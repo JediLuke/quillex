@@ -4,7 +4,7 @@ defmodule QuillEx do
   """
 
 
-  @default_resolution {700, 600}
+  @default_resolution {1200, 800}
 
   @default_conf %{
     name: :main_viewport,
