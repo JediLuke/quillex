@@ -49,23 +49,18 @@ defmodule QuillEx.Scenic.Component.TextPad do
     * `:border` - the border of the component
     * `:focus` - the border while the component has focus
 
-    ## Usage
-
-    #TODO??
-    You should add/modify components via the helper functions in
-    [`Scenic.Components`](Scenic.Components.html#text_field/3)
-
     ## Examples
     
     ```
     iex> graph
-    iex> |> text_pad   ("Sample Text", id: :text_id, translate: {20,20})
+    iex> |> text_pad(["Sample Text"], id: :text_id, translate: {20,20})
     ```
     """
     use Scenic.Component, has_children: true
-    alias Scenic.{Graph, Scene, ViewPort}
+    alias Scenic.{Scene, ViewPort}
     alias Scenic.Component.Input.Caret
     alias Scenic.Primitive.Style.Theme
+    alias QuillEx.Scenic.Component.MenuBar 
     import Scenic.Primitives
   
   
@@ -111,86 +106,85 @@ defmodule QuillEx.Scenic.Component.TextPad do
     def init(lines_of_text, opts) do
       id     = opts[:id]
       styles = opts[:styles]
-  
-    #   # theme is passed in as an inherited style
-    #   theme =
-    #     (styles[:theme] || Theme.preset(:dark))
-    #     |> Theme.normalize()
-  
-      # get the text_field specific styles
-    #   hint = styles[:hint] || @default_hint
       width  = styles[:width] || raise "need a width"
       height = styles[:height] || raise "need a height"
-    #   type = styles[:type] || @default_type
-    #   filter = styles[:filter] || @default_filter
-  
-      # index = String.length(value) #TODO this is a place we need to update, we need coords (line/col??)
-  
-    #   display = display_from_value(value, type)
-    width = 
-  
+
+      graph =
+        # Scenic.Graph.build(scissor: {150, 250})
+        Scenic.Graph.build()
+        # |> rect({100, 100}, t: {100, 100}, fill: :green, stroke: {2, :yellow})
+        |> render_lines(lines_of_text, {width, height})
+        #   font: @default_font,
+        #   font_size: @default_font_size,
+          # scissor: {width, height}
+
       state = %{
-        graph: nil,
-        # theme: theme,
+        id: id,
+        graph: graph,
         width: width,
         height: height,
-        # value: value,
         lines: lines_of_text,
-        # hint: hint,
-        index: {1,1},
-        # char_width: @char_width,
+        cursor: {1,1},
         focused: false,
-        # type: type,
-        # filter: filter,
-        id: id
       }
-  
-      graph = Graph.build()
-              |> rect({100, 100}, t: {100, 100}, fill: :green, stroke: {2, :yellow})
-    #   graph =
-    #     Graph.build(
-    #     #   font: @default_font,
-    #     #   font_size: @default_font_size,
-    #       scissor: {width, height}
-    #     )
-    #     # |> rect({width, height}, fill: theme.background)
-    #     |> group(
-    #       fn g ->
-    #         g
-    #         #TODO here, enum each line we have...
-    #         |> text(
-    #           @default_hint,
-    #           fill: @hint_color,
-    #           t: {0, @default_font_size},
-    #           id: :text
-    #         )
-    #         |> Caret.add_to_graph({height, theme.text}, id: :caret)
-    #       end,
-    #       t: {@inset_x, 0}
-    #     )
-    #     |> rect(
-    #       {width, height},
-    #       fill: :clear,
-    #       stroke: {2, theme.border},
-    #       id: :border
-    #     )
-    #     |> update_text(display, state)
-    #     |> update_caret(display, index)
+
+
   
       {:ok, %{state | graph: graph}, push: graph}
     end
+
+
+  def render_lines(graph, [] = _lines_of_text, {width, height}) do
+    render_lines(graph, [""], {width, height})
+  end
+
+  def render_lines(graph, lines_of_text, {width, height}) do
+    graph
+    |> group(fn init_graph ->
+
+               {final_graph, _n} =
+                  lines_of_text
+                  |> Enum.reduce({init_graph, 1}, fn line, {reductor_graph, n} -> # n = line number
+                       updated_graph =
+                         reductor_graph
+                         |> Scenic.Components.text_field( #TODO change this to a proper Scenic component!
+                               line,
+                               t: {0, (n-1)*40}, #TODO get line height
+                               id: {:line, n})
+ 
+                       {updated_graph, n+1}
+                  end)
+                  
+               final_graph
+             end,
+       translate: {100, 100})
+    |> rect({width, height}, stroke: {2, :white})
+  end
+end
+
+
+
+
+
+
+
+
+
+
+
+
   
     # ============================================================================
   
     # --------------------------------------------------------
     # to be called when the value has changed
-    defp update_text(graph, "", %{hint: hint}) do
-      Graph.modify(graph, :text, &text(&1, hint, fill: @hint_color))
-    end
+    # defp update_text(graph, "", %{hint: hint}) do
+    #   Graph.modify(graph, :text, &text(&1, hint, fill: @hint_color))
+    # end
   
-    defp update_text(graph, value, %{theme: theme}) do
-      Graph.modify(graph, :text, &text(&1, value, fill: theme.text))
-    end
+    # defp update_text(graph, value, %{theme: theme}) do
+    #   Graph.modify(graph, :text, &text(&1, value, fill: theme.text))
+    # end
   
     # ============================================================================
   
@@ -201,446 +195,445 @@ defmodule QuillEx.Scenic.Component.TextPad do
     #   Graph.modify( graph, :caret, &update_opts(&1, t: {x,0}) )
     # end
   
-    defp update_caret(graph, value, index) do
-      str_len = String.length(value)
-  
-      # double check the postition
-      index =
-        cond do
-          index < 0 -> 0
-          index > str_len -> str_len
-          true -> index
-        end
-  
-      # calc the caret position
-      x = index * @char_width
-  
-      # move the caret
-      Graph.modify(graph, :caret, &update_opts(&1, t: {x, 0}))
-    end
-  
-    # --------------------------------------------------------
-    defp capture_focus(context, %{focused: false, graph: graph, theme: theme} = state) do
-      # capture the input
-      ViewPort.capture_input(context, @input_capture)
-  
-      # start animating the caret
-      Scene.cast_to_refs(nil, :start_caret)
-  
-      # show the caret
-      graph =
-        graph
-        |> Graph.modify(:caret, &update_opts(&1, hidden: false))
-        |> Graph.modify(:border, &update_opts(&1, stroke: {2, theme.focus}))
-  
-      # record the state
-      state
-      |> Map.put(:focused, true)
-      |> Map.put(:graph, graph)
-    end
-  
-    # --------------------------------------------------------
-    defp release_focus(context, %{focused: true, graph: graph, theme: theme} = state) do
-      # release the input
-      ViewPort.release_input(context, @input_capture)
-  
-      # stop animating the caret
-      Scene.cast_to_refs(nil, :stop_caret)
-  
-      # hide the caret
-      graph =
-        graph
-        |> Graph.modify(:caret, &update_opts(&1, hidden: true))
-        |> Graph.modify(:border, &update_opts(&1, stroke: {2, theme.border}))
-  
-      # record the state
-      state
-      |> Map.put(:focused, false)
-      |> Map.put(:graph, graph)
-    end
-  
-    # --------------------------------------------------------
-    # get the text index from a mouse position. clap to the
-    # beginning and end of the string
-    defp index_from_cursor_pos({x, _}, value) do
-      # account for the text inset
-      x = x - @inset_x
-  
-      # get the max index
-      max_index = String.length(value)
-  
-      # calc the new index
-      d = x / @char_width
-      i = trunc(d)
-      i = i + round(d - i)
-      # clamp the result
-      cond do
-        i < 0 -> 0
-        i > max_index -> max_index
-        true -> i
-      end
-    end
-  
-    # --------------------------------------------------------
-    defp display_from_value(value, :password) do
-      String.to_charlist(value)
-      |> Enum.map(fn _ -> @password_char end)
-      |> to_string()
-    end
-  
-    defp display_from_value(value, _), do: value
-  
-    # --------------------------------------------------------
-    defp accept_char?(char, :number) do
-      "0123456789.," =~ char
-    end
-  
-    defp accept_char?(char, :integer) do
-      "0123456789" =~ char
-    end
-  
-    defp accept_char?(char, filter) when is_bitstring(filter) do
-      filter =~ char
-    end
-  
-    defp accept_char?(char, filter) when is_function(filter, 1) do
-      # note: the !! forces the response to be a boolean
-      !!filter.(char)
-    end
-  
-    defp accept_char?(_, _), do: true
-  
-    # ============================================================================
-    # User input handling - get the focus
-  
-    # --------------------------------------------------------
-    @doc false
-    # unfocused click in the text field
-    def handle_input(
-          {:cursor_button, {:left, :press, _, _}},
-          context,
-          %{focused: false} = state
-        ) do
-      {:noreply, capture_focus(context, state)}
-    end
-  
-    # --------------------------------------------------------
-    # focused click in the text field
-    def handle_input(
-          {:cursor_button, {:left, :press, _, pos}},
-          %ViewPort.Context{id: :border},
-          %{focused: true, value: value, index: index, graph: graph} = state
-        ) do
-      {index, graph} =
-        case index_from_cursor_pos(pos, value) do
-          ^index ->
-            {index, graph}
-  
-          i ->
-            # reset_caret the caret blinker
-            Scene.cast_to_refs(nil, :reset_caret)
-            # move the caret
-            graph = update_caret(graph, value, i)
-  
-            {i, graph}
-        end
-  
-      {:noreply, %{state | index: index, graph: graph}, push: graph}
-    end
-  
-    # --------------------------------------------------------
-    # focused click outside the text field
-    def handle_input(
-          {:cursor_button, {:left, :press, _, _}},
-          context,
-          %{focused: true} = state
-        ) do
-      state = release_focus(context, state)
-      {:cont, state, push: state.graph}
-    end
-  
-    # ============================================================================
-    # control keys
-  
-    # --------------------------------------------------------
-    # treat key repeats as a press
-    def handle_input({:key, {key, :repeat, mods}}, context, state) do
-      handle_input({:key, {key, :press, mods}}, context, state)
-    end
-  
-    # --------------------------------------------------------
-    def handle_input(
-          {:key, {"left", :press, _}},
-          _context,
-          %{index: index, value: value, graph: graph} = state
-        ) do
-      # move left. clamp to 0
-      {index, graph} =
-        case index do
-          0 ->
-            {0, graph}
-  
-          i ->
-            # reset_caret the caret blinker
-            Scene.cast_to_refs(nil, :reset_caret)
-            # move the caret
-            i = i - 1
-  
-            graph = update_caret(graph, value, i)
-  
-            {i, graph}
-        end
-  
-      {:noreply, %{state | index: index, graph: graph}, push: graph}
-    end
-  
-    # --------------------------------------------------------
-    def handle_input(
-          {:key, {"right", :press, _}},
-          _context,
-          %{index: index, value: value, graph: graph} = state
-        ) do
-      # the max position for the caret
-      max_index = String.length(value)
-  
-      # move left. clamp to 0
-      {index, graph} =
-        case index do
-          ^max_index ->
-            {index, graph}
-  
-          i ->
-            # reset the caret blinker
-            Scene.cast_to_refs(nil, :reset_caret_caret)
-            # move the caret
-            i = i + 1
-  
-            graph = update_caret(graph, value, i)
-  
-            {i, graph}
-        end
-  
-      {:noreply, %{state | index: index, graph: graph}, push: graph}
-    end
-  
-    # --------------------------------------------------------
-    def handle_input({:key, {"page_up", :press, mod}}, context, state) do
-      handle_input({:key, {"home", :press, mod}}, context, state)
-    end
-  
-    def handle_input(
-          {:key, {"home", :press, _}},
-          _context,
-          %{index: index, value: value, graph: graph} = state
-        ) do
-      # move left. clamp to 0
-      {index, graph} =
-        case index do
-          0 ->
-            {index, graph}
-  
-          _ ->
-            # reset the caret blinker
-            Scene.cast_to_refs(nil, :reset_caret)
-            # move the caret
-            graph = update_caret(graph, value, 0)
-  
-            {0, graph}
-        end
-  
-      {:noreply, %{state | index: index, graph: graph}, push: graph}
-    end
-  
-    # --------------------------------------------------------
-    def handle_input({:key, {"page_down", :press, mod}}, context, state) do
-      handle_input({:key, {"end", :press, mod}}, context, state)
-    end
-  
-    def handle_input(
-          {:key, {"end", :press, _}},
-          _context,
-          %{index: index, value: value, graph: graph} = state
-        ) do
-      # the max position for the caret
-      max_index = String.length(value)
-  
-      # move left. clamp to 0
-      {index, graph} =
-        case index do
-          ^max_index ->
-            {index, graph}
-  
-          _ ->
-            # reset the caret blinker
-            Scene.cast_to_refs(nil, :reset_caret)
-            # move the caret
-            graph = update_caret(graph, value, max_index)
-  
-            {max_index, graph}
-        end
-  
-      {:noreply, %{state | index: index, graph: graph}, push: graph}
-    end
-  
-    # --------------------------------------------------------
-    # ignore backspace if at index 0
-    def handle_input({:key, {"backspace", :press, _}}, _context, %{index: 0} = state),
-      do: {:noreply, state}
-  
-    # handle backspace
-    def handle_input(
-          {:key, {"backspace", :press, _}},
-          _context,
-          %{
-            graph: graph,
-            value: value,
-            index: index,
-            type: type,
-            id: id
-          } = state
-        ) do
-      # reset_caret the caret blinker
-      Scene.cast_to_refs(nil, :reset_caret)
-  
-      # delete the char to the left of the index
-      value =
-        String.to_charlist(value)
-        |> List.delete_at(index - 1)
-        |> to_string()
-  
-      display = display_from_value(value, type)
-  
-      # send the value changed event
-      send_event({:value_changed, id, value})
-  
-      # move the index
-      index = index - 1
-  
-      # update the graph
-      graph =
-        graph
-        |> update_text(display, state)
-        |> update_caret(display, index)
-  
-      state =
-        state
-        |> Map.put(:graph, graph)
-        |> Map.put(:value, value)
-        |> Map.put(:display, display)
-        |> Map.put(:index, index)
-  
-      {:noreply, state, push: graph}
-    end
-  
-    # --------------------------------------------------------
-    def handle_input(
-          {:key, {"delete", :press, _}},
-          _context,
-          %{
-            graph: graph,
-            value: value,
-            index: index,
-            type: type,
-            id: id
-          } = state
-        ) do
-      # reset the caret blinker
-      Scene.cast_to_refs(nil, :reset_caret)
-  
-      # delete the char at the index
-      value =
-        String.to_charlist(value)
-        |> List.delete_at(index)
-        |> to_string()
-  
-      display = display_from_value(value, type)
-  
-      # send the value changed event
-      send_event({:value_changed, id, value})
-  
-      # update the graph (the caret doesn't move)
-      graph =
-        graph
-        |> update_text(display, state)
-  
-      state =
-        state
-        |> Map.put(:graph, graph)
-        |> Map.put(:value, value)
-        |> Map.put(:display, display)
-        |> Map.put(:index, index)
-  
-      {:noreply, state, push: graph}
-    end
-  
-    # --------------------------------------------------------
-    def handle_input({:key, {"enter", :press, _}}, _context, state) do
-      {:noreply, state}
-    end
-  
-    # --------------------------------------------------------
-    def handle_input({:key, {"escape", :press, _}}, _context, state) do
-      {:noreply, state}
-    end
-  
-    # ============================================================================
-    # text entry
-  
-    # --------------------------------------------------------
-    def handle_input({:codepoint, {char, _}}, _, %{filter: filter} = state) do
-      char
-      |> accept_char?(filter)
-      |> do_handle_codepoint(char, state)
-    end
-  
-    # --------------------------------------------------------
-    def handle_input(_msg, _context, state) do
-      # IO.puts "TextField msg: #{inspect(_msg)}"
-      {:noreply, state}
-    end
-  
-    # --------------------------------------------------------
-    defp do_handle_codepoint(
-           true,
-           char,
-           %{
-             graph: graph,
-             value: value,
-             index: index,
-             type: type,
-             id: id
-           } = state
-         ) do
-      # reset the caret blinker
-      Scene.cast_to_refs(nil, :reset_caret)
-  
-      # insert the char into the string at the index location
-      {left, right} = String.split_at(value, index)
-      value = Enum.join([left, char, right])
-      display = display_from_value(value, type)
-  
-      # send the value changed event
-      send_event({:value_changed, id, value})
-  
-      # advance the index
-      index = index + String.length(char)
-  
-      # update the graph
-      graph =
-        graph
-        |> update_text(display, state)
-        |> update_caret(display, index)
-  
-      state =
-        state
-        |> Map.put(:graph, graph)
-        |> Map.put(:value, value)
-        |> Map.put(:display, display)
-        |> Map.put(:index, index)
-  
-      {:noreply, state, push: graph}
-    end
-  
-    # ignore the char
-    defp do_handle_codepoint(_, _, state), do: {:noreply, state}
-  end
+    # defp update_caret(graph, value, index) do
+    #   str_len = String.length(value)
+  
+    #   # double check the postition
+    #   index =
+    #     cond do
+    #       index < 0 -> 0
+    #       index > str_len -> str_len
+    #       true -> index
+    #     end
+  
+    #   # calc the caret position
+    #   x = index * @char_width
+  
+    #   # move the caret
+    #   Graph.modify(graph, :caret, &update_opts(&1, t: {x, 0}))
+    # end
+  
+    # # --------------------------------------------------------
+    # defp capture_focus(context, %{focused: false, graph: graph, theme: theme} = state) do
+    #   # capture the input
+    #   ViewPort.capture_input(context, @input_capture)
+  
+    #   # start animating the caret
+    #   Scene.cast_to_refs(nil, :start_caret)
+  
+    #   # show the caret
+    #   graph =
+    #     graph
+    #     |> Graph.modify(:caret, &update_opts(&1, hidden: false))
+    #     |> Graph.modify(:border, &update_opts(&1, stroke: {2, theme.focus}))
+  
+    #   # record the state
+    #   state
+    #   |> Map.put(:focused, true)
+    #   |> Map.put(:graph, graph)
+    # end
+  
+    # # --------------------------------------------------------
+    # defp release_focus(context, %{focused: true, graph: graph, theme: theme} = state) do
+    #   # release the input
+    #   ViewPort.release_input(context, @input_capture)
+  
+    #   # stop animating the caret
+    #   Scene.cast_to_refs(nil, :stop_caret)
+  
+    #   # hide the caret
+    #   graph =
+    #     graph
+    #     |> Graph.modify(:caret, &update_opts(&1, hidden: true))
+    #     |> Graph.modify(:border, &update_opts(&1, stroke: {2, theme.border}))
+  
+    #   # record the state
+    #   state
+    #   |> Map.put(:focused, false)
+    #   |> Map.put(:graph, graph)
+    # end
+  
+    # # --------------------------------------------------------
+    # # get the text index from a mouse position. clap to the
+    # # beginning and end of the string
+    # defp index_from_cursor_pos({x, _}, value) do
+    #   # account for the text inset
+    #   x = x - @inset_x
+  
+    #   # get the max index
+    #   max_index = String.length(value)
+  
+    #   # calc the new index
+    #   d = x / @char_width
+    #   i = trunc(d)
+    #   i = i + round(d - i)
+    #   # clamp the result
+    #   cond do
+    #     i < 0 -> 0
+    #     i > max_index -> max_index
+    #     true -> i
+    #   end
+    # end
+  
+    # # --------------------------------------------------------
+    # defp display_from_value(value, :password) do
+    #   String.to_charlist(value)
+    #   |> Enum.map(fn _ -> @password_char end)
+    #   |> to_string()
+    # end
+  
+    # defp display_from_value(value, _), do: value
+  
+    # # --------------------------------------------------------
+    # defp accept_char?(char, :number) do
+    #   "0123456789.," =~ char
+    # end
+  
+    # defp accept_char?(char, :integer) do
+    #   "0123456789" =~ char
+    # end
+  
+    # defp accept_char?(char, filter) when is_bitstring(filter) do
+    #   filter =~ char
+    # end
+  
+    # defp accept_char?(char, filter) when is_function(filter, 1) do
+    #   # note: the !! forces the response to be a boolean
+    #   !!filter.(char)
+    # end
+  
+    # defp accept_char?(_, _), do: true
+  
+    # # ============================================================================
+    # # User input handling - get the focus
+  
+    # # --------------------------------------------------------
+    # @doc false
+    # # unfocused click in the text field
+    # def handle_input(
+    #       {:cursor_button, {:left, :press, _, _}},
+    #       context,
+    #       %{focused: false} = state
+    #     ) do
+    #   {:noreply, capture_focus(context, state)}
+    # end
+  
+    # # --------------------------------------------------------
+    # # focused click in the text field
+    # def handle_input(
+    #       {:cursor_button, {:left, :press, _, pos}},
+    #       %ViewPort.Context{id: :border},
+    #       %{focused: true, value: value, index: index, graph: graph} = state
+    #     ) do
+    #   {index, graph} =
+    #     case index_from_cursor_pos(pos, value) do
+    #       ^index ->
+    #         {index, graph}
+  
+    #       i ->
+    #         # reset_caret the caret blinker
+    #         Scene.cast_to_refs(nil, :reset_caret)
+    #         # move the caret
+    #         graph = update_caret(graph, value, i)
+  
+    #         {i, graph}
+    #     end
+  
+    #   {:noreply, %{state | index: index, graph: graph}, push: graph}
+    # end
+  
+    # # --------------------------------------------------------
+    # # focused click outside the text field
+    # def handle_input(
+    #       {:cursor_button, {:left, :press, _, _}},
+    #       context,
+    #       %{focused: true} = state
+    #     ) do
+    #   state = release_focus(context, state)
+    #   {:cont, state, push: state.graph}
+    # end
+  
+    # # ============================================================================
+    # # control keys
+  
+    # # --------------------------------------------------------
+    # # treat key repeats as a press
+    # def handle_input({:key, {key, :repeat, mods}}, context, state) do
+    #   handle_input({:key, {key, :press, mods}}, context, state)
+    # end
+  
+    # # --------------------------------------------------------
+    # def handle_input(
+    #       {:key, {"left", :press, _}},
+    #       _context,
+    #       %{index: index, value: value, graph: graph} = state
+    #     ) do
+    #   # move left. clamp to 0
+    #   {index, graph} =
+    #     case index do
+    #       0 ->
+    #         {0, graph}
+  
+    #       i ->
+    #         # reset_caret the caret blinker
+    #         Scene.cast_to_refs(nil, :reset_caret)
+    #         # move the caret
+    #         i = i - 1
+  
+    #         graph = update_caret(graph, value, i)
+  
+    #         {i, graph}
+    #     end
+  
+    #   {:noreply, %{state | index: index, graph: graph}, push: graph}
+    # end
+  
+    # # --------------------------------------------------------
+    # def handle_input(
+    #       {:key, {"right", :press, _}},
+    #       _context,
+    #       %{index: index, value: value, graph: graph} = state
+    #     ) do
+    #   # the max position for the caret
+    #   max_index = String.length(value)
+  
+    #   # move left. clamp to 0
+    #   {index, graph} =
+    #     case index do
+    #       ^max_index ->
+    #         {index, graph}
+  
+    #       i ->
+    #         # reset the caret blinker
+    #         Scene.cast_to_refs(nil, :reset_caret_caret)
+    #         # move the caret
+    #         i = i + 1
+  
+    #         graph = update_caret(graph, value, i)
+  
+    #         {i, graph}
+    #     end
+  
+    #   {:noreply, %{state | index: index, graph: graph}, push: graph}
+    # end
+  
+    # # --------------------------------------------------------
+    # def handle_input({:key, {"page_up", :press, mod}}, context, state) do
+    #   handle_input({:key, {"home", :press, mod}}, context, state)
+    # end
+  
+    # def handle_input(
+    #       {:key, {"home", :press, _}},
+    #       _context,
+    #       %{index: index, value: value, graph: graph} = state
+    #     ) do
+    #   # move left. clamp to 0
+    #   {index, graph} =
+    #     case index do
+    #       0 ->
+    #         {index, graph}
+  
+    #       _ ->
+    #         # reset the caret blinker
+    #         Scene.cast_to_refs(nil, :reset_caret)
+    #         # move the caret
+    #         graph = update_caret(graph, value, 0)
+  
+    #         {0, graph}
+    #     end
+  
+    #   {:noreply, %{state | index: index, graph: graph}, push: graph}
+    # end
+  
+    # # --------------------------------------------------------
+    # def handle_input({:key, {"page_down", :press, mod}}, context, state) do
+    #   handle_input({:key, {"end", :press, mod}}, context, state)
+    # end
+  
+    # def handle_input(
+    #       {:key, {"end", :press, _}},
+    #       _context,
+    #       %{index: index, value: value, graph: graph} = state
+    #     ) do
+    #   # the max position for the caret
+    #   max_index = String.length(value)
+  
+    #   # move left. clamp to 0
+    #   {index, graph} =
+    #     case index do
+    #       ^max_index ->
+    #         {index, graph}
+  
+    #       _ ->
+    #         # reset the caret blinker
+    #         Scene.cast_to_refs(nil, :reset_caret)
+    #         # move the caret
+    #         graph = update_caret(graph, value, max_index)
+  
+    #         {max_index, graph}
+    #     end
+  
+    #   {:noreply, %{state | index: index, graph: graph}, push: graph}
+    # end
+  
+    # # --------------------------------------------------------
+    # # ignore backspace if at index 0
+    # def handle_input({:key, {"backspace", :press, _}}, _context, %{index: 0} = state),
+    #   do: {:noreply, state}
+  
+    # # handle backspace
+    # def handle_input(
+    #       {:key, {"backspace", :press, _}},
+    #       _context,
+    #       %{
+    #         graph: graph,
+    #         value: value,
+    #         index: index,
+    #         type: type,
+    #         id: id
+    #       } = state
+    #     ) do
+    #   # reset_caret the caret blinker
+    #   Scene.cast_to_refs(nil, :reset_caret)
+  
+    #   # delete the char to the left of the index
+    #   value =
+    #     String.to_charlist(value)
+    #     |> List.delete_at(index - 1)
+    #     |> to_string()
+  
+    #   display = display_from_value(value, type)
+  
+    #   # send the value changed event
+    #   send_event({:value_changed, id, value})
+  
+    #   # move the index
+    #   index = index - 1
+  
+    #   # update the graph
+    #   graph =
+    #     graph
+    #     |> update_text(display, state)
+    #     |> update_caret(display, index)
+  
+    #   state =
+    #     state
+    #     |> Map.put(:graph, graph)
+    #     |> Map.put(:value, value)
+    #     |> Map.put(:display, display)
+    #     |> Map.put(:index, index)
+  
+    #   {:noreply, state, push: graph}
+    # end
+  
+    # # --------------------------------------------------------
+    # def handle_input(
+    #       {:key, {"delete", :press, _}},
+    #       _context,
+    #       %{
+    #         graph: graph,
+    #         value: value,
+    #         index: index,
+    #         type: type,
+    #         id: id
+    #       } = state
+    #     ) do
+    #   # reset the caret blinker
+    #   Scene.cast_to_refs(nil, :reset_caret)
+  
+    #   # delete the char at the index
+    #   value =
+    #     String.to_charlist(value)
+    #     |> List.delete_at(index)
+    #     |> to_string()
+  
+    #   display = display_from_value(value, type)
+  
+    #   # send the value changed event
+    #   send_event({:value_changed, id, value})
+  
+    #   # update the graph (the caret doesn't move)
+    #   graph =
+    #     graph
+    #     |> update_text(display, state)
+  
+    #   state =
+    #     state
+    #     |> Map.put(:graph, graph)
+    #     |> Map.put(:value, value)
+    #     |> Map.put(:display, display)
+    #     |> Map.put(:index, index)
+  
+    #   {:noreply, state, push: graph}
+    # end
+  
+    # # --------------------------------------------------------
+    # def handle_input({:key, {"enter", :press, _}}, _context, state) do
+    #   {:noreply, state}
+    # end
+  
+    # # --------------------------------------------------------
+    # def handle_input({:key, {"escape", :press, _}}, _context, state) do
+    #   {:noreply, state}
+    # end
+  
+    # # ============================================================================
+    # # text entry
+  
+    # # --------------------------------------------------------
+    # def handle_input({:codepoint, {char, _}}, _, %{filter: filter} = state) do
+    #   char
+    #   |> accept_char?(filter)
+    #   |> do_handle_codepoint(char, state)
+    # end
+  
+    # # --------------------------------------------------------
+    # def handle_input(_msg, _context, state) do
+    #   # IO.puts "TextField msg: #{inspect(_msg)}"
+    #   {:noreply, state}
+    # end
+  
+    # # --------------------------------------------------------
+    # defp do_handle_codepoint(
+    #        true,
+    #        char,
+    #        %{
+    #          graph: graph,
+    #          value: value,
+    #          index: index,
+    #          type: type,
+    #          id: id
+    #        } = state
+    #      ) do
+    #   # reset the caret blinker
+    #   Scene.cast_to_refs(nil, :reset_caret)
+  
+    #   # insert the char into the string at the index location
+    #   {left, right} = String.split_at(value, index)
+    #   value = Enum.join([left, char, right])
+    #   display = display_from_value(value, type)
+  
+    #   # send the value changed event
+    #   send_event({:value_changed, id, value})
+  
+    #   # advance the index
+    #   index = index + String.length(char)
+  
+    #   # update the graph
+    #   graph =
+    #     graph
+    #     |> update_text(display, state)
+    #     |> update_caret(display, index)
+  
+    #   state =
+    #     state
+    #     |> Map.put(:graph, graph)
+    #     |> Map.put(:value, value)
+    #     |> Map.put(:display, display)
+    #     |> Map.put(:index, index)
+  
+    #   {:noreply, state, push: graph}
+    # end
+  
+    # # ignore the char
+    # defp do_handle_codepoint(_, _, state), do: {:noreply, state}

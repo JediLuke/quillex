@@ -20,12 +20,14 @@ defmodule QuillEx.Scenic.Component.MenuBar do
     @menubar_height 64
     @button_size 0.72
 
-    @buffer_around_button 
+    @background {48, 48, 48} # {150, 100, 150}
 
     @doc false
     def info(data) do
       "MenuBar failed to initialize - but MenuBar can accept any params!?"
     end
+
+    def height, do: @menubar_height
   
     @doc false
     def verify(_) do
@@ -42,7 +44,7 @@ defmodule QuillEx.Scenic.Component.MenuBar do
         |> add_specs_to_graph([
              rect_spec(
                   {Utils.vp_width(opts[:viewport]), @menubar_height},
-                  fill: {150, 100, 150}),
+                  fill: @background),
              Scenic.Components.button_spec(
                    "",
                    id: :new_file,
@@ -51,7 +53,7 @@ defmodule QuillEx.Scenic.Component.MenuBar do
                    radius: 6,
                    # fill: {196, 202, 206},
                    # stroke: {2, :black},
-                   theme: :info,
+                   theme: :primary,
                    translate: {buffer_around_button(), buffer_around_button()})
         ])
 

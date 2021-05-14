@@ -14,10 +14,12 @@ defmodule QuillEx.Scene.SingleFile do
       graph =
         Scenic.Graph.build()
         |> text_pad(
-            ["This is is", "the first text we render."],
+            # [],
+            ["Luke", "is", "the", "best"],
             id: :pad,
             width: Utils.vp_width(opts[:viewport]),
-            height: Utils.vp_height(opts[:viewport]))
+            height: Utils.vp_height(opts[:viewport]) - MenuBar.height(),
+            translate: {0, MenuBar.height()})
         |> MenuBar.add_to_graph()
   
       state = %{
