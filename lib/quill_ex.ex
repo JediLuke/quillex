@@ -9,7 +9,7 @@ defmodule QuillEx do
   @default_conf %{
     name: :main_viewport,
     size: @default_resolution,
-    default_scene: {QuillEx.Scene.Home, nil},
+    default_scene: {QuillEx.Scene.Default, nil},
     drivers: [
       %{
         module: Scenic.Driver.Glfw,
