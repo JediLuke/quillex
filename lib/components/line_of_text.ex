@@ -145,11 +145,11 @@ defmodule Scenic.Component.Input.LineOfText do
   
       graph =
         Graph.build(
-          font: @default_font,
-          font_size: @default_font_size,
-          scissor: {width, height}
+          # font: @default_font,
+          # font_size: @default_font_size,
+          # # scissor: {width, height} #NOTE: Taken care of by larger text_pad window
         )
-        |> rect({width, height}, fill: theme.background)
+        # |> rect({width, height}, fill: theme.background)
         |> group(
           fn g ->
             g
@@ -163,12 +163,12 @@ defmodule Scenic.Component.Input.LineOfText do
           end,
           t: {@inset_x, 0}
         )
-        |> rect(
-          {width, height},
-          fill: :clear,
-          stroke: {2, theme.border},
-          id: :border
-        )
+        # |> rect(
+        #   {width, height},
+        #   fill: :clear,
+        #   stroke: {2, theme.border},
+        #   id: :border
+        # )
         |> update_text(display, state)
         |> update_caret(display, index)
   

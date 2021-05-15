@@ -21,6 +21,7 @@ defmodule QuillEx.Scene.SingleFile do
             height: Utils.vp_height(opts[:viewport]) - MenuBar.height(),
             translate: {0, MenuBar.height()})
         |> MenuBar.add_to_graph()
+        
   
       state = %{
         viewport: opts[:viewport],

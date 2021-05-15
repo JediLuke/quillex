@@ -160,8 +160,7 @@ defmodule QuillEx.Scenic.Component.TextPad do
                   end)
                   
                final_graph
-             end,
-       translate: {100, 100})
+             end)
     |> rect({width, height}, stroke: {2, :white})
   end
 end
