@@ -56,7 +56,7 @@ defmodule QuillEx.Scenic.Component.MenuBar do
                    radius: 6,
                    theme: :primary,
                    translate: {buffer_around_button(), buffer_around_button()}),
-             # draw the new-file ico
+             # draw the new-file icon
              group_spec([
                line_spec({{0, 0}, {0, 0.6*@button_size*@menubar_height}}, stroke: {2, :black}),
                line_spec({{0, 0}, {0.4*@button_size*@menubar_height, 0}}, stroke: {2, :black}),

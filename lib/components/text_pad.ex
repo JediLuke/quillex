@@ -61,6 +61,7 @@ defmodule QuillEx.Scenic.Component.TextPad do
     alias Scenic.Component.Input.Caret
     alias Scenic.Primitive.Style.Theme
     alias QuillEx.Scenic.Component.MenuBar 
+    alias Scenic.Component.Input.LineOfText
     import Scenic.Primitives
   
   
@@ -94,6 +95,9 @@ defmodule QuillEx.Scenic.Component.TextPad do
       #{IO.ANSI.default_color()}
       """
     end
+
+
+
   
     @doc false
     def verify(initial_lines_of_text) when is_list(initial_lines_of_text) do
@@ -147,7 +151,7 @@ defmodule QuillEx.Scenic.Component.TextPad do
                   |> Enum.reduce({init_graph, 1}, fn line, {reductor_graph, n} -> # n = line number
                        updated_graph =
                          reductor_graph
-                         |> Scenic.Components.text_field( #TODO change this to a proper Scenic component!
+                         |> LineOfText.add_to_graph( #TODO change this to a proper Scenic component!
                                line,
                                t: {0, (n-1)*40}, #TODO get line height
                                id: {:line, n})
