@@ -43,18 +43,28 @@ defmodule QuillEx.Scenic.Component.MenuBar do
         Scenic.Graph.build()
         |> add_specs_to_graph([
              rect_spec(
-                  {Utils.vp_width(opts[:viewport]), @menubar_height},
+               {Utils.vp_width(opts[:viewport]), @menubar_height},
                   fill: @background),
+             rrect_spec({@button_size*@menubar_height, @button_size*@menubar_height, 6},
+                   stroke: {2, :white},
+                   translate: {buffer_around_button(), buffer_around_button()}),
              Scenic.Components.button_spec(
-                   "",
+               "",
                    id: :new_file,
                    width: @button_size*@menubar_height,
                    height: @button_size*@menubar_height,
                    radius: 6,
-                   # fill: {196, 202, 206},
-                   # stroke: {2, :black},
                    theme: :primary,
-                   translate: {buffer_around_button(), buffer_around_button()})
+                   translate: {buffer_around_button(), buffer_around_button()}),
+             # draw the new-file ico
+             group_spec([
+               line_spec({{0, 0}, {0, 0.6*@button_size*@menubar_height}}, stroke: {2, :black}),
+               line_spec({{0, 0}, {0.4*@button_size*@menubar_height, 0}}, stroke: {2, :black}),
+               line_spec({{0.4*@button_size*@menubar_height, 0}, {0.6*@button_size*@menubar_height, 0.2*@button_size*@menubar_height}}, stroke: {2, :black}),
+               line_spec({{0.6*@button_size*@menubar_height, 0.2*@button_size*@menubar_height}, {0.6*@button_size*@menubar_height, 0.6*@button_size*@menubar_height}}, stroke: {2, :black}),
+               line_spec({{0, 0.6*@button_size*@menubar_height}, {0.6*@button_size*@menubar_height, 0.6*@button_size*@menubar_height}}, stroke: {2, :black}),
+             ],
+                   translate: {2*buffer_around_button(), 2*buffer_around_button()})
         ])
 
       state = %{
