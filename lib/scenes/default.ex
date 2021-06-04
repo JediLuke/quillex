@@ -1,6 +1,6 @@
 defmodule QuillEx.Scene.Default do
   use Scenic.Scene
-  alias QuillEx.Scenic.Component.MenuBar
+  alias QuillEx.ScenicComponent.MenuBar
 
 
   def init(_, opts) do

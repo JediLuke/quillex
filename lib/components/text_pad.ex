@@ -1,4 +1,4 @@
-defmodule QuillEx.Scenic.Component.TextPad do
+defmodule QuillEx.ScenicComponent.TextPad do
     @moduledoc """
     Add a `text_pad` input to a graph.
 
@@ -60,8 +60,9 @@ defmodule QuillEx.Scenic.Component.TextPad do
     alias Scenic.{Scene, ViewPort}
     alias Scenic.Component.Input.Caret
     alias Scenic.Primitive.Style.Theme
-    alias QuillEx.Scenic.Component.MenuBar 
-    alias Scenic.Component.Input.LineOfText
+    alias QuillEx.ScenicComponent.MenuBar 
+    alias QuillEx.ScenicComponent.TextPad.LineOfText
+    alias Scenic.Component.Input.TextField
     import Scenic.Primitives
   
   
@@ -100,14 +101,14 @@ defmodule QuillEx.Scenic.Component.TextPad do
 
   
     @doc false
-    def verify(initial_lines_of_text) when is_list(initial_lines_of_text) do
-      {:ok, initial_lines_of_text}
+    def verify(lines_of_text) when is_list(lines_of_text) do
+      {:ok, lines_of_text}
     end
   
     def verify(_), do: :invalid_data
   
     @doc false
-    def init(lines_of_text, opts) do
+    def init(lines_of_text, opts) when is_list(lines_of_text) do
       id     = opts[:id]
       styles = opts[:styles]
       width  = styles[:width] || raise "need a width"
@@ -117,10 +118,11 @@ defmodule QuillEx.Scenic.Component.TextPad do
         # Scenic.Graph.build(scissor: {150, 250})
         Scenic.Graph.build()
         # |> rect({100, 100}, t: {100, 100}, fill: :green, stroke: {2, :yellow})
-        |> render_lines(lines_of_text, {width, height})
+        # |> render_lines(lines_of_text, {width, height})
         #   font: @default_font,
         #   font_size: @default_font_size,
           # scissor: {width, height}
+        |> render_textfields(lines_of_text, {width, height})
 
       state = %{
         id: id,
@@ -144,24 +146,89 @@ defmodule QuillEx.Scenic.Component.TextPad do
 
   def render_lines(graph, lines_of_text, {width, height}) do
     graph
+
     |> group(fn init_graph ->
 
                {final_graph, _n} =
                   lines_of_text
                   |> Enum.reduce({init_graph, 1}, fn line, {reductor_graph, n} -> # n = line number
-                       updated_graph =
-                         reductor_graph
-                         |> LineOfText.add_to_graph( #TODO change this to a proper Scenic component!
-                               line,
-                               t: {0, (n-1)*40}, #TODO get line height
-                               id: {:line, n})
- 
-                       {updated_graph, n+1}
+                        updated_graph =
+                          reductor_graph
+                          #TODO this needs to be overridden with LineOfText I guess, so we can change the behaviour of pressing enter
+                          # |> TextField.add_to_graph(
+                          |> LineOfText.add_to_graph(
+                                line,
+                                t: {0, (n-1)*40}, #TODO get line height
+                                id: {:line, n})
+
+                        {updated_graph, n+1}
                   end)
+
+              #  {final_graph, _n} =
+              #     lines_of_text
+              #     |> Enum.reduce({init_graph, 1}, fn line, {reductor_graph, n} -> # n = line number
+              #          updated_graph =
+              #            reductor_graph
+              #            |> LineOfText.add_to_graph( #TODO change this to a proper Scenic component!
+              #                  line,
+              #                  t: {0, (n-1)*40}, #TODO get line height
+              #                  id: {:line, n})
+ 
+              #          {updated_graph, n+1}
+              #     end)
                   
                final_graph
              end)
-    |> rect({width, height}, stroke: {2, :white})
+
+    # |> rect({width, height}, stroke: {2, :white})
+  end
+
+  def render_textfields(graph, lines_of_text, {width, height}) do
+    initial_accumulator = {graph, _first_line = 1}
+
+    tfn = fn graph ->
+
+          end
+    
+    {new_graph, _final_acc} =
+        lines_of_text
+        |> Enum.reduce(initial_accumulator,
+            fn line, _acc = {reductor, n} ->
+              new_reductor =
+                reductor
+                |> LineOfText.add_to_graph(
+                # |> TextField.add_to_graph(
+                      line,
+                      t: {10, (n-0)*40}, #TODO get line height, it's not 40
+                      id: {:line, n})
+              {new_reductor, n+1}
+           end)
+
+      # |> TextField.add_to_graph(
+      #         line,
+      #         t: {0, (n-1)*40}, #TODO get line height
+      #         id: {:line, n})
+      # |> TextField.add_to_graph(
+      #   line,
+      #   t: {0, (n-0)*40}, #TODO get line height
+      #   id: {:line, n})
+
+    new_graph
+
+    # graph
+    # |> group(fn init_graph ->
+    #      new_graph
+    #    end)
+  end
+
+  def handle_input({:key, {"enter", :press, _}}, _context, state) do
+    IO.puts "OK WE GOT AN ENTER"
+    {:noreply, state}
+  end
+
+  def filter_event({:newline, {:line, l}}, _from, state) do
+    IO.puts "get enter on line #{inspect l}"
+    {:noreply, state}
   end
 end
 

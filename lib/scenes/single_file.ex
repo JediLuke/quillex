@@ -2,20 +2,23 @@ defmodule QuillEx.Scene.SingleFile do
     use Scenic.Scene
     alias Scenic.ViewPort
     alias QuillEx.Utils
-    alias QuillEx.Scenic.Component.MenuBar
+    alias QuillEx.ScenicComponent.MenuBar
     import Scenic.Primitives
     import Scenic.Components
-    import QuillEx.Scenic.Component.TextPad, only: [{:text_pad, 3}]
+    import QuillEx.ScenicComponent.TextPad, only: [{:text_pad, 3}]
     require Logger
   
 
-    def init(state, opts) do
+    def init(%{lines: lines_of_text} = textfile, opts) do
+
+      IO.puts "OPENING A FILE - #{inspect textfile}, #{inspect opts}"
       
       graph =
         Scenic.Graph.build()
         |> text_pad(
             # [],
-            ["Luke", "is", "the", "best"],
+            # ["Luke", "is", "the", "best"],
+            lines_of_text,
             id: :pad,
             width: Utils.vp_width(opts[:viewport]),
             height: Utils.vp_height(opts[:viewport]) - MenuBar.height(),

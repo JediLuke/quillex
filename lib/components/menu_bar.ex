@@ -1,4 +1,4 @@
-defmodule QuillEx.Scenic.Component.MenuBar do
+defmodule QuillEx.ScenicComponent.MenuBar do
     @moduledoc """
     The MenuBar component, which is permenently rendered along the top of QuillEx.
 
@@ -14,6 +14,7 @@ defmodule QuillEx.Scenic.Component.MenuBar do
     alias Scenic.Component.Input.Caret
     alias Scenic.Primitive.Style.Theme
     alias QuillEx.Utils
+    alias QuillEx.Structs.TextFile
     import Scenic.Primitives
   
 
@@ -78,7 +79,7 @@ defmodule QuillEx.Scenic.Component.MenuBar do
 
     def filter_event({:click, :new_file}, _from, state) do
         #TODO need to figure out how we work this... based on state?
-        ViewPort.set_root(state.viewport, {QuillEx.Scene.SingleFile, state})
+        ViewPort.set_root(state.viewport, {QuillEx.Scene.SingleFile, TextFile.blank()})
         {:halt, state}
     end
 

@@ -1,4 +1,4 @@
-defmodule Scenic.Component.Input.LineOfText do
+defmodule QuillEx.ScenicComponent.TextPad.LineOfText do
     @moduledoc """
     Add a text field input to a graph
     ## Data
@@ -147,9 +147,9 @@ defmodule Scenic.Component.Input.LineOfText do
         Graph.build(
           # font: @default_font,
           # font_size: @default_font_size,
-          # # scissor: {width, height} #NOTE: Taken care of by larger text_pad window
+          # # scissor: {width, height} #NOTE: Taken care of by larger text_pad window??
         )
-        # |> rect({width, height}, fill: theme.background)
+        |> rect({width, height}, fill: theme.background)
         |> group(
           fn g ->
             g
@@ -163,12 +163,12 @@ defmodule Scenic.Component.Input.LineOfText do
           end,
           t: {@inset_x, 0}
         )
-        # |> rect(
-        #   {width, height},
-        #   fill: :clear,
-        #   stroke: {2, theme.border},
-        #   id: :border
-        # )
+        |> rect(
+          {width, height},
+          fill: :clear,
+          stroke: {2, theme.border},
+          id: :border
+        )
         |> update_text(display, state)
         |> update_caret(display, index)
   
@@ -570,6 +570,8 @@ defmodule Scenic.Component.Input.LineOfText do
   
     # --------------------------------------------------------
     def handle_input({:key, {"enter", :press, _}}, _context, state) do
+      # IO.puts "FOUND ENTER BUT ITS IN WRONG SPOT"
+      send_event({:newline, state.id})
       {:noreply, state}
     end
   
