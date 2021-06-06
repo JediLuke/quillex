@@ -77,10 +77,9 @@ defmodule QuillEx.ScenicComponent.MenuBar do
     end
 
 
-    def filter_event({:click, :new_file}, _from, state) do
-        #TODO need to figure out how we work this... based on state?
-        ViewPort.set_root(state.viewport, {QuillEx.Scene.SingleFile, TextFile.blank()})
-        {:halt, state}
+    def filter_event(event, _from, state) do
+      # handle all MenuBar input events at root level
+      {:cont, {:menubar, event}, state}
     end
 
 

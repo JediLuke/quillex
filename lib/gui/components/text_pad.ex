@@ -221,6 +221,8 @@ defmodule QuillEx.ScenicComponent.TextPad do
     #    end)
   end
 
+  # {:value_changed, {:line, 1}, "k"
+
   def handle_input({:key, {"enter", :press, _}}, _context, state) do
     IO.puts "OK WE GOT AN ENTER"
     {:noreply, state}
@@ -228,6 +230,11 @@ defmodule QuillEx.ScenicComponent.TextPad do
 
   def filter_event({:newline, {:line, l}}, _from, state) do
     IO.puts "get enter on line #{inspect l}"
+    {:noreply, state}
+  end
+
+  def filter_event(ee, _from, state) do
+    IO.puts "EVENT #{inspect ee}"
     {:noreply, state}
   end
 end
