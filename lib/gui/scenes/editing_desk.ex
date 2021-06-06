@@ -4,7 +4,7 @@ defmodule QuillEx.Scene.EditingDesk do
   alias QuillEx.ScenicComponent.MenuBar
   import Scenic.Primitives
   import Scenic.Components
-  import QuillEx.ScenicComponent.TextPad, only: [{:text_pad, 3}]
+  alias QuillEx.ScenicComponent.TextPad
   require Logger
 
 
@@ -41,7 +41,7 @@ defmodule QuillEx.Scene.EditingDesk do
 
     new_graph =
       Scenic.Graph.build()
-      |> text_pad(
+      |> TextPad.add_to_graph(
            [""],
            id: :pad,
            width: Utils.vp_width(state.viewport),

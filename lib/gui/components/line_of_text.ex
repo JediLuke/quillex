@@ -109,21 +109,19 @@ defmodule QuillEx.ScenicComponent.TextPad.LineOfText do
       id = opts[:id]
       styles = opts[:styles]
 
-      IO.puts "I'm real!!!/"
-  
       # theme is passed in as an inherited style
       theme =
         (styles[:theme] || Theme.preset(:dark))
         |> Theme.normalize()
   
       # get the text_field specific styles
-      hint = styles[:hint] || @default_hint
-      width = styles[:width] || styles[:w] || @default_width
+      hint   = styles[:hint]   || @default_hint
+      width  = styles[:width]  || styles[:w] || @default_width
       height = styles[:height] || styles[:h] || @default_height
-      type = styles[:type] || @default_type
+      type   = styles[:type]   || @default_type
       filter = styles[:filter] || @default_filter
   
-      index = String.length(value)
+      index  = String.length(value)
   
       display = display_from_value(value, type)
   

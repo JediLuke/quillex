@@ -7,54 +7,6 @@ defmodule QuillEx.ScenicComponent.TextPad do
     scrolling. A TextPad understands multi-line text segment, and has a
     scrolling capability for when the text renders larger than the window
     in which we have to present it.
-
-    ## Data
-
-    `initial_value`
-    * `initial_value` - is the string that will be the starting value
-    ## Messages
-    When the text in the field changes, it sends an event message to the host
-    scene in the form of:
-    `{:value_changed, id, value}`
-
-    ## Styles
-
-    Text fields honor the following styles:
-
-    * `:hidden` - If `false` the component is rendered. If `true`, it is skipped. The default is `false`.
-    * `:theme` - The color set used to draw. See below. The default is `:dark`
-
-    ## Additional Styles
-
-    Text fields honor the following list of additional styles:
-
-    * `:filter` - Adding a filter option restricts which characters can be entered into the text_field component. The value of filter can be one of:
-    * `:all` - Accept all characters. This is the default
-    * `:number` - Any characters from "0123456789.,"
-    * `"filter_string"` - Pass in a string containing all the characters you will accept
-    * `function/1` - Pass in an anonymous function. The single parameter will be the character to be filtered. Return `true` or `false` to keep or reject it.
-    * `:hint` - A string that will be shown (greyed out) when the entered value of the component is empty.
-    * `:type` - Can be one of the following options:
-    * `:all` - Show all characters. This is the default.
-    * `:password` - Display a string of '*' characters instead of the value.
-    * `:width` - set the width of the control.
-
-    ## Theme
-
-    Text fields work well with the following predefined themes: `:light`, `:dark`
-    To pass in a custom theme, supply a map with at least the following entries:
-
-    * `:text` - the color of the text
-    * `:background` - the background of the component
-    * `:border` - the border of the component
-    * `:focus` - the border while the component has focus
-
-    ## Examples
-    
-    ```
-    iex> graph
-    iex> |> text_pad(["Sample Text"], id: :text_id, translate: {20,20})
-    ```
     """
     use Scenic.Component, has_children: true
     alias Scenic.{Scene, ViewPort}
@@ -63,33 +15,6 @@ defmodule QuillEx.ScenicComponent.TextPad do
     alias QuillEx.ScenicComponent.MenuBar 
     alias QuillEx.ScenicComponent.TextPad.LineOfText
   
-  
-    @default_hint ""
-    @default_font :roboto_mono
-    @default_font_size 22
-    @char_width 10
-    @inset_x 10
-  
-    @default_type :text
-    @default_filter :all
-  
-    @default_width @char_width * 24
-    @default_height @default_font_size * 1.5
-  
-    @input_capture [:cursor_button, :cursor_pos, :codepoint, :key]
-  
-    @password_char '*'
-  
-    @hint_color :grey
-
-    def text_pad(graph, lines, opts) do
-      graph |> add_to_graph(lines, opts)
-    end
-  
-
-
-
-
   
     @doc false
     def init(lines_of_text, opts) when is_list(lines_of_text) do
@@ -102,12 +27,12 @@ defmodule QuillEx.ScenicComponent.TextPad do
       window_bow = {width, height}
       text_box = {width-(2*padding), height-(2*padding)} # padding applies to top and bottom / both sides
 
+      #NOTE: just some old experiments, trying to get group_spec to work...
       # list_of_linespecs =
         # for l <- lines_of_text, into: [], do: [LineOfText.spec(l)]
-
       # text_block_group = group_spec(list_of_linespecs, t: [ 100, 100 ])
 
-      # this function adds all the LineOfText components to the graph
+      # this function adds all the LineOfText components to the graph #TODO as a group
       render_lines_of_text_fn =
         fn incoming_graph ->
              {final_graph, _n} =
@@ -117,7 +42,7 @@ defmodule QuillEx.ScenicComponent.TextPad do
                        reductor_graph
                        |> LineOfText.add_to_graph(
                             line,
-                              t: {0, (n-1)*40}, #TODO get line height
+                              t: {0+p, ((n-1)*40)+p}, #TODO get line height
                               id: {:line, n})
 
                           {updated_graph, n+1}
@@ -141,42 +66,10 @@ defmodule QuillEx.ScenicComponent.TextPad do
         focused: false,
       }
 
-      {:ok, state, push: graph}
-    end
-
-   def render_textfields(graph, lines_of_text, {width, height}) do
-    initial_accumulator = {graph, _first_line = 1}
-
-    {new_graph, _final_acc} =
-        lines_of_text
-        |> Enum.reduce(initial_accumulator,
-            fn line, _acc = {reductor, n} ->
-              new_reductor =
-                reductor
-                |> LineOfText.add_to_graph(
-                # |> TextField.add_to_graph(
-                      line,
-                      t: {10, (n-0)*40}, #TODO get line height, it's not 40
-                      id: {:line, n})
-              {new_reductor, n+1}
-           end)
-
-      # |> TextField.add_to_graph(
-      #         line,
-      #         t: {0, (n-1)*40}, #TODO get line height
-      #         id: {:line, n})
-      # |> TextField.add_to_graph(
-      #   line,
-      #   t: {0, (n-0)*40}, #TODO get line height
-      #   id: {:line, n})
-
-    new_graph
-
-    # graph
-    # |> group(fn init_graph ->
-    #      new_graph
-    #    end)
+    {:ok, state, push: graph}
   end
+
+
 
 
   def filter_event({:newline, {:line, l}}, _from, state) do
