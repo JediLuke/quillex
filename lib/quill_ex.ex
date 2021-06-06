@@ -6,7 +6,7 @@ defmodule QuillEx do
 
   @default_resolution {1200, 800}
 
-  @default_conf %{
+  @default_scenic_viewport_configuration %{
     name: :main_viewport,
     size: @default_resolution,
     default_scene: {QuillEx.Scene.Default, nil},
@@ -22,10 +22,12 @@ defmodule QuillEx do
 
   def start(_type, _args) do
 
-    # load the viewport configuration from config
-    # start the application with the viewport
     children = [
-      {Scenic, viewports: [@default_conf]}
+      {Registry, name: QuillEx.PubSub,
+                 keys: :duplicate,
+                 partitions: System.schedulers_online()},
+      # QuillEx.MainExecutiveProcess,
+      {Scenic, viewports: [@default_scenic_viewport_configuration]}
     ]
 
     Supervisor.start_link(children, strategy: :one_for_one)
