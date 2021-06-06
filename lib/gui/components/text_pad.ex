@@ -62,8 +62,6 @@ defmodule QuillEx.ScenicComponent.TextPad do
     alias Scenic.Primitive.Style.Theme
     alias QuillEx.ScenicComponent.MenuBar 
     alias QuillEx.ScenicComponent.TextPad.LineOfText
-    alias Scenic.Component.Input.TextField
-    import Scenic.Primitives
   
   
     @default_hint ""
@@ -88,41 +86,50 @@ defmodule QuillEx.ScenicComponent.TextPad do
       graph |> add_to_graph(lines, opts)
     end
   
-    @doc false
-    def info(data) do
-      """
-      #{IO.ANSI.red()}TextPad components accept a list of Strings, e.g. ["The first line", "and the second."]
-      #{IO.ANSI.yellow()}Received: #{inspect(data)}
-      #{IO.ANSI.default_color()}
-      """
-    end
 
 
 
-  
-    @doc false
-    def verify(lines_of_text) when is_list(lines_of_text) do
-      {:ok, lines_of_text}
-    end
-  
-    def verify(_), do: :invalid_data
+
   
     @doc false
     def init(lines_of_text, opts) when is_list(lines_of_text) do
-      id     = opts[:id]
-      styles = opts[:styles]
-      width  = styles[:width] || raise "need a width"
-      height = styles[:height] || raise "need a height"
+      id      = opts[:id]
+      styles  = opts[:styles]
+      width   = styles[:width]  || raise "need a width"
+      height  = styles[:height] || raise "need a height"
+      margin  = 0
+      padding = p = 20
+      window_bow = {width, height}
+      text_box = {width-(2*padding), height-(2*padding)} # padding applies to top and bottom / both sides
+
+      # list_of_linespecs =
+        # for l <- lines_of_text, into: [], do: [LineOfText.spec(l)]
+
+      # text_block_group = group_spec(list_of_linespecs, t: [ 100, 100 ])
+
+      # this function adds all the LineOfText components to the graph
+      render_lines_of_text_fn =
+        fn incoming_graph ->
+             {final_graph, _n} =
+                lines_of_text
+                |> Enum.reduce({incoming_graph, 1}, fn line, {reductor_graph, n} -> # n = line number
+                     updated_graph =
+                       reductor_graph
+                       |> LineOfText.add_to_graph(
+                            line,
+                              t: {0, (n-1)*40}, #TODO get line height
+                              id: {:line, n})
+
+                          {updated_graph, n+1}
+                   end)
+
+             final_graph
+        end
 
       graph =
-        # Scenic.Graph.build(scissor: {150, 250})
-        Scenic.Graph.build()
-        # |> rect({100, 100}, t: {100, 100}, fill: :green, stroke: {2, :yellow})
-        # |> render_lines(lines_of_text, {width, height})
-        #   font: @default_font,
-        #   font_size: @default_font_size,
-          # scissor: {width, height}
-        |> render_textfields(lines_of_text, {width, height})
+        Scenic.Graph.build(scissor: window_bow)
+        |> Scenic.Primitives.rect(text_box, t: {p, p}, fill: :green, stroke: {2, :yellow})
+        |> render_lines_of_text_fn.()
 
       state = %{
         id: id,
@@ -134,62 +141,12 @@ defmodule QuillEx.ScenicComponent.TextPad do
         focused: false,
       }
 
-
-  
-      {:ok, %{state | graph: graph}, push: graph}
+      {:ok, state, push: graph}
     end
 
-
-  def render_lines(graph, [] = _lines_of_text, {width, height}) do
-    render_lines(graph, [""], {width, height})
-  end
-
-  def render_lines(graph, lines_of_text, {width, height}) do
-    graph
-
-    |> group(fn init_graph ->
-
-               {final_graph, _n} =
-                  lines_of_text
-                  |> Enum.reduce({init_graph, 1}, fn line, {reductor_graph, n} -> # n = line number
-                        updated_graph =
-                          reductor_graph
-                          #TODO this needs to be overridden with LineOfText I guess, so we can change the behaviour of pressing enter
-                          # |> TextField.add_to_graph(
-                          |> LineOfText.add_to_graph(
-                                line,
-                                t: {0, (n-1)*40}, #TODO get line height
-                                id: {:line, n})
-
-                        {updated_graph, n+1}
-                  end)
-
-              #  {final_graph, _n} =
-              #     lines_of_text
-              #     |> Enum.reduce({init_graph, 1}, fn line, {reductor_graph, n} -> # n = line number
-              #          updated_graph =
-              #            reductor_graph
-              #            |> LineOfText.add_to_graph( #TODO change this to a proper Scenic component!
-              #                  line,
-              #                  t: {0, (n-1)*40}, #TODO get line height
-              #                  id: {:line, n})
- 
-              #          {updated_graph, n+1}
-              #     end)
-                  
-               final_graph
-             end)
-
-    # |> rect({width, height}, stroke: {2, :white})
-  end
-
-  def render_textfields(graph, lines_of_text, {width, height}) do
+   def render_textfields(graph, lines_of_text, {width, height}) do
     initial_accumulator = {graph, _first_line = 1}
 
-    tfn = fn graph ->
-
-          end
-    
     {new_graph, _final_acc} =
         lines_of_text
         |> Enum.reduce(initial_accumulator,
@@ -221,12 +178,6 @@ defmodule QuillEx.ScenicComponent.TextPad do
     #    end)
   end
 
-  # {:value_changed, {:line, 1}, "k"
-
-  def handle_input({:key, {"enter", :press, _}}, _context, state) do
-    IO.puts "OK WE GOT AN ENTER"
-    {:noreply, state}
-  end
 
   def filter_event({:newline, {:line, l}}, _from, state) do
     IO.puts "get enter on line #{inspect l}"
@@ -236,6 +187,26 @@ defmodule QuillEx.ScenicComponent.TextPad do
   def filter_event(ee, _from, state) do
     IO.puts "EVENT #{inspect ee}"
     {:noreply, state}
+  end
+
+
+
+  
+  @doc false
+  @impl Scenic.Component
+  def verify(lines_of_text) when is_list(lines_of_text) do
+    # verify/1 must be implemented by a Scenic.Component,
+    # it checks the incoming params are valid
+    {:ok, lines_of_text}
+  end
+  def verify(_), do: :invalid_data
+
+  @doc false
+  @impl Scenic.Component
+  def info(data) do
+    # this is called by Scenic if we don't pass in correct params...
+    # I never use it but we have to implement it so here it is
+    raise "Failed to initialize #{__MODULE__} due to invalid params. Received: #{inspect data}"
   end
 end
 
