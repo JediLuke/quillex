@@ -1,4 +1,4 @@
-defmodule QuillEx.Scene.Editor do
+defmodule QuillEx.Scene.EditingDesk do
   use Scenic.Scene
   alias QuillEx.Utils
   alias QuillEx.ScenicComponent.MenuBar
@@ -26,7 +26,7 @@ defmodule QuillEx.Scene.Editor do
     {:ok, state, push: graph}
   end
 
-  def filter_event({:menubar, {:click, :new_file}}, _from, %{buffer_list: [], active_buffer: nil} = state) do
+  def filter_event({:menubar, {:click, :new_file}}, _from, %{buffer_list: []} = state) do
 
     new_buffer_list = [
       %{
