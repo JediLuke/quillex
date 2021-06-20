@@ -4,7 +4,7 @@ defmodule QuillEx.Scene.EditingDesk do
   alias QuillEx.ScenicComponent.MenuBar
   import Scenic.Primitives
   import Scenic.Components
-  alias QuillEx.ScenicComponent.TextPad
+  alias QuillEx.ScenicComponent.{EmeraldTablet, TextPad}
   require Logger
 
 
@@ -41,7 +41,7 @@ defmodule QuillEx.Scene.EditingDesk do
 
     new_graph =
       Scenic.Graph.build()
-      |> TextPad.add_to_graph(
+      |> EmeraldTablet.add_to_graph(
            [""],
            id: :pad,
            width: Utils.vp_width(state.viewport),

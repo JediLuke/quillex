@@ -2,11 +2,12 @@ defmodule QuillEx.ScenicComponent.TextPad do
     @moduledoc """
     Add a `text_pad` input to a graph.
 
-    TextPad is an extension of the original `text_field` provided in base
-    Scenic. That component worked for single lines, and had issus with
-    scrolling. A TextPad understands multi-line text segment, and has a
-    scrolling capability for when the text renders larger than the window
-    in which we have to present it.
+    TextPad is an extension of the original `TextField` provided in base
+    Scenic. That component works for single lines, and doesn't really support
+    scrolling. A TextPad understands multi-line text segments (so pressing
+    enter will take you onto a new line), and has a scrolling capability
+    for when the text renders larger than the window in which we have
+    to present it.
     """
     use Scenic.Component, has_children: true
     alias Scenic.{Scene, ViewPort}
@@ -15,6 +16,7 @@ defmodule QuillEx.ScenicComponent.TextPad do
     alias QuillEx.ScenicComponent.MenuBar 
     alias QuillEx.ScenicComponent.TextPad.LineOfText
   
+    @empty_string_of_blank_text "" # for readability / expliciteness
   
     @doc false
     def init(lines_of_text, opts) when is_list(lines_of_text) do
@@ -25,7 +27,7 @@ defmodule QuillEx.ScenicComponent.TextPad do
       margin  = 0
       padding = p = 20
       window_bow = {width, height}
-      text_box = {width-(2*padding), height-(2*padding)} # padding applies to top and bottom / both sides
+      text_box   = {width-(2*padding), height-(2*padding)} # padding applies to top and bottom / both sides
 
       #NOTE: just some old experiments, trying to get group_spec to work...
       # list_of_linespecs =
@@ -43,6 +45,7 @@ defmodule QuillEx.ScenicComponent.TextPad do
                        |> LineOfText.add_to_graph(
                             line,
                               t: {0+p, ((n-1)*40)+p}, #TODO get line height
+                              styles: %{capture_focus?: n == 1},
                               id: {:line, n})
 
                           {updated_graph, n+1}
@@ -64,6 +67,7 @@ defmodule QuillEx.ScenicComponent.TextPad do
         lines: lines_of_text,
         cursor: {1,1},
         focused: false,
+        opts: opts
       }
 
     {:ok, state, push: graph}
@@ -72,9 +76,30 @@ defmodule QuillEx.ScenicComponent.TextPad do
 
 
 
-  def filter_event({:newline, {:line, l}}, _from, state) do
+  def filter_event({:newline, {:line, l}}, _from, %{lines: ll, cursor: {row,_col}} = state) do
     IO.puts "get enter on line #{inspect l}"
-    {:noreply, state}
+
+    #TODO should I try to manipulate the graph here?? Find the lines & update em all?
+
+    new_graph =
+      state.graph
+      |> LineOfText.add_to_graph(@empty_string_of_blank_text,
+                      id: {:line, row},
+                      styles: %{capture_focus?: true},
+                      #TODO passing should be a property of the component (i.e. in the state)
+                      t: {0+20, ((row)*40)+20}, #TODO get line height
+                    )
+                            
+    #TODO it worked, but I now nee to move the focus to the next line
+
+
+    new_state =
+      state
+      |> Map.replace!(:lines, state.lines ++ [""])
+      |> Map.replace!(:graph, new_graph)
+
+
+    {:noreply, new_state, push: new_graph}
   end
 
   def filter_event(ee, _from, state) do
@@ -83,6 +108,9 @@ defmodule QuillEx.ScenicComponent.TextPad do
   end
 
 
+  defp render_lines_of_text(graph) do
+    
+  end
 
   
   @doc false

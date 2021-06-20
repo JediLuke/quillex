@@ -67,7 +67,7 @@ defmodule QuillEx.ScenicComponent.TextPad.LineOfText do
   
     # import IEx
   
-    @default_hint ""
+    @default_hint "Enter text here..."
     @default_font :roboto_mono
     @default_font_size 22
     @char_width 10
@@ -109,6 +109,15 @@ defmodule QuillEx.ScenicComponent.TextPad.LineOfText do
       id = opts[:id]
       styles = opts[:styles]
 
+      # ok so - seems like this: https://github.com/boydm/scenic/blob/master/lib/scenic/primitive.ex#L238
+      # is stripping out extra options I send...
+      capture_focus? = styles[:capture_focus?] || false
+      |> IO.inspect(label: "HEHEHE")
+      # for now, I'm going to use the `styles` to pass things down, but
+      # this is a hack and we should just go change the way components work,
+      # not being able to pass in even "props" ? seems dumb
+
+
       # theme is passed in as an inherited style
       theme =
         (styles[:theme] || Theme.preset(:dark))
@@ -124,6 +133,20 @@ defmodule QuillEx.ScenicComponent.TextPad.LineOfText do
       index  = String.length(value)
   
       display = display_from_value(value, type)
+
+      if capture_focus? do
+
+        scene_ref = Process.info(self())[:dictionary][:scene_ref]
+        graph_key = {:graph, scene_ref, nil} #TODO still dont know what the third param is for...
+
+        viewport_ctx = Scenic.ViewPort.Context.build(%{graph_key: graph_key})
+
+        Process.whereis(:main_viewport)
+        |> GenServer.cast({:capture_input, viewport_ctx, @input_capture})
+
+        # And then animate differently - change color or something
+        GenServer.cast(self(), :capture_focus_animate)
+      end
   
       state = %{
         graph: nil,
@@ -135,7 +158,8 @@ defmodule QuillEx.ScenicComponent.TextPad.LineOfText do
         hint: hint,
         index: index,
         char_width: @char_width,
-        focused: false,
+        focused: capture_focus?,
+        # focused: false,
         type: type,
         filter: filter,
         id: id
@@ -170,7 +194,8 @@ defmodule QuillEx.ScenicComponent.TextPad.LineOfText do
         |> update_text(display, state)
         |> update_caret(display, index)
   
-      {:ok, %{state | graph: graph}, push: graph}
+      {:ok, %{state | graph: graph}, push: graph} #TODO here, continue to the next part which is (potentially?) capturing focus
+                                                  #we need to do it in a handle_input or something, so that we have the "context"
     end
   
     # ============================================================================
@@ -302,6 +327,30 @@ defmodule QuillEx.ScenicComponent.TextPad.LineOfText do
     end
   
     defp accept_char?(_, _), do: true
+
+    
+    def handle_cast(:capture_focus_animate, %{focused: f, graph: graph, theme: theme} = state) do
+
+      IO.puts "HANDLE FOCUS ANIMATRE"
+      IO.inspect f, label: "FOCUS?"
+
+      # start animating the caret
+      Scene.cast_to_refs(nil, :start_caret)
+
+      # show the caret
+      new_graph =
+        graph
+        |> Graph.modify(:caret, &update_opts(&1, hidden: false))
+        |> Graph.modify(:border, &update_opts(&1, stroke: {2, theme.focus}))
+  
+      # record the state
+      new_state =
+        state
+        |> Map.put(:focused, true)
+        |> Map.put(:graph, new_graph)
+
+      {:noreply, new_state, push: new_graph}
+    end
   
     # ============================================================================
     # User input handling - get the focus
@@ -314,6 +363,8 @@ defmodule QuillEx.ScenicComponent.TextPad.LineOfText do
           context,
           %{focused: false} = state
         ) do
+          IO.puts "UNFOCUSED CLICK IN THE TEXT FIELD"
+          IO.inspect context, label: "Context"
       {:noreply, capture_focus(context, state)}
     end
   
@@ -569,6 +620,8 @@ defmodule QuillEx.ScenicComponent.TextPad.LineOfText do
     # --------------------------------------------------------
     def handle_input({:key, {"enter", :press, _}}, _context, state) do
       # IO.puts "FOUND ENTER BUT ITS IN WRONG SPOT"
+      #TODO here - depends on whether or not it's in the middle of the line or not...
+      # for now assume its always end of the line
       send_event({:newline, state.id})
       {:noreply, state}
     end
