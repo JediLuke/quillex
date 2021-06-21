@@ -45,7 +45,7 @@ defmodule QuillEx.ScenicComponent.MenuBar do
         |> add_specs_to_graph([
              rect_spec(
                {Utils.vp_width(opts[:viewport]), @menubar_height},
-                  fill: @background),
+                   fill: @background),
              rrect_spec({@button_size*@menubar_height, @button_size*@menubar_height, 6},
                    stroke: {2, :white},
                    translate: {buffer_around_button(), buffer_around_button()}),
