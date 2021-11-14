@@ -4,8 +4,8 @@ defmodule QuillEx.MixProject do
   def project do
     [
       app: :quill_ex,
-      version: "0.1.0",
-      elixir: "~> 1.7",
+      version: "0.1.2",
+      elixir: "~> 1.12",
       build_embedded: true,
       start_permanent: Mix.env() == :prod,
       deps: deps()
@@ -16,15 +16,15 @@ defmodule QuillEx.MixProject do
   def application do
     [
       mod: {QuillEx, []},
-      extra_applications: [:crypto]
+      extra_applications: []
     ]
   end
 
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:scenic, "~> 0.10"},
-      {:scenic_driver_glfw, "~> 0.10", targets: :host},
+      {:scenic, "~> 0.11.0-beta.0"},
+      {:scenic_driver_local, "~> 0.11.0-beta.0"}
     ]
   end
 end
