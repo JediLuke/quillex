@@ -10,7 +10,7 @@ defmodule QuillEx do
   @scenic_config [
     name: :main_viewport,
     size: @default_resolution,
-    default_scene: {QuillEx.Scene.NotePad, nil},
+    default_scene: {QuillEx.Scene.RootScene, nil},
     drivers: [
       [
         module: Scenic.Driver.Local,
@@ -45,6 +45,10 @@ defmodule QuillEx do
   def start(_type, _args) do
 
     children = [
+      QuillEx.Radix,
+      {Registry, keys: :duplicate, name: QuillEx.PubSub},
+      QuillEx.StageManager,
+
       # {Registry, name: QuillEx.PubSub,
       #            keys: :duplicate,
       #            partitions: System.schedulers_online()},
