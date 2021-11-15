@@ -3,6 +3,7 @@ defmodule QuillEx.Components.NotePad do
     require Logger
     alias QuillEx.Components.NotePad.TextBoxMachv1
     alias QuillEx.Components.NotePad.TextBoxMachv2
+    alias QuillEx.Components.NotePad.TextBoxScrollable
 
 
     # this Component is mainly an outer-wrapper around the upcoming TextBox
@@ -56,6 +57,10 @@ defmodule QuillEx.Components.NotePad do
         |> TextBoxMachv2.add_to_graph(%{
             text: "The changes center around the fact that the NIF behind the put and clear functions breaks the immutable assumptions of the Erlang and Elixir languages. In other words, they operate directly on the backing memory of the texture instead of making a new copy and then changing it. This is for performance reasons. It also create several very hard to track down bugs.",
             frame: %{pin: {150, 800}, size: {1200, 300}}
+        })
+        |> TextBoxScrollable.add_to_graph(%{
+            text: "The changes center around the fact that the NIF behind the put and clear functions breaks the immutable assumptions of the Erlang and Elixir languages. In other words, they operate directly on the backing memory of the texture instead of making a new copy and then changing it. This is for performance reasons. It also create several very hard to track down bugs.",
+            frame: %{pin: {1050, 200}, size: {300, 300}}
         })
         # Scroll wrapping - for this, I can go ahead with existing text (which wraps),
         # but treat it as larger than another container. However, ultimately
