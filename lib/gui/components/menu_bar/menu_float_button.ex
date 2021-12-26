@@ -7,9 +7,6 @@ defmodule QuillEx.GUI.Components.MenuBar.FloatButton do
     """
 
 
-    @background :red
-    @sub_menu_height 40
-
     def validate(%{label: _l, index: _n, frame: _f, margin: _m, font_size: _fs} = data) do
         Logger.debug "#{__MODULE__} accepted params: #{inspect data}"
         {:ok, data}
@@ -54,42 +51,6 @@ defmodule QuillEx.GUI.Components.MenuBar.FloatButton do
     end
 
 
-    # def render(%{assigns: %{graph: %Scenic.Graph{} = graph, frame: frame}} = scene) do
-    #     new_graph = graph
-    #     |> Scenic.Graph.delete(@component_id)
-    #     |> Scenic.Primitives.rect({frame.dimensions.width, frame.dimensions.height},
-    #                 id: @component_id,
-    #                 fill: @background_color,
-    #                 translate: {
-    #                     frame.top_left.x,
-    #                     frame.top_left.y})
-
-
-    #     scene
-    #     |> assign(graph: new_graph)
-    # end
-
-
-
-    # def handle_input({:cursor_button, {:btn_left, 0, [], coords}}, _context, scene) do
-    #    bounds = Scenic.Graph.bounds(scene.assigns.graph) 
-    #    if coords |> inside?(bounds) do
-    #      Logger.debug "You clicked inside the tab: #{scene.assigns.label}"
-    #      #TODO here we need to throw the event "up" into SideBar to handle
-    #      #TODO is this still supported? If not, Scenic docs need updating...
-    #     #  {:cont, {:tab_click, scene.assigns.label}, scene}
-    #     # GenServer.cast(Flamelex.GUI.Component.Memex.SideBar, {:open_tab, scene.assigns.label})
-    #     {:gui_component, Flamelex.GUI.Component.Memex.HyperCard.Sidebar.LowerPane, :lower_pane}
-    #     |> ProcessRegistry.find!()
-    #     |> GenServer.cast({:open_tab, scene.assigns.label})
-
-    #      {:noreply, scene}
-    #    else
-    #     #  IO.puts "DID NOT CLICK ON A TAB"
-    #      {:noreply, scene}
-    #    end
-    # end
-
     def handle_input({:cursor_pos, {x, y} = coords}, _context, scene) do
         bounds = Scenic.Graph.bounds(scene.assigns.graph)
 
@@ -113,6 +74,5 @@ defmodule QuillEx.GUI.Components.MenuBar.FloatButton do
         # Logger.debug "#{__MODULE__} ignoring input: #{inspect input}..."
         {:noreply, scene}
     end
-
 
 end

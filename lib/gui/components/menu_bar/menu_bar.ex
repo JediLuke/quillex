@@ -11,8 +11,6 @@ defmodule QuillEx.GUI.Components.MenuBar do
 
     @menu_font_size 36
 
-    
-
     @default_menu [
         ["Buffer",
             ["Open", &QuillEx.API.Buffer.open/0]],
@@ -22,14 +20,14 @@ defmodule QuillEx.GUI.Components.MenuBar do
 
     def validate(%{width: _w} = data) do
         Logger.debug "#{__MODULE__} accepted params: #{inspect data}"
-        {:ok, data}
+        {:ok, data |> Map.merge(%{menu_map: @default_menu})}
     end
 
-    def init(scene, params, opts) do
+    def init(scene, args, opts) do
         Logger.debug "#{__MODULE__} initializing..."
 
-        init_state = {:initium, @default_menu}
-        init_frame = %{width: params.width}
+        init_state = {:initium, args.menu_map}
+        init_frame = %{width: args.width}
         init_graph = render(init_frame, init_state)
 
         new_scene = scene
