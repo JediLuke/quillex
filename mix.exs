@@ -27,7 +27,8 @@ defmodule QuillEx.MixProject do
       #{:scenic_driver_local, "~> 0.11.0-beta.0"}
       {:scenic_driver_local, path: "../scenic_driver_local", override: true},
       {:event_bus, "~> 1.6.2"},
-      {:elixir_uuid, "~> 1.2"} 
+      {:elixir_uuid, "~> 1.2"},
+      {:font_metrics, "~> 0.5"}
     ]
   end
 end
