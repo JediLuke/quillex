@@ -88,19 +88,48 @@ defmodule QuillEx.GUI.Components.MenuBar do
           ])
     end
 
-    def render_sub_menu(graph, %{menu_map: menu_map}, index) do
+    def render_sub_menu(graph, %{menu_map: menu_map} = state, index) do
+
         num_top_items = Enum.count(menu_map)
         {_top_label, sub_menu} = menu_map |> Enum.at(index-1)
         num_sub_menu_items = Enum.count(sub_menu)
+        sub_menu = sub_menu |> Enum.with_index()
+        sub_menu_width = @menu_width+(num_top_items*@left_margin)
+        sub_menu_height = num_sub_menu_items*@sub_menu_height
+
+        render_sub_menu = fn(init_graph) ->
+            {final_graph, _final_offset} = 
+                sub_menu
+                |> Enum.reduce({init_graph, _init_offset = 0}, fn {{label, func}, index}, {graph, offset} ->
+                        carry_graph = graph
+                        |> FloatButton.add_to_graph(%{
+                                label: label,
+                                index: index+1, #NOTE: I hate indexes which start at zero...
+                                font: %{
+                                    size: @sub_menu_font_size,
+                                    ascent: FontMetrics.ascent(@sub_menu_font_size, state.font_metrics),
+                                    descent: FontMetrics.descent(@sub_menu_font_size, state.font_metrics),
+                                    metrics: state.font_metrics},
+                                frame: %{
+                                    pin: {offset, 0}, #REMINDER: coords are like this, {x_coord, y_coord}
+                                    size: {sub_menu_width, @sub_menu_height}},
+                                margin: @left_margin})
+                        {carry_graph, offset+@sub_menu_height}
+                end)
+
+            final_graph
+        end
+
         graph
         |> Scenic.Primitives.group(fn graph ->
-            graph
-            |> Scenic.Primitives.rect({@menu_width+(num_top_items*@left_margin), num_sub_menu_items*@sub_menu_height}, fill: :grey)
-            |> Scenic.Primitives.text(Integer.to_string(index),
-                    font: :ibm_plex_mono,
-                    font_size: @sub_menu_font_size,
-                    translate: {15, 40},
-                    fill: :antique_white)
+            graph_with_background = graph
+            |> Scenic.Primitives.rect({sub_menu_width, sub_menu_height}, fill: :green)
+            |> render_sub_menu.()
+            # |> Scenic.Primitives.text(Integer.to_string(index),
+            #         font: :ibm_plex_mono,
+            #         font_size: @sub_menu_font_size,
+            #         translate: {15, 40},
+            #         fill: :antique_white)
           end, [
              id: :sub_menu, translate: {@menu_width*(index-1), @height}
           ])
