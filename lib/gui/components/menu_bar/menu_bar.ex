@@ -26,7 +26,9 @@ defmodule QuillEx.GUI.Components.MenuBar do
     def init(scene, args, opts) do
         Logger.debug "#{__MODULE__} initializing..."
 
-        init_state = {:initium, args.menu_map}
+        {:ok, ibm_plex_mono_fm} = TruetypeMetrics.load("./assets/fonts/IBMPlexMono-Regular.ttf")
+
+        init_state = %{mode: :inactive, menu_map: args.menu_map, font_metrics: ibm_plex_mono_fm}
         init_frame = %{width: args.width}
         init_graph = render(init_frame, init_state)
 
@@ -43,7 +45,7 @@ defmodule QuillEx.GUI.Components.MenuBar do
     end
 
 
-    def render(%{width: width}, {:initium, menu}) do
+    def render(%{width: width}, %{mode: :inactive, menu_map: menu, font_metrics: fm}) do
         menu_items_list = menu
         |> Enum.map(fn [label, _sub_menu] -> label end)
         |> Enum.with_index()
@@ -53,14 +55,18 @@ defmodule QuillEx.GUI.Components.MenuBar do
         render_menu_items = fn(init_graph, menu_items_list) ->
             {final_graph, _final_offset} = 
                 menu_items_list
-                |> Enum.reduce({init_graph, _init_offset = @left_margin}, fn {label, index}, {graph, offset} ->
+                |> Enum.reduce({init_graph, _init_offset = 0}, fn {label, index}, {graph, offset} ->
                         label_width = 180 #TODO - either fixed width, or flex width (adapts to size of label)
                         item_width = label_width+@left_margin
                         carry_graph = graph
                         |> FloatButton.add_to_graph(%{
                                 label: label,
                                 index: index+1, #NOTE: I hate indexes which start at zero...
-                                font_size: @menu_font_size,
+                                font: %{
+                                    size: @menu_font_size,
+                                    ascent: FontMetrics.ascent(@menu_font_size, fm),
+                                    descent: FontMetrics.descent(@menu_font_size, fm),
+                                    metrics: fm},
                                 frame: %{
                                     pin: {offset, 0}, #REMINDER: coords are like this, {x_coord, y_coord}
                                     size: {item_width, @height}},

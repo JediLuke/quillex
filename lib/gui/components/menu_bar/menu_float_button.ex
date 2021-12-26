@@ -7,7 +7,7 @@ defmodule QuillEx.GUI.Components.MenuBar.FloatButton do
     """
 
 
-    def validate(%{label: _l, index: _n, frame: _f, margin: _m, font_size: _fs} = data) do
+    def validate(%{label: _l, index: _n, frame: _f, margin: _m, font: _fs} = data) do
         Logger.debug "#{__MODULE__} accepted params: #{inspect data}"
         {:ok, data}
     end
@@ -22,7 +22,7 @@ defmodule QuillEx.GUI.Components.MenuBar.FloatButton do
         |> assign(frame: args.frame)
         |> assign(state: %{
                     mode: :inactive,
-                    font_size: args.font_size,
+                    font: args.font,
                     index: args.index})
         |> push_graph(init_graph)
 
@@ -32,6 +32,11 @@ defmodule QuillEx.GUI.Components.MenuBar.FloatButton do
     end
 
     def render(args) do
+        {_width, height} = args.frame.size
+
+        # https://github.com/boydm/scenic/blob/master/lib/scenic/component/button.ex#L200
+        vpos = height/2 + (args.font.ascent/2) + (args.font.descent/3)
+
         Scenic.Graph.build()
         |> Scenic.Primitives.group(fn graph ->
             graph
@@ -41,8 +46,8 @@ defmodule QuillEx.GUI.Components.MenuBar.FloatButton do
             |> Scenic.Primitives.text(args.label,
                     id: :label,
                     font: :ibm_plex_mono,
-                    font_size: args.font_size,
-                    translate: {args.font_size, args.margin},
+                    font_size: args.font.size,
+                    translate: {args.margin, vpos},
                     fill: :antique_white)
           end, [
              id: {:float_button, args.index},
