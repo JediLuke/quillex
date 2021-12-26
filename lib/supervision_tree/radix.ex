@@ -4,19 +4,23 @@ defmodule QuillEx.Radix do
   
     @seed_state %{
         #   menubar: ["Open file"],
-          menubar: :inactive,
-          tabs: :inactive,
-          textbox: :inactive,
-          bottom_bar: :inactive
+          # menubar: :inactive,
+          # tabs: :inactive,
+          # textbox: :inactive,
+          # bottom_bar: :inactive
       }
 
     def start_link(_opts) do
-      Process.register(self(), __MODULE__)
-      Agent.start_link(fn -> @seed_state end)
+      Agent.start_link(fn -> @seed_state end, name: __MODULE__)
     end
 
+    # def get do
+    #   IO.puts "HERE"
+    #   Process.whereis(__MODULE__) |> Agent.get(& &1) # just return all the state
+    # end
+
     def get do
-      Agent.get(__MODULE__, & &1) # just return all the state
+      Agent.get(__MODULE__, & &1)
     end
   
 

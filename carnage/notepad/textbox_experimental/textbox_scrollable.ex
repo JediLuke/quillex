@@ -26,7 +26,7 @@ defmodule QuillEx.Components.NotePad.TextBoxScrollable do
         |> assign(state: state)
         |> push_graph(new_graph)
         
-        QuillEx.Utils.PubSub.register()
+        #QuillEx.Utils.PubSub.register()
         request_input(new_scene, [:cursor_scroll])
 
         {:ok, new_scene}

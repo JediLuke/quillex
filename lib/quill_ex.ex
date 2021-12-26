@@ -1,6 +1,6 @@
 defmodule QuillEx do
   @moduledoc """
-  Starter application using the Scenic framework.
+  QuillEx is a simple text-editor, written in Elixir.
   """
 
   @mix_app :quill_ex # this is the name of our app, declared in `mix.exs` - THIS HAS TO MATCH !
@@ -42,12 +42,26 @@ defmodule QuillEx do
   end
 
 
+  @doc """
+  Publish an action to the internal event-bus.
+  """
+  def action(a) do
+    EventBus.notify(%EventBus.Model.Event{
+      id:    UUID.uuid4(),
+      topic: :general,
+      data:  {:action, a}
+    })
+  end
+
+  #REMINDER: This launches the supervision tree
   def start(_type, _args) do
 
     children = [
-      QuillEx.Radix,
-      {Registry, keys: :duplicate, name: QuillEx.PubSub},
-      QuillEx.StageManager,
+      QuillEx.Radix,            # holds the root-state of the application
+      QuillEx.EventListener,    # listens to the event-bus, triggers actions
+
+      # {Registry, keys: :duplicate, name: QuillEx.PubSub},
+      # QuillEx.StageManager,
 
       # {Registry, name: QuillEx.PubSub,
       #            keys: :duplicate,
@@ -58,4 +72,6 @@ defmodule QuillEx do
 
     Supervisor.start_link(children, strategy: :one_for_one)
   end
+
+
 end

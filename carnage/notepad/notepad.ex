@@ -36,7 +36,7 @@ defmodule QuillEx.Components.NotePad do
         |> assign(state: :initium)
         |> push_graph(new_graph)
         
-        QuillEx.Utils.PubSub.register()
+        #QuillEx.Utils.PubSub.register()
         request_input(new_scene, [:cursor_button])
 
         {:ok, new_scene}

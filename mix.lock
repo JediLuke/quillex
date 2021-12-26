@@ -1,5 +1,7 @@
 %{
   "elixir_make": {:hex, :elixir_make, "0.6.3", "bc07d53221216838d79e03a8019d0839786703129599e9619f4ab74c8c096eac", [:mix], [], "hexpm", "f5cbd651c5678bcaabdbb7857658ee106b12509cd976c2c2fca99688e1daf716"},
+  "elixir_uuid": {:hex, :elixir_uuid, "1.2.1", "dce506597acb7e6b0daeaff52ff6a9043f5919a4c3315abb4143f0b00378c097", [:mix], [], "hexpm", "f7eba2ea6c3555cea09706492716b0d87397b88946e6380898c2889d68585752"},
+  "event_bus": {:hex, :event_bus, "1.6.2", "75a68e2950a383bd413acadd97071c3990534afec307564c11432bc477a2f509", [:mix], [], "hexpm", "6a04ae12b5b40e2bcc71f920da43fb24ac712e13ec4f81e020f37b2a2c47b481"},
   "ex_image_info": {:hex, :ex_image_info, "0.2.4", "610002acba43520a9b1cf1421d55812bde5b8a8aeaf1fe7b1f8823e84e762adb", [:mix], [], "hexpm", "fd1a7e02664e3b14dfd3b231d22fdd48bd3dd694c4773e6272b3a6228f1106bc"},
   "font_metrics": {:hex, :font_metrics, "0.5.1", "10ce0b8b1bf092a2d3d307e05a7c433787ae8ca7cd1f3cf959995a628809a994", [:mix], [{:nimble_options, "~> 0.3", [hex: :nimble_options, repo: "hexpm", optional: false]}], "hexpm", "192e4288772839ae4dadccb0f5b1d5c89b73a0c3961ccea14b6181fdcd535e54"},
   "input_event": {:hex, :input_event, "0.4.3", "ea1c6c81fd245f617858294ce106bf4b9c35822eaa94793ffa104cc0ae1bd323", [:make, :mix], [{:elixir_make, "~> 0.6", [hex: :elixir_make, repo: "hexpm", optional: false]}], "hexpm", "818bd6b20d3a6ccac868074138eae5dbae17baf2f7711b2852253d6461ad80db"},

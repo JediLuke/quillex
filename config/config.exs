@@ -5,6 +5,9 @@ use Mix.Config
 config :scenic,
   :assets, module: QuillEx.Assets
 
+config :event_bus,
+  topics: [:general, :random]
+
 # It is also possible to import configuration files, relative to this
 # directory. For example, you can emulate configuration per environment
 # by uncommenting the line below and defining dev.exs, test.exs and such.
