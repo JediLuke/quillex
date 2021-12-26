@@ -12,11 +12,13 @@ defmodule QuillEx.GUI.Components.MenuBar do
     @menu_font_size 36
     @sub_menu_font_size 22
 
+    @menu_width 180
+
     @default_menu [
-        ["Buffer",
-            ["Open", &QuillEx.API.Buffer.open/0]],
-        ["Help",
-            ["About QuillEx", &QuillEx.API.Misc.makers_mark/0]]
+        {"Buffer", [
+            {"Open", &QuillEx.API.Buffer.open/0}]},
+        {"Help", [
+            {"About QuillEx", &QuillEx.API.Misc.makers_mark/0}]}
     ]
 
     def validate(%{width: _w} = data) do
@@ -46,7 +48,7 @@ defmodule QuillEx.GUI.Components.MenuBar do
 
     def render(%{width: width}, %{mode: :inactive, menu_map: menu, font_metrics: fm}) do
         menu_items_list = menu
-        |> Enum.map(fn [label, _sub_menu] -> label end)
+        |> Enum.map(fn {label, _sub_menu} -> label end)
         |> Enum.with_index()
 
         #NOTE: define a function which shall render the menu-item components,
@@ -55,7 +57,7 @@ defmodule QuillEx.GUI.Components.MenuBar do
             {final_graph, _final_offset} = 
                 menu_items_list
                 |> Enum.reduce({init_graph, _init_offset = 0}, fn {label, index}, {graph, offset} ->
-                        label_width = 180 #TODO - either fixed width, or flex width (adapts to size of label)
+                        label_width = @menu_width #TODO - either fixed width, or flex width (adapts to size of label)
                         item_width = label_width+@left_margin
                         carry_graph = graph
                         |> FloatButton.add_to_graph(%{
@@ -87,24 +89,27 @@ defmodule QuillEx.GUI.Components.MenuBar do
     end
 
     def render_sub_menu(graph, %{menu_map: menu_map}, index) do
+        num_top_items = Enum.count(menu_map)
+        {_top_label, sub_menu} = menu_map |> Enum.at(index-1)
+        num_sub_menu_items = Enum.count(sub_menu)
         graph
         |> Scenic.Primitives.group(fn graph ->
             graph
-            |> Scenic.Primitives.rect({100, 100}, fill: :grey)
+            |> Scenic.Primitives.rect({@menu_width+(num_top_items*@left_margin), num_sub_menu_items*@sub_menu_height}, fill: :grey)
             |> Scenic.Primitives.text(Integer.to_string(index),
                     font: :ibm_plex_mono,
                     font_size: @sub_menu_font_size,
-                    translate: {15, 15},
+                    translate: {15, 40},
                     fill: :antique_white)
           end, [
-             id: :sub_menu, translate: {100, 100}
+             id: :sub_menu, translate: {@menu_width*(index-1), @height}
           ])
     end
 
 
     def handle_cast({:hover, _index} = new_mode, %{assigns: %{state: %{mode: current_mode}}} = scene)
         when new_mode == current_mode do
-            Logger.debug "#{__MODULE__} ignoring mode change request, as we are already in #{inspect new_mode}"
+            #Logger.debug "#{__MODULE__} ignoring mode change request, as we are already in #{inspect new_mode}"
             {:noreply, scene}
     end
 
@@ -146,7 +151,7 @@ defmodule QuillEx.GUI.Components.MenuBar do
     end
 
     def handle_cast({:cancel, cancel_mode}, scene) do
-        Logger.debug "#{__MODULE__} ignoring mode cancellation request, as we are not in #{inspect cancel_mode}"
+        #Logger.debug "#{__MODULE__} ignoring mode cancellation request, as we are not in #{inspect cancel_mode}"
         {:noreply, scene}
     end
 end
