@@ -10,6 +10,7 @@ defmodule QuillEx.GUI.Components.MenuBar do
     @default_gray {48, 48, 48}
 
     @menu_font_size 36
+    @sub_menu_font_size 22
 
     @default_menu [
         ["Buffer",
@@ -85,13 +86,18 @@ defmodule QuillEx.GUI.Components.MenuBar do
           ])
     end
 
-    def render_sub_menu(graph, menu_map, index) do
+    def render_sub_menu(graph, %{menu_map: menu_map}, index) do
         graph
         |> Scenic.Primitives.group(fn graph ->
             graph
-            |> Scenic.Primitives.rect({100, 100}, fill: :grey, translate: {100, 100})
+            |> Scenic.Primitives.rect({100, 100}, fill: :grey)
+            |> Scenic.Primitives.text(Integer.to_string(index),
+                    font: :ibm_plex_mono,
+                    font_size: @sub_menu_font_size,
+                    translate: {15, 15},
+                    fill: :antique_white)
           end, [
-             id: :sub_menu
+             id: :sub_menu, translate: {100, 100}
           ])
     end
 
@@ -110,7 +116,7 @@ defmodule QuillEx.GUI.Components.MenuBar do
 
         new_graph = scene.assigns.graph
         |> Scenic.Graph.delete(:sub_menu)
-        |> render_sub_menu(scene.assigns.state.menu_map, index)
+        |> render_sub_menu(scene.assigns.state, index)
 
         new_scene = scene
         |> assign(state: new_state)
