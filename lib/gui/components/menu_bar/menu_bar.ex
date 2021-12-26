@@ -39,9 +39,6 @@ defmodule QuillEx.GUI.Components.MenuBar do
         |> assign(frame: init_frame)
         |> push_graph(init_graph)
         
-        #QuillEx.Utils.PubSub.register()
-        # request_input(new_scene, [:cursor_button])
-
         {:ok, new_scene}
     end
 
@@ -88,18 +85,16 @@ defmodule QuillEx.GUI.Components.MenuBar do
           ])
     end
 
-
-    def handle_cast({:hover, index} = new_mode, %{assigns: %{state: %{mode: :inactive}}} = scene) do
-        Logger.debug "#{__MODULE__} changing state.mode to: #{inspect new_mode}"
-
-        new_state = scene.assigns.state
-        |> Map.put(:mode, new_mode)
-
-        new_scene = scene
-        |> assign(state: new_state)
-        
-        {:noreply, new_scene}
+    def render_sub_menu(graph, menu_map, index) do
+        graph
+        |> Scenic.Primitives.group(fn graph ->
+            graph
+            |> Scenic.Primitives.rect({100, 100}, fill: :grey, translate: {100, 100})
+          end, [
+             id: :sub_menu
+          ])
     end
+
 
     def handle_cast({:hover, _index} = new_mode, %{assigns: %{state: %{mode: current_mode}}} = scene)
         when new_mode == current_mode do
@@ -107,15 +102,45 @@ defmodule QuillEx.GUI.Components.MenuBar do
             {:noreply, scene}
     end
 
-    def handle_cast({:hover, _index} = new_mode, %{assigns: %{state: %{mode: _current_mode}}} = scene) do
+    def handle_cast({:hover, index} = new_mode, %{assigns: %{state: %{mode: _current_mode}}} = scene) do
         Logger.debug "#{__MODULE__} changing state.mode to: #{inspect new_mode}"
 
         new_state = scene.assigns.state
         |> Map.put(:mode, new_mode)
 
+        new_graph = scene.assigns.graph
+        |> Scenic.Graph.delete(:sub_menu)
+        |> render_sub_menu(scene.assigns.state.menu_map, index)
+
         new_scene = scene
         |> assign(state: new_state)
+        |> assign(graph: new_graph)
+        |> push_graph(new_graph)
         
         {:noreply, new_scene}
+    end
+
+    def handle_cast({:cancel, cancel_mode}, %{assigns: %{state: %{mode: current_mode}}} = scene)
+        when cancel_mode == current_mode do
+            new_mode = :inactive
+            Logger.debug "#{__MODULE__} changing state.mode to: #{inspect new_mode}"
+
+            new_state = scene.assigns.state
+            |> Map.put(:mode, new_mode)
+    
+            new_graph = scene.assigns.graph
+            |> Scenic.Graph.delete(:sub_menu)
+
+            new_scene = scene
+            |> assign(state: new_state)
+            |> assign(graph: new_graph)
+            |> push_graph(new_graph)
+            
+            {:noreply, new_scene}
+    end
+
+    def handle_cast({:cancel, cancel_mode}, scene) do
+        Logger.debug "#{__MODULE__} ignoring mode cancellation request, as we are not in #{inspect cancel_mode}"
+        {:noreply, scene}
     end
 end
