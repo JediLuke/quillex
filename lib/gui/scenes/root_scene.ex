@@ -6,7 +6,6 @@ defmodule QuillEx.Scene.RootScene do
 
   def init(scene, _params, _opts) do
     Logger.debug "#{__MODULE__} initializing..."
-
     Process.register(self(), __MODULE__)
 
     init_state = :initium #NOTE: `initium` - the initial/default state

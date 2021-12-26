@@ -61,6 +61,7 @@ defmodule QuillEx.GUI.Components.MenuBar.FloatButton do
 
         new_graph =
             if coords |> QuillEx.Utils.HoverUtils.inside?(bounds) do
+                GenServer.cast(QuillEx.GUI.Components.MenuBar, {:hover, scene.assigns.state.index})
                 scene.assigns.graph
                 |> Scenic.Graph.modify(:background, &Scenic.Primitives.update_opts(&1, fill: :green))
             else

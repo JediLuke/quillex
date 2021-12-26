@@ -25,6 +25,7 @@ defmodule QuillEx.GUI.Components.MenuBar do
 
     def init(scene, args, opts) do
         Logger.debug "#{__MODULE__} initializing..."
+        Process.register(self(), __MODULE__)
 
         {:ok, ibm_plex_mono_fm} = TruetypeMetrics.load("./assets/fonts/IBMPlexMono-Regular.ttf")
 
@@ -85,5 +86,36 @@ defmodule QuillEx.GUI.Components.MenuBar do
           end, [
              id: :menu_bar
           ])
+    end
+
+
+    def handle_cast({:hover, index} = new_mode, %{assigns: %{state: %{mode: :inactive}}} = scene) do
+        Logger.debug "#{__MODULE__} changing state.mode to: #{inspect new_mode}"
+
+        new_state = scene.assigns.state
+        |> Map.put(:mode, new_mode)
+
+        new_scene = scene
+        |> assign(state: new_state)
+        
+        {:noreply, new_scene}
+    end
+
+    def handle_cast({:hover, _index} = new_mode, %{assigns: %{state: %{mode: current_mode}}} = scene)
+        when new_mode == current_mode do
+            Logger.debug "#{__MODULE__} ignoring mode change request, as we are already in #{inspect new_mode}"
+            {:noreply, scene}
+    end
+
+    def handle_cast({:hover, _index} = new_mode, %{assigns: %{state: %{mode: _current_mode}}} = scene) do
+        Logger.debug "#{__MODULE__} changing state.mode to: #{inspect new_mode}"
+
+        new_state = scene.assigns.state
+        |> Map.put(:mode, new_mode)
+
+        new_scene = scene
+        |> assign(state: new_state)
+        
+        {:noreply, new_scene}
     end
 end
