@@ -7,7 +7,7 @@ defmodule QuillEx.GUI.Components.MenuBar.FloatButton do
     """
 
 
-    def validate(%{label: _l, index: _n, frame: _f, margin: _m, font: _fs} = data) do
+    def validate(%{label: _l, menu_index: _n, frame: _f, margin: _m, font: _fs} = data) do
         Logger.debug "#{__MODULE__} accepted params: #{inspect data}"
         {:ok, data}
     end
@@ -23,7 +23,7 @@ defmodule QuillEx.GUI.Components.MenuBar.FloatButton do
         |> assign(state: %{
                     mode: :inactive,
                     font: args.font,
-                    index: args.index})
+                    menu_index: args.menu_index})
         |> push_graph(init_graph)
 
         request_input(init_scene, [:cursor_pos])
@@ -50,7 +50,7 @@ defmodule QuillEx.GUI.Components.MenuBar.FloatButton do
                     translate: {args.margin, vpos},
                     fill: :antique_white)
           end, [
-             id: {:float_button, args.index},
+             id: {:float_button, args.menu_index},
              translate: args.frame.pin
           ])
     end
@@ -61,11 +61,11 @@ defmodule QuillEx.GUI.Components.MenuBar.FloatButton do
 
         new_graph =
             if coords |> QuillEx.Utils.HoverUtils.inside?(bounds) do
-                GenServer.cast(QuillEx.GUI.Components.MenuBar, {:hover, scene.assigns.state.index})
+                GenServer.cast(QuillEx.GUI.Components.MenuBar, {:hover, scene.assigns.state.menu_index})
                 scene.assigns.graph
                 |> Scenic.Graph.modify(:background, &Scenic.Primitives.update_opts(&1, fill: :green))
             else
-                GenServer.cast(QuillEx.GUI.Components.MenuBar, {:cancel, {:hover, scene.assigns.state.index}})
+                GenServer.cast(QuillEx.GUI.Components.MenuBar, {:cancel, {:hover, scene.assigns.state.menu_index}})
                 scene.assigns.graph
                 |> Scenic.Graph.modify(:background, &Scenic.Primitives.update_opts(&1, fill: :blue))
             end

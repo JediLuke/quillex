@@ -62,7 +62,7 @@ defmodule QuillEx.GUI.Components.MenuBar do
                         carry_graph = graph
                         |> FloatButton.add_to_graph(%{
                                 label: label,
-                                index: index+1, #NOTE: I hate indexes which start at zero...
+                                menu_index: {:top_index, index+1}, #NOTE: I hate indexes which start at zero...
                                 font: %{
                                     size: @menu_font_size,
                                     ascent: FontMetrics.ascent(@menu_font_size, fm),
@@ -88,10 +88,10 @@ defmodule QuillEx.GUI.Components.MenuBar do
           ])
     end
 
-    def render_sub_menu(graph, %{menu_map: menu_map} = state, index) do
+    def render_sub_menu(graph, %{menu_map: menu_map} = state, top_index) do
 
         num_top_items = Enum.count(menu_map)
-        {_top_label, sub_menu} = menu_map |> Enum.at(index-1)
+        {_top_label, sub_menu} = menu_map |> Enum.at(top_index-1)
         num_sub_menu_items = Enum.count(sub_menu)
         sub_menu = sub_menu |> Enum.with_index()
         sub_menu_width = @menu_width+(num_top_items*@left_margin)
@@ -100,11 +100,11 @@ defmodule QuillEx.GUI.Components.MenuBar do
         render_sub_menu = fn(init_graph) ->
             {final_graph, _final_offset} = 
                 sub_menu
-                |> Enum.reduce({init_graph, _init_offset = 0}, fn {{label, func}, index}, {graph, offset} ->
+                |> Enum.reduce({init_graph, _init_offset = 0}, fn {{label, func}, sub_index}, {graph, offset} ->
                         carry_graph = graph
                         |> FloatButton.add_to_graph(%{
                                 label: label,
-                                index: index+1, #NOTE: I hate indexes which start at zero...
+                                menu_index: {:top_index, top_index, :sub_index, sub_index+1}, #NOTE: I hate indexes which start at zero...
                                 font: %{
                                     size: @sub_menu_font_size,
                                     ascent: FontMetrics.ascent(@sub_menu_font_size, state.font_metrics),
@@ -131,19 +131,19 @@ defmodule QuillEx.GUI.Components.MenuBar do
             #         translate: {15, 40},
             #         fill: :antique_white)
           end, [
-             id: :sub_menu, translate: {@menu_width*(index-1), @height}
+             id: :sub_menu, translate: {@menu_width*(top_index-1), @height}
           ])
     end
 
 
-    def handle_cast({:hover, _index} = new_mode, %{assigns: %{state: %{mode: current_mode}}} = scene)
+    def handle_cast({:hover, {:top_index, _index}} = new_mode, %{assigns: %{state: %{mode: current_mode}}} = scene)
         when new_mode == current_mode do
             #Logger.debug "#{__MODULE__} ignoring mode change request, as we are already in #{inspect new_mode}"
             {:noreply, scene}
     end
 
-    def handle_cast({:hover, index} = new_mode, %{assigns: %{state: %{mode: _current_mode}}} = scene) do
-        Logger.debug "#{__MODULE__} changing state.mode to: #{inspect new_mode}"
+    def handle_cast({:hover, {:top_index, index}} = new_mode, %{assigns: %{state: %{mode: current_mode}}} = scene) do
+        Logger.debug "#{__MODULE__} changing state.mode to: #{inspect new_mode}, from: #{inspect current_mode}"
 
         new_state = scene.assigns.state
         |> Map.put(:mode, new_mode)
@@ -156,6 +156,24 @@ defmodule QuillEx.GUI.Components.MenuBar do
         |> assign(state: new_state)
         |> assign(graph: new_graph)
         |> push_graph(new_graph)
+        
+        {:noreply, new_scene}
+    end
+
+    def handle_cast({:hover, {:top_index, t, :sub_index, s}} = new_mode, %{assigns: %{state: %{mode: current_mode}}} = scene) do
+        Logger.debug "#{__MODULE__} changing state.mode to: #{inspect new_mode}, from: #{inspect current_mode}"
+
+        new_state = scene.assigns.state
+        |> Map.put(:mode, new_mode)
+
+        # new_graph = scene.assigns.graph
+        # |> Scenic.Graph.delete(:sub_menu)
+        # |> render_sub_menu(scene.assigns.state, index)
+
+        new_scene = scene
+        |> assign(state: new_state)
+        # |> assign(graph: new_graph)
+        # |> push_graph(new_graph)
         
         {:noreply, new_scene}
     end
