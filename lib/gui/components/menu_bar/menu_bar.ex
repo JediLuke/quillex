@@ -149,7 +149,7 @@ defmodule QuillEx.GUI.Components.MenuBar do
     end
 
     def handle_cast({:hover, {:top_index, index}} = new_mode, %{assigns: %{state: %{mode: current_mode}}} = scene) do
-        Logger.debug "#{__MODULE__} changing state.mode to: #{inspect new_mode}, from: #{inspect current_mode}"
+        #Logger.debug "#{__MODULE__} changing state.mode to: #{inspect new_mode}, from: #{inspect current_mode}"
 
         new_state = scene.assigns.state
         |> Map.put(:mode, new_mode)
@@ -168,33 +168,38 @@ defmodule QuillEx.GUI.Components.MenuBar do
 
     def handle_cast({:click, {:top_index, top_ii, :sub_index, sub_ii}}, %{assigns: %{state: %{menu_map: menu_map}}} = scene) do
        {_label, sub_menu} = menu_map |> Enum.at(top_ii-1) #REMINDER: I use indexes which start at 1, Elixir does not :P 
-       {_label, action}   = sub_menu |> Enum.at(sub_ii-1) #REMINDER: I use indexes which start at 1, Elixir does not :P 
+       {_label, action}  = sub_menu |> Enum.at(sub_ii-1) #REMINDER: I use indexes which start at 1, Elixir does not :P 
        action.()
        {:noreply, scene}
     end
 
-    def handle_cast({:hover, {:top_index, t, :sub_index, s}} = new_mode, %{assigns: %{state: %{mode: current_mode}}} = scene) do
-        Logger.debug "#{__MODULE__} changing state.mode to: #{inspect new_mode}, from: #{inspect current_mode}"
+    def handle_cast({:hover, {:top_index, t, :sub_index, s}} = new_mode, %{assigns: %{state: %{mode: _current_mode}}} = scene) do
+        #Logger.debug "#{__MODULE__} changing state.mode to: #{inspect new_mode}, from: #{inspect current_mode}"
+
+        #NOTE: Here we don't actually have to do anything except update
+        #      the state - drawing the sub-menu was done when we transitioned
+        #      into a `{:hover, x}` mode, and highlighting the float-buttons
+        #      is done inside the FloatButton itself.
 
         new_state = scene.assigns.state
         |> Map.put(:mode, new_mode)
 
-        # new_graph = scene.assigns.graph
-        # |> Scenic.Graph.delete(:sub_menu)
-        # |> render_sub_menu(scene.assigns.state, index)
-
         new_scene = scene
         |> assign(state: new_state)
-        # |> assign(graph: new_graph)
-        # |> push_graph(new_graph)
         
         {:noreply, new_scene}
+    end
+
+    def handle_cast({:cancel, :inactive}, scene) do
+        # We just need to ignore these, the MenuBar keeps sending cancel
+        # signals even when it's in :inactive mode... maybe that's a #TODO
+        {:noreply, scene}
     end
 
     def handle_cast({:cancel, cancel_mode}, %{assigns: %{state: %{mode: current_mode}}} = scene)
         when cancel_mode == current_mode do
             new_mode = :inactive
-            Logger.debug "#{__MODULE__} changing state.mode to: #{inspect new_mode}"
+            Logger.debug "#{__MODULE__} changing state.mode to: #{inspect new_mode}, from: #{inspect cancel_mode}"
 
             new_state = scene.assigns.state
             |> Map.put(:mode, new_mode)
