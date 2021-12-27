@@ -6,7 +6,8 @@ config :scenic,
   :assets, module: QuillEx.Assets
 
 config :event_bus,
-  topics: [:general, :random]
+  topics: [:general,    # most events & input gets processed through here
+           :radix]      # the radix channel broadcasts updates to the root state (Radix) of the application
 
 # It is also possible to import configuration files, relative to this
 # directory. For example, you can emulate configuration per environment

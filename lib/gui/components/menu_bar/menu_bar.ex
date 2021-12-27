@@ -16,8 +16,9 @@ defmodule QuillEx.GUI.Components.MenuBar do
 
     @default_menu [
         {"Buffer", [
-            {"New", &QuillEx.API.Buffer.new/0},
-            {"Open", &QuillEx.API.Buffer.open/0}]},
+            {"new", &QuillEx.API.Buffer.new/0},
+            {"open", &QuillEx.API.Buffer.open/0},
+            {"close", &QuillEx.API.Buffer.close/0}]},
         {"DevTools", [
             {"restart & re-compile", &QuillEx.API.Buffer.new/0},
             {"fire dev loop", &QuillEx.API.Buffer.open/0},
@@ -43,24 +44,7 @@ defmodule QuillEx.GUI.Components.MenuBar do
 
         {:ok, ibm_plex_mono_fm} = TruetypeMetrics.load("./assets/fonts/IBMPlexMono-Regular.ttf")
 
-        # theme is passed in as an inherited style
-        # %{
-        #     active: {58, 94, 201},
-        #     background: {72, 122, 252},
-        #     border: :light_grey,
-        #     focus: :cornflower_blue,
-        #     highlight: :sandy_brown,
-        #     text: :white,
-        #     thumb: :cornflower_blue
-        # }
-        theme =
-            case opts[:theme] do
-                nil -> Scenic.Primitive.Style.Theme.preset(:primary)
-                :dark -> Scenic.Primitive.Style.Theme.preset(:primary)
-                :light -> Scenic.Primitive.Style.Theme.preset(:primary)
-                theme -> theme
-            end
-            |> Scenic.Primitive.Style.Theme.normalize()
+        theme = QuillEx.Utils.Themes.theme(opts)
 
         init_state = %{mode: :inactive,
                        menu_map: args.menu_map,

@@ -3,9 +3,7 @@ defmodule QuillEx.GUI.Components.EditPane do
     require Logger
     alias QuillEx.GUI.Components.{TabSelector, TextPad}
 
-    @menu_bar_height 60 #TODO clean this up
-
-    def validate(data) do
+    def validate(%{width: _w, height: _h} = data) do
         Logger.debug "#{__MODULE__} accepted params: #{inspect data}"
         {:ok, data}
     end
@@ -21,7 +19,7 @@ defmodule QuillEx.GUI.Components.EditPane do
             graph
             |> TabSelector.add_to_graph(%{})
             |> TextPad.add_to_graph(%{})
-        end, translate: {0, @menu_bar_height})
+        end, translate: {0, args.menubar_height})
 
         init_scene = scene
         |> assign(graph: init_graph)

@@ -26,7 +26,7 @@ defmodule QuillEx.RadixAgent do
 
     def put(new) do
       Logger.debug "!! updating the Radix with: #{inspect new}"
-      #TODO broadcast to a new topic? PubSub? #buffers ?
+      QuillEx.Scene.RootScene.push_radix_state(new)
       Agent.update(__MODULE__, fn _old -> new end)
     end
   end

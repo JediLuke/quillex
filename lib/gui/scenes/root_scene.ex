@@ -5,6 +5,14 @@ defmodule QuillEx.Scene.RootScene do
 
   @menubar %{height: 60}
 
+  def push_radix_state(x) do
+    EventBus.notify(%EventBus.Model.Event{
+      id:    UUID.uuid4(),
+      topic: :radix,
+      data:  {:radix_state_update, x}
+    })
+  end
+
   def init(scene, _params, _opts) do
     Logger.debug "#{__MODULE__} initializing..."
     Process.register(self(), __MODULE__)
@@ -32,9 +40,10 @@ defmodule QuillEx.Scene.RootScene do
   end
 
   def render(%Scenic.ViewPort{size: {width, height}}, _state = :initium) do
+    #NOTE: draw MenuBar last so it shows up over the top of the EditPane
     Scenic.Graph.build()
+    |> EditPane.add_to_graph(%{width: width, height: height-@menubar.height, menubar_height: @menubar.height})
     |> MenuBar.add_to_graph(@menubar |> Map.merge(%{width: width}))
-    |> EditPane.add_to_graph(%{width: width, height: height-@menubar.height})
   end
 
   def handle_call(:get_viewport, _from, scene) do

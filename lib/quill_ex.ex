@@ -57,9 +57,10 @@ defmodule QuillEx do
   def start(_type, _args) do
 
     children = [
-      QuillEx.RadixAgent,       # holds the root-state of the application
-      QuillEx.BufferManager,    # listens to the event-bus, manages Buffers
-      QuillEx.EventListener,    # listens to the event-bus, triggers actions
+      {Scenic, [@scenic_config]},
+      QuillEx.BufferManager,        # listens to the event-bus, manages Buffers
+      #QuillEx.EventListener,        # listens to the event-bus, triggers actions
+      QuillEx.RadixAgent,           # holds the root-state of the application
 
       # {Registry, keys: :duplicate, name: QuillEx.PubSub},
       # QuillEx.StageManager,
@@ -68,7 +69,6 @@ defmodule QuillEx do
       #            keys: :duplicate,
       #            partitions: System.schedulers_online()},
       # QuillEx.MainExecutiveProcess,
-      {Scenic, [@scenic_config]}
     ]
 
     Supervisor.start_link(children, strategy: :one_for_one)

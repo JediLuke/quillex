@@ -15,14 +15,7 @@ defmodule QuillEx.GUI.Components.MenuBar.FloatButton do
     def init(scene, args, opts) do
         Logger.debug "#{__MODULE__} initializing..."
 
-        theme =
-            case opts[:theme] do
-                nil -> Scenic.Primitive.Style.Theme.preset(:primary)
-                :dark -> Scenic.Primitive.Style.Theme.preset(:primary)
-                :light -> Scenic.Primitive.Style.Theme.preset(:primary)
-                theme -> theme
-            end
-            |> Scenic.Primitive.Style.Theme.normalize()
+        theme = QuillEx.Utils.Themes.theme(opts)
 
         init_graph = render(args, theme)
 
