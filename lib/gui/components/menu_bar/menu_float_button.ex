@@ -65,7 +65,29 @@ defmodule QuillEx.GUI.Components.MenuBar.FloatButton do
                 scene.assigns.graph
                 |> Scenic.Graph.modify(:background, &Scenic.Primitives.update_opts(&1, fill: :green))
             else
-                GenServer.cast(QuillEx.GUI.Components.MenuBar, {:cancel, {:hover, scene.assigns.state.menu_index}})
+                # GenServer.cast(QuillEx.GUI.Components.MenuBar, {:cancel, {:hover, scene.assigns.state.menu_index}})
+                scene.assigns.graph
+                |> Scenic.Graph.modify(:background, &Scenic.Primitives.update_opts(&1, fill: :blue))
+            end
+
+        new_scene = scene
+        |> assign(graph: new_graph)
+        |> push_graph(new_graph)
+
+        {:noreply, new_scene}
+    end
+
+    #TODO accept clicks, send msg bck up to menu bar??
+    def handle_input({:cursor_pos, {x, y} = coords}, _context, scene) do
+        bounds = Scenic.Graph.bounds(scene.assigns.graph)
+
+        new_graph =
+            if coords |> QuillEx.Utils.HoverUtils.inside?(bounds) do
+                GenServer.cast(QuillEx.GUI.Components.MenuBar, {:hover, scene.assigns.state.menu_index})
+                scene.assigns.graph
+                |> Scenic.Graph.modify(:background, &Scenic.Primitives.update_opts(&1, fill: :green))
+            else
+                # GenServer.cast(QuillEx.GUI.Components.MenuBar, {:cancel, {:hover, scene.assigns.state.menu_index}})
                 scene.assigns.graph
                 |> Scenic.Graph.modify(:background, &Scenic.Primitives.update_opts(&1, fill: :blue))
             end

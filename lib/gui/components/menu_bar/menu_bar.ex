@@ -16,9 +16,15 @@ defmodule QuillEx.GUI.Components.MenuBar do
 
     @default_menu [
         {"Buffer", [
+            {"New", &QuillEx.API.Buffer.new/0},
             {"Open", &QuillEx.API.Buffer.open/0}]},
+        {"DevTools", [
+            {"restart & re-compile", &QuillEx.API.Buffer.new/0},
+            {"fire dev loop", &QuillEx.API.Buffer.open/0},
+            {"more", &QuillEx.API.Buffer.open/0},
+            {"some more", &QuillEx.API.Buffer.open/0}]},
         {"Help", [
-            {"About QuillEx", &QuillEx.API.Misc.makers_mark/0}]}
+            {"About QuillEx", &QuillEx.API.Misc.makers_mark/0}]},
     ]
 
     def validate(%{width: _w} = data) do
@@ -36,13 +42,15 @@ defmodule QuillEx.GUI.Components.MenuBar do
         init_frame = %{width: args.width}
         init_graph = render(init_frame, init_state)
 
-        new_scene = scene
+        init_scene = scene
         |> assign(state: init_state)
         |> assign(graph: init_graph)
         |> assign(frame: init_frame)
         |> push_graph(init_graph)
+
+        request_input(init_scene, [:cursor_pos])
         
-        {:ok, new_scene}
+        {:ok, init_scene}
     end
 
 
@@ -105,13 +113,14 @@ defmodule QuillEx.GUI.Components.MenuBar do
                         |> FloatButton.add_to_graph(%{
                                 label: label,
                                 menu_index: {:top_index, top_index, :sub_index, sub_index+1}, #NOTE: I hate indexes which start at zero...
+                                action: func,
                                 font: %{
                                     size: @sub_menu_font_size,
                                     ascent: FontMetrics.ascent(@sub_menu_font_size, state.font_metrics),
                                     descent: FontMetrics.descent(@sub_menu_font_size, state.font_metrics),
                                     metrics: state.font_metrics},
                                 frame: %{
-                                    pin: {offset, 0}, #REMINDER: coords are like this, {x_coord, y_coord}
+                                    pin: {0, offset}, #REMINDER: coords are like this, {x_coord, y_coord}
                                     size: {sub_menu_width, @sub_menu_height}},
                                 margin: @left_margin})
                         {carry_graph, offset+@sub_menu_height}
@@ -136,7 +145,7 @@ defmodule QuillEx.GUI.Components.MenuBar do
     end
 
 
-    def handle_cast({:hover, {:top_index, _index}} = new_mode, %{assigns: %{state: %{mode: current_mode}}} = scene)
+    def handle_cast(new_mode, %{assigns: %{state: %{mode: current_mode}}} = scene)
         when new_mode == current_mode do
             #Logger.debug "#{__MODULE__} ignoring mode change request, as we are already in #{inspect new_mode}"
             {:noreply, scene}
@@ -195,6 +204,26 @@ defmodule QuillEx.GUI.Components.MenuBar do
             |> push_graph(new_graph)
             
             {:noreply, new_scene}
+    end
+
+    # Here we use the cursor_pos to trigger resets when the user navigates
+    # away from the MenuBar. Right now it only uses the y axis, this is a bug
+    def handle_input({:cursor_pos, {x, y} = coords}, _context, scene) do
+        #NOTE: `menu_bar_max_height` is the full height, including any
+        #       currently rendered sub-menus. As new sub-menus of different
+        #       lengths get rendered, this max-height will change.
+        #
+        #       menu_bar_max_height = @height + num_sub_menu*@sub_menu_height
+        {0.0, 0.0, _viewport_width, menu_bar_max_height} = bounds = Scenic.Graph.bounds(scene.assigns.graph)
+        #Logger.debug "MenuBar bounds: #{inspect bounds}"
+
+        if y > menu_bar_max_height do
+            GenServer.cast(self(), {:cancel, scene.assigns.state.mode})
+            {:noreply, scene}
+        else
+            #TODO here check if we veered of sideways in a sub-menu
+            {:noreply, scene}
+        end
     end
 
     def handle_cast({:cancel, cancel_mode}, scene) do

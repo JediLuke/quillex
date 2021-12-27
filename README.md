@@ -23,3 +23,11 @@ iex -S mix run
 
 * would be cool to be able to call quillex from terminal, e.g. `qlx .`
 * currently workin on showing the menubar...
+
+## Known Bugs
+
+### MenuBar
+
+* We use the y-axis boundary to de-activate the menu, but not the x-axis
+  of each sub-menu, so you can move the mouse around sideways without
+  de-activating the menu - in practice, it's not such a pain or dangerous
