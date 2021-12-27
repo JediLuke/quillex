@@ -1,10 +1,22 @@
 defmodule QuillEx.GUI.Components.TabSelector do
     use Scenic.Component
     require Logger
+    alias QuillEx.GUI.Components.MenuBar.SingleTab
 
     @menu_bar_height 60 #TODO clean this up
 
-    def validate(data) do
+    @left_margin 15     # how far we indent the first menu item
+
+    @sub_menu_height 40
+    @default_gray {48, 48, 48}
+
+    @menu_font_size 36
+    @sub_menu_font_size 22
+    @tab_font_size 18
+
+    @menu_width 180
+
+    def validate(%{buffers: [], width: w} = data) when is_integer(w) and w >= 0 do
         Logger.debug "#{__MODULE__} accepted params: #{inspect data}"
         {:ok, data}
     end
@@ -15,24 +27,17 @@ defmodule QuillEx.GUI.Components.TabSelector do
 
         EventBus.subscribe({__MODULE__, ["radix"]})
 
-        init_graph = Scenic.Graph.build()
-        # |> Scenic.Primitives.group(fn graph ->
-        #     graph
-        #     |> TabSelector.add_to_graph()
-        #     |> TextPad.add_to_graph()
-        # end, translate: {0, @menu_bar_height})
-
         init_scene = scene
-        |> assign(graph: init_graph)
+        |> assign(graph: Scenic.Graph.build())
         |> assign(state: :inactive)
+        |> assign(frame: %{width: args.width})
         |> assign(theme: QuillEx.Utils.Themes.theme(opts))
-        # |> push_graph(init_graph)
+        #NOTE: no push_graph...
 
         {:ok, init_scene}
     end
 
     def process({:radix = _topic, _id} = event_shadow) do
-        # GenServer.cast(self(), {:event, event_shadow})
         event = EventBus.fetch_event(event_shadow)
         # :ok = do_process(event.data)
         GenServer.cast(__MODULE__, {event.data, event_shadow}) #NOTE: can't use `self()` here, this function gets run in some other process ;)
@@ -64,14 +69,43 @@ defmodule QuillEx.GUI.Components.TabSelector do
         #Logger.debug "#{__MODULE__} ignoring radix_state: #{inspect new_state}, scene_state: #{inspect scene.assigns.state}}"
         Logger.debug "#{__MODULE__} drawing a 2-tab TabSelector --"
 
-        buf_list = buf_list |> Enum.map(fn %{id: id} -> id end)
+        {:ok, ibm_plex_mono_fm} = TruetypeMetrics.load("./assets/fonts/IBMPlexMono-Regular.ttf")
+        fm = ibm_plex_mono_fm #TODO get this once and keep hold of it in the state
+
+        render_tabs = fn(init_graph) ->
+            {final_graph, _final_offset} = 
+                buf_list
+                |> Enum.map(fn %{id: id} -> id end) # we only care about id's...
+                |> Enum.with_index()
+                |> Enum.reduce({init_graph, _init_offset = 0}, fn {label, index}, {graph, offset} ->
+                        label_width = @menu_width #TODO - either fixed width, or flex width (adapts to size of label)
+                        item_width = label_width+@left_margin
+                        carry_graph = graph
+                        |> SingleTab.add_to_graph(%{
+                                label: label,
+                                margin: 10,
+                                font: %{
+                                    size: @tab_font_size,
+                                    ascent: FontMetrics.ascent(@tab_font_size, fm),
+                                    descent: FontMetrics.descent(@tab_font_size, fm),
+                                    metrics: fm},
+                                frame: %{
+                                    pin: {offset, 0}, #REMINDER: coords are like this, {x_coord, y_coord}
+                                    size: {item_width, 40} #TODO dont hard-code
+                                }}) 
+                        {carry_graph, offset+item_width}
+                end)
+
+            final_graph
+
+        end
 
         #TODO delete the graph/group in case we're going backwards, closing buffers
         new_graph = Scenic.Graph.build()
         |> Scenic.Primitives.group(fn graph ->
             graph
-            |> Scenic.Primitives.rect({200, 200}, t: {0, 0}, fill: scene.assigns.theme.thumb)
-            # |> render_menu_items.(menu_items_list)
+            |> Scenic.Primitives.rect({scene.assigns.frame.width, 40}, fill: scene.assigns.theme.thumb)
+            |> render_tabs.()
           end, [
              id: :tab_selector
           ])

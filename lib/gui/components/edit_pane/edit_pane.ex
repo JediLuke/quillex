@@ -17,7 +17,7 @@ defmodule QuillEx.GUI.Components.EditPane do
         init_graph = Scenic.Graph.build()
         |> Scenic.Primitives.group(fn graph ->
             graph
-            |> TabSelector.add_to_graph(%{})
+            |> TabSelector.add_to_graph(%{buffers: [], width: args.width})
             |> TextPad.add_to_graph(%{})
         end, translate: {0, args.menubar_height})
 
