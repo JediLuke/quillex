@@ -26,7 +26,7 @@ defmodule QuillEx.GUI.Components.MenuBar.FloatButton do
                     menu_index: args.menu_index})
         |> push_graph(init_graph)
 
-        request_input(init_scene, [:cursor_pos])
+        request_input(init_scene, [:cursor_pos, :cursor_button])
 
         {:ok, init_scene}
     end
@@ -97,6 +97,14 @@ defmodule QuillEx.GUI.Components.MenuBar.FloatButton do
         |> push_graph(new_graph)
 
         {:noreply, new_scene}
+    end
+
+    def handle_input({:cursor_button, {:btn_left, 0, [], click_coords}}, _context, scene) do
+        bounds = Scenic.Graph.bounds(scene.assigns.graph)
+        if click_coords |> QuillEx.Utils.HoverUtils.inside?(bounds) do
+            GenServer.cast(QuillEx.GUI.Components.MenuBar, {:click, scene.assigns.state.menu_index})
+        end
+        {:noreply, scene}
     end
 
     def handle_input(input, _context, scene) do

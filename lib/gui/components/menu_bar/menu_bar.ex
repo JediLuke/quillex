@@ -18,7 +18,7 @@ defmodule QuillEx.GUI.Components.MenuBar do
         {"Buffer", [
             {"New", &QuillEx.API.Buffer.new/0},
             {"Open", &QuillEx.API.Buffer.open/0}]},
-        {"DevTools", [
+        {"DevTlz", [
             {"restart & re-compile", &QuillEx.API.Buffer.new/0},
             {"fire dev loop", &QuillEx.API.Buffer.open/0},
             {"more", &QuillEx.API.Buffer.open/0},
@@ -38,7 +38,9 @@ defmodule QuillEx.GUI.Components.MenuBar do
 
         {:ok, ibm_plex_mono_fm} = TruetypeMetrics.load("./assets/fonts/IBMPlexMono-Regular.ttf")
 
-        init_state = %{mode: :inactive, menu_map: args.menu_map, font_metrics: ibm_plex_mono_fm}
+        init_state = %{mode: :inactive,
+                       menu_map: args.menu_map,
+                       font_metrics: ibm_plex_mono_fm}
         init_frame = %{width: args.width}
         init_graph = render(init_frame, init_state)
 
@@ -134,11 +136,6 @@ defmodule QuillEx.GUI.Components.MenuBar do
             graph_with_background = graph
             |> Scenic.Primitives.rect({sub_menu_width, sub_menu_height}, fill: :green)
             |> render_sub_menu.()
-            # |> Scenic.Primitives.text(Integer.to_string(index),
-            #         font: :ibm_plex_mono,
-            #         font_size: @sub_menu_font_size,
-            #         translate: {15, 40},
-            #         fill: :antique_white)
           end, [
              id: :sub_menu, translate: {@menu_width*(top_index-1), @height}
           ])
@@ -167,6 +164,13 @@ defmodule QuillEx.GUI.Components.MenuBar do
         |> push_graph(new_graph)
         
         {:noreply, new_scene}
+    end
+
+    def handle_cast({:click, {:top_index, top_ii, :sub_index, sub_ii}}, %{assigns: %{state: %{menu_map: menu_map}}} = scene) do
+       {_label, sub_menu} = menu_map |> Enum.at(top_ii-1) #REMINDER: I use indexes which start at 1, Elixir does not :P 
+       {_label, action}   = sub_menu |> Enum.at(sub_ii-1) #REMINDER: I use indexes which start at 1, Elixir does not :P 
+       action.()
+       {:noreply, scene}
     end
 
     def handle_cast({:hover, {:top_index, t, :sub_index, s}} = new_mode, %{assigns: %{state: %{mode: current_mode}}} = scene) do

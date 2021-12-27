@@ -1,4 +1,8 @@
 defmodule QuillEx.API.Buffer do
+
+   def new do
+      IO.puts "MAKE NEW BUFFER"
+   end
    
    def open do
       open("./README.md")
