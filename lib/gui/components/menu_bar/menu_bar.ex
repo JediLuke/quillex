@@ -18,7 +18,12 @@ defmodule QuillEx.GUI.Components.MenuBar do
         {"Buffer", [
             {"New", &QuillEx.API.Buffer.new/0},
             {"Open", &QuillEx.API.Buffer.open/0}]},
-        {"DevTlz", [
+        {"DevTools", [
+            {"restart & re-compile", &QuillEx.API.Buffer.new/0},
+            {"fire dev loop", &QuillEx.API.Buffer.open/0},
+            {"more", &QuillEx.API.Buffer.open/0},
+            {"some more", &QuillEx.API.Buffer.open/0}]},
+        {"Next menu", [
             {"restart & re-compile", &QuillEx.API.Buffer.new/0},
             {"fire dev loop", &QuillEx.API.Buffer.open/0},
             {"more", &QuillEx.API.Buffer.open/0},
@@ -38,16 +43,36 @@ defmodule QuillEx.GUI.Components.MenuBar do
 
         {:ok, ibm_plex_mono_fm} = TruetypeMetrics.load("./assets/fonts/IBMPlexMono-Regular.ttf")
 
+        # theme is passed in as an inherited style
+        # %{
+        #     active: {58, 94, 201},
+        #     background: {72, 122, 252},
+        #     border: :light_grey,
+        #     focus: :cornflower_blue,
+        #     highlight: :sandy_brown,
+        #     text: :white,
+        #     thumb: :cornflower_blue
+        # }
+        theme =
+            case opts[:theme] do
+                nil -> Scenic.Primitive.Style.Theme.preset(:primary)
+                :dark -> Scenic.Primitive.Style.Theme.preset(:primary)
+                :light -> Scenic.Primitive.Style.Theme.preset(:primary)
+                theme -> theme
+            end
+            |> Scenic.Primitive.Style.Theme.normalize()
+
         init_state = %{mode: :inactive,
                        menu_map: args.menu_map,
                        font_metrics: ibm_plex_mono_fm}
         init_frame = %{width: args.width}
-        init_graph = render(init_frame, init_state)
+        init_graph = render(init_frame, init_state, theme)
 
         init_scene = scene
         |> assign(state: init_state)
         |> assign(graph: init_graph)
         |> assign(frame: init_frame)
+        |> assign(theme: theme)
         |> push_graph(init_graph)
 
         request_input(init_scene, [:cursor_pos])
@@ -56,7 +81,7 @@ defmodule QuillEx.GUI.Components.MenuBar do
     end
 
 
-    def render(%{width: width}, %{mode: :inactive, menu_map: menu, font_metrics: fm}) do
+    def render(%{width: width}, %{mode: :inactive, menu_map: menu, font_metrics: fm}, theme) do
         menu_items_list = menu
         |> Enum.map(fn {label, _sub_menu} -> label end)
         |> Enum.with_index()
@@ -91,7 +116,7 @@ defmodule QuillEx.GUI.Components.MenuBar do
         Scenic.Graph.build()
         |> Scenic.Primitives.group(fn graph ->
             graph
-            |> Scenic.Primitives.rect({width, @height}, fill: @default_gray)
+            |> Scenic.Primitives.rect({width, @height}, fill: theme.background)
             |> render_menu_items.(menu_items_list)
           end, [
              id: :menu_bar

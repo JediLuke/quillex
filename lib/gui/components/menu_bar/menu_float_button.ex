@@ -15,11 +15,21 @@ defmodule QuillEx.GUI.Components.MenuBar.FloatButton do
     def init(scene, args, opts) do
         Logger.debug "#{__MODULE__} initializing..."
 
-        init_graph = render(args)
+        theme =
+            case opts[:theme] do
+                nil -> Scenic.Primitive.Style.Theme.preset(:primary)
+                :dark -> Scenic.Primitive.Style.Theme.preset(:primary)
+                :light -> Scenic.Primitive.Style.Theme.preset(:primary)
+                theme -> theme
+            end
+            |> Scenic.Primitive.Style.Theme.normalize()
+
+        init_graph = render(args, theme)
 
         init_scene = scene
         |> assign(graph: init_graph)
         |> assign(frame: args.frame)
+        |> assign(theme: theme)
         |> assign(state: %{
                     mode: :inactive,
                     font: args.font,
@@ -31,7 +41,7 @@ defmodule QuillEx.GUI.Components.MenuBar.FloatButton do
         {:ok, init_scene}
     end
 
-    def render(args) do
+    def render(args, theme) do
         {_width, height} = args.frame.size
 
         # https://github.com/boydm/scenic/blob/master/lib/scenic/component/button.ex#L200
@@ -42,13 +52,13 @@ defmodule QuillEx.GUI.Components.MenuBar.FloatButton do
             graph
             |> Scenic.Primitives.rect(args.frame.size,
                     id: :background,
-                    fill: :blue)
+                    fill: theme.active)
             |> Scenic.Primitives.text(args.label,
                     id: :label,
                     font: :ibm_plex_mono,
                     font_size: args.font.size,
                     translate: {args.margin, vpos},
-                    fill: :antique_white)
+                    fill: theme.text)
           end, [
              id: {:float_button, args.menu_index},
              translate: args.frame.pin
@@ -58,16 +68,18 @@ defmodule QuillEx.GUI.Components.MenuBar.FloatButton do
 
     def handle_input({:cursor_pos, {x, y} = coords}, _context, scene) do
         bounds = Scenic.Graph.bounds(scene.assigns.graph)
+        theme  = scene.assigns.theme
 
         new_graph =
             if coords |> QuillEx.Utils.HoverUtils.inside?(bounds) do
                 GenServer.cast(QuillEx.GUI.Components.MenuBar, {:hover, scene.assigns.state.menu_index})
                 scene.assigns.graph
-                |> Scenic.Graph.modify(:background, &Scenic.Primitives.update_opts(&1, fill: :green))
+                #TODO and change text to black
+                |> Scenic.Graph.modify(:background, &Scenic.Primitives.update_opts(&1, fill: theme.highlight))
             else
                 # GenServer.cast(QuillEx.GUI.Components.MenuBar, {:cancel, {:hover, scene.assigns.state.menu_index}})
                 scene.assigns.graph
-                |> Scenic.Graph.modify(:background, &Scenic.Primitives.update_opts(&1, fill: :blue))
+                |> Scenic.Graph.modify(:background, &Scenic.Primitives.update_opts(&1, fill: theme.active))
             end
 
         new_scene = scene
