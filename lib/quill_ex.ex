@@ -57,7 +57,8 @@ defmodule QuillEx do
   def start(_type, _args) do
 
     children = [
-      QuillEx.Radix,            # holds the root-state of the application
+      QuillEx.RadixAgent,       # holds the root-state of the application
+      QuillEx.BufferManager,    # listens to the event-bus, manages Buffers
       QuillEx.EventListener,    # listens to the event-bus, triggers actions
 
       # {Registry, keys: :duplicate, name: QuillEx.PubSub},

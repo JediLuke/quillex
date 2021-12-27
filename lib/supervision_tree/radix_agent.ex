@@ -1,14 +1,10 @@
-defmodule QuillEx.Radix do
+defmodule QuillEx.RadixAgent do
     use Agent
     require Logger
   
     @seed_state %{
-        #   menubar: ["Open file"],
-          # menubar: :inactive,
-          # tabs: :inactive,
-          # textbox: :inactive,
-          # bottom_bar: :inactive
-      }
+      buffers: []
+    }
 
     def start_link(_opts) do
       Agent.start_link(fn -> @seed_state end, name: __MODULE__)
@@ -30,7 +26,8 @@ defmodule QuillEx.Radix do
 
     def put(new) do
       Logger.debug "!! updating the Radix with: #{inspect new}"
-      Agent.update(__MODULE__, fn -> new end)
+      #TODO broadcast to a new topic? PubSub? #buffers ?
+      Agent.update(__MODULE__, fn _old -> new end)
     end
   end
   

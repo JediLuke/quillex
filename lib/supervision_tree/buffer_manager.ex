@@ -1,4 +1,4 @@
-defmodule QuillEx.EventListener do
+defmodule QuillEx.BufferManager do
     use GenServer
     require Logger
 
@@ -24,8 +24,16 @@ defmodule QuillEx.EventListener do
 
     ##--------------------------------------------------------
 
-    def do_process(radix_state, action) do
-        Logger.debug "#{__MODULE__} ignoring... #{inspect %{radix_state: radix_state, action: action}}"
+    def do_process(%{buffers: buf_list} = radix, {:action, {:open_buffer, new_buf}}) do
+        Logger.debug "Opening new buffer..."
+
+        #NOTE: Our goal is to update the Radix state with the new buffer
+        #      - that change will send out msgs to the GUI to make updates
+        num_buffers = Enum.count(buf_list)
+        #TODO make this a struct?
+        new_buffer_id = "untitled_" <> Integer.to_string(num_buffers+1) <> ".txt"
+        new_buffer_list = buf_list ++ [new_buf |> Map.merge(%{id: new_buffer_id})]
+        QuillEx.RadixAgent.put(radix |> Map.put(:buffers, new_buffer_list))
         :ok
     end
 

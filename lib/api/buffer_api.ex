@@ -1,7 +1,7 @@
 defmodule QuillEx.API.Buffer do
 
    def new do
-      IO.puts "MAKE NEW BUFFER"
+      QuillEx.action({:open_buffer, %{data: ""}})
    end
    
    def open do
