@@ -1,8 +1,9 @@
 defmodule QuillEx.Scene.RootScene do
   use Scenic.Scene
   require Logger
-  alias QuillEx.GUI.Components.MenuBar
+  alias QuillEx.GUI.Components.{MenuBar, EditPane}
 
+  @menubar %{height: 60}
 
   def init(scene, _params, _opts) do
     Logger.debug "#{__MODULE__} initializing..."
@@ -30,9 +31,10 @@ defmodule QuillEx.Scene.RootScene do
     GenServer.call(__MODULE__, :get_viewport)
   end
 
-  def render(%Scenic.ViewPort{size: {width, _height}}, _state = :initium) do
+  def render(%Scenic.ViewPort{size: {width, height}}, _state = :initium) do
     Scenic.Graph.build()
-    |> MenuBar.add_to_graph(%{width: width})
+    |> MenuBar.add_to_graph(@menubar |> Map.merge(%{width: width}))
+    |> EditPane.add_to_graph(%{width: width, height: height-@menubar.height})
   end
 
   def handle_call(:get_viewport, _from, scene) do

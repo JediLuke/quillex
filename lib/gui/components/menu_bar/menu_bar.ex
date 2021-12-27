@@ -3,7 +3,7 @@ defmodule QuillEx.GUI.Components.MenuBar do
     require Logger
     alias QuillEx.GUI.Components.MenuBar.FloatButton
 
-    @height 60          # height of the menubar in pixels
+    
     @left_margin 15     # how far we indent the first menu item
 
     @sub_menu_height 40
@@ -32,7 +32,7 @@ defmodule QuillEx.GUI.Components.MenuBar do
             {"About QuillEx", &QuillEx.API.Misc.makers_mark/0}]},
     ]
 
-    def validate(%{width: _w} = data) do
+    def validate(%{width: _w, height: _h} = data) do
         Logger.debug "#{__MODULE__} accepted params: #{inspect data}"
         {:ok, data |> Map.merge(%{menu_map: @default_menu})}
     end
@@ -65,7 +65,7 @@ defmodule QuillEx.GUI.Components.MenuBar do
         init_state = %{mode: :inactive,
                        menu_map: args.menu_map,
                        font_metrics: ibm_plex_mono_fm}
-        init_frame = %{width: args.width}
+        init_frame = %{width: args.width, height: args.height}
         init_graph = render(init_frame, init_state, theme)
 
         init_scene = scene
@@ -81,7 +81,7 @@ defmodule QuillEx.GUI.Components.MenuBar do
     end
 
 
-    def render(%{width: width}, %{mode: :inactive, menu_map: menu, font_metrics: fm}, theme) do
+    def render(%{width: width, height: height}, %{mode: :inactive, menu_map: menu, font_metrics: fm}, theme) do
         menu_items_list = menu
         |> Enum.map(fn {label, _sub_menu} -> label end)
         |> Enum.with_index()
@@ -105,7 +105,7 @@ defmodule QuillEx.GUI.Components.MenuBar do
                                     metrics: fm},
                                 frame: %{
                                     pin: {offset, 0}, #REMINDER: coords are like this, {x_coord, y_coord}
-                                    size: {item_width, @height}},
+                                    size: {item_width, height}},
                                 margin: @left_margin})
                         {carry_graph, offset+item_width}
                 end)
@@ -116,14 +116,14 @@ defmodule QuillEx.GUI.Components.MenuBar do
         Scenic.Graph.build()
         |> Scenic.Primitives.group(fn graph ->
             graph
-            |> Scenic.Primitives.rect({width, @height}, fill: theme.background)
+            |> Scenic.Primitives.rect({width, height}, fill: theme.background)
             |> render_menu_items.(menu_items_list)
           end, [
              id: :menu_bar
           ])
     end
 
-    def render_sub_menu(graph, %{menu_map: menu_map} = state, top_index) do
+    def render_sub_menu(graph, %{state: %{menu_map: menu_map} = state, index: top_index, frame: frame}) do
 
         num_top_items = Enum.count(menu_map)
         {_top_label, sub_menu} = menu_map |> Enum.at(top_index-1)
@@ -162,7 +162,7 @@ defmodule QuillEx.GUI.Components.MenuBar do
             |> Scenic.Primitives.rect({sub_menu_width, sub_menu_height}, fill: :green)
             |> render_sub_menu.()
           end, [
-             id: :sub_menu, translate: {@menu_width*(top_index-1), @height}
+             id: :sub_menu, translate: {@menu_width*(top_index-1), frame.height}
           ])
     end
 
@@ -181,7 +181,7 @@ defmodule QuillEx.GUI.Components.MenuBar do
 
         new_graph = scene.assigns.graph
         |> Scenic.Graph.delete(:sub_menu)
-        |> render_sub_menu(scene.assigns.state, index)
+        |> render_sub_menu(%{state: scene.assigns.state, index: index, frame: scene.assigns.frame})
 
         new_scene = scene
         |> assign(state: new_state)
