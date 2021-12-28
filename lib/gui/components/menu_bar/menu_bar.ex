@@ -179,6 +179,7 @@ defmodule QuillEx.GUI.Components.MenuBar do
        {_label, sub_menu} = menu_map |> Enum.at(top_ii-1) #REMINDER: I use indexes which start at 1, Elixir does not :P 
        {_label, action}  = sub_menu |> Enum.at(sub_ii-1) #REMINDER: I use indexes which start at 1, Elixir does not :P 
        action.()
+       GenServer.cast(__MODULE__, {:cancel, scene.assigns.state.mode})
        {:noreply, scene}
     end
 

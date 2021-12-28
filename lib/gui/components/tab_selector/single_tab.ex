@@ -1,13 +1,14 @@
-defmodule QuillEx.GUI.Components.MenuBar.SingleTab do
+defmodule QuillEx.GUI.Components.TabSelector.SingleTab do
     use Scenic.Component
     require Logger
     @moduledoc """
     This module is really not that different from a normal Scenic Button,
     just customized a little bit.
     """
+    alias QuillEx.GUI.Components.TabSelector
 
 
-    def validate(%{label: _l, frame: _f} = data) do
+    def validate(%{label: _l, frame: _f, ref: _r} = data) do
         Logger.debug "#{__MODULE__} accepted params: #{inspect data}"
         {:ok, data}
     end
@@ -23,7 +24,8 @@ defmodule QuillEx.GUI.Components.MenuBar.SingleTab do
         |> assign(graph: init_graph)
         |> assign(frame: args.frame)
         |> assign(theme: theme)
-        |> assign(state: %{mode: :inactive })
+        |> assign(ref: args.ref)
+        |> assign(state: %{mode: :inactive})
         |> push_graph(init_graph)
 
         request_input(init_scene, [:cursor_pos, :cursor_button])
@@ -55,21 +57,18 @@ defmodule QuillEx.GUI.Components.MenuBar.SingleTab do
           ])
     end
 
-
+    # Change color of the text if we hover over a tab
     def handle_input({:cursor_pos, {x, y} = coords}, _context, scene) do
         bounds = Scenic.Graph.bounds(scene.assigns.graph)
         theme  = scene.assigns.theme
 
         new_graph =
             if coords |> QuillEx.Utils.HoverUtils.inside?(bounds) do
-                GenServer.cast(QuillEx.GUI.Components.MenuBar, {:hover, scene.assigns.state.menu_index})
                 scene.assigns.graph
-                #TODO and change text to black
-                |> Scenic.Graph.modify(:background, &Scenic.Primitives.update_opts(&1, fill: theme.highlight))
+                |> Scenic.Graph.modify(:label, &Scenic.Primitives.update_opts(&1, fill: :black))
             else
-                # GenServer.cast(QuillEx.GUI.Components.MenuBar, {:cancel, {:hover, scene.assigns.state.menu_index}})
                 scene.assigns.graph
-                |> Scenic.Graph.modify(:background, &Scenic.Primitives.update_opts(&1, fill: theme.active))
+                |> Scenic.Graph.modify(:label, &Scenic.Primitives.update_opts(&1, fill: theme.text))
             end
 
         new_scene = scene
@@ -79,32 +78,22 @@ defmodule QuillEx.GUI.Components.MenuBar.SingleTab do
         {:noreply, new_scene}
     end
 
-    #TODO accept clicks, send msg bck up to menu bar??
-    def handle_input({:cursor_pos, {x, y} = coords}, _context, scene) do
-        bounds = Scenic.Graph.bounds(scene.assigns.graph)
-
-        new_graph =
-            if coords |> QuillEx.Utils.HoverUtils.inside?(bounds) do
-                GenServer.cast(QuillEx.GUI.Components.MenuBar, {:hover, scene.assigns.state.menu_index})
-                scene.assigns.graph
-                |> Scenic.Graph.modify(:background, &Scenic.Primitives.update_opts(&1, fill: :green))
-            else
-                # GenServer.cast(QuillEx.GUI.Components.MenuBar, {:cancel, {:hover, scene.assigns.state.menu_index}})
-                scene.assigns.graph
-                |> Scenic.Graph.modify(:background, &Scenic.Primitives.update_opts(&1, fill: :blue))
-            end
-
-        new_scene = scene
-        |> assign(graph: new_graph)
-        |> push_graph(new_graph)
-
-        {:noreply, new_scene}
-    end
+    # def handle_input({:cursor_pos, {x, y} = coords}, _context, scene) do
+    #     bounds = Scenic.Graph.bounds(scene.assigns.graph)
+    #     if coords |> QuillEx.Utils.HoverUtils.inside?(bounds) do
+    #         GenServer.cast(MenuBar, {:hover, scene.assigns.ref})
+    #         # v.s.
+    #         #buf =  QuillEx.API.Buffer.list() |> Enum.
+    #         #QuillEx.API.Buffer.activate(buf)
+    #     end
+    #     {:noreply, scene}
+    # end
 
     def handle_input({:cursor_button, {:btn_left, 0, [], click_coords}}, _context, scene) do
         bounds = Scenic.Graph.bounds(scene.assigns.graph)
         if click_coords |> QuillEx.Utils.HoverUtils.inside?(bounds) do
-            GenServer.cast(QuillEx.GUI.Components.MenuBar, {:click, scene.assigns.state.menu_index})
+            Logger.debug "we clickd inside the tab  - #{inspect scene.assigns.ref}"
+            GenServer.cast(TabSelector, {:activate_tab, scene.assigns.ref})
         end
         {:noreply, scene}
     end

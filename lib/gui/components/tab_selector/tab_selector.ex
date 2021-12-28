@@ -1,7 +1,7 @@
 defmodule QuillEx.GUI.Components.TabSelector do
     use Scenic.Component
     require Logger
-    alias QuillEx.GUI.Components.MenuBar.SingleTab
+    alias QuillEx.GUI.Components.TabSelector.SingleTab
 
     @menu_bar_height 60 #TODO clean this up
 
@@ -75,14 +75,16 @@ defmodule QuillEx.GUI.Components.TabSelector do
         render_tabs = fn(init_graph) ->
             {final_graph, _final_offset} = 
                 buf_list
-                |> Enum.map(fn %{id: id} -> id end) # we only care about id's...
+                # |> Enum.map(fn %{id: id} -> id end) # we only care about id's...
                 |> Enum.with_index()
-                |> Enum.reduce({init_graph, _init_offset = 0}, fn {label, index}, {graph, offset} ->
+                |> Enum.reduce({init_graph, _init_offset = 0}, fn {%{id: label}, index}, {graph, offset} ->
                         label_width = @menu_width #TODO - either fixed width, or flex width (adapts to size of label)
-                        item_width = label_width+@left_margin
+                        item_width  = label_width+@left_margin
                         carry_graph = graph
                         |> SingleTab.add_to_graph(%{
                                 label: label,
+                                ref: label,
+                                active?: false,
                                 margin: 10,
                                 font: %{
                                     size: @tab_font_size,
@@ -123,6 +125,11 @@ defmodule QuillEx.GUI.Components.TabSelector do
     def handle_cast({{:radix_state_update, %{buffers: new_buf_list} = new_state}, event_shadow}, %{assigns: %{state: %{buffers: old_buf_list}}} = scene) when length(new_buf_list) >= 3 and length(old_buf_list) >= 2 do
         Logger.warn "We can't render more than 2 tabs yet!!"
         EventBus.mark_as_completed({__MODULE__, event_shadow})
+        {:noreply, scene}
+    end
+
+    def handle_cast({:activate_tab, ref}, %{assigns: %{state: %{buffers: buf_list}}} = scene) do
+        buf = buf_list |> Enum.filter(& &1.id == ref)
         {:noreply, scene}
     end
 end
