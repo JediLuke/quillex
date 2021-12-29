@@ -9,7 +9,7 @@ defmodule QuillEx.GUI.Components.TabSelector.SingleTab do
 
 
     def validate(%{label: _l, frame: _f, ref: _r} = data) do
-        Logger.debug "#{__MODULE__} accepted params: #{inspect data}"
+        #Logger.debug "#{__MODULE__} accepted params: #{inspect data}"
         {:ok, data}
     end
 

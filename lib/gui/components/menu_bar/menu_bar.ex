@@ -24,7 +24,7 @@ defmodule QuillEx.GUI.Components.MenuBar do
     ]
 
     def validate(%{width: _w, height: _h} = data) do
-        Logger.debug "#{__MODULE__} accepted params: #{inspect data}"
+        #Logger.debug "#{__MODULE__} accepted params: #{inspect data}"
         {:ok, data |> Map.merge(%{menu_map: @default_menu})}
     end
 

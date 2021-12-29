@@ -3,11 +3,12 @@ defmodule QuillEx.GUI.Components.EditPane do
     use QuillEx.GUI.ScenicEventsDefinitions
     require Logger
     alias QuillEx.GUI.Components.{TabSelector, TextPad}
+    alias QuillEx.GUI.Structs.Frame
 
     @tab_selector_height 40 #TODO remove, this should come from the font or something
 
-    def validate(%{frame: %{width: _w, height: _h, pin: _p}} = data) do
-        Logger.debug "#{__MODULE__} accepted params: #{inspect data}"
+    def validate(%{frame: %Frame{} = _f} = data) do
+        #Logger.debug "#{__MODULE__} accepted params: #{inspect data}"
         {:ok, data}
     end
 
@@ -35,11 +36,10 @@ defmodule QuillEx.GUI.Components.EditPane do
         |> Scenic.Graph.delete(:edit_pane)
         |> Scenic.Primitives.group(fn graph ->
                 graph
-                |> TextPad.add_to_graph(%{frame: %{
-                      pin: {0, 0}, #NOTE: We don't need to move the pane around (referened from the outer frame of the EditPane) because there's no TabSelector being rendered (this is the single-buffer case)
-                      size: {scene.assigns.frame.width, scene.assigns.frame.height}},
-                   data: d},
-                   id: :text_pad)
+                |> TextPad.add_to_graph(%{
+                        frame: Frame.new(pin: {0, 0}, size: scene.assigns.frame.size), #NOTE: We don't need to move the pane around (referened from the outer frame of the EditPane) because there's no TabSelector being rendered (this is the single-buffer case)
+                        data: d },
+                        id: :text_pad)
         end, translate: scene.assigns.frame.pin, id: :edit_pane)
 
         new_scene = scene
@@ -59,10 +59,10 @@ defmodule QuillEx.GUI.Components.EditPane do
         |> Scenic.Graph.delete(:edit_pane)
         |> Scenic.Primitives.group(fn graph ->
                 graph
-                |> TabSelector.add_to_graph(%{radix_state: new_state, width: scene.assigns.frame.width, height: @tab_selector_height})
+                |> TabSelector.add_to_graph(%{radix_state: new_state, width: scene.assigns.frame.dimensions.width, height: @tab_selector_height})
                 |> TextPad.add_to_graph(%{frame: %{
                      pin: {0, @tab_selector_height}, #REMINDER: We need to move the TextPad down a bit, to make room for the TabSelector
-                     size: {scene.assigns.frame.width, scene.assigns.frame.height-@tab_selector_height}},
+                     size: {scene.assigns.frame.dimensions.width, scene.assigns.frame.dimensions.height-@tab_selector_height}},
                    data: full_active_buffer.data},
                    id: :text_pad)
         end, translate: scene.assigns.frame.pin, id: :edit_pane)

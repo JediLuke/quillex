@@ -2,28 +2,16 @@ defmodule QuillEx.GUI.Components.TextPad do
     use Scenic.Component
     require Logger
 
-    @menu_bar_height 60 #TODO clean this up
 
     def validate(%{frame: _f, data: d} = data) when is_bitstring(d) do
-        Logger.debug "#{__MODULE__} accepted params: #{inspect data}"
+        #Logger.debug "#{__MODULE__} accepted params: #{inspect data}"
         {:ok, data}
     end
 
     def init(scene, args, opts) do
         Logger.debug "#{__MODULE__} initializing..."
-        # Process.register(self(), __MODULE__) #TODO how to register this process, which there might be many of...
-
-        # QuillEx.Utils.PubSub.register(topic: :radix_state_change)
-
-        # init_graph = Scenic.Graph.build()
-        # |> Scenic.Primitives.group(fn graph ->
-        #     graph
-        #     |> TabSelector.add_to_graph()
-        #     |> TextPad.add_to_graph()
-        # end, translate: {0, @menu_bar_height})
 
         theme = QuillEx.Utils.Themes.theme(opts)
-        # test_data
 
         init_graph = Scenic.Graph.build()
         |> Scenic.Primitives.group(fn graph ->
@@ -35,8 +23,7 @@ defmodule QuillEx.GUI.Components.TextPad do
                         font_size: 24,
                         fill: theme.text,
                         translate: {10, 28})
-                        # fill: theme.text)
-        end, translate: args.frame.pin) #NOTE: No translate necessary, since there is no TabSelector open (just one active buffer)
+        end, translate: args.frame.pin)
 
         init_scene = scene
         |> assign(graph: init_graph)

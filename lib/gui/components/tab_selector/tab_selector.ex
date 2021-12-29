@@ -17,7 +17,7 @@ defmodule QuillEx.GUI.Components.TabSelector do
     @menu_width 180
 
     def validate(%{radix_state: _rs, width: w} = data) when is_integer(w) and w >= 0 do
-        Logger.debug "#{__MODULE__} accepted params: #{inspect data}"
+        #Logger.debug "#{__MODULE__} accepted params: #{inspect data}"
         {:ok, data}
     end
 
