@@ -16,51 +16,40 @@ defmodule QuillEx.GUI.Components.TabSelector do
 
     @menu_width 180
 
-    def validate(%{buffers: [], width: w} = data) when is_integer(w) and w >= 0 do
+    def validate(%{radix_state: _rs, width: w} = data) when is_integer(w) and w >= 0 do
         Logger.debug "#{__MODULE__} accepted params: #{inspect data}"
         {:ok, data}
     end
 
     def init(scene, args, opts) do
         Logger.debug "#{__MODULE__} initializing..."
-        Process.register(self(), __MODULE__)
+        # Process.register(self(), __MODULE__)
 
         QuillEx.Utils.PubSub.register(topic: :radix_state_change)
 
+        init_graph = render(Scenic.Graph.build(), %{frame: %{width: args.width}, radix_state: args.radix_state, theme: QuillEx.Utils.Themes.theme(opts)})
+
         init_scene = scene
-        |> assign(graph: Scenic.Graph.build())
-        |> assign(state: :inactive)
+        |> assign(graph: init_graph)
         |> assign(frame: %{width: args.width})
         |> assign(theme: QuillEx.Utils.Themes.theme(opts))
-        #NOTE: no push_graph...
+        |> push_graph(init_graph)
 
         {:ok, init_scene}
     end
 
-    # def process({:radix = _topic, _id} = event_shadow) do
-    #     event = EventBus.fetch_event(event_shadow)
-    #     # :ok = do_process(event.data)
-    #     GenServer.cast(__MODULE__, {event.data, event_shadow}) #NOTE: can't use `self()` here, this function gets run in some other process ;)
-    #     #NOTE: We will mark the event completed when we handle it (which
-    #     #      requires the internal state of TabSelector, which sadly we
-    #     #      don't seem to have here...)
-    #     #EventBus.mark_as_completed({__MODULE__, event_shadow})
-    #     :ok
-    # end
-
-    # ##--------------------------------------------------------
-
-    # def do_process({:radix_state_change, state}) do
-    #     Logger.debug "#{__MODULE__} ignoring radix_state: #{inspect state}}"
-    #     :ok
-    # end
-
     #NOTE: This case is where there's just one buffer open
-    def handle_info({:radix_state_change, %{buffers: [%{id: _id, data: _d} = _b]} = new_state}, %{assigns: %{state: :inactive}} = scene) do
-        #Logger.debug "#{__MODULE__} ignoring radix_state: #{inspect new_state}, scene_state: #{inspect scene.assigns.state}}"
-        Logger.debug "#{__MODULE__} ignoring a RadixState update, since we get get activated by just a single buffer"
-        #TODO delete the graph/group in case we're going backwards, closing buffers
-        {:noreply, scene}
+    def handle_info({:radix_state_change, %{buffers: [%{id: _id, data: _d}]} = new_state}, scene) do
+        Logger.debug "#{__MODULE__} de-activating/ignoring the TabSelector, as we don't get shown if there's only one buffer"
+
+        new_graph = scene.assigns.graph
+        |> Scenic.Graph.delete(:tab_selector)
+
+        new_scene = scene
+        |> assign(graph: new_graph)
+        |> push_graph(new_graph)
+
+        {:noreply, new_scene}
     end
 
     #TODO right now, this re-draws every time there's a RadixState update - we ought to compare it against what we have, & only update/broadcast if it really changed
@@ -102,8 +91,8 @@ defmodule QuillEx.GUI.Components.TabSelector do
 
         end
 
-        #TODO delete the graph/group in case we're going backwards, closing buffers
-        new_graph = Scenic.Graph.build()
+        new_graph = scene.assigns.graph
+        |> Scenic.Graph.delete(:tab_selector)
         |> Scenic.Primitives.group(fn graph ->
             graph
             |> Scenic.Primitives.rect({scene.assigns.frame.width, 40}, fill: scene.assigns.theme.thumb)
@@ -114,10 +103,56 @@ defmodule QuillEx.GUI.Components.TabSelector do
 
         new_scene = scene
         |> assign(graph: new_graph)
-        |> assign(state: %{buffers: buf_list})
+        # |> assign(state: %{buffers: buf_list})
         |> push_graph(new_graph)
 
         {:noreply, new_scene}
     end
 
+    def render(init_graph, %{frame: frame, theme: theme, radix_state: %{buffers: buf_list, active_buf: active_buf}}) when length(buf_list) >= 2 do
+        {:ok, ibm_plex_mono_fm} = TruetypeMetrics.load("./assets/fonts/IBMPlexMono-Regular.ttf")
+        fm = ibm_plex_mono_fm #TODO get this once and keep hold of it in the state
+
+        render_tabs = fn(init_graph) ->
+            {final_graph, _final_offset} = 
+                buf_list
+                # |> Enum.map(fn %{id: id} -> id end) # we only care about id's...
+                |> Enum.with_index()
+                |> Enum.reduce({init_graph, _init_offset = 0}, fn {%{id: label}, index}, {graph, offset} ->
+                        label_width = @menu_width #TODO - either fixed width, or flex width (adapts to size of label)
+                        item_width  = label_width+@left_margin
+                        carry_graph = graph
+                        |> SingleTab.add_to_graph(%{
+                                label: label,
+                                ref: label,
+                                active?: label == active_buf,
+                                margin: 10,
+                                font: %{
+                                    size: @tab_font_size,
+                                    ascent: FontMetrics.ascent(@tab_font_size, fm),
+                                    descent: FontMetrics.descent(@tab_font_size, fm),
+                                    metrics: fm},
+                                frame: %{
+                                    pin: {offset, 0}, #REMINDER: coords are like this, {x_coord, y_coord}
+                                    size: {item_width, 40} #TODO dont hard-code
+                                }}) 
+                        {carry_graph, offset+item_width}
+                end)
+
+            final_graph
+
+        end
+
+        new_graph = init_graph
+        |> Scenic.Primitives.group(fn graph ->
+            graph
+            |> Scenic.Primitives.rect({frame.width, 40}, fill: theme.thumb)
+            |> render_tabs.()
+          end, [
+             id: :tab_selector
+          ])
+
+        # finally, return `new_graph`
+        new_graph
+    end
 end

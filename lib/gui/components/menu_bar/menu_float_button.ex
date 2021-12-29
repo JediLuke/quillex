@@ -8,12 +8,12 @@ defmodule QuillEx.GUI.Components.MenuBar.FloatButton do
 
 
     def validate(%{label: _l, menu_index: _n, frame: _f, margin: _m, font: _fs} = data) do
-        Logger.debug "#{__MODULE__} accepted params: #{inspect data}"
+        #Logger.debug "#{__MODULE__} accepted params: #{inspect data}"
         {:ok, data}
     end
 
     def init(scene, args, opts) do
-        Logger.debug "#{__MODULE__} initializing..."
+        #Logger.debug "#{__MODULE__} initializing..."
 
         theme = QuillEx.Utils.Themes.theme(opts)
 

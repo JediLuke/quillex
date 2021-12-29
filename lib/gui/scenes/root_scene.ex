@@ -17,25 +17,18 @@ defmodule QuillEx.Scene.RootScene do
     |> assign(graph: init_graph)
     |> push_graph(init_graph)
          
-    # EventBus.subscribe({__MODULE__, ["general"]})
-
-    # #QuillEx.Utils.PubSub.register()
-    # EventBus.register_topic(:general)
-    # request_input(new_scene, [:cursor_pos, :cursor_button])
-    
     {:ok, new_scene}
-  end
-
-
-  def get_viewport do
-    GenServer.call(__MODULE__, :get_viewport)
   end
 
   def render(%Scenic.ViewPort{size: {width, height}}, _state = :initium) do
     #NOTE: draw MenuBar last so it shows up over the top of the EditPane
     Scenic.Graph.build()
-    |> EditPane.add_to_graph(%{width: width, height: height-@menubar.height, menubar_height: @menubar.height})
+    |> EditPane.add_to_graph(%{frame: %{width: width, height: height-@menubar.height, pin: {0, @menubar.height}}})
     |> MenuBar.add_to_graph(@menubar |> Map.merge(%{width: width}))
+  end
+
+  def get_viewport do
+    GenServer.call(__MODULE__, :get_viewport)
   end
 
   def handle_call(:get_viewport, _from, scene) do
