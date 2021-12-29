@@ -74,11 +74,12 @@ defmodule QuillEx.GUI.Components.EditPane do
         {:noreply, new_scene}
     end
 
-    def handle_input({:key, {key, @key_released, []}}, _context, scene) do
-        Logger.debug "#{__MODULE__} `key_released` for keypress: #{inspect key}"
+    def handle_input(key, _context, scene) when key in @valid_text_input_characters do
+        Logger.debug "#{__MODULE__} recv'd valid input: #{inspect key}"
+        QuillEx.API.Buffer.active_buf()
+        |> QuillEx.API.Buffer.modify({:append, key |> key2string()})
         {:noreply, scene}
     end
-
 
     def handle_input({:key, {key, _dont_care, _dont_care_either}}, _context, scene) do
         Logger.debug "#{__MODULE__} ignoring key: #{inspect key}"

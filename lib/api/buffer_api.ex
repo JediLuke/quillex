@@ -1,5 +1,8 @@
 defmodule QuillEx.API.Buffer do
 
+   @doc """
+   Open a blank, unsaved buffer.
+   """ 
    def new do
       QuillEx.action({:open_buffer, %{data: ""}})
    end
@@ -59,14 +62,12 @@ defmodule QuillEx.API.Buffer do
       buf.data
    end
 
-   def modify(buf) do
-      raise "dont know how to modify a buffer yet"
-      # ProcessRegistry.find!(buf) |> GenServer.call(:read)
+   def modify(buf, mod) do
+      QuillEx.action({:modify_buffer, buf, mod})
    end
 
    def save(buf) do
-      raise "dont know how to save a buffer yet"
-      # ProcessRegistry.find!(buf) |> GenServer.call(:read)
+      QuillEx.action({:save_buffer, buf})
    end
 
    def close do

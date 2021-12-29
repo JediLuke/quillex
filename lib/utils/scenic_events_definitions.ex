@@ -9,7 +9,6 @@ defmodule QuillEx.GUI.ScenicEventsDefinitions do
 
 
       # key-state numbers
-      # -----------------
       # These are the numbers used by Scenic to represent the
       # state of a key-press. I just prefer to use these names,
       # so I bind them here.
@@ -25,8 +24,6 @@ defmodule QuillEx.GUI.ScenicEventsDefinitions do
       @escape_key {:key, {:key_esc, @key_pressed, []}}
       @enter_key {:key, {:key_enter, @key_pressed, []}}
       @backspace_key {:key, {:key_backspace, @key_pressed, []}}
-      # @backspace_repeat {:key, {"backspace", :repeat, 0}}
-      # @backspace_input [@backspace_key, @backspace_repeat]
       @tab_key {:key, {:key_tab, @key_pressed, []}}
 
       @space_bar {:key, {:key_space, @key_pressed, []}}
@@ -138,7 +135,7 @@ defmodule QuillEx.GUI.ScenicEventsDefinitions do
         @quote_character, @percent_sign, @left_parenthesis, @right_parenthesis,
         @left_brace, @right_brace]
 
-      @valid_text_input_characters @all_letters ++ @all_punctuation ++ [@space_bar]
+      @valid_text_input_characters @all_letters ++ @all_punctuation ++ [@space_bar, @enter_key]
 
       ## convert a keystroke into a string - used for inputing text
 

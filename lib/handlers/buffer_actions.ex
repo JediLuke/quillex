@@ -12,6 +12,13 @@ defmodule QuillEx.Handlers.BufferActions do
     end
 
 
+    ## ----------------------------------------------------------------
+
+
+    def handle(radix, {:activate_buffer, buffer_ref}) do
+        {:ok, radix |> Map.put(:active_buf, buffer_ref)}
+    end
+
     def handle(%{buffers: buf_list} = radix, {:open_buffer, %{filepath: filepath}}) do
         raise "Cant open new files yet"
     end
@@ -25,7 +32,19 @@ defmodule QuillEx.Handlers.BufferActions do
         {:ok, radix |> Map.put(:buffers, new_buffer_list) |> Map.merge(%{active_buf: new_buffer_id})}
     end
 
-    def handle(radix, {:activate_buffer, buffer_ref}) do
-        {:ok, radix |> Map.put(:active_buf, buffer_ref)}
+    def handle(%{buffers: buf_list} = radix, {:modify_buffer, buf, {:append, text}}) do
+        new_buf_list = buf_list
+        |> Enum.map(fn %{id: ^buf} = buffer -> %{buffer|data: buffer.data <> text}
+                           any_other_buffer -> any_other_buffer end)
+        {:ok, radix |> Map.put(:buffers, new_buf_list)}
     end
+
+    def handle(%{buffers: buf_list} = radix, {:save_buffer, buf}) do
+        raise "Cant save files yet"
+    end
+
+    def handle(%{buffers: buf_list} = radix, {:close_buffer, buf}) do
+        raise "Cant close files yet"
+    end
+
 end
