@@ -18,20 +18,9 @@ defmodule QuillEx.GUI.Components.MenuBar do
     @default_menu [
         {"Buffer", [
             {"new", &QuillEx.API.Buffer.new/0},
-            {"open", &QuillEx.API.Buffer.open/0},
             {"close", &QuillEx.API.Buffer.close/0}]},
-        # {"DevTools", [
-        #     {"restart & re-compile", &QuillEx.API.Buffer.new/0},
-        #     {"fire dev loop", &QuillEx.API.Buffer.open/0},
-        #     {"more", &QuillEx.API.Buffer.open/0},
-        #     {"some more", &QuillEx.API.Buffer.open/0}]},
-        # {"Next menu", [
-        #     {"restart & re-compile", &QuillEx.API.Buffer.new/0},
-        #     {"fire dev loop", &QuillEx.API.Buffer.open/0},
-        #     {"more", &QuillEx.API.Buffer.open/0},
-        #     {"some more", &QuillEx.API.Buffer.open/0}]},
-        {"Help", [
-            {"About QuillEx", &QuillEx.API.Misc.makers_mark/0}]},
+        # {"Help", [
+        #     {"About QuillEx", &QuillEx.API.Misc.makers_mark/0}]},
     ]
 
     def validate(%{width: _w, height: _h} = data) do

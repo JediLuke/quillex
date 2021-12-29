@@ -26,6 +26,7 @@ defmodule QuillEx.Handlers.BufferActions do
     def handle(%{buffers: buf_list} = radix, {:open_buffer, %{data: text} = new_buf}) when is_bitstring(text) do
         num_buffers = Enum.count(buf_list)
         #TODO make this a struct?
+        #TODO need to check it also doesn't exist yet, else we end up with 2 untitled_2.txts
         new_buffer_id = "untitled_" <> Integer.to_string(num_buffers+1) <> ".txt"
         #TODO keep track of the active buffer...
         new_buffer_list = buf_list ++ [new_buf |> Map.merge(%{id: new_buffer_id})]
@@ -43,8 +44,9 @@ defmodule QuillEx.Handlers.BufferActions do
         raise "Cant save files yet"
     end
 
-    def handle(%{buffers: buf_list} = radix, {:close_buffer, buf}) do
-        raise "Cant close files yet"
+    def handle(%{buffers: buf_list, active_buf: active_buf} = radix, {:close_buffer, buf_to_close}) when active_buf == buf_to_close do
+        new_buf_list = buf_list |> Enum.reject(& &1.id == buf_to_close)
+        {:ok, radix |> Map.put(:buffers, new_buf_list) |> Map.put(:active_buf, hd(new_buf_list).id)}
     end
 
 end
