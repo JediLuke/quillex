@@ -213,6 +213,8 @@ defmodule QuillEx.GUI.ScenicEventsDefinitions do
 
       def key2string(@underscore), do: "_"
 
+      def key2string(@enter_key), do: "\n"
+
       def key2string(@left_parenthesis), do: "("
       def key2string(@right_parenthesis), do: ")"
 
