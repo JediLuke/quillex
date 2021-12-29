@@ -27,12 +27,13 @@ defmodule QuillEx.GUI.Components.TabSelector do
 
         QuillEx.Utils.PubSub.register(topic: :radix_state_change)
 
-        init_graph = render(Scenic.Graph.build(), %{frame: %{width: args.width}, radix_state: args.radix_state, theme: QuillEx.Utils.Themes.theme(opts)})
+        init_theme = QuillEx.Utils.Themes.theme(opts)
+        init_graph = render(Scenic.Graph.build(), %{frame: %{width: args.width}, radix_state: args.radix_state, theme: init_theme})
 
         init_scene = scene
         |> assign(graph: init_graph)
         |> assign(frame: %{width: args.width})
-        |> assign(theme: QuillEx.Utils.Themes.theme(opts))
+        |> assign(theme: init_theme)
         |> push_graph(init_graph)
 
         {:ok, init_scene}
@@ -95,7 +96,7 @@ defmodule QuillEx.GUI.Components.TabSelector do
         |> Scenic.Graph.delete(:tab_selector)
         |> Scenic.Primitives.group(fn graph ->
             graph
-            |> Scenic.Primitives.rect({scene.assigns.frame.width, 40}, fill: scene.assigns.theme.thumb)
+            |> Scenic.Primitives.rect({scene.assigns.frame.width, 40}, fill: scene.assigns.theme.background)
             |> render_tabs.()
           end, [
              id: :tab_selector
@@ -146,7 +147,7 @@ defmodule QuillEx.GUI.Components.TabSelector do
         new_graph = init_graph
         |> Scenic.Primitives.group(fn graph ->
             graph
-            |> Scenic.Primitives.rect({frame.width, 40}, fill: theme.thumb)
+            |> Scenic.Primitives.rect({frame.width, 40}, fill: theme.background)
             |> render_tabs.()
           end, [
              id: :tab_selector

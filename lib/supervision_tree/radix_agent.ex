@@ -5,7 +5,7 @@ defmodule QuillEx.RadixAgent do
   
 
     def start_link(_opts) do
-      Agent.start_link(fn -> %Radix{} end, name: __MODULE__)
+      Agent.start_link(fn -> Radix.new() end, name: __MODULE__)
     end
 
 

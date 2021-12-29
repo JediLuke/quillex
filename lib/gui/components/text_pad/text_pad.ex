@@ -22,17 +22,18 @@ defmodule QuillEx.GUI.Components.TextPad do
         #     |> TextPad.add_to_graph()
         # end, translate: {0, @menu_bar_height})
 
+        theme = QuillEx.Utils.Themes.theme(opts)
         # test_data
 
         init_graph = Scenic.Graph.build()
         |> Scenic.Primitives.group(fn graph ->
             graph
-            |> Scenic.Primitives.rect(args.frame.size, fill: :yellow, stroke: {12, :purple})
+            |> Scenic.Primitives.rect(args.frame.size, fill: theme.active, stroke: {2, theme.border})
             |> Scenic.Primitives.text(args.data,
                         id: :label,
                         font: :ibm_plex_mono,
                         font_size: 24,
-                        fill: :black,
+                        fill: theme.text,
                         translate: {10, 28})
                         # fill: theme.text)
         end, translate: args.frame.pin) #NOTE: No translate necessary, since there is no TabSelector open (just one active buffer)

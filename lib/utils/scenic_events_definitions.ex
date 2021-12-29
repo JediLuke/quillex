@@ -44,6 +44,9 @@ defmodule QuillEx.GUI.ScenicEventsDefinitions do
       @number_8 {:key, {:key_8, @key_pressed, []}}
       @number_9 {:key, {:key_9, @key_pressed, []}}
 
+      @all_numbers [@number_0, @number_1, @number_2, @number_3, @number_4,
+        @number_5, @number_6, @number_7, @number_8, @number_9]
+
       @lowercase_a {:key, {:key_a, @key_pressed, []}}
       @lowercase_b {:key, {:key_b, @key_pressed, []}}
       @lowercase_c {:key, {:key_c, @key_pressed, []}}
@@ -135,7 +138,7 @@ defmodule QuillEx.GUI.ScenicEventsDefinitions do
         @quote_character, @percent_sign, @left_parenthesis, @right_parenthesis,
         @left_brace, @right_brace]
 
-      @valid_text_input_characters @all_letters ++ @all_punctuation ++ [@space_bar, @enter_key]
+      @valid_text_input_characters @all_letters ++ @all_numbers ++ @all_punctuation ++ [@space_bar, @enter_key]
 
       ## convert a keystroke into a string - used for inputing text
 

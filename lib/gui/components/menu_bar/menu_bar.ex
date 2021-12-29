@@ -20,16 +20,16 @@ defmodule QuillEx.GUI.Components.MenuBar do
             {"new", &QuillEx.API.Buffer.new/0},
             {"open", &QuillEx.API.Buffer.open/0},
             {"close", &QuillEx.API.Buffer.close/0}]},
-        {"DevTools", [
-            {"restart & re-compile", &QuillEx.API.Buffer.new/0},
-            {"fire dev loop", &QuillEx.API.Buffer.open/0},
-            {"more", &QuillEx.API.Buffer.open/0},
-            {"some more", &QuillEx.API.Buffer.open/0}]},
-        {"Next menu", [
-            {"restart & re-compile", &QuillEx.API.Buffer.new/0},
-            {"fire dev loop", &QuillEx.API.Buffer.open/0},
-            {"more", &QuillEx.API.Buffer.open/0},
-            {"some more", &QuillEx.API.Buffer.open/0}]},
+        # {"DevTools", [
+        #     {"restart & re-compile", &QuillEx.API.Buffer.new/0},
+        #     {"fire dev loop", &QuillEx.API.Buffer.open/0},
+        #     {"more", &QuillEx.API.Buffer.open/0},
+        #     {"some more", &QuillEx.API.Buffer.open/0}]},
+        # {"Next menu", [
+        #     {"restart & re-compile", &QuillEx.API.Buffer.new/0},
+        #     {"fire dev loop", &QuillEx.API.Buffer.open/0},
+        #     {"more", &QuillEx.API.Buffer.open/0},
+        #     {"some more", &QuillEx.API.Buffer.open/0}]},
         {"Help", [
             {"About QuillEx", &QuillEx.API.Misc.makers_mark/0}]},
     ]
@@ -101,7 +101,7 @@ defmodule QuillEx.GUI.Components.MenuBar do
         Scenic.Graph.build()
         |> Scenic.Primitives.group(fn graph ->
             graph
-            |> Scenic.Primitives.rect({width, height}, fill: theme.background)
+            |> Scenic.Primitives.rect({width, height}, fill: theme.active)
             |> render_menu_items.(menu_items_list)
           end, [
              id: :menu_bar

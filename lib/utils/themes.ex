@@ -1,6 +1,8 @@
 defmodule QuillEx.Utils.Themes do
     alias Scenic.Primitive.Style.Theme
 
+    @default_theme :light
+
     # `theme` is passed in as an inherited style by Scenic - e.g.
     #
     # %{
@@ -14,7 +16,7 @@ defmodule QuillEx.Utils.Themes do
     # }
 
     def theme(opts) do
-        (opts[:theme] || Theme.preset(:dark))
+        (opts[:theme] || Theme.preset(@default_theme))
         |> Theme.normalize()
     end
 end

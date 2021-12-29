@@ -39,7 +39,7 @@ defmodule QuillEx.GUI.Components.TabSelector.SingleTab do
         # https://github.com/boydm/scenic/blob/master/lib/scenic/component/button.ex#L200
         vpos = height/2 + (args.font.ascent/2) + (args.font.descent/3)
 
-        background = if args.active?, do: theme.highlight, else: theme.active
+        background = if args.active?, do: theme.border, else: theme.background
 
         Scenic.Graph.build()
         |> Scenic.Primitives.group(fn graph ->
