@@ -23,7 +23,7 @@ defmodule QuillEx.GUI.Components.MenuBar do
         #     {"About QuillEx", &QuillEx.API.Misc.makers_mark/0}]},
     ]
 
-    def validate(%{width: _w, height: _h} = data) do
+    def validate(%{frame: _f} = data) do
         #Logger.debug "#{__MODULE__} accepted params: #{inspect data}"
         {:ok, data |> Map.merge(%{menu_map: @default_menu})}
     end
@@ -39,7 +39,7 @@ defmodule QuillEx.GUI.Components.MenuBar do
         init_state = %{mode: :inactive,
                        menu_map: args.menu_map,
                        font_metrics: ibm_plex_mono_fm}
-        init_frame = %{width: args.width, height: args.height}
+        init_frame = args.frame
         init_graph = render(init_frame, init_state, theme)
 
         init_scene = scene
@@ -55,7 +55,7 @@ defmodule QuillEx.GUI.Components.MenuBar do
     end
 
 
-    def render(%{width: width, height: height}, %{mode: :inactive, menu_map: menu, font_metrics: fm}, theme) do
+    def render(%{size: {width, height}}, %{mode: :inactive, menu_map: menu, font_metrics: fm}, theme) do
         menu_items_list = menu
         |> Enum.map(fn {label, _sub_menu} -> label end)
         |> Enum.with_index()
@@ -136,7 +136,7 @@ defmodule QuillEx.GUI.Components.MenuBar do
             |> Scenic.Primitives.rect({sub_menu_width, sub_menu_height}, fill: :green)
             |> render_sub_menu.()
           end, [
-             id: :sub_menu, translate: {@menu_width*(top_index-1), frame.height}
+             id: :sub_menu, translate: {@menu_width*(top_index-1), frame.dimensions.height}
           ])
     end
 
