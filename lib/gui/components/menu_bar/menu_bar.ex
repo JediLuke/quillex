@@ -2,6 +2,7 @@ defmodule QuillEx.GUI.Components.MenuBar do
     use Scenic.Component
     require Logger
     alias QuillEx.GUI.Components.MenuBar.FloatButton
+    use QuillEx.GUI.ScenicEventsDefinitions
 
     
     @left_margin 15     # how far we indent the first menu item
@@ -59,7 +60,7 @@ defmodule QuillEx.GUI.Components.MenuBar do
         |> assign(theme: theme)
         |> push_graph(init_graph)
 
-        request_input(init_scene, [:cursor_pos])
+        request_input(init_scene, [:cursor_pos, :key])
         
         {:ok, init_scene}
     end
@@ -243,6 +244,17 @@ defmodule QuillEx.GUI.Components.MenuBar do
             #TODO here check if we veered of sideways in a sub-menu
             {:noreply, scene}
         end
+    end
+
+    def handle_input(@escape_key, _context, scene) do
+        Logger.debug "#{__MODULE__} cancelling due to ESCAPE KEY !!"
+        GenServer.cast(__MODULE__, {:cancel, scene.assigns.state.mode})
+        {:noreply, scene}
+    end
+
+    def handle_input({:key, {key, _dont_care, _dont_care_either}}, _context, scene) do
+        Logger.debug "#{__MODULE__} ignoring key: #{inspect key}"
+        {:noreply, scene}
     end
 
     def handle_cast({:cancel, cancel_mode}, scene) do
