@@ -12,7 +12,11 @@ defmodule QuillEx.Handlers.BufferActions do
     end
 
 
-    def handle(%{buffers: buf_list} = radix, {:open_buffer, new_buf}) do
+    def handle(%{buffers: buf_list} = radix, {:open_buffer, %{filepath: filepath}}) do
+        raise "Cant open new files yet"
+    end
+
+    def handle(%{buffers: buf_list} = radix, {:open_buffer, %{data: text} = new_buf}) when is_bitstring(text) do
         num_buffers = Enum.count(buf_list)
         #TODO make this a struct?
         new_buffer_id = "untitled_" <> Integer.to_string(num_buffers+1) <> ".txt"

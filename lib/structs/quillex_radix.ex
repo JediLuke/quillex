@@ -1,6 +1,7 @@
 defmodule QuillEx.Structs.Radix do
     defstruct [
         buffers: [],
+        active_buf: nil,
         gui_config: %{
             menu_bar: %{
                 height: 60,
