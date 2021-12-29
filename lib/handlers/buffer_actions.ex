@@ -19,8 +19,11 @@ defmodule QuillEx.Handlers.BufferActions do
         {:ok, radix |> Map.put(:active_buf, buffer_ref)}
     end
 
-    def handle(%{buffers: buf_list} = radix, {:open_buffer, %{filepath: filepath}}) do
-        raise "Cant open new files yet"
+    def handle(%{buffers: buf_list} = radix, {:open_buffer, %{filepath: filepath} = new_buf}) do
+        id = filepath
+        data = File.read!(filepath)
+        new_buffer_list = buf_list ++ [new_buf |> Map.merge(%{id: id, data: data})]
+        {:ok, radix |> Map.put(:buffers, new_buffer_list) |> Map.merge(%{active_buf: id})}
     end
 
     def handle(%{buffers: buf_list} = radix, {:open_buffer, %{data: text} = new_buf}) when is_bitstring(text) do

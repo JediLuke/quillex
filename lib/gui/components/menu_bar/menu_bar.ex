@@ -18,6 +18,7 @@ defmodule QuillEx.GUI.Components.MenuBar do
     @default_menu [
         {"Buffer", [
             {"new", &QuillEx.API.Buffer.new/0},
+            {"save", &QuillEx.API.Buffer.save/0},
             {"close", &QuillEx.API.Buffer.close/0}]},
         # {"Help", [
         #     {"About QuillEx", &QuillEx.API.Misc.makers_mark/0}]},
@@ -136,7 +137,7 @@ defmodule QuillEx.GUI.Components.MenuBar do
             #      gives this component a larger bounding box, which we
             #      need to detect when we've left the area with the mouse
             graph_with_background = graph
-            |> Scenic.Primitives.rect({sub_menu_width, sub_menu_height}, fill: :green)
+            |> Scenic.Primitives.rect({sub_menu_width, sub_menu_height})
             |> render_sub_menu.()
           end, [
              id: :sub_menu, translate: {@menu_width*(top_index-1), frame.dimensions.height}

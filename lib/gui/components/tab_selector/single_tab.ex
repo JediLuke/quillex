@@ -67,7 +67,7 @@ defmodule QuillEx.GUI.Components.TabSelector.SingleTab do
         new_graph =
             if coords |> QuillEx.Utils.HoverUtils.inside?(bounds) do
                 scene.assigns.graph
-                |> Scenic.Graph.modify(:label, &Scenic.Primitives.update_opts(&1, fill: :black))
+                |> Scenic.Graph.modify(:label, &Scenic.Primitives.update_opts(&1, fill: theme.highlight))
             else
                 scene.assigns.graph
                 |> Scenic.Graph.modify(:label, &Scenic.Primitives.update_opts(&1, fill: theme.text))
