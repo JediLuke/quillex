@@ -5,14 +5,6 @@ defmodule QuillEx.Scene.RootScene do
 
   @menubar %{height: 60}
 
-  def push_radix_state(x) do
-    EventBus.notify(%EventBus.Model.Event{
-      id:    UUID.uuid4(),
-      topic: :radix,
-      data:  {:radix_state_update, x}
-    })
-  end
-
   def init(scene, _params, _opts) do
     Logger.debug "#{__MODULE__} initializing..."
     Process.register(self(), __MODULE__)

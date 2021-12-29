@@ -12,13 +12,11 @@ defmodule QuillEx.GUI.Components.EditPane do
         Logger.debug "#{__MODULE__} initializing..."
         Process.register(self(), __MODULE__)
 
-        # EventBus.subscribe({__MODULE__, ["radix"]})
-
         init_graph = Scenic.Graph.build()
         |> Scenic.Primitives.group(fn graph ->
             graph
-            |> TabSelector.add_to_graph(%{buffers: [], width: args.width})
-            |> TextPad.add_to_graph(%{})
+            |> TabSelector.add_to_graph(%{buffers: [], width: args.width, height: 40})
+            |> TextPad.add_to_graph(%{tab_selector_height: 40})
         end, translate: {0, args.menubar_height})
 
         init_scene = scene

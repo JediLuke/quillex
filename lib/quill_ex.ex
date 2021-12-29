@@ -72,12 +72,8 @@ defmodule QuillEx do
       #QuillEx.EventListener,        # listens to the event-bus, triggers actions
       QuillEx.RadixAgent,           # holds the root-state of the application
 
-      # {Registry, keys: :duplicate, name: QuillEx.PubSub},
+      {Registry, keys: :duplicate, name: QuillEx.PubSub}, # The PubSub broker
       # QuillEx.StageManager,
-
-      # {Registry, name: QuillEx.PubSub,
-      #            keys: :duplicate,
-      #            partitions: System.schedulers_online()},
       # QuillEx.MainExecutiveProcess,
     ]
 

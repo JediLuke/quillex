@@ -10,7 +10,7 @@ defmodule QuillEx.Utils.PubSub do
       register(topic: @topic)   
    end
 
-   def register(topic: t = @topic) do
+   def register(topic: t) do
       {:ok, _} = Registry.register(@pubsub_registry, t, [])
       :ok
    end
@@ -18,6 +18,12 @@ defmodule QuillEx.Utils.PubSub do
    def broadcast(state_change: chng) do
       Registry.dispatch(@pubsub_registry, @topic, fn entries ->
          for {pid, _} <- entries, do: send(pid, {:state_change, chng})
+      end)
+   end
+
+   def broadcast(topic: topic, msg: msg) do
+      Registry.dispatch(@pubsub_registry, topic, fn entries ->
+         for {pid, _} <- entries, do: send(pid, msg)
       end)
    end
 

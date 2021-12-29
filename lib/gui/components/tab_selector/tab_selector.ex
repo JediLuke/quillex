@@ -25,7 +25,7 @@ defmodule QuillEx.GUI.Components.TabSelector do
         Logger.debug "#{__MODULE__} initializing..."
         Process.register(self(), __MODULE__)
 
-        EventBus.subscribe({__MODULE__, ["radix"]})
+        QuillEx.Utils.PubSub.register(topic: :radix_state_change)
 
         init_scene = scene
         |> assign(graph: Scenic.Graph.build())
@@ -37,36 +37,35 @@ defmodule QuillEx.GUI.Components.TabSelector do
         {:ok, init_scene}
     end
 
-    def process({:radix = _topic, _id} = event_shadow) do
-        event = EventBus.fetch_event(event_shadow)
-        # :ok = do_process(event.data)
-        GenServer.cast(__MODULE__, {event.data, event_shadow}) #NOTE: can't use `self()` here, this function gets run in some other process ;)
-        #NOTE: We will mark the event completed when we handle it (which
-        #      requires the internal state of TabSelector, which sadly we
-        #      don't seem to have here...)
-        #EventBus.mark_as_completed({__MODULE__, event_shadow})
-        :ok
-    end
+    # def process({:radix = _topic, _id} = event_shadow) do
+    #     event = EventBus.fetch_event(event_shadow)
+    #     # :ok = do_process(event.data)
+    #     GenServer.cast(__MODULE__, {event.data, event_shadow}) #NOTE: can't use `self()` here, this function gets run in some other process ;)
+    #     #NOTE: We will mark the event completed when we handle it (which
+    #     #      requires the internal state of TabSelector, which sadly we
+    #     #      don't seem to have here...)
+    #     #EventBus.mark_as_completed({__MODULE__, event_shadow})
+    #     :ok
+    # end
 
     # ##--------------------------------------------------------
 
-    # def do_process({:radix_state_update, state}) do
+    # def do_process({:radix_state_change, state}) do
     #     Logger.debug "#{__MODULE__} ignoring radix_state: #{inspect state}}"
     #     :ok
     # end
 
     #NOTE: This case is where there's just one buffer open
-    def handle_cast({{:radix_state_update, %{buffers: [%{id: _id, data: _d} = _b]} = new_state}, event_shadow}, %{assigns: %{state: :inactive}} = scene) do
+    def handle_info({:radix_state_change, %{buffers: [%{id: _id, data: _d} = _b]} = new_state}, %{assigns: %{state: :inactive}} = scene) do
         #Logger.debug "#{__MODULE__} ignoring radix_state: #{inspect new_state}, scene_state: #{inspect scene.assigns.state}}"
         Logger.debug "#{__MODULE__} ignoring a RadixState update, since we get get activated by just a single buffer"
         #TODO delete the graph/group in case we're going backwards, closing buffers
-        EventBus.mark_as_completed({__MODULE__, event_shadow})
         {:noreply, scene}
     end
 
     #TODO right now, this re-draws every time there's a RadixState update - we ought to compare it against what we have, & only update/broadcast if it really changed
     # This case takes us from :inactive -> 2 buffers
-    def handle_cast({{:radix_state_update, %{buffers: buf_list, active_buf: active_buf} = new_state}, event_shadow}, scene) when length(buf_list) >= 2 do
+    def handle_info({:radix_state_change, %{buffers: buf_list, active_buf: active_buf} = new_state}, scene) when length(buf_list) >= 2 and length(buf_list) <= 7 do
         #Logger.debug "#{__MODULE__} ignoring radix_state: #{inspect new_state}, scene_state: #{inspect scene.assigns.state}}"
         Logger.debug "#{__MODULE__} drawing a 2-tab TabSelector --"
 
@@ -118,7 +117,6 @@ defmodule QuillEx.GUI.Components.TabSelector do
         |> assign(state: %{buffers: buf_list})
         |> push_graph(new_graph)
 
-        EventBus.mark_as_completed({__MODULE__, event_shadow})
         {:noreply, new_scene}
     end
 
