@@ -98,7 +98,7 @@ defmodule QuillEx.GUI.Components.MenuBar do
           ])
     end
 
-    def render_sub_menu(graph, %{state: %{menu_map: menu_map} = state, index: top_index, frame: frame}) do
+    def render_sub_menu(graph, %{state: %{menu_map: menu_map} = state, index: top_index, frame: frame, theme: theme}) do
 
         num_top_items = Enum.count(menu_map)
         {_top_label, sub_menu} = menu_map |> Enum.at(top_index-1)
@@ -139,6 +139,7 @@ defmodule QuillEx.GUI.Components.MenuBar do
             graph_with_background = graph
             |> Scenic.Primitives.rect({sub_menu_width, sub_menu_height})
             |> render_sub_menu.()
+            |> Scenic.Primitives.rect({sub_menu_width, frame.dimensions.height+sub_menu_height}, translate: {0, -frame.dimensions.height}, stroke: {2, theme.border})
           end, [
              id: :sub_menu, translate: {@menu_width*(top_index-1), frame.dimensions.height}
           ])
@@ -159,7 +160,7 @@ defmodule QuillEx.GUI.Components.MenuBar do
 
         new_graph = scene.assigns.graph
         |> Scenic.Graph.delete(:sub_menu)
-        |> render_sub_menu(%{state: scene.assigns.state, index: index, frame: scene.assigns.frame})
+        |> render_sub_menu(%{state: scene.assigns.state, index: index, frame: scene.assigns.frame, theme: scene.assigns.theme})
 
         new_scene = scene
         |> assign(state: new_state)
