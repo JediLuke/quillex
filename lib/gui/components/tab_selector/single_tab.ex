@@ -39,12 +39,14 @@ defmodule QuillEx.GUI.Components.TabSelector.SingleTab do
         # https://github.com/boydm/scenic/blob/master/lib/scenic/component/button.ex#L200
         vpos = height/2 + (args.font.ascent/2) + (args.font.descent/3)
 
+        background = if args.active?, do: :red, else: theme.active
+
         Scenic.Graph.build()
         |> Scenic.Primitives.group(fn graph ->
             graph
             |> Scenic.Primitives.rect(args.frame.size,
                     id: :background,
-                    fill: theme.active)
+                    fill: background)
             |> Scenic.Primitives.text(args.label,
                     id: :label,
                     font: :ibm_plex_mono,
@@ -93,7 +95,7 @@ defmodule QuillEx.GUI.Components.TabSelector.SingleTab do
         bounds = Scenic.Graph.bounds(scene.assigns.graph)
         if click_coords |> QuillEx.Utils.HoverUtils.inside?(bounds) do
             Logger.debug "we clickd inside the tab  - #{inspect scene.assigns.ref}"
-            GenServer.cast(TabSelector, {:activate_tab, scene.assigns.ref})
+            QuillEx.API.Buffer.activate(scene.assigns.ref)
         end
         {:noreply, scene}
     end

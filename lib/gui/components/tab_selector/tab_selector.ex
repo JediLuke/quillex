@@ -64,8 +64,9 @@ defmodule QuillEx.GUI.Components.TabSelector do
         {:noreply, scene}
     end
 
+    #TODO right now, this re-draws every time there's a RadixState update - we ought to compare it against what we have, & only update/broadcast if it really changed
     # This case takes us from :inactive -> 2 buffers
-    def handle_cast({{:radix_state_update, %{buffers: buf_list} = new_state}, event_shadow}, %{assigns: %{state: :inactive}} = scene) when length(buf_list) >= 2 do
+    def handle_cast({{:radix_state_update, %{buffers: buf_list, active_buf: active_buf} = new_state}, event_shadow}, scene) when length(buf_list) >= 2 do
         #Logger.debug "#{__MODULE__} ignoring radix_state: #{inspect new_state}, scene_state: #{inspect scene.assigns.state}}"
         Logger.debug "#{__MODULE__} drawing a 2-tab TabSelector --"
 
@@ -84,7 +85,7 @@ defmodule QuillEx.GUI.Components.TabSelector do
                         |> SingleTab.add_to_graph(%{
                                 label: label,
                                 ref: label,
-                                active?: false,
+                                active?: label == active_buf,
                                 margin: 10,
                                 font: %{
                                     size: @tab_font_size,
@@ -121,15 +122,4 @@ defmodule QuillEx.GUI.Components.TabSelector do
         {:noreply, new_scene}
     end
 
-    # This case takes us from 2 -> n buffers
-    def handle_cast({{:radix_state_update, %{buffers: new_buf_list} = new_state}, event_shadow}, %{assigns: %{state: %{buffers: old_buf_list}}} = scene) when length(new_buf_list) >= 3 and length(old_buf_list) >= 2 do
-        Logger.warn "We can't render more than 2 tabs yet!!"
-        EventBus.mark_as_completed({__MODULE__, event_shadow})
-        {:noreply, scene}
-    end
-
-    def handle_cast({:activate_tab, ref}, %{assigns: %{state: %{buffers: buf_list}}} = scene) do
-        buf = buf_list |> Enum.filter(& &1.id == ref)
-        {:noreply, scene}
-    end
 end
