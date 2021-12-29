@@ -2,8 +2,11 @@ defmodule QuillEx.Scene.RootScene do
   use Scenic.Scene
   require Logger
   alias QuillEx.GUI.Components.{MenuBar, EditPane}
+  alias QuillEx.GUI.Structs.Frame
 
-  @menubar %{height: 60}
+  
+  @menubar %{height: 60} #TODO should come from RadixState
+
 
   def init(scene, _params, _opts) do
     Logger.debug "#{__MODULE__} initializing..."
@@ -12,19 +15,21 @@ defmodule QuillEx.Scene.RootScene do
     init_state = :initium #NOTE: `initium` - the initial/default state
     init_graph = render(scene.viewport, init_state)
 
-    new_scene = scene
+    init_scene = scene
     |> assign(state: init_state)
     |> assign(graph: init_graph)
     |> push_graph(init_graph)
+
+    request_input(init_scene, [:viewport])
          
-    {:ok, new_scene}
+    {:ok, init_scene}
   end
 
-  def render(%Scenic.ViewPort{size: {width, height}}, _state = :initium) do
+  def render(%Scenic.ViewPort{size: {vp_width, vp_height}}, _state = :initium) do
     #NOTE: draw MenuBar last so it shows up over the top of the EditPane
     Scenic.Graph.build()
-    |> EditPane.add_to_graph(%{frame: %{width: width, height: height-@menubar.height, pin: {0, @menubar.height}}})
-    |> MenuBar.add_to_graph(@menubar |> Map.merge(%{width: width}))
+    |> EditPane.add_to_graph(%{frame: Frame.new(pin: {0, @menubar.height}, size: {vp_width, vp_height-@menubar.height})}, id: :edit_pane)
+    |> MenuBar.add_to_graph(%{frame: Frame.new(pin: {0, 0}, size: {vp_width, @menubar.height})}, id: :menu_bar)
   end
 
   def get_viewport do
@@ -35,54 +40,20 @@ defmodule QuillEx.Scene.RootScene do
     {:reply, {:ok, scene.viewport}, scene}
   end
 
-  # def process({_topic, _id} = event_shadow) do
-  #   # Fetch event
-  #   event = EventBus.fetch(event_shadow)
+  def handle_input({:viewport, {:reshape, {new_vp_width, new_vp_height} = new_size}}, context, scene) do
+    Logger.debug "#{__MODULE__} received :viewport :reshape, size: #{inspect new_size}"
 
-  #   # Do something with the event
-  #   Logger.info("I am handling the event with a Simple module #{__MODULE__}")
-  #   Logger.info(fn -> inspect(event) end)
+    EditPane |> GenServer.cast({:frame_reshape,
+        Frame.new(pin: {0, @menubar.height}, size: {new_vp_width, new_vp_height-@menubar.height})})
+    MenuBar |> GenServer.cast({:frame_reshape,
+        Frame.new(pin: {0, 0}, size: {new_vp_width, @menubar.height})})
 
-  #   # Mark the event as completed for this consumer
-  #   EventBus.mark_as_completed({MyFirstConsumer, event_shadow})
-  # end
+    {:noreply, scene}
+  end
 
+  def handle_input({:viewport, input}, context, scene) do
+    #Logger.debug "#{__MODULE__} ignoring some input from the :viewport - #{inspect input}"
+    {:noreply, scene}
+  end
 
-
-
-  # def handle_input({:cursor_button, {:btn_left, 1, [], coords}}, _context, scene) do
-
-  #   # IO.inspect input
-  #   {:noreply, scene}
-  # end
-
-  # def handle_input({:cursor_button, {:btn_left, 1, [], coords}}, _context, scene) do
-
-  #   # IO.inspect input
-  #   {:noreply, scene}
-  # end
-
-  # def handle_info({:state_change, %{files: [active: filepath], text: text} = new_state}, %{assigns: %{state: :initium}} = scene) do
-  #   # IO.puts "RECV'd: #{inspect msg}"
-
-  #   # new_graph = render(state, first_render?: true)
-  #   new_graph = scene.assigns.graph
-  #   |> QuillEx.Components.NotePad.add_to_graph(%{
-  #         file: filepath,
-  #         text: text,
-  #         frame: {1, 1} #TODO use a real frame
-  #   })
-
-
-  #   new_scene = scene
-  #   |> assign(graph: new_graph)
-  #   |> assign(state: new_state)
-  #   |> push_graph(new_graph)
-
-  #   {:noreply, new_scene}
-  # end
-
-
-  # reducer(state, action) -> new_state
-  # render(graph, new_state) -> new_graph
 end

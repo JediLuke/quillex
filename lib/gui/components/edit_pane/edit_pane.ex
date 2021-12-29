@@ -28,6 +28,18 @@ defmodule QuillEx.GUI.Components.EditPane do
         {:ok, init_scene}
     end
 
+    def handle_cast({:frame_reshape, new_frame}, scene) do
+        # new_graph = scene.assigns.graph
+        # |> Scenic.Graph.modify(:menu_background, &Scenic.Primitives.rect(&1, new_frame.size))
+        
+        # new_scene = scene
+        # |> assign(graph: new_graph)
+        # |> assign(frame: new_frame)
+        # |> push_graph(new_graph)
+            
+        {:noreply, scene}
+    end
+
     # Single buffer
     def handle_info({:radix_state_change, %{buffers: [%{id: id, data: d}], active_buf: id}}, scene) do
         Logger.debug "drawing a single TextPad since we have only one buffer open!"

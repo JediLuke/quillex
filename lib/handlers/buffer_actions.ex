@@ -27,7 +27,7 @@ defmodule QuillEx.Handlers.BufferActions do
         num_buffers = Enum.count(buf_list)
         #TODO make this a struct?
         #TODO need to check it also doesn't exist yet, else we end up with 2 untitled_2.txts
-        new_buffer_id = "untitled_" <> Integer.to_string(num_buffers+1) <> ".txt"
+        new_buffer_id = "untitled_" <> Integer.to_string(num_buffers+1) <> ".txt*"
         #TODO keep track of the active buffer...
         new_buffer_list = buf_list ++ [new_buf |> Map.merge(%{id: new_buffer_id})]
         {:ok, radix |> Map.put(:buffers, new_buffer_list) |> Map.merge(%{active_buf: new_buffer_id})}

@@ -90,7 +90,7 @@ defmodule QuillEx.GUI.Components.MenuBar do
         Scenic.Graph.build()
         |> Scenic.Primitives.group(fn graph ->
             graph
-            |> Scenic.Primitives.rect({width, height}, fill: theme.active)
+            |> Scenic.Primitives.rect({width, height}, fill: theme.active, id: :menu_background)
             |> render_menu_items.(menu_items_list)
           end, [
              id: :menu_bar
@@ -132,6 +132,9 @@ defmodule QuillEx.GUI.Components.MenuBar do
 
         graph
         |> Scenic.Primitives.group(fn graph ->
+            #NOTE: We never see this rectangle beneath the sub_menu, but it
+            #      gives this component a larger bounding box, which we
+            #      need to detect when we've left the area with the mouse
             graph_with_background = graph
             |> Scenic.Primitives.rect({sub_menu_width, sub_menu_height}, fill: :green)
             |> render_sub_menu.()
@@ -213,6 +216,18 @@ defmodule QuillEx.GUI.Components.MenuBar do
             |> push_graph(new_graph)
             
             {:noreply, new_scene}
+    end
+
+    def handle_cast({:frame_reshape, new_frame}, scene) do
+        new_graph = scene.assigns.graph
+        |> Scenic.Graph.modify(:menu_background, &Scenic.Primitives.rect(&1, new_frame.size))
+        
+        new_scene = scene
+        |> assign(graph: new_graph)
+        |> assign(frame: new_frame)
+        |> push_graph(new_graph)
+            
+        {:noreply, new_scene}
     end
 
     # Here we use the cursor_pos to trigger resets when the user navigates
