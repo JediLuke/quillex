@@ -55,8 +55,8 @@ defmodule QuillEx.API.Buffer do
    Return the contents of a buffer.
    """
    def read(buf) do
-      raise "dont know how to read a buffer yet"
-      # ProcessRegistry.find!(buf) |> GenServer.call(:read)
+      [buf] = list() |> Enum.filter(& &1.id == buf)
+      buf.data
    end
 
    def modify(buf) do
@@ -69,10 +69,12 @@ defmodule QuillEx.API.Buffer do
       # ProcessRegistry.find!(buf) |> GenServer.call(:read)
    end
 
+   def close do
+      active_buf() |> close()
+   end
+
    def close(buf) do
-      raise "dont know how to close a buffer yet"
-      # ProcessRegistry.find!(buf) |> GenServer.call(:read)
+      QuillEx.action({:close_buffer, buf})
    end
   
-
 end

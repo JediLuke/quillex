@@ -26,7 +26,6 @@ defmodule QuillEx.Handlers.BufferActions do
     end
 
     def handle(radix, {:activate_buffer, buffer_ref}) do
-        IO.puts "ACTIVATING BUFFER"
         {:ok, radix |> Map.put(:active_buf, buffer_ref)}
     end
 end
