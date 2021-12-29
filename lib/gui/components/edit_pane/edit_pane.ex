@@ -1,5 +1,6 @@
 defmodule QuillEx.GUI.Components.EditPane do
     use Scenic.Component
+    use QuillEx.GUI.ScenicEventsDefinitions
     require Logger
     alias QuillEx.GUI.Components.{TabSelector, TextPad}
 
@@ -20,6 +21,8 @@ defmodule QuillEx.GUI.Components.EditPane do
         |> assign(frame: args.frame)
         |> assign(graph: Scenic.Graph.build())
         #NOTE: no push_graph...
+
+        request_input(init_scene, [:key])
 
         {:ok, init_scene}
     end
@@ -51,10 +54,6 @@ defmodule QuillEx.GUI.Components.EditPane do
         Logger.debug "drawing a TextPad which has been moved down a bit, to make room for a TabSelector"
 
         [full_active_buffer] = buf_list |> Enum.filter(& &1.id == new_state.active_buf)
-        IO.inspect full_active_buffer.data, label: "REAL TEXT"
-
-        Logger.warn "Not rendering real text..."
-        # test_data = "Hello, this is Limelek!"
 
         new_graph = scene.assigns.graph
         |> Scenic.Graph.delete(:edit_pane)
@@ -73,6 +72,17 @@ defmodule QuillEx.GUI.Components.EditPane do
         |> push_graph(new_graph)
 
         {:noreply, new_scene}
+    end
+
+    def handle_input({:key, {key, @key_released, []}}, _context, scene) do
+        Logger.debug "#{__MODULE__} `key_released` for keypress: #{inspect key}"
+        {:noreply, scene}
+    end
+
+
+    def handle_input({:key, {key, _dont_care, _dont_care_either}}, _context, scene) do
+        Logger.debug "#{__MODULE__} ignoring key: #{inspect key}"
+        {:noreply, scene}
     end
 
 end
