@@ -1,20 +1,7 @@
-defmodule QuillEx.GUI.Components.Caret do
-
-
-
-end
-
-
-
-
-
-# #
-# #  Created by Boyd Multerer 2018-08-06.
-# #  Copyright © 2018 Kry10 Limited. All rights reserved.
-# #
-
-# defmodule Scenic.Component.Input.Caret do
-#     @moduledoc """
+defmodule QuillEx.GUI.Components.PadCaret do
+    use Scenic.Component
+    require Logger
+    #     @moduledoc """
 #     Add a blinking text-input caret to a graph.
 #     ## Data
 #     `height`
@@ -37,8 +24,63 @@ end
 #       |> Caret.add_to_graph(24, id: :caret, color: :blue )
 #     ```
 #     """
-  
-#     use Scenic.Component, has_children: false
+
+
+    @width 2 # how wide the cursor is
+
+    # caret blink speed in hertz
+    @caret_hz 0.5
+    @caret_ms trunc(1000 / @caret_hz / 2)
+
+    # def validate(%{coords: num} = data) when is_integer(num) and num >= 0 do
+    def validate(%{coords: _coords} = data) do
+        Logger.debug "#{__MODULE__} accepted params: #{inspect data}"
+        {:ok, data}
+    end
+
+    def init(scene, args, opts) do
+        Logger.debug "#{__MODULE__} initializing..."
+
+        # {line, col} = args.coords
+
+        #NOTE: `color` is not an option for this PadCaret, even though it is in the Scenic.TextField.Caret component
+        theme = QuillEx.Utils.Themes.theme(opts)
+
+        init_graph = Scenic.Graph.build()
+        |> Scenic.Primitives.group(fn graph ->
+            graph
+            |> Scenic.Primitives.rect({4,26},
+                        id: :blinker,
+                        t: {10,10},
+                        fill: theme.text)
+        # end)
+        # end, translate: {line*24, col*12})
+        end, translate: args.coords)
+
+
+#       graph =
+#         Graph.build()
+#         |> line(
+#           {{0, @inset_v}, {0, height - @inset_v}},
+#           stroke: {@width, color},
+#           hidden: true,
+#           id: :caret
+#         )
+
+
+        init_scene = scene
+        |> assign(graph: init_graph)
+        # |> assign(frame: args.frame)
+        |> push_graph(init_graph)
+
+        {:ok, init_scene}
+    end
+
+
+end
+
+
+
   
 #     import Scenic.Primitives,
 #       only: [
@@ -49,61 +91,13 @@ end
 #     alias Scenic.Graph
 #     alias Scenic.Primitive.Style.Theme
   
-#     @width 2
 #     @inset_v 4
   
-#     # caret blink speed in hertz
-#     @caret_hz 0.5
-#     @caret_ms trunc(1000 / @caret_hz / 2)
-  
-#     # ============================================================================
-#     # setup
-  
-#     # --------------------------------------------------------
-#     @impl Scenic.Component
-#     def validate(height) when is_number(height) and height >= 0 do
-#       {:ok, height}
-#     end
-  
-#     def validate(data) do
-#       {
-#         :error,
-#         """
-#         #{IO.ANSI.red()}Invalid Caret specification
-#         Received: #{inspect(data)}
-#         #{IO.ANSI.yellow()}
-#         The data for a Caret is the height of the caret line.
-#         This height must be >= 0#{IO.ANSI.default_color()}
-#         """
-#       }
-#     end
-  
-#     # --------------------------------------------------------
-#     @doc false
-#     @impl Scenic.Scene
-#     def init(scene, height, opts) do
-#       color =
-#         case opts[:color] do
-#           nil ->
-#             opts[:theme]
-#             |> Theme.normalize()
-#             |> Map.get(:highlight)
-  
-#           c ->
-#             c
-#         end
   
 #       # build the graph, initially not showing
 #       # the height and the color are variable, which means it can't be
 #       # built at compile time
-#       graph =
-#         Graph.build()
-#         |> line(
-#           {{0, @inset_v}, {0, height - @inset_v}},
-#           stroke: {@width, color},
-#           hidden: true,
-#           id: :caret
-#         )
+
   
 #       scene =
 #         scene

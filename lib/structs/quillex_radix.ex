@@ -1,7 +1,6 @@
 defmodule QuillEx.Structs.Radix do
     defstruct [
         buffers: [],
-        cursors: %{},
         theme: :dark,
         active_buf: nil,
         gui_config: %{}

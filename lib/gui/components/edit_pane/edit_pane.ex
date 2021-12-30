@@ -18,8 +18,11 @@ defmodule QuillEx.GUI.Components.EditPane do
 
         QuillEx.Utils.PubSub.register(topic: :radix_state_change)
 
+        {:ok, ibm_plex_mono_fm} = TruetypeMetrics.load("./assets/fonts/IBMPlexMono-Regular.ttf")
+
         init_scene = scene
         |> assign(frame: args.frame)
+        |> assign(font_metrics: ibm_plex_mono_fm)
         |> assign(graph: Scenic.Graph.build())
         #NOTE: no push_graph...
 
@@ -41,7 +44,7 @@ defmodule QuillEx.GUI.Components.EditPane do
     end
 
     # Single buffer
-    def handle_info({:radix_state_change, %{buffers: [%{id: id, data: d}], active_buf: id}}, scene) do
+    def handle_info({:radix_state_change, %{buffers: [%{id: id, data: d, cursor: cursor_coords}], active_buf: id}}, scene) do
         Logger.debug "drawing a single TextPad since we have only one buffer open!"
 
         new_graph = scene.assigns.graph
@@ -50,7 +53,9 @@ defmodule QuillEx.GUI.Components.EditPane do
                 graph
                 |> TextPad.add_to_graph(%{
                         frame: Frame.new(pin: {0, 0}, size: scene.assigns.frame.size), #NOTE: We don't need to move the pane around (referened from the outer frame of the EditPane) because there's no TabSelector being rendered (this is the single-buffer case)
-                        data: d },
+                        data: d,
+                        font_metrics: scene.assigns.font_metrics,
+                        cursor: cursor_coords },
                         id: :text_pad)
         end, translate: scene.assigns.frame.pin, id: :edit_pane)
 
@@ -75,7 +80,9 @@ defmodule QuillEx.GUI.Components.EditPane do
                 |> TextPad.add_to_graph(%{frame: %{
                      pin: {0, @tab_selector_height}, #REMINDER: We need to move the TextPad down a bit, to make room for the TabSelector
                      size: {scene.assigns.frame.dimensions.width, scene.assigns.frame.dimensions.height-@tab_selector_height}},
-                   data: full_active_buffer.data},
+                   data: full_active_buffer.data,
+                    font_metrics: scene.assigns.font_metrics,
+                   cursor: full_active_buffer.cursor },
                    id: :text_pad)
         end, translate: scene.assigns.frame.pin, id: :edit_pane)
 
@@ -89,7 +96,7 @@ defmodule QuillEx.GUI.Components.EditPane do
     def handle_input(key, _context, scene) when key in @valid_text_input_characters do
         Logger.debug "#{__MODULE__} recv'd valid input: #{inspect key}"
         QuillEx.API.Buffer.active_buf()
-        |> QuillEx.API.Buffer.modify({:append, key |> key2string()})
+        |> QuillEx.API.Buffer.modify({:insert, key |> key2string(), :at_cursor})
         {:noreply, scene}
     end
 

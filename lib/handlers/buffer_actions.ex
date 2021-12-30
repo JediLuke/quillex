@@ -22,7 +22,9 @@ defmodule QuillEx.Handlers.BufferActions do
     def handle(%{buffers: buf_list} = radix, {:open_buffer, %{filepath: filepath} = new_buf}) do
         id = filepath
         data = File.read!(filepath)
-        new_buffer_list = buf_list ++ [new_buf |> Map.merge(%{id: id, data: data})]
+        #TODO place the cursor at the end of the buffer
+        # new_buffer_list = buf_list ++ [new_buf |> Map.merge(%{id: id, data: data, cursor: {0, 0}})]
+        new_buffer_list = buf_list ++ [new_buf |> Map.merge(%{id: id, data: data, cursor: 0, font_metrics: radix.gui_config.fonts.primary.metrics})]
         {:ok, radix |> Map.put(:buffers, new_buffer_list) |> Map.merge(%{active_buf: id})}
     end
 
@@ -31,14 +33,26 @@ defmodule QuillEx.Handlers.BufferActions do
         #TODO make this a struct?
         #TODO need to check it also doesn't exist yet, else we end up with 2 untitled_2.txts
         new_buffer_id = "untitled_" <> Integer.to_string(num_buffers+1) <> ".txt*"
-        #TODO keep track of the active buffer...
-        new_buffer_list = buf_list ++ [new_buf |> Map.merge(%{id: new_buffer_id})]
+        #TODO place the cursor at the end of the buffer
+        new_buffer_list = buf_list ++ [new_buf |> Map.merge(%{id: new_buffer_id, cursor: 0, font_metrics: radix.gui_config.fonts.primary.metrics})]
         {:ok, radix |> Map.put(:buffers, new_buffer_list) |> Map.merge(%{active_buf: new_buffer_id})}
     end
 
     def handle(%{buffers: buf_list} = radix, {:modify_buffer, buf, {:append, text}}) do
         new_buf_list = buf_list
         |> Enum.map(fn %{id: ^buf} = buffer -> %{buffer|data: buffer.data <> text}
+                           any_other_buffer -> any_other_buffer end)
+        {:ok, radix |> Map.put(:buffers, new_buf_list)}
+    end
+
+    # Insert text at the position of the cursor (and thus, also move the cursor)
+    def handle(%{buffers: buf_list} = radix, {:modify_buffer, buf, {:insert, text, :at_cursor}}) do
+        [%{data: _d, cursor: cursor_num} = buf_being_modified] = buf_list |> Enum.filter(& &1.id == buf)
+
+        new_buf_list = buf_list
+        |> Enum.map(fn %{id: ^buf} = buffer -> %{buffer|
+                                                    data: buf_being_modified.data <> text,
+                                                    cursor: cursor_num+1}
                            any_other_buffer -> any_other_buffer end)
         {:ok, radix |> Map.put(:buffers, new_buf_list)}
     end

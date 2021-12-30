@@ -1,9 +1,16 @@
 defmodule QuillEx.GUI.Components.TextPad do
     use Scenic.Component
     require Logger
+    alias QuillEx.GUI.Components.PadCaret
 
+    #NOTE: This component is surprisingly dumb - input events are captured
+    #      higher up in the EditPane, which then get fired off as fluxus-
+    #      events. These to through the managers, which (if necessary) will
+    #      update the RadixState - that gets broadcast out and these components
+    #      end up being just thin wrappers around a piece of RadixState, so
+    #      we freely create/destroy them as needed.
 
-    def validate(%{frame: _f, data: d} = data) when is_bitstring(d) do
+    def validate(%{frame: _f, data: d, cursor: _c, font_metrics: _fm} = data) when is_bitstring(d) do
         #Logger.debug "#{__MODULE__} accepted params: #{inspect data}"
         {:ok, data}
     end
@@ -13,16 +20,26 @@ defmodule QuillEx.GUI.Components.TextPad do
 
         theme = QuillEx.Utils.Themes.theme(opts)
 
+        font_size = 24 #T)D)
+
+        cursor_coords = FontMetrics.position_at(args.data, args.cursor, font_size, args.font_metrics)
+        IO.inspect cursor_coords
+
         init_graph = Scenic.Graph.build()
         |> Scenic.Primitives.group(fn graph ->
             graph
-            |> Scenic.Primitives.rect(args.frame.size, fill: theme.active, stroke: {2, theme.border})
+            |> Scenic.Primitives.rect(args.frame.size,
+                        id: :background,
+                        fill: theme.active,
+                        stroke: {2, theme.border},
+                        scissor: args.frame.size)
             |> Scenic.Primitives.text(args.data,
-                        id: :label,
+                        id: :text_buffer,
                         font: :ibm_plex_mono,
-                        font_size: 24,
+                        font_size: 24, #TODO
                         fill: theme.text,
-                        translate: {10, 28})
+                        translate: {10, 28}) #TODO
+            |> PadCaret.add_to_graph(%{coords: cursor_coords})
         end, translate: args.frame.pin)
 
         init_scene = scene
@@ -33,58 +50,7 @@ defmodule QuillEx.GUI.Components.TextPad do
         {:ok, init_scene}
     end
 
-    # def process({:radix = _topic, _id} = event_shadow) do
-    #     event = EventBus.fetch_event(event_shadow)
-    #     #NOTE: We have to use PubSub
-    #     QuillEx.Utils.PubSub.register(topic: :radix_state_change, msg: {event.data, event_shadow})
-    #     #NOTE: We will mark the event completed when we handle it (which
-    #     #      requires the internal state of TabSelector, which sadly we
-    #     #      don't seem to have here...)
-    #     #EventBus.mark_as_completed({__MODULE__, event_shadow})
-    #     :ok
-    # end
-
-    # Single buffer
-    # def handle_info({:radix_state_change, %{buffers: [%{id: id, data: d}], active_buf: id}}, scene) do
-    #     Logger.debug "drawing a single TextPad singe we have only one buffer open!"
-
-
-
-    #     #TODO delete the graph/group in case we're going backwards, closing buffers
-    #     new_graph = Scenic.Graph.build()
-    #     |> Scenic.Primitives.group(fn graph ->
-    #         graph
-    #         |> Scenic.Primitives.rect({400, 400}, fill: :yellow)
-    #     end) #NOTE: No translate necessary, since there is no TabSelector open (just one active buffer)
-
-    #     new_scene = scene
-    #     |> assign(graph: new_graph)
-    #     |> push_graph(new_graph)
-
-    #     {:noreply, scene}
-    # end
-
-
-    # def process({:radix = _topic, _id} = event_shadow) do
-    #     # GenServer.cast(self(), {:event, event_shadow})
-    #     event = EventBus.fetch_event(event_shadow)
-    #     :ok = do_process(event.data)
-    #     EventBus.mark_as_completed({__MODULE__, event_shadow})
-    # end
-
-    # ##--------------------------------------------------------
-
-    # def do_process(action) do
-    #     Logger.debug "#{__MODULE__} ignoring action: #{inspect action}}"
-    #     :ok
-    # end
 end
-
-
-
-
-
-
 
 
 
@@ -140,14 +106,6 @@ end
 #         )
 #     """
   
-#     use Scenic.Component, has_children: true
-  
-#     alias Scenic.Graph
-#     alias Scenic.Component.Input.Caret
-#     alias Scenic.Primitive.Style.Theme
-#     # alias Scenic.Assets.Static
-  
-
   
 #     @default_hint ""
 #     @default_hint_color :grey
