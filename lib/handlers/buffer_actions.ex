@@ -57,6 +57,26 @@ defmodule QuillEx.Handlers.BufferActions do
         {:ok, radix |> Map.put(:buffers, new_buf_list)}
     end
 
+    def handle(%{buffers: buf_list} = radix, {:modify_buffer, buf, {:backspace, x, :at_cursor}}) do
+        [%{data: full_text, cursor: cursor_num} = buf_being_modified] = buf_list |> Enum.filter(& &1.id == buf)
+
+        # delete text left of this by 1 char
+        {before_cursor_text, after_and_under_cursor_text} =
+            full_text |> String.split_at(cursor_num)
+        {backspaced_text, _deleted_text} =
+            before_cursor_text |> String.split_at(-x)
+        full_backspaced_text =
+            backspaced_text <> after_and_under_cursor_text
+
+        new_buf_list = buf_list
+        |> Enum.map(fn %{id: ^buf} = buffer -> %{buffer|
+                                                    data: full_backspaced_text,
+                                                    cursor: cursor_num-1}
+                           any_other_buffer -> any_other_buffer end)
+
+        {:ok, radix |> Map.put(:buffers, new_buf_list)}
+    end
+
     def handle(%{buffers: buf_list} = radix, {:save_buffer, buf}) do
         raise "Cant save files yet"
     end

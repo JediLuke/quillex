@@ -100,6 +100,12 @@ defmodule QuillEx.GUI.Components.EditPane do
         {:noreply, scene}
     end
 
+    def handle_input(@backspace_key, _context, scene) do
+        QuillEx.API.Buffer.active_buf()
+        |> QuillEx.API.Buffer.modify({:backspace, 1, :at_cursor})
+        {:noreply, scene}
+    end
+
     def handle_input({:key, {key, _dont_care, _dont_care_either}}, _context, scene) do
         Logger.debug "#{__MODULE__} ignoring key: #{inspect key}"
         {:noreply, scene}
