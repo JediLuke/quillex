@@ -10,7 +10,7 @@ defmodule QuillEx.GUI.Components.TextPad do
     #      end up being just thin wrappers around a piece of RadixState, so
     #      we freely create/destroy them as needed.
 
-    def validate(%{frame: _f, data: d, cursor: _c, font_metrics: _fm} = data) when is_bitstring(d) do
+    def validate(%{frame: _f, data: d, cursor: _c} = data) when is_bitstring(d) do
         #Logger.debug "#{__MODULE__} accepted params: #{inspect data}"
         {:ok, data}
     end
@@ -19,27 +19,66 @@ defmodule QuillEx.GUI.Components.TextPad do
         Logger.debug "#{__MODULE__} initializing..."
 
         theme = QuillEx.Utils.Themes.theme(opts)
+        font  = QuillEx.RadixAgent.get().gui_config.fonts.primary
 
-        font_size = 24 #T)D)
+        #NOTE: This *must* be wrong, because it ought to be some multiple of 14.4 (or whatever 1 char width is)
+        {_x_pos, line_num} = cursor_coords = FontMetrics.position_at(args.data, args.cursor, font.size, font.metrics)
+        IO.inspect cursor_coords, label: "coords"
 
-        cursor_coords = FontMetrics.position_at(args.data, args.cursor, font_size, args.font_metrics)
-        IO.inspect cursor_coords
+        # [longest_lint|rest] = lines = args.data
+        #     |> String.split("\n")
+        #     |> Enum.sort(& String.length(&1) >= String.length(&2))
+        # IO.inspect longest_lint
+
+        current_line = args.data |> String.split("\n") |> Enum.at(line_num)
+
+        x_pos = String.length(current_line)*14 #TODO this works even though FontMetrics.width returns 14.4 - maybe it needs to be truncated to be correct?
+        #TODO ok so the puzzle right now seems to be - I can get the width of 1 char using FontMetrics.width,
+        #       and since I'm using a monospce font, that means thats 1 char width. It's a hack but...
+        #       even so, I cant get the line hgiehght - maybe FontMetrics is lcking
+
+        ascent = FontMetrics.ascent(font.size, font.metrics)
+        descnt = FontMetrics.descent(font.size, font.metrics)
+        {x_min, y_min, x_max, y_max} = FontMetrics.max_box(font.size, font.metrics)
+
+        IO.inspect ascent, label: "ascent"
+        IO.inspect descnt, label: "descnt"
+
+        # text_height = ascent-descnt
+        # text_height = 31.0
+        # text_height = 30.0 #NOTE - got this by truncing ascent & descent -> 24-(-6)=30
+        text_height = 29.0 #NOTE - got this by truncing ascent & descent -> 24-(-6)=30
+        mayyy = (-1*y_min)+y_max
+        maxxx = (-1*x_min)+x_max
+        IO.inspect text_height, label: "textHeight"
+        IO.inspect mayyy, label: "mayyy"
+        IO.inspect maxxx, label: "maxxx"
+        IO.inspect x_max, label: "XMX"
+
+        # https://github.com/boydm/scenic/blob/master/lib/scenic/component/button.ex#L200
+        vpos = (ascent/2) + (descnt/3)
+        IO.inspect vpos, label: "VPOS"
+
+        line_height = text_height #TODO this is something I need to be able to get *exactly*
 
         init_graph = Scenic.Graph.build()
         |> Scenic.Primitives.group(fn graph ->
             graph
             |> Scenic.Primitives.rect(args.frame.size,
                         id: :background,
-                        fill: theme.active,
+                        fill: theme.thumb,
                         stroke: {2, theme.border},
                         scissor: args.frame.size)
             |> Scenic.Primitives.text(args.data,
                         id: :text_buffer,
                         font: :ibm_plex_mono,
-                        font_size: 24, #TODO
+                        font_size: font.size,
                         fill: theme.text,
-                        translate: {10, 28}) #TODO
-            |> PadCaret.add_to_graph(%{coords: cursor_coords})
+                        # translate: {0, ascent})
+                        translate: {0, ascent}) #TODO this is what scenic does https://github.com/boydm/scenic/blob/master/lib/scenic/component/input/text_field.ex#L198
+            |> PadCaret.add_to_graph(%{
+                        coords: {x_pos, line_num*line_height}, 
+                        height: text_height})
         end, translate: args.frame.pin)
 
         init_scene = scene
@@ -316,27 +355,6 @@ end
   
 #     defp display_from_value(value, _), do: value
   
-#     # --------------------------------------------------------
-#     defp accept_char?(char, :number) do
-#       "0123456789.," =~ char
-#     end
-  
-#     defp accept_char?(char, :integer) do
-#       "0123456789" =~ char
-#     end
-  
-#     defp accept_char?(char, filter) when is_bitstring(filter) do
-#       filter =~ char
-#     end
-  
-#     defp accept_char?(char, filter) when is_function(filter, 1) do
-#       # note: the !! forces the response to be a boolean
-#       !!filter.(char)
-#     end
-  
-#     defp accept_char?(_char, _filter) do
-#       true
-#     end
   
 #     # ============================================================================
 #     # User input handling - get the focus
@@ -400,11 +418,7 @@ end
 #     # ============================================================================
 #     # control keys
   
-#     # --------------------------------------------------------
-#     # treat key repeats as a press
-#     def handle_input({:key, {key, 2, mods}}, id, scene) do
-#       handle_input({:key, {key, 1, mods}}, id, scene)
-#     end
+
   
 #     # --------------------------------------------------------
 #     def handle_input(
@@ -640,32 +654,10 @@ end
 #       end
 #     end
   
-#     # --------------------------------------------------------
-#     def handle_input({:key, {:key_enter, 1, _}}, _id, scene) do
-#       {:noreply, scene}
-#     end
+
   
-#     # --------------------------------------------------------
-#     def handle_input({:key, {:key_esc, 1, _}}, _id, scene) do
-#       {:noreply, scene}
-#     end
-  
-#     # ============================================================================
-#     # text entry
-  
-#     # --------------------------------------------------------
-#     def handle_input({:codepoint, {char, _}}, _id, %{assigns: %{filter: filter}} = scene) do
-#       case accept_char?(char, filter) do
-#         true -> do_handle_codepoint(char, scene)
-#         false -> {:noreply, scene}
-#       end
-#     end
-  
-#     # --------------------------------------------------------
-#     def handle_input(_input, _id, scene) do
-#       {:noreply, scene}
-#     end
-  
+
+
 #     # --------------------------------------------------------
 #     defp do_handle_codepoint(
 #            char,

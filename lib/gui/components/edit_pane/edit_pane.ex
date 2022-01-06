@@ -18,11 +18,11 @@ defmodule QuillEx.GUI.Components.EditPane do
 
         QuillEx.Utils.PubSub.register(topic: :radix_state_change)
 
-        {:ok, ibm_plex_mono_fm} = TruetypeMetrics.load("./assets/fonts/IBMPlexMono-Regular.ttf")
+        # {:ok, ibm_plex_mono_fm} = TruetypeMetrics.load("./assets/fonts/IBMPlexMono-Regular.ttf")
 
         init_scene = scene
         |> assign(frame: args.frame)
-        |> assign(font_metrics: ibm_plex_mono_fm)
+        # |> assign(font_metrics: ibm_plex_mono_fm)
         |> assign(graph: Scenic.Graph.build())
         #NOTE: no push_graph...
 
@@ -51,12 +51,14 @@ defmodule QuillEx.GUI.Components.EditPane do
         |> Scenic.Graph.delete(:edit_pane)
         |> Scenic.Primitives.group(fn graph ->
                 graph
-                |> TextPad.add_to_graph(%{
-                        frame: Frame.new(pin: {0, 0}, size: scene.assigns.frame.size), #NOTE: We don't need to move the pane around (referened from the outer frame of the EditPane) because there's no TabSelector being rendered (this is the single-buffer case)
-                        data: d,
-                        font_metrics: scene.assigns.font_metrics,
-                        cursor: cursor_coords },
-                        id: :text_pad)
+                #TODO here, replace it with WidgetContrib.LegalPad
+                |> WidgetContrib.TextPad.add_to_graph(%{})
+                # |> TextPad.add_to_graph(%{
+                #         frame: Frame.new(pin: {0, 0}, size: scene.assigns.frame.size), #NOTE: We don't need to move the pane around (referened from the outer frame of the EditPane) because there's no TabSelector being rendered (this is the single-buffer case)
+                #         data: d,
+                #         # font_metrics: scene.assigns.font_metrics,
+                #         cursor: cursor_coords },
+                #         id: :text_pad)
         end, translate: scene.assigns.frame.pin, id: :edit_pane)
 
         new_scene = scene
@@ -81,7 +83,6 @@ defmodule QuillEx.GUI.Components.EditPane do
                      pin: {0, @tab_selector_height}, #REMINDER: We need to move the TextPad down a bit, to make room for the TabSelector
                      size: {scene.assigns.frame.dimensions.width, scene.assigns.frame.dimensions.height-@tab_selector_height}},
                    data: full_active_buffer.data,
-                    font_metrics: scene.assigns.font_metrics,
                    cursor: full_active_buffer.cursor },
                    id: :text_pad)
         end, translate: scene.assigns.frame.pin, id: :edit_pane)
@@ -100,15 +101,30 @@ defmodule QuillEx.GUI.Components.EditPane do
         {:noreply, scene}
     end
 
+    # treat key repeats as a press
+    def handle_input({:key, {key, @key_held, mods}}, id, scene) do
+      handle_input({:key, {key, @key_pressed, mods}}, id, scene)
+    end
+
+    def handle_input({:key, {key, @key_released, mods}}, id, scene) do
+        Logger.debug "#{__MODULE__} ignoring key_release: #{inspect key}"
+        {:noreply, scene}
+    end
+
+    def handle_input(key, id, scene) when key in [@left_shift] do
+        Logger.debug "#{__MODULE__} ignoring key: #{inspect key}"
+        {:noreply, scene}
+    end
+
     def handle_input(@backspace_key, _context, scene) do
         QuillEx.API.Buffer.active_buf()
         |> QuillEx.API.Buffer.modify({:backspace, 1, :at_cursor})
         {:noreply, scene}
     end
 
-    def handle_input({:key, {key, _dont_care, _dont_care_either}}, _context, scene) do
-        Logger.debug "#{__MODULE__} ignoring key: #{inspect key}"
-        {:noreply, scene}
-    end
+    # def handle_input({:key, {key, _dont_care, _dont_care_either}}, _context, scene) do
+    #     Logger.debug "#{__MODULE__} ignoring key: #{inspect key}"
+    #     {:noreply, scene}
+    # end
 
 end

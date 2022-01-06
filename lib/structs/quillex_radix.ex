@@ -19,7 +19,11 @@ defmodule QuillEx.Structs.Radix do
                     height: 40
                 },
                 fonts: %{
-                    primary: %{name: :ibm_plex_mono, metrics: ibm_plex_mono_fm}
+                    primary: %{
+                        name: :ibm_plex_mono,
+                        metrics: ibm_plex_mono_fm,
+                        size: 24
+                    }
                 }
             }
         }

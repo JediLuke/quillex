@@ -20,7 +20,7 @@ defmodule QuillEx.GUI.ScenicEventsDefinitions do
       @click 1
       @release_click 0
       
-      @left_shift_press {:key, {:key_leftshift, @key_pressed, []}}
+      @left_shift {:key, {:key_leftshift, @key_pressed, []}}
       @escape_key {:key, {:key_esc, @key_pressed, []}}
       @enter_key {:key, {:key_enter, @key_pressed, []}}
       @backspace_key {:key, {:key_backspace, @key_pressed, []}}
@@ -121,22 +121,29 @@ defmodule QuillEx.GUI.ScenicEventsDefinitions do
 
       @all_letters @lowercase_letters ++ @uppercase_letters
 
+      #TODO go through punctuation in some kind of order - go left to right across a QWERTY keyboard
       @period {:key, {:key_dot, @key_pressed, []}}
       @bang {:key, {:key_1, @key_pressed, [:shift]}}
       @question_mark {:key, {:key_slash, @key_pressed, [:shift]}}
+      @at_sign {:key, {:key_2, @key_pressed, [:shift]}}
       @colon {:key, {:key_semicolon, @key_pressed, [:shift]}}
       @comma {:key, {:key_comma, @key_pressed, []}}
       @quote_character {:key, {:key_apostrophe, @key_pressed, [:shift]}}
+      @apostrophe {:key, {:key_apostrophe, @key_pressed, []}}
       @underscore {:key, {:key_minus, @key_pressed, [:shift]}}
       @percent_sign {:key, {:key_5, @key_pressed, [:shift]}}
       @left_parenthesis {:key, {:key_9, @key_pressed, [:shift]}}
       @right_parenthesis {:key, {:key_0, @key_pressed, [:shift]}}
       @left_brace {:key, {:key_leftbrace, @key_pressed, [:shift]}}
       @right_brace {:key, {:key_rightbrace, @key_pressed, [:shift]}}
+      @minus_sign {:key, {:key_minus, @key_pressed, []}}
+
+      #TODO what is the beauty!?
+      # {:key, {:key_space, 0, [:shift]}}
 
       @all_punctuation [@period, @bang, @question_mark, @colon, @comma,
         @quote_character, @percent_sign, @left_parenthesis, @right_parenthesis,
-        @left_brace, @right_brace]
+        @left_brace, @right_brace, @at_sign, @minus_sign, @apostrophe]
 
       @valid_text_input_characters @all_letters ++ @all_numbers ++ @all_punctuation ++ [@space_bar, @enter_key]
 
@@ -152,9 +159,6 @@ defmodule QuillEx.GUI.ScenicEventsDefinitions do
       def key2string(@number_7), do: "7"
       def key2string(@number_8), do: "8"
       def key2string(@number_9), do: "9"
-
-      def key2string(@escape), do: "escape"
-      def key2string(@space_bar), do: " "
 
       def key2string(@lowercase_a), do: "a"
       def key2string(@lowercase_b), do: "b"
@@ -210,16 +214,27 @@ defmodule QuillEx.GUI.ScenicEventsDefinitions do
       def key2string(@uppercase_Y), do: "Y"
       def key2string(@uppercase_Z), do: "Z"
 
-      def key2string(@period), do: "."
-      def key2string(@bang), do: "!"
-      def key2string(@question_mark), do: "?"
-
-      def key2string(@underscore), do: "_"
-
+      #def key2string(@escape), do: "escape"
+      def key2string(@space_bar), do: " "
       def key2string(@enter_key), do: "\n"
 
+      def key2string(@period), do: "."
+      def key2string(@bang), do: "!"
+      def key2string(@at_sign), do: "@"
+      def key2string(@question_mark), do: "?"
+      def key2string(@colon), do: ":"
+      def key2string(@comma), do: ","
+      def key2string(@quote_character), do: "\""
+      def key2string(@underscore), do: "_"
+      def key2string(@percent_sign), do: "%"
       def key2string(@left_parenthesis), do: "("
       def key2string(@right_parenthesis), do: ")"
+      def key2string(@left_brace), do: "{"
+      def key2string(@right_brace), do: "}"
+      def key2string(@left_brace), do: "{"
+      def key2string(@right_brace), do: "}"
+      def key2string(@minus_sign), do: "-"
+      def key2string(@apostrophe), do: "'"
 
 
       def key2string(x) do

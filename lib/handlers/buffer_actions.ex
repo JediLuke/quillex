@@ -24,7 +24,7 @@ defmodule QuillEx.Handlers.BufferActions do
         data = File.read!(filepath)
         #TODO place the cursor at the end of the buffer
         # new_buffer_list = buf_list ++ [new_buf |> Map.merge(%{id: id, data: data, cursor: {0, 0}})]
-        new_buffer_list = buf_list ++ [new_buf |> Map.merge(%{id: id, data: data, cursor: 0, font_metrics: radix.gui_config.fonts.primary.metrics})]
+        new_buffer_list = buf_list ++ [new_buf |> Map.merge(%{id: id, data: data, cursor: 0})]
         {:ok, radix |> Map.put(:buffers, new_buffer_list) |> Map.merge(%{active_buf: id})}
     end
 

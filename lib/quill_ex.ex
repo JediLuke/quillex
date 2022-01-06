@@ -66,13 +66,15 @@ defmodule QuillEx do
   #REMINDER: This launches the supervision tree
   def start(_type, _args) do
 
+    #NOTE: The starting order here is important - we have to start the
+    #      Registry first.
     children = [
+      {Registry, keys: :duplicate, name: QuillEx.PubSub}, # The PubSub broker
       {Scenic, [@scenic_config]},
       QuillEx.BufferManager,        # listens to the event-bus, manages Buffers
       #QuillEx.EventListener,        # listens to the event-bus, triggers actions
       QuillEx.RadixAgent,           # holds the root-state of the application
 
-      {Registry, keys: :duplicate, name: QuillEx.PubSub}, # The PubSub broker
       # QuillEx.StageManager,
       # QuillEx.MainExecutiveProcess,
     ]

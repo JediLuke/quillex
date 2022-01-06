@@ -33,7 +33,7 @@ defmodule QuillEx.GUI.Components.PadCaret do
     @caret_ms trunc(1000 / @caret_hz / 2)
 
     # def validate(%{coords: num} = data) when is_integer(num) and num >= 0 do
-    def validate(%{coords: _coords} = data) do
+    def validate(%{coords: _coords, height: _h} = data) do
         Logger.debug "#{__MODULE__} accepted params: #{inspect data}"
         {:ok, data}
     end
@@ -49,12 +49,9 @@ defmodule QuillEx.GUI.Components.PadCaret do
         init_graph = Scenic.Graph.build()
         |> Scenic.Primitives.group(fn graph ->
             graph
-            |> Scenic.Primitives.rect({4,26},
-                        id: :blinker,
-                        t: {10,10},
-                        fill: theme.text)
-        # end)
-        # end, translate: {line*24, col*12})
+            |> Scenic.Primitives.rect({@width, args.height},
+                    id: :blinker,
+                    fill: theme.text)
         end, translate: args.coords)
 
 
