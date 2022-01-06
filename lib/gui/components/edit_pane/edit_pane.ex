@@ -51,8 +51,7 @@ defmodule QuillEx.GUI.Components.EditPane do
         |> Scenic.Graph.delete(:edit_pane)
         |> Scenic.Primitives.group(fn graph ->
                 graph
-                #TODO here, replace it with WidgetContrib.LegalPad
-                |> WidgetContrib.TextPad.add_to_graph(%{})
+                |> ScenicWidgets.TestPattern.add_to_graph(%{})
                 # |> TextPad.add_to_graph(%{
                 #         frame: Frame.new(pin: {0, 0}, size: scene.assigns.frame.size), #NOTE: We don't need to move the pane around (referened from the outer frame of the EditPane) because there's no TabSelector being rendered (this is the single-buffer case)
                 #         data: d,
