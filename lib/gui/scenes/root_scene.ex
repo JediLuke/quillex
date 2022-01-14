@@ -13,9 +13,9 @@ defmodule QuillEx.Scene.RootScene do
        {"new", &QuillEx.API.Buffer.new/0},
        {"save", &QuillEx.API.Buffer.save/0},
        {"close", &QuillEx.API.Buffer.close/0}
-     ]}
-    # {"Help", [
-    #     {"About QuillEx", &QuillEx.API.Misc.makers_mark/0}]},
+     ]},
+    {"Help", [
+        {"About QuillEx", &QuillEx.API.Misc.makers_mark/0}]},
   ]
 
   def init(scene, _args, _opts) do
