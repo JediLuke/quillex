@@ -3,7 +3,8 @@ defmodule QuillEx do
   QuillEx is a simple text-editor, written in Elixir.
   """
 
-  @mix_app :quill_ex # this is the name of our app, declared in `mix.exs` - THIS HAS TO MATCH !
+  # this is the name of our app, declared in `mix.exs` - THIS HAS TO MATCH !
+  @mix_app :quill_ex
 
   @default_resolution {1680, 1005}
 
@@ -23,7 +24,6 @@ defmodule QuillEx do
     ]
   ]
 
-
   @doc """
   Re-compile, and re-start.
 
@@ -31,16 +31,15 @@ defmodule QuillEx do
   in one command.
   """
   def re_compil_start do
-    IO.puts "\n#{__MODULE__} stopping..."
+    IO.puts("\n#{__MODULE__} stopping...")
     Application.stop(@mix_app)
 
-    IO.puts "\n#{__MODULE__} recompiling..."
-    IEx.Helpers.recompile
+    IO.puts("\n#{__MODULE__} recompiling...")
+    IEx.Helpers.recompile()
 
-    IO.puts "\n#{__MODULE__} starting...\n"
+    IO.puts("\n#{__MODULE__} starting...\n")
     Application.start(@mix_app)
   end
-
 
   @doc """
   Publish an action to the internal event-bus.
@@ -57,23 +56,25 @@ defmodule QuillEx do
     # 4) VIEW: This is where it is imporant to write components which are pure functions rendered from state
     # 5) ACTION2: UI interaction achieves interaction by calling further actions in turn (often via the API, developing which not only gives us a nice dev experience, it improves the quality of the GUI code)
     EventBus.notify(%EventBus.Model.Event{
-      id:    UUID.uuid4(),
+      id: UUID.uuid4(),
       topic: :general,
-      data:  {:action, a}
+      data: {:action, a}
     })
   end
 
-  #REMINDER: This launches the supervision tree
+  # REMINDER: This launches the supervision tree
   def start(_type, _args) do
-
-    #NOTE: The starting order here is important - we have to start the
+    # NOTE: The starting order here is important - we have to start the
     #      Registry first.
     children = [
-      {Registry, keys: :duplicate, name: QuillEx.PubSub}, # The PubSub broker
+      # The PubSub broker
+      {Registry, keys: :duplicate, name: QuillEx.PubSub},
       {Scenic, [@scenic_config]},
-      QuillEx.BufferManager,        # listens to the event-bus, manages Buffers
-      #QuillEx.EventListener,        # listens to the event-bus, triggers actions
-      QuillEx.RadixAgent,           # holds the root-state of the application
+      # listens to the event-bus, manages Buffers
+      QuillEx.BufferManager,
+      # QuillEx.EventListener,        # listens to the event-bus, triggers actions
+      # holds the root-state of the application
+      QuillEx.RadixAgent
 
       # QuillEx.StageManager,
       # QuillEx.MainExecutiveProcess,
@@ -81,6 +82,4 @@ defmodule QuillEx do
 
     Supervisor.start_link(children, strategy: :one_for_one)
   end
-
-
 end

@@ -1,81 +1,79 @@
 defmodule QuillEx.API.Buffer do
+  @doc """
+  Open a blank, unsaved buffer.
+  """
+  def new do
+    QuillEx.action({:open_buffer, %{data: ""}})
+  end
 
-   @doc """
-   Open a blank, unsaved buffer.
-   """ 
-   def new do
-      QuillEx.action({:open_buffer, %{data: ""}})
-   end
+  def new(raw_text) when is_bitstring(raw_text) do
+    QuillEx.action({:open_buffer, %{data: raw_text}})
+  end
 
-   def new(raw_text) when is_bitstring(raw_text) do
-      QuillEx.action({:open_buffer, %{data: raw_text}})
-   end
+  @doc """
+  Return the active Buffer.
+  """
+  def active_buf do
+    QuillEx.RadixAgent.get().active_buf
+  end
 
-   @doc """
-   Return the active Buffer.
-   """ 
-   def active_buf do
-      QuillEx.RadixAgent.get().active_buf
-   end
+  @doc """
+  Set which buffer is the active buffer.
+  """
+  def activate(buffer_ref) do
+    QuillEx.action({:activate_buffer, buffer_ref})
+  end
 
-   @doc """
-   Set which buffer is the active buffer.
-   """ 
-   def activate(buffer_ref) do
-      QuillEx.action({:activate_buffer, buffer_ref})
-   end
+  @doc """
+  Set which buffer is the active buffer.
 
-   @doc """
-   Set which buffer is the active buffer.
+  This function does the same thing as `activate/1`, it's just another
+  entry point via the API, included for better DX (dev-experience).
+  """
+  def switch(buffer_ref) do
+    QuillEx.action({:activate_buffer, buffer_ref})
+  end
 
-   This function does the same thing as `activate/1`, it's just another
-   entry point via the API, included for better DX (dev-experience).
-   """ 
-   def switch(buffer_ref) do
-      QuillEx.action({:activate_buffer, buffer_ref})
-   end
-   
-   @doc """
-   List all the open buffers.
-   """
-   def list do
-      QuillEx.RadixAgent.get().buffers
-   end
-   
-   def open do
-      open("./README.md")
-   end
+  @doc """
+  List all the open buffers.
+  """
+  def list do
+    QuillEx.RadixAgent.get().buffers
+  end
 
-   def open(filepath) do
-      QuillEx.action({:open_buffer, %{filepath: filepath}})
-   end
+  def open do
+    open("./README.md")
+  end
 
-   def find(search_term) do
-      raise "cant find yet"
-   end
+  def open(filepath) do
+    QuillEx.action({:open_buffer, %{filepath: filepath}})
+  end
 
-   @doc """
-   Return the contents of a buffer.
-   """
-   def read(buf) do
-      [buf] = list() |> Enum.filter(& &1.id == buf)
-      buf.data
-   end
+  def find(search_term) do
+    raise "cant find yet"
+  end
 
-   def modify(buf, mod) do
-      QuillEx.action({:modify_buffer, buf, mod})
-   end
+  @doc """
+  Return the contents of a buffer.
+  """
+  def read(buf) do
+    [buf] = list() |> Enum.filter(&(&1.id == buf))
+    buf.data
+  end
 
-   def save(buf) do
-      QuillEx.action({:save_buffer, buf})
-   end
+  def modify(buf, mod) do
+    QuillEx.action({:modify_buffer, buf, mod})
+  end
 
-   def close do
-      active_buf() |> close()
-   end
+  def save(buf) do
+    QuillEx.action({:save_buffer, buf})
+  end
 
-   def close(buf) do
-      QuillEx.action({:close_buffer, buf})
-   end
-  
+  def close do
+    active_buf() |> close()
+  end
+
+  def close(buf) do
+    QuillEx.action({:close_buffer, buf})
+  end
 end
