@@ -2,12 +2,13 @@ defmodule QuillEx.GUI.Components.EditPane do
   use Scenic.Component
   use ScenicWidgets.ScenicEventsDefinitions
   require Logger
-  # alias QuillEx.GUI.Components.{TabSelector, TextPad}
   alias ScenicWidgets.{TabSelector, TextPad}
   alias ScenicWidgets.Core.Structs.Frame
 
   # TODO remove, this should come from the font or something
   @tab_selector_height 40
+
+  #TODO cursors
 
   def validate(%{frame: %Frame{} = _f} = data) do
     # Logger.debug "#{__MODULE__} accepted params: #{inspect data}"
@@ -62,23 +63,10 @@ defmodule QuillEx.GUI.Components.EditPane do
       |> Scenic.Primitives.group(
         fn graph ->
           graph
-          |> ScenicWidgets.TextPad.add_to_graph(
-            %{
-              # NOTE: We don't need to move the pane around (referened from the outer frame of the EditPane) because there's no TabSelector being rendered (this is the single-buffer case))
-              frame: Frame.new(pin: {0, 0}, size: scene.assigns.frame.size),
-              text: text,
-              format_opts: %{
-                alignment: :left,
-                wrap_opts: {:wrap, :end_of_line},
-                show_line_num?: false
-              },
-              font: %{
-                size: 24,
-                metrics: scene.assigns.font_metrics
-              }
-            },
-            id: :text_pad
-          )
+          |> TextPad.add_to_graph(enhance_args(scene, %{
+                text: text,
+                frame: full_screen_buffer(scene)
+          }))
         end,
         translate: scene.assigns.frame.pin,
         id: :edit_pane
@@ -99,7 +87,7 @@ defmodule QuillEx.GUI.Components.EditPane do
       "drawing a TextPad which has been moved down a bit, to make room for a TabSelector"
     )
 
-    [full_active_buffer] = buf_list |> Enum.filter(&(&1.id == new_state.active_buf))
+    [active_buffer] = buf_list |> Enum.filter(&(&1.id == new_state.active_buf))
 
     new_graph =
       scene.assigns.graph
@@ -112,20 +100,11 @@ defmodule QuillEx.GUI.Components.EditPane do
             width: scene.assigns.frame.dimensions.width,
             height: @tab_selector_height
           })
-          |> TextPad.add_to_graph(
-            %{
-              frame: %{
-                # REMINDER: We need to move the TextPad down a bit, to make room for the TabSelector
-                pin: {0, @tab_selector_height},
-                size:
-                  {scene.assigns.frame.dimensions.width,
-                   scene.assigns.frame.dimensions.height - @tab_selector_height}
-              },
-              data: full_active_buffer.data,
-              cursor: full_active_buffer.cursor
-            },
-            id: :text_pad
-          )
+          |> TextPad.add_to_graph(enhance_args(scene, %{
+                text: active_buffer.data,
+                frame: full_screen_buffer(scene, tab_selector_visible?: true)
+          #NOTE: We translate the box down here, on this level - not in the Component below (that just adjusts it's size)
+          }), translate: {0, @tab_selector_height})
         end,
         translate: scene.assigns.frame.pin,
         id: :edit_pane
@@ -170,8 +149,47 @@ defmodule QuillEx.GUI.Components.EditPane do
     {:noreply, scene}
   end
 
-  # def handle_input({:key, {key, _dont_care, _dont_care_either}}, _context, scene) do
-  #     Logger.debug "#{__MODULE__} ignoring key: #{inspect key}"
-  #     {:noreply, scene}
-  # end
+  def handle_input({:key, {key, _dont_care, _dont_care_either}}, _context, scene) do
+      Logger.debug "#{__MODULE__} ignoring key: #{inspect key}"
+      {:noreply, scene}
+  end
+
+  # To make the TextPad's rendering code more palatable, I bunched
+  # up a bunch of their arguments into this function call
+  def enhance_args(scene, other_args) do
+    Map.merge(other_args, %{
+      id: :text_pad,
+      mode: :edit,
+      format_opts: %{
+        alignment: :left,
+        wrap_opts: :no_wrap,
+        scroll_opts: :all_directions,
+        show_line_num?: true
+      },
+      font: %{
+        name: :ibm_plex_mono,
+        size: 24,
+        metrics: scene.assigns.font_metrics
+      }
+    })
+  end
+  
+  # Return a %Frame{} that's full-screen, depending on whether or not we
+  # need to adjust for adding a TabSelector
+  def full_screen_buffer(scene), do: full_screen_buffer(scene, tab_selector_visible?: false)
+  def full_screen_buffer(scene, tab_selector_visible?: tab_selector_visible?) do
+    #NOTE: If the TabSelector is visible, we need to reduce the height of
+    #      a full-screen buffer, to make room for the TabSelector. In the
+    #      single-buffer case, we don't need to make any height reduction
+    height_reduction =
+      if tab_selector_visible?, do: @tab_selector_height, else: 0
+    
+    Frame.new(
+      #NOTE: We translate the box down here, on this level, so use {0, 0} for the pin
+      pin: {0, 0},
+      size:
+        {scene.assigns.frame.dimensions.width,
+        scene.assigns.frame.dimensions.height - height_reduction})
+  end
+
 end
