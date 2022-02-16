@@ -88,6 +88,23 @@ defmodule QuillEx.GUI.Components.EditPane do
     )
 
     [active_buffer] = buf_list |> Enum.filter(&(&1.id == new_state.active_buf))
+    tab_list = buf_list |> Enum.map(& &1.id)
+
+    font = %{
+      name: :ibm_plex_mono,
+      size: 20,
+      metrics: scene.assigns.font_metrics
+    }
+
+    theme = %{
+      active: {58, 94, 201},
+      background: {72, 122, 252},
+      border: :light_grey,
+      focus: :cornflower_blue,
+      highlight: :sandy_brown,
+      text: :white,
+      thumb: :cornflower_blue
+    }
 
     new_graph =
       scene.assigns.graph
@@ -96,9 +113,12 @@ defmodule QuillEx.GUI.Components.EditPane do
         fn graph ->
           graph
           |> TabSelector.add_to_graph(%{
-            radix_state: new_state,
-            width: scene.assigns.frame.dimensions.width,
-            height: @tab_selector_height
+                frame: Frame.new(width: scene.assigns.frame.dimensions.width, height: @tab_selector_height),
+                theme: theme,
+                tab_list: tab_list,
+                active: active_buffer.id,
+                font: font,
+                menu_item: %{width: 220}
           })
           |> TextPad.add_to_graph(enhance_args(scene, %{
                 text: active_buffer.data,
@@ -124,6 +144,26 @@ defmodule QuillEx.GUI.Components.EditPane do
     QuillEx.API.Buffer.active_buf()
     |> QuillEx.API.Buffer.modify({:insert, key |> key2string(), :at_cursor})
 
+    {:noreply, scene}
+  end
+
+  def handle_event({:tab_clicked, tab_label}, _from, scene) do
+    # Flamelex.Fluxus.action({MemexReducer, :new_tidbit})
+    #TODO buffer.find, then Buffer.activate
+    Logger.warn "TAB CLICKED"
+    QuillEx.API.Buffer.activate(tab_label)
+    {:noreply, scene}
+  end
+
+  def handle_event({:hover_tab, tab_label}, _from, scene) do
+    # Flamelex.Fluxus.action({MemexReducer, :new_tidbit})
+    #TODO buffer.find, then Buffer.activate
+    Logger.warn "TAB HOVERED"
+    {:noreply, scene}
+  end
+
+  def handle_event({:value_changed, :text_pad, new_value}, _from, scene) do
+    Logger.warn "TEXT PAD CHANGED"
     {:noreply, scene}
   end
 
@@ -193,3 +233,88 @@ defmodule QuillEx.GUI.Components.EditPane do
   end
 
 end
+
+
+
+
+
+
+
+
+    #NOTE: Don't handle events here, just let them bubble-up to the
+    #      parent scene - https://hexdocs.pm/scenic/Scenic.Scene.html#module-event-filtering
+    # def handle_event({:tab_clicked, tab_label}, _from, scene) do
+    #     {:noreply, scene}
+    # end
+
+    # #NOTE: This case is where there's just one buffer open
+    # def handle_info({:radix_state_change, %{buffers: [%{id: _id, data: _d}]} = new_state}, scene) do
+    #     Logger.debug "#{__MODULE__} de-activating/ignoring the TabSelector, as we don't get shown if there's only one buffer"
+
+    #     new_graph = scene.assigns.graph
+    #     |> Scenic.Graph.delete(:tab_selector)
+
+    #     new_scene = scene
+    #     |> assign(graph: new_graph)
+    #     |> push_graph(new_graph)
+
+    #     {:noreply, new_scene}
+    # end
+
+    # #TODO right now, this re-draws every time there's a RadixState update - we ought to compare it against what we have, & only update/broadcast if it really changed
+    # # This case takes us from :inactive -> 2 buffers
+    # def handle_info({:radix_state_change, %{buffers: buf_list, active_buf: active_buf} = new_state}, scene) when length(buf_list) >= 2 and length(buf_list) <= 7 do
+    #     #Logger.debug "#{__MODULE__} ignoring radix_state: #{inspect new_state}, scene_state: #{inspect scene.assigns.state}}"
+    #     Logger.debug "#{__MODULE__} drawing a 2-tab TabSelector --"
+
+    #     {:ok, ibm_plex_mono_fm} = TruetypeMetrics.load("./assets/fonts/IBMPlexMono-Regular.ttf")
+    #     fm = ibm_plex_mono_fm #TODO get this once and keep hold of it in the state
+
+    #     render_tabs = fn(init_graph) ->
+    #         {final_graph, _final_offset} = 
+    #             buf_list
+    #             # |> Enum.map(fn %{id: id} -> id end) # we only care about id's...
+    #             |> Enum.with_index()
+    #             |> Enum.reduce({init_graph, _init_offset = 0}, fn {%{id: label}, index}, {graph, offset} ->
+    #                     label_width = @menu_width #TODO - either fixed width, or flex width (adapts to size of label)
+    #                     item_width  = label_width+@left_margin
+    #                     carry_graph = graph
+    #                     |> SingleTab.add_to_graph(%{
+    #                             label: label,
+    #                             ref: label,
+    #                             active?: label == active_buf,
+    #                             margin: 10,
+    #                             font: %{
+    #                                 size: @tab_font_size,
+    #                                 ascent: FontMetrics.ascent(@tab_font_size, fm),
+    #                                 descent: FontMetrics.descent(@tab_font_size, fm),
+    #                                 metrics: fm},
+    #                             frame: %{
+    #                                 pin: {offset, 0}, #REMINDER: coords are like this, {x_coord, y_coord}
+    #                                 size: {item_width, 40} #TODO dont hard-code
+    #                             }}) 
+    #                     {carry_graph, offset+item_width}
+    #             end)
+
+    #         final_graph
+
+    #     end
+
+    #     new_graph = scene.assigns.graph
+    #     |> Scenic.Graph.delete(:tab_selector)
+    #     |> Scenic.Primitives.group(fn graph ->
+    #         graph
+    #         |> Scenic.Primitives.rect({scene.assigns.frame.width, 40}, fill: scene.assigns.theme.background)
+    #         |> render_tabs.()
+    #       end, [
+    #          id: :tab_selector
+    #       ])
+
+    #     new_scene = scene
+    #     |> assign(graph: new_graph)
+    #     # |> assign(state: %{buffers: buf_list})
+    #     |> push_graph(new_graph)
+
+    #     {:noreply, new_scene}
+    # end
+
