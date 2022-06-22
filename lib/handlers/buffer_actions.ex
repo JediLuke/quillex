@@ -102,6 +102,11 @@ defmodule QuillEx.Handlers.BufferActions do
   def handle(%{buffers: buf_list, active_buf: active_buf} = radix, {:close_buffer, buf_to_close})
       when active_buf == buf_to_close do
     new_buf_list = buf_list |> Enum.reject(&(&1.id == buf_to_close))
-    {:ok, radix |> Map.put(:buffers, new_buf_list) |> Map.put(:active_buf, hd(new_buf_list).id)}
+
+    if new_buf_list == [] do
+      {:ok, radix |> Map.put(:buffers, []) |> Map.put(:active_buf, nil)}
+    else
+      {:ok, radix |> Map.put(:buffers, new_buf_list) |> Map.put(:active_buf, hd(new_buf_list).id)}
+    end
   end
 end

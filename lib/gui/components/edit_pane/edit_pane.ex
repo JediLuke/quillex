@@ -48,7 +48,21 @@ defmodule QuillEx.GUI.Components.EditPane do
     {:noreply, scene}
   end
 
-  # Single buffer
+  def handle_info({:radix_state_change, %{buffers: []}}, scene) do
+    new_graph =
+      scene.assigns.graph
+      |> Scenic.Graph.delete(:edit_pane)
+  
+    new_scene =
+      scene
+      |> assign(graph: new_graph)
+      |> push_graph(new_graph)
+    
+    {:noreply, new_scene}
+  end
+
+
+  # Single buffer open
   def handle_info(
         {:radix_state_change,
          %{buffers: [%{id: id, data: text, cursor: cursor_coords}], active_buf: id}},
@@ -57,6 +71,7 @@ defmodule QuillEx.GUI.Components.EditPane do
       when is_bitstring(text) do
     Logger.debug("drawing a single TextPad since we have only one buffer open!")
 
+    #TODO replace this with render
     new_graph =
       scene.assigns.graph
       |> Scenic.Graph.delete(:edit_pane)
@@ -65,6 +80,7 @@ defmodule QuillEx.GUI.Components.EditPane do
           graph
           |> TextPad.add_to_graph(enhance_args(scene, %{
                 text: text,
+                cursor: cursor_coords,
                 frame: full_screen_buffer(scene)
           }))
         end,
