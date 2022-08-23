@@ -24,13 +24,13 @@ defmodule QuillEx.MixProject do
   defp deps do
     [
       {:scenic, "~> 0.11.0-beta.0"},
-      # {:scenic_driver_local, "~> 0.11.0-beta.0"}
-      {:scenic_driver_local, path: "../scenic_driver_local", override: true},
+      {:scenic_driver_local, "~> 0.11.0-beta.0"},
+      # {:scenic_driver_local, path: "../scenic_driver_local", override: true},
       {:event_bus, "~> 1.6.2"},
       {:elixir_uuid, "~> 1.2"},
       {:scenic_widget_contrib, path: "../scenic-widget-contrib", override: true},
-      # {:font_metrics, "~> 0.5"}
-      {:font_metrics, path: "../font_metrics", override: true}
+      {:font_metrics, "~> 0.5"}
+      # {:font_metrics, path: "../font_metrics", override: true}
     ]
   end
 end
