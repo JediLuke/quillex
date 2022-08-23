@@ -24,27 +24,25 @@ defmodule QuillEx do
     ]
   ]
 
-  @doc """
-  Re-compile, and re-start.
 
-  This is to shorten the dev-loop - we can shut-down Scenic & restart it
-  in one command.
-  """
-  def re_compil_start do
-    IO.puts("\n#{__MODULE__} stopping...")
-    Application.stop(@mix_app)
+  def start(_type, _args) do
 
-    IO.puts("\n#{__MODULE__} recompiling...")
-    IEx.Helpers.recompile()
+    # NOTE: The starting order here is important - we have to start the Registry first.
+    children = [
+      {Registry, keys: :duplicate, name: QuillEx.PubSub},
+      QuillEx.RadixStore,
+      {Scenic, [@scenic_config]},
+      QuillEx.EventListener,
+    ]
 
-    IO.puts("\n#{__MODULE__} starting...\n")
-    Application.start(@mix_app)
+    Supervisor.start_link(children, strategy: :one_for_one)
   end
+
 
   @doc """
   Publish an action to the internal event-bus.
   """
-  def action(a) do
+  def action({reducer, action}) when is_atom(reducer) do
     # https://www.etatvasoft.com/insights/react-design-patterns-and-structures-of-redux-and-flux/
     # `Flux Architecture`: A design pattern that implements a single mediator
     # (either a reducer or store, depending on implementation) for all actions,
@@ -58,28 +56,7 @@ defmodule QuillEx do
     EventBus.notify(%EventBus.Model.Event{
       id: UUID.uuid4(),
       topic: :general,
-      data: {:action, a}
+      data: {reducer, {:action, action}}
     })
-  end
-
-  # REMINDER: This launches the supervision tree
-  def start(_type, _args) do
-    # NOTE: The starting order here is important - we have to start the
-    #      Registry first.
-    children = [
-      # The PubSub broker
-      {Registry, keys: :duplicate, name: QuillEx.PubSub},
-      {Scenic, [@scenic_config]},
-      # listens to the event-bus, manages Buffers
-      QuillEx.BufferManager,
-      # QuillEx.EventListener,        # listens to the event-bus, triggers actions
-      # holds the root-state of the application
-      QuillEx.RadixAgent
-
-      # QuillEx.StageManager,
-      # QuillEx.MainExecutiveProcess,
-    ]
-
-    Supervisor.start_link(children, strategy: :one_for_one)
   end
 end

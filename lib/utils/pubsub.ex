@@ -1,9 +1,6 @@
 defmodule QuillEx.Utils.PubSub do
-
-
   @registrar_proc QuillEx.PubSub
   @topic :quill_ex
-
 
   # almost every component just wants to join `:quill_ex`
   def register do

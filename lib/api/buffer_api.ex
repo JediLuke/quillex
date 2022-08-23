@@ -2,26 +2,29 @@ defmodule QuillEx.API.Buffer do
   @doc """
   Open a blank, unsaved buffer.
   """
+  alias QuillEx.Reducers.BufferReducer
+
+
   def new do
-    QuillEx.action({:open_buffer, %{data: ""}})
+    QuillEx.action({BufferReducer, {:open_buffer, %{data: ""}}})
   end
 
   def new(raw_text) when is_bitstring(raw_text) do
-    QuillEx.action({:open_buffer, %{data: raw_text}})
+    QuillEx.action({BufferReducer, {:open_buffer, %{data: raw_text}}})
   end
 
   @doc """
   Return the active Buffer.
   """
   def active_buf do
-    QuillEx.RadixAgent.get().active_buf
+    QuillEx.RadixStore.get().editor.active_buf
   end
 
   @doc """
   Set which buffer is the active buffer.
   """
   def activate(buffer_ref) do
-    QuillEx.action({:activate_buffer, buffer_ref})
+    QuillEx.action({BufferReducer, {:activate_buffer, buffer_ref}})
   end
 
   @doc """
@@ -31,14 +34,14 @@ defmodule QuillEx.API.Buffer do
   entry point via the API, included for better DX (dev-experience).
   """
   def switch(buffer_ref) do
-    QuillEx.action({:activate_buffer, buffer_ref})
+    QuillEx.action({BufferReducer, {:activate_buffer, buffer_ref}})
   end
 
   @doc """
   List all the open buffers.
   """
   def list do
-    QuillEx.RadixAgent.get().buffers
+    QuillEx.RadixStore.get().editor.buffers
   end
 
   def open do
@@ -46,7 +49,7 @@ defmodule QuillEx.API.Buffer do
   end
 
   def open(filepath) do
-    QuillEx.action({:open_buffer, %{filepath: filepath}})
+    QuillEx.action({BufferReducer, {:open_buffer, %{filepath: filepath}}})
   end
 
   def find(search_term) do
@@ -62,11 +65,11 @@ defmodule QuillEx.API.Buffer do
   end
 
   def modify(buf, mod) do
-    QuillEx.action({:modify_buffer, buf, mod})
+    QuillEx.action({BufferReducer, {:modify_buffer, buf, mod}})
   end
 
   def save(buf) do
-    QuillEx.action({:save_buffer, buf})
+    QuillEx.action({BufferReducer, {:save_buffer, buf}})
   end
 
   def close do
@@ -74,6 +77,6 @@ defmodule QuillEx.API.Buffer do
   end
 
   def close(buf) do
-    QuillEx.action({:close_buffer, buf})
+    QuillEx.action({BufferReducer, {:close_buffer, buf}})
   end
 end
