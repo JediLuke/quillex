@@ -188,6 +188,16 @@ defmodule QuillEx.Scene.RootScene do
                 QuillEx.RadixStore.get()
                 |> QuillEx.RadixState.change_font(:source_code_pro)
                 |> QuillEx.RadixStore.put()
+              end},
+              {"fira code", fn ->
+                QuillEx.RadixStore.get()
+                |> QuillEx.RadixState.change_font(:fira_code)
+                |> QuillEx.RadixStore.put()
+              end},
+              {"bitter", fn ->
+                QuillEx.RadixStore.get()
+                |> QuillEx.RadixState.change_font(:bitter)
+                |> QuillEx.RadixStore.put()
               end}
             ]},
           {"make bigger", fn ->
