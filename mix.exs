@@ -28,9 +28,11 @@ defmodule QuillEx.MixProject do
       # {:scenic_driver_local, path: "../scenic_driver_local", override: true},
       {:event_bus, "~> 1.6.2"},
       {:elixir_uuid, "~> 1.2"},
-      {:scenic_widget_contrib, path: "../scenic-widget-contrib", override: true},
-      {:font_metrics, "~> 0.5"}
+      # {:scenic_widget_contrib, path: "../scenic-widget-contrib", override: true},
+      {:scenic_widget_contrib, git: "https://github.com/JediLuke/scenic-widget-contrib", branch: "text_pad_wip"},
+      # {:font_metrics, "~> 0.5"}
       # {:font_metrics, path: "../font_metrics", override: true}
+      {:font_metrics, git: "https://github.com/JediLuke/font_metrics", branch: "add_line_height_fn", override: true}
     ]
   end
 end
