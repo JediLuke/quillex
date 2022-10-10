@@ -111,8 +111,6 @@ defmodule QuillEx.Scene.RootScene do
     end
   end
 
-  # def handle_cast()
-
   def render(%Scenic.ViewPort{} = vp, radix_state) do
     render(Scenic.Graph.build(), vp, radix_state)
   end
@@ -120,11 +118,15 @@ defmodule QuillEx.Scene.RootScene do
   def render(%Scenic.Graph{} = graph, %Scenic.ViewPort{size: {vp_width, vp_height}}, radix_state) do
     # NOTE: draw order is important, things drawn last render over the top
     # of things drawn earlier than them
+
+    #TODO add a new buffer into the radi_state right at the beginning...
+
     graph
     |> Scenic.Primitives.group(fn graph ->
       graph
       |> Editor.add_to_graph(
         %{
+          radix_state: radix_state,
           frame:
             Frame.new(
               pin: {0, radix_state.gui_config.menu_bar.height},

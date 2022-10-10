@@ -15,22 +15,33 @@ defmodule QuillEx.GUI.Components.Editor do
     {:ok, data}
   end
 
-  def init(scene, args, opts) do
+  def init(scene, %{radix_state: %{editor: %{buffers: buf_list}}} = args, opts) do
     Logger.debug("#{__MODULE__} initializing...")
     # Process.register(self(), __MODULE__)
 
     QuillEx.Utils.PubSub.register(topic: :radix_state_change)
 
+    init_graph =
+      render(args)
+    
+    init_state =
+      calc_state(args.radix_state)
+      
     init_scene =
       scene
       |> assign(frame: args.frame)
-      |> assign(graph: Scenic.Graph.build())
-
-    # NOTE: no push_graph...
+      |> assign(graph: init_graph)
+      |> assign(state: init_state)
+      |> push_graph(init_graph)
 
     request_input(init_scene, [:key])
 
     {:ok, init_scene}
+  end
+
+  def handle_cast(_unknown_msg, scene) do
+    # NOTE: We need this cause cast_children/2 sends all child components messages, even if we don't want them...
+    {:noreply, scene}
   end
 
   def handle_cast({:frame_reshape, new_frame}, scene) do
@@ -64,65 +75,43 @@ defmodule QuillEx.GUI.Components.Editor do
     {:noreply, new_scene}
   end
 
-  def handle_info({:radix_state_change, %{editor: %{buffers: buf_list}} = new_state}, scene)
-      when length(buf_list) >= 1 do
-
-    [active_buffer] = buf_list |> Enum.filter(&(&1.id == new_state.editor.active_buf))
-    # tab_list = buf_list |> Enum.map(& &1.id)
-
-    theme = %{
-      active: {58, 94, 201},
-      background: {72, 122, 252},
-      border: :light_grey,
-      focus: :cornflower_blue,
-      highlight: :sandy_brown,
-      text: :white,
-      thumb: :cornflower_blue
-    }
+  #TODO handle font changes (size & font)
+  def handle_info({:radix_state_change, %{editor: %{active_buf: radix_active_buf}} = new_radix_state}, %{assigns: %{state: %{active_buf: state_active_buf}}} = scene) when radix_active_buf != state_active_buf do
+    Logger.debug "Active buffer changed..."
 
     new_graph =
-      Scenic.Graph.build()
-      |> Scenic.Primitives.group(
-        fn graph ->
-          graph
-          # |> TabSelector.add_to_graph(%{
-          #   frame:
-          #     Frame.new(width: scene.assigns.frame.dimensions.width, height: @tab_selector_height),
-          #   theme: theme,
-          #   tab_list: tab_list,
-          #   active: active_buffer.id,
-          #   font: font,
-          #   menu_item: %{width: 220}
-          # })
-          |> TextPad.add_to_graph(%{
-            id: :text_pad,
-            text: active_buffer.data,
-            frame: full_screen_buffer(scene, tab_selector_visible?: true),
-            mode: :insert,
-            format_opts: %{
-              alignment: :left,
-              wrap_opts: :no_wrap,
-              scroll_opts: :all_directions,
-              show_line_num?: true
-            },
-            font: new_state.gui_config.fonts.primary,
-            cursor: active_buffer.cursor
-          })
-        end,
-        translate: scene.assigns.frame.pin,
-        id: :editor
-      )
+      render(%{frame: scene.assigns.frame, radix_state: new_radix_state})
+
+    new_state =
+      calc_state(new_radix_state)
 
     new_scene =
       scene
       |> assign(graph: new_graph)
+      |> assign(state: new_state)
       |> push_graph(new_graph)
-
+  
     {:noreply, new_scene}
+  end
+
+
+  def handle_info({:radix_state_change, %{editor: %{buffers: buf_list}} = new_state}, scene)
+    when length(buf_list) >= 1 do
+
+      [active_buffer] = buf_list |> Enum.filter(&(&1.id == new_state.editor.active_buf))
+      # tab_list = buf_list |> Enum.map(& &1.id)
+
+      #TODO maybe send it a list of lines instead? Do the rope calc here??
+
+      cast_children(scene, {:redraw, %{data: active_buffer.data, cursor: active_buffer.cursor}})
+
+    {:noreply, scene}
   end
 
   def handle_input(key, _context, scene) when key in @valid_text_input_characters do
     Logger.debug("#{__MODULE__} recv'd valid input: #{inspect(key)}")
+
+    #KEY INPOUT HERE
 
     QuillEx.API.Buffer.active_buf()
     |> QuillEx.API.Buffer.modify({:insert, key |> key2string(), :at_cursor})
@@ -145,10 +134,10 @@ defmodule QuillEx.GUI.Components.Editor do
     {:noreply, scene}
   end
 
-  def handle_event({:value_changed, :text_pad, new_value}, _from, scene) do
-    Logger.warn("TEXT PAD CHANGED")
-    {:noreply, scene}
-  end
+  # def handle_event({:value_changed, :text_pad, new_value}, _from, scene) do
+  #   Logger.warn("TEXT PAD CHANGED")
+  #   {:noreply, scene}
+  # end
 
   # treat key repeats as a press
   def handle_input({:key, {key, @key_held, mods}}, id, scene) do
@@ -160,10 +149,10 @@ defmodule QuillEx.GUI.Components.Editor do
     {:noreply, scene}
   end
 
-  def handle_input(key, id, scene) when key in [@left_shift] do
-    Logger.debug("#{__MODULE__} ignoring key: #{inspect(key)}")
-    {:noreply, scene}
-  end
+  # def handle_input(key, id, scene) when key in [@left_shift] do
+  #   Logger.debug("#{__MODULE__} ignoring key: #{inspect(key)}")
+  #   {:noreply, scene}
+  # end
 
   def handle_input(@backspace_key, _context, scene) do
     QuillEx.API.Buffer.active_buf()
@@ -177,13 +166,86 @@ defmodule QuillEx.GUI.Components.Editor do
     {:noreply, scene}
   end
 
+  def calc_state(%{editor: %{active_buf: active_buf}} = _radix_state) do
+    %{active_buf: active_buf}
+    |> IO.inspect(label: "New state")
+  end
 
+  def render(%{frame: frame, radix_state: %{editor: %{active_buf: nil}} = radix_state}) do
+    IO.puts "RENDERING BLANX"
+    Scenic.Graph.build()
+    |> Scenic.Primitives.group(
+      fn graph ->
+        graph
+        # |> TabSelector.add_to_graph(%{
+        #   frame:
+        #     Frame.new(width: scene.assigns.frame.dimensions.width, height: @tab_selector_height),
+        #   theme: theme,
+        #   tab_list: tab_list,
+        #   active: active_buffer.id,
+        #   font: font,
+        #   menu_item: %{width: 220}
+        # })
+        |> TextPad.add_to_graph(%{
+          id: :text_pad,
+          mode: :inactive,
+          format_opts: %{
+            alignment: :left,
+            wrap_opts: :no_wrap,
+            scroll_opts: :all_directions,
+            show_line_num?: true
+          },
+          # font: radix_state.gui_config.fonts.primary,
+          frame: full_screen_buffer(frame, tab_selector_visible?: true)
+        })
+      end,
+      translate: frame.pin,
+      id: :editor
+    )
+  end
+
+  def render(%{frame: frame, radix_state: %{editor: %{buffers: buf_list}} = radix_state}) do
+    IO.puts "RENDERING FOR AN ACTIVE UFFFFFF"
+    [active_buffer] = buf_list |> Enum.filter(&(&1.id == radix_state.editor.active_buf))
+
+    Scenic.Graph.build()
+    |> Scenic.Primitives.group(
+      fn graph ->
+        graph
+        # |> TabSelector.add_to_graph(%{
+        #   frame:
+        #     Frame.new(width: scene.assigns.frame.dimensions.width, height: @tab_selector_height),
+        #   theme: theme,
+        #   tab_list: tab_list,
+        #   active: active_buffer.id,
+        #   font: font,
+        #   menu_item: %{width: 220}
+        # })
+        |> TextPad.add_to_graph(%{
+          id: :text_pad,
+          text: active_buffer.data,
+          frame: full_screen_buffer(frame, tab_selector_visible?: true),
+          mode: :insert,
+          format_opts: %{
+            alignment: :left,
+            wrap_opts: :no_wrap,
+            scroll_opts: :all_directions,
+            show_line_num?: true
+          },
+          font: radix_state.gui_config.fonts.primary,
+          cursor: active_buffer.cursor
+        })
+      end,
+      translate: frame.pin,
+      id: :editor
+    )
+  end
 
   # Return a %Frame{} that's full-screen, depending on whether or not we
   # need to adjust for adding a TabSelector
-  def full_screen_buffer(scene), do: full_screen_buffer(scene, tab_selector_visible?: false)
+  def full_screen_buffer(frame), do: full_screen_buffer(frame, tab_selector_visible?: false)
 
-  def full_screen_buffer(scene, tab_selector_visible?: tab_selector_visible?) do
+  def full_screen_buffer(frame, tab_selector_visible?: tab_selector_visible?) do
     # NOTE: If the TabSelector is visible, we need to reduce the height of
     #      a full-screen buffer, to make room for the TabSelector. In the
     #      single-buffer case, we don't need to make any height reduction
@@ -193,9 +255,21 @@ defmodule QuillEx.GUI.Components.Editor do
       # NOTE: We translate the box down here, on this level, so use {0, 0} for the pin
       pin: {0, 0},
       size:
-        {scene.assigns.frame.dimensions.width,
-         scene.assigns.frame.dimensions.height - height_reduction}
+        {frame.dimensions.width,
+        frame.dimensions.height - height_reduction}
     )
+  end
+
+  defp theme do
+    %{
+      active: {58, 94, 201},
+      background: {72, 122, 252},
+      border: :light_grey,
+      focus: :cornflower_blue,
+      highlight: :sandy_brown,
+      text: :white,
+      thumb: :cornflower_blue
+    }
   end
 end
 
