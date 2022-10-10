@@ -3,7 +3,6 @@ defmodule QuillEx.RadixState do
 
   def new do
     {:ok, {_type, ibm_plex_mono_fm}} = Scenic.Assets.Static.meta(:ibm_plex_mono)
-    {:ok, {_type, iosevka_fm}} = Scenic.Assets.Static.meta(:iosevka)
 
     %{
       root: %{
@@ -38,9 +37,9 @@ defmodule QuillEx.RadixState do
             size: 24
           },
           menu_bar: %{
-            name: :iosevka,
+            name: :ibm_plex_mono,
             size: 36,
-            metrics: iosevka_fm
+            metrics: ibm_plex_mono_fm
           }
         }
       }
