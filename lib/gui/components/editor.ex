@@ -5,10 +5,9 @@ defmodule QuillEx.GUI.Components.Editor do
   alias ScenicWidgets.{TabSelector, TextPad}
   alias ScenicWidgets.Core.Structs.Frame
 
-  # TODO remove, this should come from the font or something
-  @tab_selector_height 40
 
-  # TODO cursors
+  @tab_selector_height 40 # TODO remove, this should come from the font or something
+
 
   def validate(%{frame: %Frame{} = _f} = data) do
     # Logger.debug "#{__MODULE__} accepted params: #{inspect data}"
@@ -34,14 +33,9 @@ defmodule QuillEx.GUI.Components.Editor do
       |> assign(state: init_state)
       |> push_graph(init_graph)
 
-    request_input(init_scene, [:key])
+    request_input(init_scene, [:key, :cursor_scroll])
 
     {:ok, init_scene}
-  end
-
-  def handle_cast(_unknown_msg, scene) do
-    # NOTE: We need this cause cast_children/2 sends all child components messages, even if we don't want them...
-    {:noreply, scene}
   end
 
   def handle_cast({:frame_reshape, new_frame}, scene) do
@@ -57,8 +51,13 @@ defmodule QuillEx.GUI.Components.Editor do
     {:noreply, scene}
   end
 
-  def handle_cast(_unknown_msg, scene) do
-    # NOTE: We need this cause cast_children/2 sends all child components messages, even if we don't want them...
+  def handle_cast({:scroll_limits, %{inner: %{width: _w, height: _h}, frame: _f} = new_scroll_state}, scene) do
+    # update the RadixStore, without broadcasting the changes,
+    # so we can keep accurate calculations for scrolling
+    QuillEx.RadixStore.get()
+    |> QuillEx.RadixState.change_editor_scroll_state(new_scroll_state)
+    |> QuillEx.RadixStore.put(:without_broadcast)
+
     {:noreply, scene}
   end
 
@@ -76,6 +75,7 @@ defmodule QuillEx.GUI.Components.Editor do
   end
 
   #TODO handle font changes (size & font)
+
   def handle_info({:radix_state_change, %{editor: %{active_buf: radix_active_buf}} = new_radix_state}, %{assigns: %{state: %{active_buf: state_active_buf}}} = scene) when radix_active_buf != state_active_buf do
     Logger.debug "Active buffer changed..."
 
@@ -94,7 +94,6 @@ defmodule QuillEx.GUI.Components.Editor do
     {:noreply, new_scene}
   end
 
-
   def handle_info({:radix_state_change, %{editor: %{buffers: buf_list}} = new_state}, scene)
     when length(buf_list) >= 1 do
 
@@ -102,8 +101,15 @@ defmodule QuillEx.GUI.Components.Editor do
       # tab_list = buf_list |> Enum.map(& &1.id)
 
       #TODO maybe send it a list of lines instead? Do the rope calc here??
+      {:ok, [pid]} = child(scene, {:text_pad, active_buffer.id})
 
-      cast_children(scene, {:redraw, %{data: active_buffer.data, cursor: active_buffer.cursor}})
+      # NOTE: We have to do data & cursor at the same time, since we need to make sure
+      # data is updated before thec cursor is (since we use the full  text to calculate
+      # the position of the cursor) and this can't be guaranteed merely by sending msgs
+      # GenServer.cast(pid, {:redraw, %{data: active_buffer.data}})
+      # GenServer.cast(pid, {:redraw, %{cursor: hd(active_buffer.cursors)}})
+      GenServer.cast(pid, {:redraw, %{data: active_buffer.data, cursor: hd(active_buffer.cursors)}})
+      GenServer.cast(pid, {:redraw, %{scroll_acc: active_buffer.scroll_acc}})
 
     {:noreply, scene}
   end
@@ -111,12 +117,19 @@ defmodule QuillEx.GUI.Components.Editor do
   def handle_input(key, _context, scene) when key in @valid_text_input_characters do
     Logger.debug("#{__MODULE__} recv'd valid input: #{inspect(key)}")
 
-    #KEY INPOUT HERE
-
     QuillEx.API.Buffer.active_buf()
     |> QuillEx.API.Buffer.modify({:insert, key |> key2string(), :at_cursor})
 
     {:noreply, scene}
+  end
+
+  def handle_input(
+      {:cursor_scroll, {{_x_scroll, _y_scroll} = scroll_delta, _coords}},
+      _context,
+      scene
+    ) do
+      QuillEx.API.Buffer.scroll(scroll_delta)
+      {:noreply, scene}
   end
 
   def handle_event({:tab_clicked, tab_label}, _from, scene) do
@@ -172,7 +185,6 @@ defmodule QuillEx.GUI.Components.Editor do
   end
 
   def render(%{frame: frame, radix_state: %{editor: %{active_buf: nil}} = radix_state}) do
-    IO.puts "RENDERING BLANX"
     Scenic.Graph.build()
     |> Scenic.Primitives.group(
       fn graph ->
@@ -186,26 +198,25 @@ defmodule QuillEx.GUI.Components.Editor do
         #   font: font,
         #   menu_item: %{width: 220}
         # })
-        |> TextPad.add_to_graph(%{
-          id: :text_pad,
-          mode: :inactive,
-          format_opts: %{
-            alignment: :left,
-            wrap_opts: :no_wrap,
-            scroll_opts: :all_directions,
-            show_line_num?: true
-          },
-          # font: radix_state.gui_config.fonts.primary,
-          frame: full_screen_buffer(frame, tab_selector_visible?: true)
-        })
+        # |> TextPad.add_to_graph(%{
+        #   id: :text_pad,
+        #   mode: :inactive,
+        #   format_opts: %{
+        #     alignment: :left,
+        #     wrap_opts: :no_wrap,
+        #     scroll_opts: :all_directions,
+        #     show_line_num?: true
+        #   },
+        #   # font: radix_state.gui_config.fonts.primary,
+        #   frame: full_screen_buffer(frame, tab_selector_visible?: true)
+        # })
       end,
-      translate: frame.pin,
       id: :editor
     )
   end
 
   def render(%{frame: frame, radix_state: %{editor: %{buffers: buf_list}} = radix_state}) do
-    IO.puts "RENDERING FOR AN ACTIVE UFFFFFF"
+
     [active_buffer] = buf_list |> Enum.filter(&(&1.id == radix_state.editor.active_buf))
 
     Scenic.Graph.build()
@@ -222,9 +233,10 @@ defmodule QuillEx.GUI.Components.Editor do
         #   menu_item: %{width: 220}
         # })
         |> TextPad.add_to_graph(%{
-          id: :text_pad,
+          id: {:buffer, 1},
           text: active_buffer.data,
-          frame: full_screen_buffer(frame, tab_selector_visible?: true),
+          # frame: full_screen_buffer(frame, tab_selector_visible?: true),
+          frame: full_screen_buffer(frame),
           mode: :insert,
           format_opts: %{
             alignment: :left,
@@ -233,8 +245,8 @@ defmodule QuillEx.GUI.Components.Editor do
             show_line_num?: true
           },
           font: radix_state.gui_config.fonts.primary,
-          cursor: active_buffer.cursor
-        })
+          cursor: hd(active_buffer.cursors)
+        }, id: {:text_pad, active_buffer.id})
       end,
       translate: frame.pin,
       id: :editor
@@ -256,7 +268,7 @@ defmodule QuillEx.GUI.Components.Editor do
       pin: {0, 0},
       size:
         {frame.dimensions.width,
-        frame.dimensions.height - height_reduction}
+        frame.dimensions.height - height_reduction - 10} # NOTE: Add the extra 10 because on MacOS the stupid rounded corners of the GLFW frame make the window look stupid, F-U Steve J.
     )
   end
 

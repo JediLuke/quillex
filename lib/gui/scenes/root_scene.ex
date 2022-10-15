@@ -104,7 +104,12 @@ defmodule QuillEx.Scene.RootScene do
 
     if new_menu_map != current_menu_map do
         Logger.debug "refreshing the MenuBar..."
-        cast_children(scene, {:put_menu_map, new_menu_map})
+
+        #TODO make new function in Scenic `cast_child`
+        # scene |> cast_child(:menu_bar, {:put_menu_map, new_menu_map})
+        {:ok, [pid]} = child(scene, :menu_bar)
+        GenServer.cast(pid, {:put_menu_map, new_menu_map})
+
         {:noreply, scene |> assign(menu_map: new_menu_map)}
     else
       {:noreply, scene}

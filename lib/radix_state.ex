@@ -19,7 +19,14 @@ defmodule QuillEx.RadixState do
         graph: nil,
         buffers: [],
         active_buf: nil,
-        config: %{}
+        config: %{},
+        scroll_state: %{
+          inner: %{
+            width: nil,       # this holds width of the longest/widest line of text, for the purposes of calculating maximum scroll
+            height: nil       # this holds the total height of all lines of text, again so we can calculate maximum scroll
+          },
+          frame: nil
+        }
       },
       overlay: %{},
       gui_config: %{
@@ -41,6 +48,16 @@ defmodule QuillEx.RadixState do
             size: 36,
             metrics: ibm_plex_mono_fm
           }
+        },
+        editor: %{
+          # invert_scroll: %{ # change the direction of scroll wheel
+          #   horizontal?: true,
+          #   vertical?: false
+          # },
+          scroll_speed: %{ # higher value means faster scrolling
+            horizontal: 5,
+            vertical: 3
+          }
         }
       }
     }
@@ -61,5 +78,10 @@ defmodule QuillEx.RadixState do
 
     current_radix_state
     |> put_in([:gui_config, :fonts, :primary], full_new_font_map)
+  end
+
+  def change_editor_scroll_state(current_radix_state, %{inner: %{width: _w, height: _h}, frame: _f} = new_scroll_state) do
+    current_radix_state
+    |> put_in([:editor, :scroll_state], new_scroll_state)
   end
 end

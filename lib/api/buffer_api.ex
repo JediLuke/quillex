@@ -38,6 +38,13 @@ defmodule QuillEx.API.Buffer do
   end
 
   @doc """
+  Scroll the buffer around.
+  """
+  def scroll({_x_scroll, _y_scroll} = scroll_delta) do
+    QuillEx.action({BufferReducer, {:scroll, :active_buf, {:delta, scroll_delta}}})
+  end
+
+  @doc """
   List all the open buffers.
   """
   def list do

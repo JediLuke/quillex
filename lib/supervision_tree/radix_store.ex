@@ -10,12 +10,14 @@ defmodule QuillEx.RadixStore do
     Agent.get(__MODULE__, & &1)
   end
 
+  #TODO this should be a GenServer so we dont copy the state out & manipulate it in another process
+
   # def put(state, key, value) do
   #   Agent.update(__MODULE__, &Map.put(&1, key, value))
   # end
 
   def put(new_radix_state) do
-    Logger.debug("!! updating the Radix with: #{inspect(new_radix_state)}")
+    #Logger.debug("!! updating the Radix with: #{inspect(new_radix_state)}")
     # NOTE: Although I did try it, I decided not to go with using the
     #      event bus for updating the GUI due to a state change. The event-
     #      bus serves it's purpose for funneling all action through one
@@ -28,6 +30,10 @@ defmodule QuillEx.RadixStore do
     #      start to have problems of how to handle addressing... the
     #      exact problem that PubSub is a perfect solution for.
     QuillEx.Utils.PubSub.broadcast(topic: :radix_state_change, msg: {:radix_state_change, new_radix_state})
+    Agent.update(__MODULE__, fn _old -> new_radix_state end)
+  end
+
+  def put(new_radix_state, :without_broadcast) do
     Agent.update(__MODULE__, fn _old -> new_radix_state end)
   end
 end
