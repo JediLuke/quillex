@@ -42,7 +42,7 @@ defmodule QuillEx.Reducers.BufferReducer do
 
     new_radix_state =
       radix_state
-      |> update_buf(edit_buf, %{data: (if is_nil(edit_buf.data), do: text, else: edit_buf.data <> text)})
+      |> update_buf(edit_buf, {:insert, text, {:at_cursor, edit_buf_cursor}})
       |> update_buf(edit_buf, %{cursor: new_cursor})
 
     {:ok, new_radix_state}
@@ -107,6 +107,37 @@ defmodule QuillEx.Reducers.BufferReducer do
     {:ok, radix_state |> update_buf(%{scroll_acc: new_scroll_acc})}
   end
 
+  # assume this means the active_buffer
+  def process(radix_state, {:move_cursor, {:delta, {_column_delta, _line_delta} = cursor_delta}}) do
+    edit_buf = find_buf(radix_state)
+    buf_cursor = hd(edit_buf.cursors)
+    current_cursor_coords = {buf_cursor.line, buf_cursor.col}
+    
+    lines = String.split(edit_buf.data, "\n") #TODO just make it a list of lines already...
+
+    # these coords are just a candidate because they may not be valid...
+    candidate_coords = {candidate_line, candidate_col} =
+      Scenic.Math.Vector2.add(current_cursor_coords, cursor_delta)
+      |> apply_floor({1,1}) # don't allow scrolling below the origin
+      |> apply_ceil({length(lines), Enum.max_by(lines, fn l -> String.length(l) end)}) # don't allow scrolling beyond the last line or the longest line
+
+    candidate_line_text = Enum.at(lines, candidate_line-1)
+
+    final_coords =
+      if String.length(candidate_line_text) <= candidate_col-1 do # NOTE: ned this -1 because if the cursor is sitting at the end of a line, e.g. a line with 8 chars, then it's column will be 9
+        {candidate_line, String.length(candidate_line_text)+1} # need the +1 because for e.g. a 4 letter line, to put the cursor at the end of the line, we need to put it in column 5
+      else
+        candidate_coords
+      end
+
+    new_cursor = Buffer.Cursor.move(buf_cursor, final_coords)
+
+    new_radix_state =
+      radix_state
+      |> update_buf(edit_buf, %{cursor: new_cursor})
+
+    {:ok, new_radix_state}
+  end
 
   ## --------------------------------------------------------------------------
 
@@ -228,10 +259,6 @@ defmodule QuillEx.Reducers.BufferReducer do
     res_y = max(res_y, (-1*(inner_h-frame_h+10))) #TODO why does 10 work so good here>?>??>
     res_y = min(res_y, 0)
 
-    IO.inspect res_y, label: "RESyyy"
-    IO.inspect inner_h, label: "INNER h"
-    IO.inspect frame_h, label: "frame_h h"
-
     {res_x, res_y}
 
     # if height > frame.dimensions.height do
@@ -245,9 +272,13 @@ defmodule QuillEx.Reducers.BufferReducer do
     # end
   end
 
-  # defp calc_floor({x, y}, {min_x, min_y}), do: {max(x, min_x), max(y, min_y)}
+  defp apply_floor({x, y}, {min_x, min_y}) do
+    {max(x, min_x), max(y, min_y)}
+  end
 
-  # defp calc_ceil({x, y}, {max_x, max_y}), do: {min(x, max_x), min(y, max_y)}
+  defp apply_ceil({x, y}, {max_x, max_y}) do
+    {min(x, max_x), min(y, max_y)}
+  end
 
 
   ## ----------------------------------------------------------------

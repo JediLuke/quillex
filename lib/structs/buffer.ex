@@ -26,6 +26,24 @@ defmodule QuillEx.Structs.Buffer do
         old_buf |> Map.put(:scroll_acc, new_scroll)
     end
 
+    def update(%__MODULE__{data: nil} = old_buf, {:insert, text_2_insert, {:at_cursor, _cursor}}) do
+        # if we have no text, just put it straight in there...
+        old_buf |> Map.put(:data, text_2_insert)
+    end
+
+    def update(%__MODULE__{data: old_text} = old_buf, {:insert, text_2_insert, {:at_cursor, %Cursor{line: l, col: c}}}) when is_bitstring(old_text) and is_bitstring(text_2_insert) do
+        lines = String.split(old_text, "\n")     
+        line_2_edit = Enum.at(lines, l-1)
+
+        {before_split, after_split} = String.split_at(line_2_edit, c-1) 
+
+        full_text_list = List.replace_at(lines, l-1, before_split <> text_2_insert <> after_split)
+
+        new_full_text = Enum.reduce(full_text_list, fn x, acc -> acc <> "\n" <> x end)
+
+        old_buf |> Map.put(:data, new_full_text)
+    end
+
     def update(%__MODULE__{} = old_buf, %{data: text}) when is_bitstring(text) do
         old_buf |> Map.put(:data, text)
     end

@@ -19,6 +19,12 @@ defmodule QuillEx.Structs.Buffer.Cursor do
         |> Map.put(:col, new_col)
     end
 
+    def move(%__MODULE__{} = old_cursor, {new_line, new_col}) do
+        old_cursor
+        |> Map.put(:line, new_line)
+        |> Map.put(:col, new_col)
+    end
+
 
     @doc """
     This function calculates how much the cursor needs to move when some text

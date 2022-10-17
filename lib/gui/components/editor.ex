@@ -123,6 +123,26 @@ defmodule QuillEx.GUI.Components.Editor do
     {:noreply, scene}
   end
 
+  def handle_input(key, _context, scene) when key in @arrow_keys do
+
+    # REMINDER: these tuples are in the form `{line, col}`
+    delta =
+      case key do
+        @left_arrow ->
+          {0, -1}
+        @up_arrow ->
+          {-1, 0}
+        @right_arrow ->
+          {0, 1}
+        @down_arrow ->
+          {1, 0}
+      end
+
+    QuillEx.API.Buffer.move_cursor(delta)
+
+    {:noreply, scene}
+  end
+
   def handle_input(
       {:cursor_scroll, {{_x_scroll, _y_scroll} = scroll_delta, _coords}},
       _context,
@@ -186,33 +206,7 @@ defmodule QuillEx.GUI.Components.Editor do
 
   def render(%{frame: frame, radix_state: %{editor: %{active_buf: nil}} = radix_state}) do
     Scenic.Graph.build()
-    |> Scenic.Primitives.group(
-      fn graph ->
-        graph
-        # |> TabSelector.add_to_graph(%{
-        #   frame:
-        #     Frame.new(width: scene.assigns.frame.dimensions.width, height: @tab_selector_height),
-        #   theme: theme,
-        #   tab_list: tab_list,
-        #   active: active_buffer.id,
-        #   font: font,
-        #   menu_item: %{width: 220}
-        # })
-        # |> TextPad.add_to_graph(%{
-        #   id: :text_pad,
-        #   mode: :inactive,
-        #   format_opts: %{
-        #     alignment: :left,
-        #     wrap_opts: :no_wrap,
-        #     scroll_opts: :all_directions,
-        #     show_line_num?: true
-        #   },
-        #   # font: radix_state.gui_config.fonts.primary,
-        #   frame: full_screen_buffer(frame, tab_selector_visible?: true)
-        # })
-      end,
-      id: :editor
-    )
+    |> Scenic.Primitives.group(fn graph -> graph end, id: :editor)
   end
 
   def render(%{frame: frame, radix_state: %{editor: %{buffers: buf_list}} = radix_state}) do
@@ -235,7 +229,6 @@ defmodule QuillEx.GUI.Components.Editor do
         |> TextPad.add_to_graph(%{
           id: {:buffer, 1},
           text: active_buffer.data,
-          # frame: full_screen_buffer(frame, tab_selector_visible?: true),
           frame: full_screen_buffer(frame),
           mode: :insert,
           format_opts: %{
