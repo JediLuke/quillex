@@ -3,14 +3,14 @@ defmodule QuillEx.Scene.RootScene do
   require Logger
   alias QuillEx.GUI.Components.{Editor, SplashScreen}
   alias ScenicWidgets.Core.Structs.Frame
+  alias ScenicWidgets.Core.Utils.FlexiFrame
 
+  @menubar_height 60
 
   def init(scene, _args, _opts) do
     Logger.debug("#{__MODULE__} initializing...")
-    # Process.register(self(), __MODULE__)
 
     radix_state = QuillEx.RadixStore.get()
-
     init_graph = render(scene.viewport, radix_state)
 
     init_scene =
@@ -36,6 +36,7 @@ defmodule QuillEx.Scene.RootScene do
       ) do
     Logger.debug("#{__MODULE__} received :viewport :reshape, size: #{inspect(new_size)}")
 
+   #  raise "wee"
     # Editor
     # |> GenServer.cast(
     #   {:frame_reshape,
@@ -50,10 +51,10 @@ defmodule QuillEx.Scene.RootScene do
     {:noreply, scene}
   end
 
-  def handle_input({:viewport, input}, context, scene) do
-    # Logger.debug "#{__MODULE__} ignoring some input from the :viewport - #{inspect input}"
-    {:noreply, scene}
-  end
+   def handle_input({:viewport, input}, context, scene) do
+      #Logger.debug "#{__MODULE__} ignoring some input from the :viewport - #{inspect input}"
+      {:noreply, scene}
+   end
 
   # def handle_info({:radix_state_change, new_radix_state}, %{assigns: %{menu_map: current_menu_map}} = scene) do
 
@@ -96,66 +97,71 @@ defmodule QuillEx.Scene.RootScene do
   #     end
   # end
 
-  def handle_info({:radix_state_change, new_radix_state}, %{assigns: %{menu_map: current_menu_map}} = scene) do
-    # check menu bar changed
-    new_menu_map = calc_menu_map(new_radix_state)
+   #TODO expand this to include all changesd to menubar, including font type...
+   def handle_info({:radix_state_change, new_radix_state}, %{assigns: %{menu_map: current_menu_map}} = scene) do
 
-    #TODO expand this to include all changesd to menubar, including font type...
+      new_menu_map = calc_menu_map(new_radix_state)
 
-    if new_menu_map != current_menu_map do
-        Logger.debug "refreshing the MenuBar..."
+      if new_menu_map != current_menu_map do
+         Logger.debug "refreshing the MenuBar..."
 
-        #TODO make new function in Scenic `cast_child`
-        # scene |> cast_child(:menu_bar, {:put_menu_map, new_menu_map})
-        {:ok, [pid]} = child(scene, :menu_bar)
-        GenServer.cast(pid, {:put_menu_map, new_menu_map})
+         #TODO make new function in Scenic `cast_child`
+         # scene |> cast_child(:menu_bar, {:put_menu_map, new_menu_map})
+         case child(scene, :menu_bar) do
+            {:ok, []} ->
+               Logger.warn "Could not find the MenuBar process."
+               {:noreply, scene}
+            {:ok, [pid]} ->
+               GenServer.cast(pid, {:put_menu_map, new_menu_map})
+               {:noreply, scene |> assign(menu_map: new_menu_map)}
+         end
+      else
+         {:noreply, scene}
+      end
+   end
 
-        {:noreply, scene |> assign(menu_map: new_menu_map)}
-    else
-      {:noreply, scene}
-    end
-  end
+   def render(%Scenic.ViewPort{} = vp, radix_state) do
+      render(Scenic.Graph.build(), vp, radix_state)
+   end
 
-  def render(%Scenic.ViewPort{} = vp, radix_state) do
-    render(Scenic.Graph.build(), vp, radix_state)
-  end
+   def render(
+      %Scenic.Graph{} = graph,
+      %Scenic.ViewPort{} = vp,
+      radix_state
+   ) do
+      %{framestack: [menubar_f|editor_f]} = FlexiFrame.calc(vp, {:standard_rule, linemark: @menubar_height})
 
-  def render(%Scenic.Graph{} = graph, %Scenic.ViewPort{size: {vp_width, vp_height}}, radix_state) do
-    # NOTE: draw order is important, things drawn last render over the top
-    # of things drawn earlier than them
-
-    #TODO add a new buffer into the radi_state right at the beginning...
-
-    graph
-    |> Scenic.Primitives.group(fn graph ->
       graph
-      |> Editor.add_to_graph(
-        %{
-          radix_state: radix_state,
-          frame:
-            Frame.new(
-              pin: {0, radix_state.gui_config.menu_bar.height},
-              size: {vp_width, vp_height - radix_state.gui_config.menu_bar.height}
-            )
-        },
-        id: :editor
-      )
-      |> ScenicWidgets.MenuBar.add_to_graph(
-        %{
-          frame:
-            Frame.new(
-              pin: {0, 0},
-              size: {vp_width, radix_state.gui_config.menu_bar.height}
-            ),
-          menu_map: calc_menu_map(radix_state),
-          font: radix_state.gui_config.fonts.menu_bar
-        },
-        id: :menu_bar
-      )
-      # |> SplashScreen.add_to_graph(%{frame: Frame.new(pin: {150, 150}, size: {200, 200})}, id: :splash_screen, hidden: true)
-    end,
-    id: :quillex_main)
-  end
+      |> Scenic.Primitives.group(fn graph ->
+         graph
+         |> render_editor(%{frame: hd(editor_f), radix_state: radix_state})
+         |> render_menubar(%{frame: menubar_f, radix_state: radix_state})
+      end,
+      id: :quillex_main)
+   end
+
+   def render_editor(graph, args) do
+      graph
+      # |> ScenicWidgets.FrameBox.draw(%{frame: hd(editor_f), color: :blue})
+      |> Editor.add_to_graph(args, id: :editor)
+   end
+
+   def render_menubar(graph, %{frame: frame, radix_state: radix_state}) do
+
+      menubar_args = %{
+         frame: frame,
+         menu_map: calc_menu_map(radix_state),
+         font: radix_state.gui_config.fonts.menu_bar
+       }
+
+      graph
+      # |> ScenicWidgets.FrameBox.draw(%{frame: menubar_f, color: :red})
+      |> ScenicWidgets.MenuBar.add_to_graph(menubar_args, id: :menu_bar)   
+   end
+   
+
+   # |> SplashScreen.add_to_graph(%{frame: Frame.new(pin: {150, 150}, size: {200, 200})}, id: :splash_screen, hidden: true)
+
 
   def calc_menu_map(%{editor: %{buffers: []}}) do
     [

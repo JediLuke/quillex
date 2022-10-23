@@ -4,17 +4,19 @@ defmodule QuillEx.GUI.Components.Editor do
   require Logger
   alias ScenicWidgets.{TabSelector, TextPad}
   alias ScenicWidgets.Core.Structs.Frame
+  alias QuillEx.Structs.Buffer
+  alias ScenicWidgets.TextPad.Structs.Font
 
 
   @tab_selector_height 40 # TODO remove, this should come from the font or something
 
 
-  def validate(%{frame: %Frame{} = _f} = data) do
+  def validate(%{frame: %Frame{} = _f, radix_state: _rx} = data) do
     # Logger.debug "#{__MODULE__} accepted params: #{inspect data}"
     {:ok, data}
   end
 
-  def init(scene, %{radix_state: %{editor: %{buffers: buf_list}}} = args, opts) do
+  def init(scene, args, opts) do
     Logger.debug("#{__MODULE__} initializing...")
     # Process.register(self(), __MODULE__)
 
@@ -209,61 +211,56 @@ defmodule QuillEx.GUI.Components.Editor do
     |> Scenic.Primitives.group(fn graph -> graph end, id: :editor)
   end
 
-  def render(%{frame: frame, radix_state: %{editor: %{buffers: buf_list}} = radix_state}) do
+   def render(%{frame: editor_frame, radix_state: %{editor: %{buffers: buf_list}} = radix_state}) do
 
-    [active_buffer] = buf_list |> Enum.filter(&(&1.id == radix_state.editor.active_buf))
+      [active_buffer] = buf_list |> Enum.filter(&(&1.id == radix_state.editor.active_buf))
+      primary_font = radix_state.gui_config.fonts.primary
 
-    Scenic.Graph.build()
-    |> Scenic.Primitives.group(
-      fn graph ->
-        graph
-        # |> TabSelector.add_to_graph(%{
-        #   frame:
-        #     Frame.new(width: scene.assigns.frame.dimensions.width, height: @tab_selector_height),
-        #   theme: theme,
-        #   tab_list: tab_list,
-        #   active: active_buffer.id,
-        #   font: font,
-        #   menu_item: %{width: 220}
-        # })
-        |> TextPad.add_to_graph(%{
-          id: {:buffer, 1},
-          text: active_buffer.data,
-          frame: full_screen_buffer(frame),
-          mode: :insert,
-          format_opts: %{
-            alignment: :left,
-            wrap_opts: :no_wrap,
-            scroll_opts: :all_directions,
-            show_line_num?: true
-          },
-          font: radix_state.gui_config.fonts.primary,
-          cursor: hd(active_buffer.cursors)
-        }, id: {:text_pad, active_buffer.id})
-      end,
-      translate: frame.pin,
-      id: :editor
-    )
-  end
+      Scenic.Graph.build()
+      |> Scenic.Primitives.group(
+         fn graph ->
+            graph
+            # |> render_tab_selector()
+            |> render_text_pad(%{
+               frame: editor_frame,
+               buffer: active_buffer,
+               font: primary_font
+            })
+         end,
+         id: :editor
+      )
+   end
 
-  # Return a %Frame{} that's full-screen, depending on whether or not we
-  # need to adjust for adding a TabSelector
-  def full_screen_buffer(frame), do: full_screen_buffer(frame, tab_selector_visible?: false)
+#   def render_tab_selector do
+#             # |> TabSelector.add_to_graph(%{
+#         #   frame:
+#         #     Frame.new(width: scene.assigns.frame.dimens.width, height: @tab_selector_height),
+#         #   theme: theme,
+#         #   tab_list: tab_list,
+#         #   active: active_buffer.id,
+#         #   font: font,
+#         #   menu_item: %{width: 220}
+#         # })
+#   end
 
-  def full_screen_buffer(frame, tab_selector_visible?: tab_selector_visible?) do
-    # NOTE: If the TabSelector is visible, we need to reduce the height of
-    #      a full-screen buffer, to make room for the TabSelector. In the
-    #      single-buffer case, we don't need to make any height reduction
-    height_reduction = if tab_selector_visible?, do: @tab_selector_height, else: 0
+   def render_text_pad(graph, %{
+      frame: %Frame{} = frame,
+      buffer: %Buffer{} = buffer,
+      font: %Font{} = font
+   }) do
+      graph
+      |> TextPad.add_to_graph(%{
+         frame: calc_text_pad_frame(frame),
+         state: TextPad.new(%{
+            buffer: buffer,
+            font: font
+         })
+      }, id: {:text_pad, buffer.id})
+   end
 
-    Frame.new(
-      # NOTE: We translate the box down here, on this level, so use {0, 0} for the pin
-      pin: {0, 0},
-      size:
-        {frame.dimensions.width,
-        frame.dimensions.height - height_reduction - 10} # NOTE: Add the extra 10 because on MacOS the stupid rounded corners of the GLFW frame make the window look stupid, F-U Steve J.
-    )
-  end
+   def calc_text_pad_frame(%Frame{pin: pin, size: {w, h}}) do
+      Frame.new(pin: pin, size: {w, h-10}) # NOTE: Add the extra 10 because on MacOS the stupid rounded corners of the GLFW frame make the window look stupid, F-U Steve J.
+   end
 
   defp theme do
     %{

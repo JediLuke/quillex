@@ -31,3 +31,20 @@ iex -S mix run
 * We use the y-axis boundary to de-activate the menu, but not the x-axis
   of each sub-menu, so you can move the mouse around sideways without
   de-activating the menu - in practice, it's not such a pain or dangerous
+
+## Features I want to support
+
+- unlimited undo/redo capability
+- unlimited line length
+- global search/replace (on all buffers at once)
+- block operations?
+- automatic indentation
+- word wrapping
+- justified line wrap
+- delimiter matching
+- code folding
+- scrolling text boxes
+- cut & paste
+- search & replace
+- memory limit, how much we will pull into memory at any one point of time... Need to use paging if we go over this limit
+- highlight current line & current word like VS code does

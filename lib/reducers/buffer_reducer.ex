@@ -7,7 +7,7 @@ defmodule QuillEx.Reducers.BufferReducer do
       when is_bitstring(text) do
 
     num_buffers = Enum.count(buf_list)
-    new_buf = Buffer.new(%{id: {:buffer, "untitled_" <> Integer.to_string(num_buffers + 1) <> ".txt*"}})
+    new_buf = Buffer.new(%{id: {:buffer, "untitled_" <> Integer.to_string(num_buffers + 1) <> ".txt*"}, type: :text})
 
     new_radix_state = radix_state
       |> put_in([:editor, :buffers], buf_list ++ [new_buf])

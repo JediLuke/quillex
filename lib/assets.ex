@@ -1,6 +1,6 @@
 defmodule QuillEx.Assets do
   use Scenic.Assets.Static,
-    otp_app: :quill_ex,
+    otp_app: :quillex,
     alias: [
       ibm_plex_mono: "fonts/IBMPlexMono-Regular.ttf",
       iosevka: "fonts/iosevka-etoile-regular.ttf",

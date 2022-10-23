@@ -1,4 +1,5 @@
 defmodule QuillEx.RadixState do
+   alias ScenicWidgets.TextPad.Structs.Font
 
 
   def new do
@@ -38,16 +39,16 @@ defmodule QuillEx.RadixState do
           height: 40
         },
         fonts: %{
-          primary: %{
+          primary: Font.new(%{
             name: :ibm_plex_mono,
-            metrics: ibm_plex_mono_fm,
-            size: 24
-          },
-          menu_bar: %{
+            size: 24,
+            metrics: ibm_plex_mono_fm
+          }),
+          menu_bar: Font.new(%{
             name: :ibm_plex_mono,
             size: 36,
             metrics: ibm_plex_mono_fm
-          }
+          })
         },
         editor: %{
           # invert_scroll: %{ # change the direction of scroll wheel
