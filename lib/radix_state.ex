@@ -9,27 +9,24 @@ defmodule QuillEx.RadixState do
       root: %{
         active_app: :editor,
         graph: nil,
-        layers: [
-          one: nil,
-          two: nil,
-          three: nil,
-          four: nil
-        ]
+        layers: []
       },
       editor: %{
         graph: nil,
-        buffers: [],
+        buffers: [], # A list of %Buffer{} structs
         active_buf: nil,
         config: %{},
-        scroll_state: %{
-          inner: %{
-            width: nil,       # this holds width of the longest/widest line of text, for the purposes of calculating maximum scroll
-            height: nil       # this holds the total height of all lines of text, again so we can calculate maximum scroll
-          },
-          frame: nil
-        }
       },
-      overlay: %{},
+      menu_bar: %{
+        height: 60
+      },
+      gui: %{
+        viewport: nil
+      },
+
+
+      # overlay: %{},
+      
       gui_config: %{
         menu_bar: %{
           height: 60,

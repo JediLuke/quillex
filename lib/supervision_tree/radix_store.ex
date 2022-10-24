@@ -6,6 +6,13 @@ defmodule QuillEx.RadixStore do
     Agent.start_link(fn -> QuillEx.RadixState.new() end, name: __MODULE__)
   end
 
+  def initialize(viewport: new_viewport) do
+    Agent.update(__MODULE__, fn old ->
+      old |> Map.merge(%{gui: old.gui |> Map.put(:viewport, new_viewport)})
+    end)
+  end
+
+
   def get do
     Agent.get(__MODULE__, & &1)
   end

@@ -49,6 +49,26 @@ defmodule QuillEx.Structs.Buffer do
             id: id,
             type: type,
             name: name,
+            mode: :edit,
+            cursors: [Cursor.new(%{num: 1})]
+        }
+    end
+
+    def new(%{id: {:buffer, name} = id, type: type}) when type in @valid_types do
+        %__MODULE__{
+            id: id,
+            type: type,
+            name: name,
+            cursors: [Cursor.new(%{num: 1})]
+        }
+    end
+
+    def new(%{id: {:buffer, name} = id}) do
+        %__MODULE__{
+            id: id,
+            type: :text,
+            data: "",
+            name: name,
             cursors: [Cursor.new(%{num: 1})]
         }
     end
@@ -90,4 +110,25 @@ defmodule QuillEx.Structs.Buffer do
         c = Cursor.update(old_cursor, new_coords)
         old_buf |> Map.put(:cursors, [c])
     end
+
+    defp new_untitled_buf_name([]) do
+        "untitled*"
+    end
+
+    defp new_untitled_buf_name(buf_list) when is_list(buf_list) and length(buf_list) >= 1 do
+        num_untitled_open =
+            buf_list
+            |> Enum.filter(fn
+                # %{id {:buffer, "untitled" <> _rest}, unsaved_changes?: true} ->
+                %{unsaved_changes?: true} ->
+                    true
+                _else ->
+                    false
+            end)
+            |> Enum.count()
+
+        #TODO do a final check to make sure that we arent accidentally giving it the same name as an existing buffer
+        "untitled#{inspect num_untitled_open+2}*" # add 2 because we go straight to untitled2 if we have 2 buffers open
+    end
+
 end

@@ -3,7 +3,6 @@ defmodule QuillEx.Scene.RootSceneTest do
     alias QuillEx.Scene.RootScene
 
     test "basic render" do
-        text_graph = Scenic.Graph.build()
         test_viewport = %Scenic.ViewPort{size: {_vp_width = 200, _vp_height = 200}}
 
         test_radix_state = %{
@@ -19,6 +18,6 @@ defmodule QuillEx.Scene.RootSceneTest do
             }
         }
 
-        %Scenic.Graph{} = RootScene.render(text_graph, test_viewport, test_radix_state)
+        %Scenic.Graph{} = RootScene.render(test_viewport, test_radix_state)
     end
 end

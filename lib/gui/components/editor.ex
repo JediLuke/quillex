@@ -18,7 +18,6 @@ defmodule QuillEx.GUI.Components.Editor do
 
   def init(scene, args, opts) do
     Logger.debug("#{__MODULE__} initializing...")
-    # Process.register(self(), __MODULE__)
 
     QuillEx.Utils.PubSub.register(topic: :radix_state_change)
 
@@ -203,7 +202,6 @@ defmodule QuillEx.GUI.Components.Editor do
 
   def calc_state(%{editor: %{active_buf: active_buf}} = _radix_state) do
     %{active_buf: active_buf}
-    |> IO.inspect(label: "New state")
   end
 
   def render(%{frame: frame, radix_state: %{editor: %{active_buf: nil}} = radix_state}) do

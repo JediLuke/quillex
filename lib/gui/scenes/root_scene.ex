@@ -21,6 +21,8 @@ defmodule QuillEx.Scene.RootScene do
       |> assign(menu_map: calc_menu_map(radix_state))
       |> push_graph(init_graph)
 
+    QuillEx.RadixStore.initialize(viewport: init_scene.viewport)
+
     QuillEx.Utils.PubSub.register(topic: :radix_state_change)
 
     request_input(init_scene, [:viewport])
@@ -36,7 +38,7 @@ defmodule QuillEx.Scene.RootScene do
       ) do
     Logger.debug("#{__MODULE__} received :viewport :reshape, size: #{inspect(new_size)}")
 
-   #  raise "wee"
+    # raise "wee"
     # Editor
     # |> GenServer.cast(
     #   {:frame_reshape,
@@ -120,18 +122,14 @@ defmodule QuillEx.Scene.RootScene do
       end
    end
 
-   def render(%Scenic.ViewPort{} = vp, radix_state) do
-      render(Scenic.Graph.build(), vp, radix_state)
-   end
 
    def render(
-      %Scenic.Graph{} = graph,
       %Scenic.ViewPort{} = vp,
       radix_state
    ) do
       %{framestack: [menubar_f|editor_f]} = FlexiFrame.calc(vp, {:standard_rule, linemark: @menubar_height})
 
-      graph
+      Scenic.Graph.build()
       |> Scenic.Primitives.group(fn graph ->
          graph
          |> render_editor(%{frame: hd(editor_f), radix_state: radix_state})

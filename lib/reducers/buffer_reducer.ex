@@ -1,20 +1,48 @@
 defmodule QuillEx.Reducers.BufferReducer do
-  require Logger
-  alias QuillEx.Structs.Buffer
+   require Logger
+
+   @app_layer :one
 
 
-  def process(%{editor: %{buffers: buf_list}} = radix_state, {:open_buffer, %{data: text} = new_buf})
-      when is_bitstring(text) do
+   # Open a new Buffer with none currently open.
+   def process(
+      %{editor: %{active_buf: nil}} = radix_state,
+      {:open_buffer, %{data: text}}
+   ) when is_bitstring(text) do
 
-    num_buffers = Enum.count(buf_list)
-    new_buf = Buffer.new(%{id: {:buffer, "untitled_" <> Integer.to_string(num_buffers + 1) <> ".txt*"}, type: :text})
+      #       num_buffers = Enum.count(buf_list)
+      #       new_buf = Buffer.new(%{
+      #             id: {:buffer, "untitled_" <> Integer.to_string(num_buffers + 1) <> ".txt*"}, type: :text})
 
-    new_radix_state = radix_state
-      |> put_in([:editor, :buffers], buf_list ++ [new_buf])
+      new_buf = QuillEx.Structs.Buffer.new(%{
+         id: {:buffer, "untitled*"}, #TODO auto-generate name...
+         type: :text,
+         data: text,
+         mode: {:vim, :normal},
+         dirty?: true
+      })
+
+      # calc the frame for the Menubar, we can choose to discard the other frames in the stack
+      %{framestack: [_menubar_f|editor_f]} =
+         ScenicWidgets.Core.Utils.FlexiFrame.calc(
+            radix_state.gui.viewport,
+            {:standard_rule, linemark: radix_state.menu_bar.height}
+         )
+
+      new_editor_graph =
+         QuillEx.GUI.Components.Editor.render(%{
+            frame: hd(editor_f),
+            radix_state: radix_state
+         })
+
+      new_radix_state = radix_state
+      |> put_in([:editor, :buffers], [new_buf])
       |> put_in([:editor, :active_buf], new_buf.id)
+      |> put_in([:root, :active_app], :editor)
+      |> put_in([:root, :layers, @app_layer], new_editor_graph)
 
-    {:ok, new_radix_state}
-  end
+      {:ok, new_radix_state}
+   end
 
   # def process(%{editor: %{buffers: buf_list}} = radix_state, {:open_buffer, %{filepath: filepath} = new_buf}) do
   #   raise "Can't open a buffer from a file right now..."
@@ -32,112 +60,112 @@ defmodule QuillEx.Reducers.BufferReducer do
   #   {:ok, new_radix_state}
   # end
 
-  def process(%{editor: %{buffers: buf_list}} = radix_state, {:modify_buffer, buf, {:insert, text, :at_cursor}}) do
-    # Insert text at the position of the cursor (and thus, also move the cursor)
+#   def process(%{editor: %{buffers: buf_list}} = radix_state, {:modify_buffer, buf, {:insert, text, :at_cursor}}) do
+#     # Insert text at the position of the cursor (and thus, also move the cursor)
 
-    edit_buf = find_buf(radix_state, buf)
-    edit_buf_cursor = hd(edit_buf.cursors)
+#     edit_buf = find_buf(radix_state, buf)
+#     edit_buf_cursor = hd(edit_buf.cursors)
 
-    new_cursor = Buffer.Cursor.calc_text_insertion_cursor_movement(edit_buf_cursor, text)
+#     new_cursor = Buffer.Cursor.calc_text_insertion_cursor_movement(edit_buf_cursor, text)
 
-    new_radix_state =
-      radix_state
-      |> update_buf(edit_buf, {:insert, text, {:at_cursor, edit_buf_cursor}})
-      |> update_buf(edit_buf, %{cursor: new_cursor})
+#     new_radix_state =
+#       radix_state
+#       |> update_buf(edit_buf, {:insert, text, {:at_cursor, edit_buf_cursor}})
+#       |> update_buf(edit_buf, %{cursor: new_cursor})
 
-    {:ok, new_radix_state}
-  end
+#     {:ok, new_radix_state}
+#   end
 
   #TODO handle backspacing multiple characters
-  def process(%{editor: %{buffers: buf_list}} = radix_state, {:modify_buffer, buf, {:backspace, 1, :at_cursor}}) do
+#   def process(%{editor: %{buffers: buf_list}} = radix_state, {:modify_buffer, buf, {:backspace, 1, :at_cursor}}) do
 
-    [%{data: full_text, cursors: [%{line: cursor_line, col: cursor_col}]}] =
-      buf_list |> Enum.filter(&(&1.id == buf))
+#     [%{data: full_text, cursors: [%{line: cursor_line, col: cursor_col}]}] =
+#       buf_list |> Enum.filter(&(&1.id == buf))
 
-    all_lines = String.split(full_text, "\n")
+#     all_lines = String.split(full_text, "\n")
 
-    {full_backspaced_text, new_cursor_coords} =
-      if cursor_col == 1 do
-        # join 2 lines together
-        {current_line, other_lines} = List.pop_at(all_lines, cursor_line-1)
-        new_joined_line = Enum.at(other_lines, cursor_line-2) <> current_line
-        all_lines_including_joined = List.replace_at(other_lines, cursor_line-2, new_joined_line)
+#     {full_backspaced_text, new_cursor_coords} =
+#       if cursor_col == 1 do
+#         # join 2 lines together
+#         {current_line, other_lines} = List.pop_at(all_lines, cursor_line-1)
+#         new_joined_line = Enum.at(other_lines, cursor_line-2) <> current_line
+#         all_lines_including_joined = List.replace_at(other_lines, cursor_line-2, new_joined_line)
 
-        # convert back to one long string...
-        full_backspaced_text = Enum.reduce(all_lines_including_joined, fn x, acc -> acc <> "\n" <> x end)
+#         # convert back to one long string...
+#         full_backspaced_text = Enum.reduce(all_lines_including_joined, fn x, acc -> acc <> "\n" <> x end)
       
-        {full_backspaced_text, %{line: cursor_line-1, col: String.length(Enum.at(all_lines, cursor_line-2))+1}}
-      else
-        line_to_edit = Enum.at(all_lines, cursor_line-1)
-        # delete text left of this by 1 char
-        {before_cursor_text, after_and_under_cursor_text} = line_to_edit |> String.split_at(cursor_col-1)
-        {backspaced_text, _deleted_text} = before_cursor_text |> String.split_at(-1)
+#         {full_backspaced_text, %{line: cursor_line-1, col: String.length(Enum.at(all_lines, cursor_line-2))+1}}
+#       else
+#         line_to_edit = Enum.at(all_lines, cursor_line-1)
+#         # delete text left of this by 1 char
+#         {before_cursor_text, after_and_under_cursor_text} = line_to_edit |> String.split_at(cursor_col-1)
+#         {backspaced_text, _deleted_text} = before_cursor_text |> String.split_at(-1)
     
-        full_backspaced_line = backspaced_text <> after_and_under_cursor_text
+#         full_backspaced_line = backspaced_text <> after_and_under_cursor_text
 
-        full_backspaced_line = backspaced_text <> after_and_under_cursor_text
-        all_lines_including_backspaced = List.replace_at(all_lines, cursor_line-1, full_backspaced_line)
+#         full_backspaced_line = backspaced_text <> after_and_under_cursor_text
+#         all_lines_including_backspaced = List.replace_at(all_lines, cursor_line-1, full_backspaced_line)
     
-        # convert back to one long string...
-        full_backspaced_text = Enum.reduce(all_lines_including_backspaced, fn x, acc -> acc <> "\n" <> x end)
+#         # convert back to one long string...
+#         full_backspaced_text = Enum.reduce(all_lines_including_backspaced, fn x, acc -> acc <> "\n" <> x end)
       
-        {full_backspaced_text, %{line: cursor_line, col: cursor_col-1}}
-      end
+#         {full_backspaced_text, %{line: cursor_line, col: cursor_col-1}}
+#       end
 
-    new_radix_state = radix_state
-      |> update_buf(%{data: full_backspaced_text})
-      |> update_buf(%{cursor: new_cursor_coords})
+#     new_radix_state = radix_state
+#       |> update_buf(%{data: full_backspaced_text})
+#       |> update_buf(%{cursor: new_cursor_coords})
 
-    {:ok, new_radix_state}
-  end
+#     {:ok, new_radix_state}
+#   end
 
-  def process(radix_state, {:activate_buffer, {:buffer, _id} = buf_ref}) do
-    {:ok, radix_state |> put_in([:editor, :active_buf], buf_ref)}
-  end
+#   def process(radix_state, {:activate_buffer, {:buffer, _id} = buf_ref}) do
+#     {:ok, radix_state |> put_in([:editor, :active_buf], buf_ref)}
+#   end
 
-  def process(radix_state, {:scroll, :active_buf, delta_scroll}) do
-    # NOTE: It is (a little unfortunately) necessary to keep scroll data up in
-    # the editor level rather than down at the TextPad level. This is because we
-    # may not always want to scroll the text when we use scroll (e.g. if a menu
-    # pop-up is active, we may want to scroll the menu, not the text). This is why
-    # we go to the effort of having TextPad send us back the scroll_state, so that
-    # we may use it to calculate the changes when scrolling, and prevent changes
-    # in the scroll accumulator if we're at or above the scroll limits.
-    new_scroll_acc = calc_capped_scroll(radix_state, delta_scroll)
-    {:ok, radix_state |> update_buf(%{scroll_acc: new_scroll_acc})}
-  end
+#   def process(radix_state, {:scroll, :active_buf, delta_scroll}) do
+#     # NOTE: It is (a little unfortunately) necessary to keep scroll data up in
+#     # the editor level rather than down at the TextPad level. This is because we
+#     # may not always want to scroll the text when we use scroll (e.g. if a menu
+#     # pop-up is active, we may want to scroll the menu, not the text). This is why
+#     # we go to the effort of having TextPad send us back the scroll_state, so that
+#     # we may use it to calculate the changes when scrolling, and prevent changes
+#     # in the scroll accumulator if we're at or above the scroll limits.
+#     new_scroll_acc = calc_capped_scroll(radix_state, delta_scroll)
+#     {:ok, radix_state |> update_buf(%{scroll_acc: new_scroll_acc})}
+#   end
 
-  # assume this means the active_buffer
-  def process(radix_state, {:move_cursor, {:delta, {_column_delta, _line_delta} = cursor_delta}}) do
-    edit_buf = find_buf(radix_state)
-    buf_cursor = hd(edit_buf.cursors)
-    current_cursor_coords = {buf_cursor.line, buf_cursor.col}
+#   # assume this means the active_buffer
+#   def process(radix_state, {:move_cursor, {:delta, {_column_delta, _line_delta} = cursor_delta}}) do
+#     edit_buf = find_buf(radix_state)
+#     buf_cursor = hd(edit_buf.cursors)
+#     current_cursor_coords = {buf_cursor.line, buf_cursor.col}
     
-    lines = String.split(edit_buf.data, "\n") #TODO just make it a list of lines already...
+#     lines = String.split(edit_buf.data, "\n") #TODO just make it a list of lines already...
 
-    # these coords are just a candidate because they may not be valid...
-    candidate_coords = {candidate_line, candidate_col} =
-      Scenic.Math.Vector2.add(current_cursor_coords, cursor_delta)
-      |> apply_floor({1,1}) # don't allow scrolling below the origin
-      |> apply_ceil({length(lines), Enum.max_by(lines, fn l -> String.length(l) end)}) # don't allow scrolling beyond the last line or the longest line
+#     # these coords are just a candidate because they may not be valid...
+#     candidate_coords = {candidate_line, candidate_col} =
+#       Scenic.Math.Vector2.add(current_cursor_coords, cursor_delta)
+#       |> apply_floor({1,1}) # don't allow scrolling below the origin
+#       |> apply_ceil({length(lines), Enum.max_by(lines, fn l -> String.length(l) end)}) # don't allow scrolling beyond the last line or the longest line
 
-    candidate_line_text = Enum.at(lines, candidate_line-1)
+#     candidate_line_text = Enum.at(lines, candidate_line-1)
 
-    final_coords =
-      if String.length(candidate_line_text) <= candidate_col-1 do # NOTE: ned this -1 because if the cursor is sitting at the end of a line, e.g. a line with 8 chars, then it's column will be 9
-        {candidate_line, String.length(candidate_line_text)+1} # need the +1 because for e.g. a 4 letter line, to put the cursor at the end of the line, we need to put it in column 5
-      else
-        candidate_coords
-      end
+#     final_coords =
+#       if String.length(candidate_line_text) <= candidate_col-1 do # NOTE: ned this -1 because if the cursor is sitting at the end of a line, e.g. a line with 8 chars, then it's column will be 9
+#         {candidate_line, String.length(candidate_line_text)+1} # need the +1 because for e.g. a 4 letter line, to put the cursor at the end of the line, we need to put it in column 5
+#       else
+#         candidate_coords
+#       end
 
-    new_cursor = Buffer.Cursor.move(buf_cursor, final_coords)
+#     new_cursor = Buffer.Cursor.move(buf_cursor, final_coords)
 
-    new_radix_state =
-      radix_state
-      |> update_buf(edit_buf, %{cursor: new_cursor})
+#     new_radix_state =
+#       radix_state
+#       |> update_buf(edit_buf, %{cursor: new_cursor})
 
-    {:ok, new_radix_state}
-  end
+#     {:ok, new_radix_state}
+#   end
 
   ## --------------------------------------------------------------------------
 
@@ -312,3 +340,116 @@ defmodule QuillEx.Reducers.BufferReducer do
   #   end
   # end
 end
+
+
+
+
+
+# defmodule Flamelex.Fluxus.Reducers.Buffer do
+#     @moduledoc false
+#     use Flamelex.ProjectAliases
+#     require Logger
+#     alias Flamelex.Fluxus.Reducers.Buffer.Modify
+  
+#     @app_layer :one
+
+#     defguard is_valid_buf(name, text) when is_bitstring(name) and is_bitstring(text)
+
+    
+#     def process(%{editor: %{buffers: buf_list}} = radix_state, {:open_buffer, %{name: name, data: text}}) when is_valid_buf(name, text) do
+#         #Logger.debug "opening new buffer..."
+
+#         new_buf = ScenicWidgets.TextPad.Structs.Buffer.new(%{
+#             id: {:buffer, "untitled*"},
+#             type: :text,
+#             data: text,
+#             mode: {:vim, :normal},
+#             dirty?: true
+#         })
+
+#         new_editor_graph = Scenic.Graph.build()
+#         |> Flamelex.GUI.TextFile.Layout.add_to_graph(%{
+#                 #TODO dont pass in menubar_height as a param to Frame :facepalm:
+#                 buffer_id: new_buf.id,
+#                 frame: Frame.new(radix_state.gui.viewport, menubar_height: 60), #TODO get this value from somewhere better
+#                 font: radix_state.gui.fonts.ibm_plex_mono,
+#                 state: new_buf
+#             }, id: new_buf.id)
+
+#         new_radix_state = radix_state
+#         |> put_in([:editor, :buffers], (if (is_nil(buf_list) or buf_list == []), do: [new_buf], else: buf_list ++ [new_buf]))
+#         |> put_in([:editor, :active_buf], new_buf.id)
+#         |> put_in([:root, :active_app], :editor) #TODO maybe don't put it all in RadixState, because then changes will be broadcast out everywhere... Maybe it's better to use BufferManager? Then again, maybe not...
+#         |> put_in([:root, :layers, @app_layer], new_editor_graph)
+
+#         {:ok, new_radix_state}
+#     end
+
+#     def process(%{editor: %{buffers: buf_list}} = radix_state, {:open_buffer, %{data: text}}) when is_bitstring(text) do
+#         new_buf_name = new_untitled_buf_name(buf_list)
+#         process(radix_state, {:open_buffer, %{name: new_buf_name, data: text}})
+#     end
+
+#     def process(radix_state, {:open_buffer, %{file: filename}}) when is_bitstring(filename) do
+#         Logger.debug "Opening file: #{inspect filename}..."
+#         text = File.read!(filename)
+#         process(radix_state, {:open_buffer, %{name: filename, data: text}})
+#     end
+
+#     def process(%{editor: %{buffers: []}} = radix_state, {:modify_buf, _buf_id, _modification} = action) do
+#         raise "Received :modify_buf action, but there are no open buffers. Action: #{inspect action}"    
+#     end
+
+#     def process(%{editor: %{buffers: []}}, {:close_buffer, buffer}) do
+#         Logger.warn "Tried closing a buffer `#{inspect buffer}` but none are open."
+#         :ignore
+#     end
+
+#     def process(%{editor: %{buffers: buf_list}} = radix_state, {:close_buffer, buffer}) do
+#         new_buf_list = buf_list |> Enum.reject(& &1.id == buffer)
+
+#         new_radix_state =
+#             if new_buf_list == [] do
+#                 Flamelex.Fluxus.action({Flamelex.Fluxus.Reducers.Desktop, :show_desktop})
+
+#                 radix_state
+#                 |> put_in([:editor, :buffers], new_buf_list)
+#                 |> put_in([:editor, :active_buf], nil)
+#                 |> put_in([:root, :active_app], :desktop)
+#             else
+#                 radix_state
+#                 |> put_in([:editor, :buffers], new_buf_list)
+#                 |> put_in([:editor, :active_buf], hd(new_buf_list))
+#             end
+    
+#         {:ok, new_radix_state}
+#     end
+
+#     def process(%{editor: %{active_buf: buf_id}} = radix_state, {:modify_buf, buf_id, mod}) do #NOTE: `buf_id` has to be the same in both places for this clause to match
+#         new_radix_state = radix_state
+#         |> Modify.modify(buf_id, mod)
+
+#         {:ok, new_radix_state}
+#     end
+
+
+
+# #   # to move a cursor, we just forward the message on to the specific buffer
+# #   def async_reduce(%{action: {:move_cursor, specifics}}) do
+# #     %{buffer: buffer, details: details} = specifics
+
+# #     ProcessRegistry.find!(buffer)
+# #     |> GenServer.cast({:move_cursor, details})
+# #   end
+
+# #   def async_reduce(%{action: {:activate, _buf} = action}) do
+# #     Logger.debug "#{__MODULE__} recv'd: #{inspect action}"
+# #     ## Find the buffer, set it to active
+# #     # ProcessRegistry.find!(buffer)
+
+# #     ## Update the GUI - note: this is what we DONT WANT (maybe??) - we want to calc a new state & pass it in to a "render" GUI function, not fire off side-effects like this!
+# #         # state + action -> state |> fn (RadixState) -> render_gui()
+# #         # the inherent problem with this is that state in ELixir is broken up into different processes!!
+# #     # :ok = GenServer.call(GUIController, action)
+# #     raise "unable to process action #{inspect action}"
+# #   end
