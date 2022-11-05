@@ -1,9 +1,9 @@
-defmodule QuillEx.RadixStore do
+defmodule QuillEx.Fluxus.RadixStore do
   use Agent
   require Logger
 
   def start_link(_opts) do
-    Agent.start_link(fn -> QuillEx.RadixState.new() end, name: __MODULE__)
+    Agent.start_link(fn -> QuillEx.Fluxus.Structs.RadixState.new() end, name: __MODULE__)
   end
 
   def initialize(viewport: new_viewport) do

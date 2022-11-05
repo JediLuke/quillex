@@ -1,9 +1,9 @@
-defmodule QuillEx.RadixState do
+defmodule QuillEx.Fluxus.Structs.RadixState do
    alias ScenicWidgets.TextPad.Structs.Font
 
 
   def new do
-    {:ok, {_type, ibm_plex_mono_fm}} = Scenic.Assets.Static.meta(:ibm_plex_mono)
+    {:ok, {_type, ibm_plex_mono_font_metrics}} = Scenic.Assets.Static.meta(:ibm_plex_mono)
 
     %{
       root: %{
@@ -21,7 +21,13 @@ defmodule QuillEx.RadixState do
         height: 60
       },
       gui: %{
-        viewport: nil
+        viewport: nil,
+        fonts: %{
+          primary: ScenicWidgets.TextPad.Structs.Font.new(%{
+             name: :ibm_plex_mono,
+             metrics: ibm_plex_mono_font_metrics
+          })
+       }
       },
 
 
@@ -39,12 +45,12 @@ defmodule QuillEx.RadixState do
           primary: Font.new(%{
             name: :ibm_plex_mono,
             size: 24,
-            metrics: ibm_plex_mono_fm
+            metrics: ibm_plex_mono_font_metrics
           }),
           menu_bar: Font.new(%{
             name: :ibm_plex_mono,
             size: 36,
-            metrics: ibm_plex_mono_fm
+            metrics: ibm_plex_mono_font_metrics
           })
         },
         editor: %{

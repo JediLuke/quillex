@@ -1,25 +1,32 @@
 defmodule QuillEx.GUI.Components.Editor do
   use Scenic.Component
-  use ScenicWidgets.ScenicEventsDefinitions
+  
   require Logger
   alias ScenicWidgets.{TabSelector, TextPad}
   alias ScenicWidgets.Core.Structs.Frame
   alias QuillEx.Structs.Buffer
   alias ScenicWidgets.TextPad.Structs.Font
 
+  #NOTE - we need to take in the `app` because this component is re-used by Flamelex...
 
   @tab_selector_height 40 # TODO remove, this should come from the font or something
 
+  # this module is used by both QUillex & Flamelex, so we need to pass in
+  # the correct pubsub module for whichever app is utilizing this module...
+  @higher_app [QuillEx, Flamelex]
 
-  def validate(%{frame: %Frame{} = _f, radix_state: _rx} = data) do
-    # Logger.debug "#{__MODULE__} accepted params: #{inspect data}"
-    {:ok, data}
+
+  def validate(%{frame: %Frame{} = _f, radix_state: _rx, app: app} = data)
+    when app in @higher_app do
+      # Logger.debug "#{__MODULE__} accepted params: #{inspect data}"
+      {:ok, data}
   end
 
   def init(scene, args, opts) do
     Logger.debug("#{__MODULE__} initializing...")
 
-    QuillEx.Utils.PubSub.register(topic: :radix_state_change)
+    pubsub_mod = Module.concat(args.app, Utils.PubSub)
+    pubsub_mod.subscribe(topic: :radix_state_change)
 
     init_graph =
       render(args)
@@ -29,12 +36,11 @@ defmodule QuillEx.GUI.Components.Editor do
       
     init_scene =
       scene
+      |> assign(app: args.app)
       |> assign(frame: args.frame)
       |> assign(graph: init_graph)
       |> assign(state: init_state)
       |> push_graph(init_graph)
-
-    request_input(init_scene, [:key, :cursor_scroll])
 
     {:ok, init_scene}
   end
@@ -55,9 +61,10 @@ defmodule QuillEx.GUI.Components.Editor do
   def handle_cast({:scroll_limits, %{inner: %{width: _w, height: _h}, frame: _f} = new_scroll_state}, scene) do
     # update the RadixStore, without broadcasting the changes,
     # so we can keep accurate calculations for scrolling
-    QuillEx.RadixStore.get()
-    |> QuillEx.RadixState.change_editor_scroll_state(new_scroll_state)
-    |> QuillEx.RadixStore.put(:without_broadcast)
+    radix_store(scene)
+    radix_store(scene).get()
+    |> radix_state(scene).change_editor_scroll_state(new_scroll_state)
+    |> radix_store(scene).put(:without_broadcast)
 
     {:noreply, scene}
   end
@@ -98,6 +105,8 @@ defmodule QuillEx.GUI.Components.Editor do
   def handle_info({:radix_state_change, %{editor: %{buffers: buf_list}} = new_state}, scene)
     when length(buf_list) >= 1 do
 
+      IO.puts "TSHI IS SUPPOSED TO HAPPEN"
+
       [active_buffer] = buf_list |> Enum.filter(&(&1.id == new_state.editor.active_buf))
       # tab_list = buf_list |> Enum.map(& &1.id)
 
@@ -111,94 +120,34 @@ defmodule QuillEx.GUI.Components.Editor do
       # GenServer.cast(pid, {:redraw, %{cursor: hd(active_buffer.cursors)}})
       GenServer.cast(pid, {:redraw, %{data: active_buffer.data, cursor: hd(active_buffer.cursors)}})
       GenServer.cast(pid, {:redraw, %{scroll_acc: active_buffer.scroll_acc}})
+      #TODO need to do mode changes here...
 
     {:noreply, scene}
   end
 
-  def handle_input(key, _context, scene) when key in @valid_text_input_characters do
-    Logger.debug("#{__MODULE__} recv'd valid input: #{inspect(key)}")
 
-    QuillEx.API.Buffer.active_buf()
-    |> QuillEx.API.Buffer.modify({:insert, key |> key2string(), :at_cursor})
 
-    {:noreply, scene}
-  end
+  # def handle_event({:tab_clicked, tab_label}, _from, %{assigns: %{app: app}} = scene) do
+  #   # Flamelex.Fluxus.action({MemexReducer, :new_tidbit})
+  #   # TODO buffer.find, then Buffer.activate
+  #   Logger.warn("TAB CLICKED")
+  #   buffer_api(app).activate(tab_label)
+  #   {:noreply, scene}
+  # end
 
-  def handle_input(key, _context, scene) when key in @arrow_keys do
-
-    # REMINDER: these tuples are in the form `{line, col}`
-    delta =
-      case key do
-        @left_arrow ->
-          {0, -1}
-        @up_arrow ->
-          {-1, 0}
-        @right_arrow ->
-          {0, 1}
-        @down_arrow ->
-          {1, 0}
-      end
-
-    QuillEx.API.Buffer.move_cursor(delta)
-
-    {:noreply, scene}
-  end
-
-  def handle_input(
-      {:cursor_scroll, {{_x_scroll, _y_scroll} = scroll_delta, _coords}},
-      _context,
-      scene
-    ) do
-      QuillEx.API.Buffer.scroll(scroll_delta)
-      {:noreply, scene}
-  end
-
-  def handle_event({:tab_clicked, tab_label}, _from, scene) do
-    # Flamelex.Fluxus.action({MemexReducer, :new_tidbit})
-    # TODO buffer.find, then Buffer.activate
-    Logger.warn("TAB CLICKED")
-    QuillEx.API.Buffer.activate(tab_label)
-    {:noreply, scene}
-  end
-
-  def handle_event({:hover_tab, tab_label}, _from, scene) do
-    # Flamelex.Fluxus.action({MemexReducer, :new_tidbit})
-    # TODO buffer.find, then Buffer.activate
-    Logger.warn("TAB HOVERED")
-    {:noreply, scene}
-  end
+  # def handle_event({:hover_tab, tab_label}, _from, scene) do
+  #   # Flamelex.Fluxus.action({MemexReducer, :new_tidbit})
+  #   # TODO buffer.find, then Buffer.activate
+  #   Logger.warn("TAB HOVERED")
+  #   {:noreply, scene}
+  # end
 
   # def handle_event({:value_changed, :text_pad, new_value}, _from, scene) do
   #   Logger.warn("TEXT PAD CHANGED")
   #   {:noreply, scene}
   # end
 
-  # treat key repeats as a press
-  def handle_input({:key, {key, @key_held, mods}}, id, scene) do
-    handle_input({:key, {key, @key_pressed, mods}}, id, scene)
-  end
 
-  def handle_input({:key, {key, @key_released, mods}}, id, scene) do
-    Logger.debug("#{__MODULE__} ignoring key_release: #{inspect(key)}")
-    {:noreply, scene}
-  end
-
-  # def handle_input(key, id, scene) when key in [@left_shift] do
-  #   Logger.debug("#{__MODULE__} ignoring key: #{inspect(key)}")
-  #   {:noreply, scene}
-  # end
-
-  def handle_input(@backspace_key, _context, scene) do
-    QuillEx.API.Buffer.active_buf()
-    |> QuillEx.API.Buffer.modify({:backspace, 1, :at_cursor})
-
-    {:noreply, scene}
-  end
-
-  def handle_input({:key, {key, _dont_care, _dont_care_either}}, _context, scene) do
-    Logger.debug("#{__MODULE__} ignoring key: #{inspect(key)}")
-    {:noreply, scene}
-  end
 
   def calc_state(%{editor: %{active_buf: active_buf}} = _radix_state) do
     %{active_buf: active_buf}
@@ -210,9 +159,7 @@ defmodule QuillEx.GUI.Components.Editor do
   end
 
    def render(%{frame: editor_frame, radix_state: %{editor: %{buffers: buf_list}} = radix_state}) do
-
       [active_buffer] = buf_list |> Enum.filter(&(&1.id == radix_state.editor.active_buf))
-      primary_font = radix_state.gui_config.fonts.primary
 
       Scenic.Graph.build()
       |> Scenic.Primitives.group(
@@ -222,7 +169,7 @@ defmodule QuillEx.GUI.Components.Editor do
             |> render_text_pad(%{
                frame: editor_frame,
                buffer: active_buffer,
-               font: primary_font
+               font: radix_state.gui.fonts.primary |> Map.merge(%{size: 24})
             })
          end,
          id: :editor
@@ -259,6 +206,15 @@ defmodule QuillEx.GUI.Components.Editor do
    def calc_text_pad_frame(%Frame{pin: pin, size: {w, h}}) do
       Frame.new(pin: pin, size: {w, h-10}) # NOTE: Add the extra 10 because on MacOS the stupid rounded corners of the GLFW frame make the window look stupid, F-U Steve J.
    end
+
+  # NOTE - we need these because Editor component is used by both QuilleEx & Flamelex...
+  def radix_store(%{assigns: %{app: app}}) do
+    Module.concat(app, Fluxus.RadixStore)
+  end
+
+  def radix_state(%{assigns: %{app: app}}) do
+    Module.concat(app, Fluxus.Structs.RadixState)
+  end
 
   defp theme do
     %{

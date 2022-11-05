@@ -1,5 +1,6 @@
 defmodule QuillEx.Scene.RootScene do
   use Scenic.Scene
+  use ScenicWidgets.ScenicEventsDefinitions
   require Logger
   alias QuillEx.GUI.Components.{Editor, SplashScreen}
   alias ScenicWidgets.Core.Structs.Frame
@@ -10,7 +11,7 @@ defmodule QuillEx.Scene.RootScene do
   def init(scene, _args, _opts) do
     Logger.debug("#{__MODULE__} initializing...")
 
-    radix_state = QuillEx.RadixStore.get()
+    radix_state = QuillEx.Fluxus.RadixStore.get()
     init_graph = render(scene.viewport, radix_state)
 
     init_scene =
@@ -21,11 +22,10 @@ defmodule QuillEx.Scene.RootScene do
       |> assign(menu_map: calc_menu_map(radix_state))
       |> push_graph(init_graph)
 
-    QuillEx.RadixStore.initialize(viewport: init_scene.viewport)
+    QuillEx.Fluxus.RadixStore.initialize(viewport: init_scene.viewport)
+    QuillEx.Utils.PubSub.subscribe(topic: :radix_state_change)
 
-    QuillEx.Utils.PubSub.register(topic: :radix_state_change)
-
-    request_input(init_scene, [:viewport])
+    request_input(init_scene, [:viewport, :key, :cursor_scroll])
 
     {:ok, init_scene}
   end
@@ -57,6 +57,87 @@ defmodule QuillEx.Scene.RootScene do
       #Logger.debug "#{__MODULE__} ignoring some input from the :viewport - #{inspect input}"
       {:noreply, scene}
    end
+
+   def handle_input(key, _context, scene) when key in @valid_text_input_characters do
+    Logger.debug("#{__MODULE__} recv'd valid input: #{inspect(key)}")
+
+    QuillEx.API.Buffer.active_buf()
+    |> QuillEx.API.Buffer.modify({:insert, key |> key2string(), :at_cursor})
+
+    {:noreply, scene}
+  end
+
+  def handle_input(key, _context, scene) when key in @arrow_keys do
+
+    # REMINDER: these tuples are in the form `{line, col}`
+    delta =
+      case key do
+        @left_arrow ->
+          {0, -1}
+        @up_arrow ->
+          {-1, 0}
+        @right_arrow ->
+          {0, 1}
+        @down_arrow ->
+          {1, 0}
+      end
+
+      QuillEx.API.Buffer.move_cursor(delta)
+
+    {:noreply, scene}
+  end
+
+  def handle_input(
+      {:cursor_scroll, {{_x_scroll, _y_scroll} = scroll_delta, _coords}},
+      _context,
+      scene
+    ) do
+      QuillEx.API.Buffer.scroll(scroll_delta)
+      {:noreply, scene}
+  end
+
+  # treat key repeats as a press
+  def handle_input({:key, {key, @key_held, mods}}, id, scene) do
+    handle_input({:key, {key, @key_pressed, mods}}, id, scene)
+  end
+
+  def handle_input({:key, {key, @key_released, mods}}, id, scene) do
+    Logger.debug("#{__MODULE__} ignoring key_release: #{inspect(key)}")
+    {:noreply, scene}
+  end
+
+  # def handle_input(key, id, scene) when key in [@left_shift] do
+  #   Logger.debug("#{__MODULE__} ignoring key: #{inspect(key)}")
+  #   {:noreply, scene}
+  # end
+
+  def handle_input(@backspace_key, _context, scene) do
+    QuillEx.API.Buffer.active_buf()
+    |> QuillEx.API.Buffer.modify({:backspace, 1, :at_cursor})
+
+    {:noreply, scene}
+  end
+
+  def handle_input({:key, {key, _dont_care, _dont_care_either}}, _context, scene) do
+    Logger.debug("#{__MODULE__} ignoring key: #{inspect(key)}")
+    {:noreply, scene}
+  end
+
+
+
+  # def buffer_api(app) when is_atom(app) do
+  #   Module.concat(app, API.Buffer)
+  # end
+
+  # def radix_store(%{assigns: %{app: app}}) do
+  #   Module.concat(app, Fluxus.RadixStore)
+  # end
+
+  # def radix_state(%{assigns: %{app: app}}) do
+  #   Module.concat(app, Fluxus.Structs.RadixState)
+  # end
+
+
 
   # def handle_info({:radix_state_change, new_radix_state}, %{assigns: %{menu_map: current_menu_map}} = scene) do
 
@@ -141,7 +222,7 @@ defmodule QuillEx.Scene.RootScene do
    def render_editor(graph, args) do
       graph
       # |> ScenicWidgets.FrameBox.draw(%{frame: hd(editor_f), color: :blue})
-      |> Editor.add_to_graph(args, id: :editor)
+      |> Editor.add_to_graph(args |> Map.merge(%{app: QuillEx}), id: :editor)
    end
 
    def render_menubar(graph, %{frame: frame, radix_state: radix_state}) do
@@ -176,50 +257,50 @@ defmodule QuillEx.Scene.RootScene do
           {:sub_menu, "primary font",
             [
               {"ibm plex mono", fn ->
-                QuillEx.RadixStore.get()
-                |> QuillEx.RadixState.change_font(:ibm_plex_mono)
-                |> QuillEx.RadixStore.put()
+                QuillEx.Fluxus.RadixStore.get()
+                |> QuillEx.Fluxus.Structs.RadixState.change_font(:ibm_plex_mono)
+                |> QuillEx.Fluxus.RadixStore.put()
               end},
               {"roboto", fn ->
-                QuillEx.RadixStore.get()
-                |> QuillEx.RadixState.change_font(:roboto)
-                |> QuillEx.RadixStore.put()
+                QuillEx.Fluxus.RadixStore.get()
+                |> QuillEx.Fluxus.Structs.RadixState.change_font(:roboto)
+                |> QuillEx.Fluxus.RadixStore.put()
               end},
               {"roboto mono", fn ->
-                QuillEx.RadixStore.get()
-                |> QuillEx.RadixState.change_font(:roboto_mono)
-                |> QuillEx.RadixStore.put()
+                QuillEx.Fluxus.RadixStore.get()
+                |> QuillEx.Fluxus.Structs.RadixState.change_font(:roboto_mono)
+                |> QuillEx.Fluxus.RadixStore.put()
               end},
               {"iosevka", fn ->
-                QuillEx.RadixStore.get()
-                |> QuillEx.RadixState.change_font(:iosevka)
-                |> QuillEx.RadixStore.put()
+                QuillEx.Fluxus.RadixStore.get()
+                |> QuillEx.Fluxus.Structs.RadixState.change_font(:iosevka)
+                |> QuillEx.Fluxus.RadixStore.put()
               end},
               {"source code pro", fn ->
-                QuillEx.RadixStore.get()
-                |> QuillEx.RadixState.change_font(:source_code_pro)
-                |> QuillEx.RadixStore.put()
+                QuillEx.Fluxus.RadixStore.get()
+                |> QuillEx.Fluxus.Structs.RadixState.change_font(:source_code_pro)
+                |> QuillEx.Fluxus.RadixStore.put()
               end},
               {"fira code", fn ->
-                QuillEx.RadixStore.get()
-                |> QuillEx.RadixState.change_font(:fira_code)
-                |> QuillEx.RadixStore.put()
+                QuillEx.Fluxus.RadixStore.get()
+                |> QuillEx.Fluxus.Structs.RadixState.change_font(:fira_code)
+                |> QuillEx.Fluxus.RadixStore.put()
               end},
               {"bitter", fn ->
-                QuillEx.RadixStore.get()
-                |> QuillEx.RadixState.change_font(:bitter)
-                |> QuillEx.RadixStore.put()
+                QuillEx.Fluxus.RadixStore.get()
+                |> QuillEx.Fluxus.Structs.RadixState.change_font(:bitter)
+                |> QuillEx.Fluxus.RadixStore.put()
               end}
             ]},
           {"make bigger", fn ->
-            QuillEx.RadixStore.get()
-            |> QuillEx.RadixState.change_font_size(:increase)
-            |> QuillEx.RadixStore.put()
+            QuillEx.Fluxus.RadixStore.get()
+            |> QuillEx.Fluxus.Structs.RadixState.change_font_size(:increase)
+            |> QuillEx.Fluxus.RadixStore.put()
           end},
           {"make smaller", fn ->
-            QuillEx.RadixStore.get()
-            |> QuillEx.RadixState.change_font_size(:decrease)
-            |> QuillEx.RadixStore.put()
+            QuillEx.Fluxus.RadixStore.get()
+            |> QuillEx.Fluxus.Structs.RadixState.change_font_size(:decrease)
+            |> QuillEx.Fluxus.RadixStore.put()
           end}
          ]}
        ]},

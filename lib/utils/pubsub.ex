@@ -2,12 +2,9 @@ defmodule QuillEx.Utils.PubSub do
   @registrar_proc QuillEx.PubSub
   @topic :quillex
 
-  # almost every component just wants to join `:quillex`
-  def register do
-    register(topic: @topic)
-  end
+  def subscribe, do: subscribe(topic: @topic)
 
-  def register(topic: t) do
+  def subscribe(topic: t) do
     {:ok, _} = Registry.register(@registrar_proc, t, [])
     :ok
   end

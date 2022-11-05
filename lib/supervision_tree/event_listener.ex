@@ -16,7 +16,7 @@ defmodule QuillEx.EventListener do
   def process({:general = _topic, _id} = event_shadow) do
 
     event = EventBus.fetch_event(event_shadow)
-    radix_state = QuillEx.RadixStore.get()
+    radix_state = QuillEx.Fluxus.RadixStore.get()
 
     case do_process(radix_state, event.data) do
       x when x in [:ok, :ignore] ->
@@ -25,8 +25,9 @@ defmodule QuillEx.EventListener do
         # Logger.debug "ignoring action, no change to radix_state..."
         EventBus.mark_as_completed({__MODULE__, event_shadow})
       {:ok, new_radix_state} ->
-        QuillEx.RadixStore.put(new_radix_state)
+        QuillEx.Fluxus.RadixStore.put(new_radix_state)
         EventBus.mark_as_completed({__MODULE__, event_shadow})
+      #TODO add failure clause???
     end
   end
 
@@ -39,7 +40,7 @@ defmodule QuillEx.EventListener do
       reducer.process(radix_state, a)
     rescue
       e in FunctionClauseError ->
-        Logger.error "action: #{inspect a} failed to match for reducer: #{inspect reducer}"
+        Logger.error "action: #{inspect a} failed to match for reducer: #{inspect reducer}. #{inspect e}"
         reraise e, __STACKTRACE__
     end
   end

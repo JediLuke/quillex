@@ -111,6 +111,10 @@ defmodule QuillEx.Structs.Buffer do
         old_buf |> Map.put(:cursors, [c])
     end
 
+    def update(%__MODULE__{} = buf, %{mode: new_mode}) do
+        %{buf|mode: new_mode}
+    end
+
     defp new_untitled_buf_name([]) do
         "untitled*"
     end

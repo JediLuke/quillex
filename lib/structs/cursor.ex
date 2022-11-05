@@ -1,9 +1,11 @@
 defmodule QuillEx.Structs.Buffer.Cursor do
 
     defstruct [
+        #TODO maybe we don't need cursor nums, we can just use the place in the list of cursors as their number...
         num: nil,       # which number cursor this is in the buffer, cursor 1 is considered the main cursor
         line: 1,        # which line the cursor is on
         col: 1          # which column the cursor is on. Think of this like a block cursor ("normal mode") not a baret cursor ("insert mode")
+        # mode: m
 
     ]
 

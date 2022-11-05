@@ -6,18 +6,18 @@ defmodule QuillEx.API.Buffer do
 
 
   def new do
-    QuillEx.action({BufferReducer, {:open_buffer, %{data: ""}}})
+    QuillEx.action({BufferReducer, {:open_buffer, %{data: "", mode: :edit}}})
   end
 
   def new(raw_text) when is_bitstring(raw_text) do
-    QuillEx.action({BufferReducer, {:open_buffer, %{data: raw_text}}})
+    QuillEx.action({BufferReducer, {:open_buffer, %{data: raw_text, mode: :edit}}})
   end
 
   @doc """
   Return the active Buffer.
   """
   def active_buf do
-    QuillEx.RadixStore.get().editor.active_buf
+    QuillEx.Fluxus.RadixStore.get().editor.active_buf
   end
 
   @doc """
@@ -55,7 +55,7 @@ defmodule QuillEx.API.Buffer do
   List all the open buffers.
   """
   def list do
-    QuillEx.RadixStore.get().editor.buffers
+    QuillEx.Fluxus.RadixStore.get().editor.buffers
   end
 
   def open do
@@ -63,7 +63,7 @@ defmodule QuillEx.API.Buffer do
   end
 
   def open(filepath) do
-    QuillEx.action({BufferReducer, {:open_buffer, %{filepath: filepath}}})
+    QuillEx.action({BufferReducer, {:open_buffer, %{filepath: filepath, mode: :edit}}})
   end
 
   def find(search_term) do
@@ -79,7 +79,7 @@ defmodule QuillEx.API.Buffer do
   end
 
   def modify(buf, mod) do
-    QuillEx.action({BufferReducer, {:modify_buffer, buf, mod}})
+    QuillEx.action({BufferReducer, {:modify_buf, buf, mod}})
   end
 
   def save(buf) do
