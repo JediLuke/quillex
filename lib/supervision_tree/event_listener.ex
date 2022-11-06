@@ -27,7 +27,9 @@ defmodule QuillEx.EventListener do
       {:ok, new_radix_state} ->
         QuillEx.Fluxus.RadixStore.put(new_radix_state)
         EventBus.mark_as_completed({__MODULE__, event_shadow})
-      #TODO add failure clause???
+      {:error, reason} ->
+        Logger.error reason
+        :ignore
     end
   end
 
@@ -35,13 +37,12 @@ defmodule QuillEx.EventListener do
   ## --------------------------------------------------------
 
 
-  def do_process(radix_state, {reducer, {:action, a}}) when is_atom(reducer) do
+  def do_process(radix_state, {reducer, {:action, action}}) when is_atom(reducer) do
     try do
-      reducer.process(radix_state, a)
+      reducer.process(radix_state, action)
     rescue
-      e in FunctionClauseError ->
-        Logger.error "action: #{inspect a} failed to match for reducer: #{inspect reducer}. #{inspect e}"
-        reraise e, __STACKTRACE__
+      FunctionClauseError ->
+        {:error, "#{__MODULE__} -- reducer `#{inspect reducer}` could not match action: #{inspect action}"}
     end
   end
 
