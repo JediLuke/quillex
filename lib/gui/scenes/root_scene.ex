@@ -1,142 +1,66 @@
 defmodule QuillEx.Scene.RootScene do
   use Scenic.Scene
-  use ScenicWidgets.ScenicEventsDefinitions
-  require Logger
   alias QuillEx.GUI.Components.{Editor, SplashScreen}
   alias ScenicWidgets.Core.Structs.Frame
   alias ScenicWidgets.Core.Utils.FlexiFrame
+  require Logger
 
-  @menubar_height 60
+  @menubar_height 60 #TODO
 
-  def init(scene, _args, _opts) do
-    Logger.debug("#{__MODULE__} initializing...")
+   def init(scene, _args, _opts) do
+      Logger.debug("#{__MODULE__} initializing...")
 
-    radix_state = QuillEx.Fluxus.RadixStore.get()
-    init_graph = render(scene.viewport, radix_state)
+      radix_state = QuillEx.Fluxus.RadixStore.get()
+      init_graph = render(scene.viewport, radix_state)
 
-    init_scene =
-      scene
-      |> assign(state: radix_state)
-      |> assign(graph: init_graph)
-      |> assign(viewport: scene.viewport)
-      |> assign(menu_map: calc_menu_map(radix_state))
-      |> push_graph(init_graph)
+      init_scene =
+         scene
+         |> assign(state: radix_state)
+         |> assign(graph: init_graph)
+         |> assign(viewport: scene.viewport) #TODO do we ned this?? It's in the scene??
+         |> assign(menu_map: calc_menu_map(radix_state))
+         |> push_graph(init_graph)
 
-    QuillEx.Fluxus.RadixStore.initialize(viewport: init_scene.viewport)
-    QuillEx.Utils.PubSub.subscribe(topic: :radix_state_change)
+      QuillEx.Fluxus.RadixStore.initialize(viewport: init_scene.viewport) #TODO do we ned this?? It's in the scene??
+      QuillEx.Utils.PubSub.subscribe(topic: :radix_state_change)
 
-    request_input(init_scene, [:viewport, :key, :cursor_scroll])
+      request_input(init_scene, [:viewport, :key, :cursor_scroll])
 
-    {:ok, init_scene}
-  end
+      {:ok, init_scene}
+   end
 
+   def handle_input(
+         {:viewport, {:reshape, {new_vp_width, new_vp_height} = new_size}},
+         _context,
+         scene
+   ) do
 
-  def handle_input(
-        {:viewport, {:reshape, {new_vp_width, new_vp_height} = new_size}},
-        context,
-        scene
-      ) do
-    Logger.debug("#{__MODULE__} received :viewport :reshape, size: #{inspect(new_size)}")
+      # raise "wee"
+      # Editor
+      # |> GenServer.cast(
+      #   {:frame_reshape,
+      #    Frame.new(pin: {0, radix_state.gui_config.menu_bar.height}, size: {new_vp_width, new_vp_height - radix_state.gui_config.menu_bar.height})}
+      # )
 
-    # raise "wee"
-    # Editor
-    # |> GenServer.cast(
-    #   {:frame_reshape,
-    #    Frame.new(pin: {0, radix_state.gui_config.menu_bar.height}, size: {new_vp_width, new_vp_height - radix_state.gui_config.menu_bar.height})}
-    # )
+      # ScenicWidgets.MenuBar
+      # |> GenServer.cast(
+      #   {:frame_reshape, Frame.new(pin: {0, 0}, size: {new_vp_width, radix_state.gui_config.menu_bar.height})}
+      # )
+      Logger.warn "Ignoring VIEWPORT RESHAPE - should handle this!"
 
-    # ScenicWidgets.MenuBar
-    # |> GenServer.cast(
-    #   {:frame_reshape, Frame.new(pin: {0, 0}, size: {new_vp_width, radix_state.gui_config.menu_bar.height})}
-    # )
-
-    {:noreply, scene}
-  end
-
-   def handle_input({:viewport, input}, context, scene) do
-      #Logger.debug "#{__MODULE__} ignoring some input from the :viewport - #{inspect input}"
       {:noreply, scene}
    end
 
-   def handle_input(key, _context, scene) when key in @valid_text_input_characters do
-    Logger.debug("#{__MODULE__} recv'd valid input: #{inspect(key)}")
-
-    QuillEx.API.Buffer.active_buf()
-    |> QuillEx.API.Buffer.modify({:insert, key |> key2string(), :at_cursor})
-
-    {:noreply, scene}
-  end
-
-  def handle_input(key, _context, scene) when key in @arrow_keys do
-
-    # REMINDER: these tuples are in the form `{line, col}`
-    delta =
-      case key do
-        @left_arrow ->
-          {0, -1}
-        @up_arrow ->
-          {-1, 0}
-        @right_arrow ->
-          {0, 1}
-        @down_arrow ->
-          {1, 0}
-      end
-
-      QuillEx.API.Buffer.move_cursor(delta)
-
-    {:noreply, scene}
-  end
-
-  def handle_input(
-      {:cursor_scroll, {{_x_scroll, _y_scroll} = scroll_delta, _coords}},
-      _context,
-      scene
-    ) do
-      QuillEx.API.Buffer.scroll(scroll_delta)
+   def handle_input({:viewport, input}, context, scene) do
+      Logger.warn "Ignoring VIEWPORT RESHAPE - should handle this!"
       {:noreply, scene}
-  end
+   end
 
-  # treat key repeats as a press
-  def handle_input({:key, {key, @key_held, mods}}, id, scene) do
-    handle_input({:key, {key, @key_pressed, mods}}, id, scene)
-  end
-
-  def handle_input({:key, {key, @key_released, mods}}, id, scene) do
-    Logger.debug("#{__MODULE__} ignoring key_release: #{inspect(key)}")
-    {:noreply, scene}
-  end
-
-  # def handle_input(key, id, scene) when key in [@left_shift] do
-  #   Logger.debug("#{__MODULE__} ignoring key: #{inspect(key)}")
-  #   {:noreply, scene}
-  # end
-
-  def handle_input(@backspace_key, _context, scene) do
-    QuillEx.API.Buffer.active_buf()
-    |> QuillEx.API.Buffer.modify({:backspace, 1, :at_cursor})
-
-    {:noreply, scene}
-  end
-
-  def handle_input({:key, {key, _dont_care, _dont_care_either}}, _context, scene) do
-    Logger.debug("#{__MODULE__} ignoring key: #{inspect(key)}")
-    {:noreply, scene}
-  end
-
-
-
-  # def buffer_api(app) when is_atom(app) do
-  #   Module.concat(app, API.Buffer)
-  # end
-
-  # def radix_store(%{assigns: %{app: app}}) do
-  #   Module.concat(app, Fluxus.RadixStore)
-  # end
-
-  # def radix_state(%{assigns: %{app: app}}) do
-  #   Module.concat(app, Fluxus.Structs.RadixState)
-  # end
-
+   def handle_input(input, context, scene) do
+      #Logger.debug "#{__MODULE__} recv'd some (non-ignored) input: #{inspect input}"
+      QuillEx.UserInputHandler.process(input)
+      {:noreply, scene}
+   end
 
 
   # def handle_info({:radix_state_change, new_radix_state}, %{assigns: %{menu_map: current_menu_map}} = scene) do
@@ -239,96 +163,93 @@ defmodule QuillEx.Scene.RootScene do
    end
    
 
-   # |> SplashScreen.add_to_graph(%{frame: Frame.new(pin: {150, 150}, size: {200, 200})}, id: :splash_screen, hidden: true)
-
-
-  def calc_menu_map(%{editor: %{buffers: []}}) do
-    [
-      {:sub_menu, "Buffer",
-       [
-         {"new", &QuillEx.API.Buffer.new/0}
-       ]},
-       {:sub_menu, "View",
-       [
-         {"toggle line nums", fn -> raise "no" end},
-         {"toggle file tray", fn -> raise "no" end},
-         {"toggle tab bar", fn -> raise "no" end},
-         {:sub_menu, "font", [
-          {:sub_menu, "primary font",
-            [
-              {"ibm plex mono", fn ->
-                QuillEx.Fluxus.RadixStore.get()
-                |> QuillEx.Fluxus.Structs.RadixState.change_font(:ibm_plex_mono)
-                |> QuillEx.Fluxus.RadixStore.put()
-              end},
-              {"roboto", fn ->
-                QuillEx.Fluxus.RadixStore.get()
-                |> QuillEx.Fluxus.Structs.RadixState.change_font(:roboto)
-                |> QuillEx.Fluxus.RadixStore.put()
-              end},
-              {"roboto mono", fn ->
-                QuillEx.Fluxus.RadixStore.get()
-                |> QuillEx.Fluxus.Structs.RadixState.change_font(:roboto_mono)
-                |> QuillEx.Fluxus.RadixStore.put()
-              end},
-              {"iosevka", fn ->
-                QuillEx.Fluxus.RadixStore.get()
-                |> QuillEx.Fluxus.Structs.RadixState.change_font(:iosevka)
-                |> QuillEx.Fluxus.RadixStore.put()
-              end},
-              {"source code pro", fn ->
-                QuillEx.Fluxus.RadixStore.get()
-                |> QuillEx.Fluxus.Structs.RadixState.change_font(:source_code_pro)
-                |> QuillEx.Fluxus.RadixStore.put()
-              end},
-              {"fira code", fn ->
-                QuillEx.Fluxus.RadixStore.get()
-                |> QuillEx.Fluxus.Structs.RadixState.change_font(:fira_code)
-                |> QuillEx.Fluxus.RadixStore.put()
-              end},
-              {"bitter", fn ->
-                QuillEx.Fluxus.RadixStore.get()
-                |> QuillEx.Fluxus.Structs.RadixState.change_font(:bitter)
-                |> QuillEx.Fluxus.RadixStore.put()
-              end}
-            ]},
-          {"make bigger", fn ->
-            QuillEx.Fluxus.RadixStore.get()
-            |> QuillEx.Fluxus.Structs.RadixState.change_font_size(:increase)
-            |> QuillEx.Fluxus.RadixStore.put()
-          end},
-          {"make smaller", fn ->
-            QuillEx.Fluxus.RadixStore.get()
-            |> QuillEx.Fluxus.Structs.RadixState.change_font_size(:decrease)
-            |> QuillEx.Fluxus.RadixStore.put()
-          end}
+   def calc_menu_map(%{editor: %{buffers: []}}) do
+      [
+         {:sub_menu, "Buffer",
+         [
+            {"new", &QuillEx.API.Buffer.new/0}
+         ]},
+         {:sub_menu, "View",
+         [
+            {"toggle line nums", fn -> raise "no" end},
+            {"toggle file tray", fn -> raise "no" end},
+            {"toggle tab bar", fn -> raise "no" end},
+            {:sub_menu, "font", [
+            {:sub_menu, "primary font",
+               [
+               {"ibm plex mono", fn ->
+                  QuillEx.Fluxus.RadixStore.get()
+                  |> QuillEx.Fluxus.Structs.RadixState.change_font(:ibm_plex_mono)
+                  |> QuillEx.Fluxus.RadixStore.put()
+               end},
+               {"roboto", fn ->
+                  QuillEx.Fluxus.RadixStore.get()
+                  |> QuillEx.Fluxus.Structs.RadixState.change_font(:roboto)
+                  |> QuillEx.Fluxus.RadixStore.put()
+               end},
+               {"roboto mono", fn ->
+                  QuillEx.Fluxus.RadixStore.get()
+                  |> QuillEx.Fluxus.Structs.RadixState.change_font(:roboto_mono)
+                  |> QuillEx.Fluxus.RadixStore.put()
+               end},
+               {"iosevka", fn ->
+                  QuillEx.Fluxus.RadixStore.get()
+                  |> QuillEx.Fluxus.Structs.RadixState.change_font(:iosevka)
+                  |> QuillEx.Fluxus.RadixStore.put()
+               end},
+               {"source code pro", fn ->
+                  QuillEx.Fluxus.RadixStore.get()
+                  |> QuillEx.Fluxus.Structs.RadixState.change_font(:source_code_pro)
+                  |> QuillEx.Fluxus.RadixStore.put()
+               end},
+               {"fira code", fn ->
+                  QuillEx.Fluxus.RadixStore.get()
+                  |> QuillEx.Fluxus.Structs.RadixState.change_font(:fira_code)
+                  |> QuillEx.Fluxus.RadixStore.put()
+               end},
+               {"bitter", fn ->
+                  QuillEx.Fluxus.RadixStore.get()
+                  |> QuillEx.Fluxus.Structs.RadixState.change_font(:bitter)
+                  |> QuillEx.Fluxus.RadixStore.put()
+               end}
+               ]},
+            {"make bigger", fn ->
+               QuillEx.Fluxus.RadixStore.get()
+               |> QuillEx.Fluxus.Structs.RadixState.change_font_size(:increase)
+               |> QuillEx.Fluxus.RadixStore.put()
+            end},
+            {"make smaller", fn ->
+               QuillEx.Fluxus.RadixStore.get()
+               |> QuillEx.Fluxus.Structs.RadixState.change_font_size(:decrease)
+               |> QuillEx.Fluxus.RadixStore.put()
+            end}
+            ]}
+         ]},
+         {:sub_menu, "Help",
+         [
+            {"about QuillEx", &QuillEx.API.Misc.makers_mark/0}
          ]}
-       ]},
-      {:sub_menu, "Help",
-       [
-         {"about QuillEx", &QuillEx.API.Misc.makers_mark/0}
-       ]}
-    ]
-  end
+      ]
+   end
 
-  def calc_menu_map(%{editor: %{buffers: buffers}}) when is_list(buffers) and length(buffers) >= 1 do
-    # NOTE: Here what we do is just take the base menu (with no open buffers)
-    # and add the new buffer menu in to it using Enum.map
+   def calc_menu_map(%{editor: %{buffers: buffers}}) when is_list(buffers) and length(buffers) >= 1 do
+      # NOTE: Here what we do is just take the base menu (with no open buffers)
+      # and add the new buffer menu in to it using Enum.map
 
-    base_menu = calc_menu_map(%{editor: %{buffers: []}})
+      base_menu = calc_menu_map(%{editor: %{buffers: []}})
 
-    open_bufs_sub_menu = buffers
-    |> Enum.map(fn %{id: {:buffer, name} = buf_id} ->
-            #NOTE: Wrap this call in it's closure so it's a function of arity /0
-            {name, fn -> QuillEx.API.Buffer.activate(buf_id) end}
-    end)
+      open_bufs_sub_menu = buffers
+      |> Enum.map(fn %{id: {:buffer, name} = buf_id} ->
+               #NOTE: Wrap this call in it's closure so it's a function of arity /0
+               {name, fn -> QuillEx.API.Buffer.activate(buf_id) end}
+      end)
 
-    Enum.map(base_menu, fn
-      {:sub_menu, "Buffer", base_buffer_menu} ->
-        {:sub_menu, "Buffer", base_buffer_menu ++ [{:sub_menu, "open-buffers", open_bufs_sub_menu}]}
-      other_menu ->
-        other_menu
-    end)
-  end
+      Enum.map(base_menu, fn
+         {:sub_menu, "Buffer", base_buffer_menu} ->
+         {:sub_menu, "Buffer", base_buffer_menu ++ [{:sub_menu, "open-buffers", open_bufs_sub_menu}]}
+         other_menu ->
+         other_menu
+      end)
+   end
 
 end
