@@ -1,8 +1,14 @@
 defmodule QuillEx.UserInputHandler.Editor do
-    # - NOTE: We have this little hack `buffer_api_module` to make
-    # this module re-usable by Flamelex...
-    use ScenicWidgets.ScenicEventsDefinitions
+   # - NOTE: We have this little hack `buffer_api_module` to make
+   # this module re-usable by Flamelex...
+   use ScenicWidgets.ScenicEventsDefinitions
 
+   @ignorable_keys [@left_shift]
+
+   def process(key, _buffer_api_module) when key in @ignorable_keys do
+      IO.puts "~~~ ignorin..."
+      :ignore
+   end
 
    def process(key, buffer_api_module) when key in @valid_text_input_characters do
       buffer_api_module.active_buf()
@@ -33,6 +39,11 @@ defmodule QuillEx.UserInputHandler.Editor do
 
    def process({:cursor_scroll, {{_x_scroll, _y_scroll} = scroll_delta, _coords}}, buffer_api_module) do
       buffer_api_module.scroll(scroll_delta)
+   end
+
+   def process(key, api_mod) do
+      IO.puts "#{__MODULE__} couldn't match key!"
+      dbg()
    end
 
 

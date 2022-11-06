@@ -157,22 +157,19 @@ defmodule QuillEx.Reducers.BufferReducer do
     {:ok, radix_state |> put_in([:editor, :active_buf], buf_ref)}
   end
 
-  def process(radix_state, action) do
-     IO.puts "BufferReducer failed to catch the action: #{inspect action}"
-     dbg()
-  end
 
-#   def process(radix_state, {:scroll, :active_buf, delta_scroll}) do
-#     # NOTE: It is (a little unfortunately) necessary to keep scroll data up in
-#     # the editor level rather than down at the TextPad level. This is because we
-#     # may not always want to scroll the text when we use scroll (e.g. if a menu
-#     # pop-up is active, we may want to scroll the menu, not the text). This is why
-#     # we go to the effort of having TextPad send us back the scroll_state, so that
-#     # we may use it to calculate the changes when scrolling, and prevent changes
-#     # in the scroll accumulator if we're at or above the scroll limits.
-#     new_scroll_acc = calc_capped_scroll(radix_state, delta_scroll)
-#     {:ok, radix_state |> update_buf(%{scroll_acc: new_scroll_acc})}
-#   end
+
+  def process(radix_state, {:scroll, :active_buf, delta_scroll}) do
+    # NOTE: It is (a little unfortunately) necessary to keep scroll data up in
+    # the editor level rather than down at the TextPad level. This is because we
+    # may not always want to scroll the text when we use scroll (e.g. if a menu
+    # pop-up is active, we may want to scroll the menu, not the text). This is why
+    # we go to the effort of having TextPad send us back the scroll_state, so that
+    # we may use it to calculate the changes when scrolling, and prevent changes
+    # in the scroll accumulator if we're at or above the scroll limits.
+    new_scroll_acc = calc_capped_scroll(radix_state, delta_scroll)
+    {:ok, radix_state |> update_buf(%{scroll_acc: new_scroll_acc})}
+  end
 
 #   # assume this means the active_buffer
 #   def process(radix_state, {:move_cursor, {:delta, {_column_delta, _line_delta} = cursor_delta}}) do
@@ -205,6 +202,12 @@ defmodule QuillEx.Reducers.BufferReducer do
 
 #     {:ok, new_radix_state}
 #   end
+
+  def process(radix_state, action) do
+    IO.puts "BufferReducer failed to catch the action: #{inspect action}"
+    dbg()
+  end
+
 
   ## --------------------------------------------------------------------------
 
@@ -249,7 +252,7 @@ defmodule QuillEx.Reducers.BufferReducer do
     # invrt_scroll = radix_state.gui_config.editor.invert_scroll
     # scroll_acc_w = if invrt_scroll.horizontal?, do: (-1*scroll_acc_w), else: scroll_acc_w
     # scroll_acc_y = if invrt_scroll.vertical?, do: (-1*scroll_acc_y), else: scroll_acc_y
-    scroll_speed = radix_state.gui_config.editor.scroll_speed
+    scroll_speed = radix_state.editor.config.scroll.speed
 
     %{
       frame: %{size: {frame_w, frame_h}},

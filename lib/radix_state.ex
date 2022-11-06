@@ -15,7 +15,18 @@ defmodule QuillEx.Fluxus.Structs.RadixState do
         graph: nil,
         buffers: [], # A list of %Buffer{} structs
         active_buf: nil,
-        config: %{},
+        config: %{
+          scroll: %{
+            # invert: %{ # change the direction of scroll wheel
+            #   horizontal?: true,
+            #   vertical?: false
+            # },
+            speed: %{ # higher value means faster scrolling
+              horizontal: 5,
+              vertical: 3
+            }
+          }
+        }
       },
       menu_bar: %{
         height: 60
@@ -53,16 +64,6 @@ defmodule QuillEx.Fluxus.Structs.RadixState do
             metrics: ibm_plex_mono_font_metrics
           })
         },
-        editor: %{
-          # invert_scroll: %{ # change the direction of scroll wheel
-          #   horizontal?: true,
-          #   vertical?: false
-          # },
-          scroll_speed: %{ # higher value means faster scrolling
-            horizontal: 5,
-            vertical: 3
-          }
-        }
       }
     }
   end
