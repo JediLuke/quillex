@@ -3,8 +3,6 @@ defmodule QuillEx.App do
   QuillEx is a simple text-editor, written in Elixir.
   """
 
-  # this is the name of our app, declared in `mix.exs` - THIS HAS TO MATCH !
-  @mix_app :quillex
 
   @default_resolution {1680, 1005}
 
