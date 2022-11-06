@@ -69,61 +69,52 @@ defmodule QuillEx.GUI.Components.Editor do
     {:noreply, scene}
   end
 
-  def handle_info({:radix_state_change, %{editor: %{buffers: []}}}, scene) do
+   def handle_info({:radix_state_change, %{editor: %{buffers: []}}}, scene) do
 
-    new_graph =
-      Scenic.Graph.build()
+      new_graph =
+         Scenic.Graph.build()
 
-    new_scene =
-      scene
-      |> assign(graph: new_graph)
-      |> push_graph(new_graph)
+      new_scene =
+         scene
+         |> assign(graph: new_graph)
+         |> push_graph(new_graph)
 
-    {:noreply, new_scene}
-  end
+      {:noreply, new_scene}
+   end
 
   #TODO handle font changes (size & font)
 
-  def handle_info({:radix_state_change, %{editor: %{active_buf: radix_active_buf}} = new_radix_state}, %{assigns: %{state: %{active_buf: state_active_buf}}} = scene) when radix_active_buf != state_active_buf do
-    Logger.debug "Active buffer changed..."
+   def handle_info({:radix_state_change, %{editor: %{active_buf: radix_active_buf}} = new_radix_state}, %{assigns: %{state: %{active_buf: state_active_buf}}} = scene) when radix_active_buf != state_active_buf do
+      Logger.debug "Active buffer changed..."
 
-    new_graph =
-      render(%{frame: scene.assigns.frame, radix_state: new_radix_state})
+      new_graph =
+         render(%{frame: scene.assigns.frame, radix_state: new_radix_state})
 
-    new_state =
-      calc_state(new_radix_state)
+      new_state =
+         calc_state(new_radix_state)
 
-    new_scene =
-      scene
-      |> assign(graph: new_graph)
-      |> assign(state: new_state)
-      |> push_graph(new_graph)
-  
-    {:noreply, new_scene}
-  end
+      new_scene =
+         scene
+         |> assign(graph: new_graph)
+         |> assign(state: new_state)
+         |> push_graph(new_graph)
+   
+      {:noreply, new_scene}
+   end
 
-  def handle_info({:radix_state_change, %{editor: %{buffers: buf_list}} = new_state}, scene)
-    when length(buf_list) >= 1 do
+   def handle_info({:radix_state_change, %{editor: %{buffers: buf_list}} = new_state}, scene)
+      when length(buf_list) >= 1 do
 
-      IO.puts "TSHI IS SUPPOSED TO HAPPEN"
+         [active_buffer] = buf_list |> Enum.filter(&(&1.id == new_state.editor.active_buf))
+         # tab_list = buf_list |> Enum.map(& &1.id)
 
-      [active_buffer] = buf_list |> Enum.filter(&(&1.id == new_state.editor.active_buf))
-      # tab_list = buf_list |> Enum.map(& &1.id)
+         #TODO maybe send it a list of lines instead? Do the rope calc here??
+         {:ok, [pid]} = child(scene, {:text_pad, active_buffer.id})
 
-      #TODO maybe send it a list of lines instead? Do the rope calc here??
-      {:ok, [pid]} = child(scene, {:text_pad, active_buffer.id})
+         GenServer.cast(pid, {:redraw, active_buffer})
 
-      # NOTE: We have to do data & cursor at the same time, since we need to make sure
-      # data is updated before thec cursor is (since we use the full  text to calculate
-      # the position of the cursor) and this can't be guaranteed merely by sending msgs
-      # GenServer.cast(pid, {:redraw, %{data: active_buffer.data}})
-      # GenServer.cast(pid, {:redraw, %{cursor: hd(active_buffer.cursors)}})
-      GenServer.cast(pid, {:redraw, %{data: active_buffer.data, cursor: hd(active_buffer.cursors)}})
-      GenServer.cast(pid, {:redraw, %{scroll_acc: active_buffer.scroll_acc}})
-      #TODO need to do mode changes here...
-
-    {:noreply, scene}
-  end
+      {:noreply, scene}
+   end
 
 
 
