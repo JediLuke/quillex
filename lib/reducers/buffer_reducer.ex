@@ -7,12 +7,13 @@ defmodule QuillEx.Reducers.BufferReducer do
    def process(
       # NOTE: No need to re-draw the layers if we're already using :editor
       # %{root: %{active_app: :editor}, editor: %{active_buf: nil}} = radix_state,
-      %{editor: %{active_buf: nil}} = radix_state,
-      {:open_buffer, %{data: text, mode: buf_mode}}
+      radix_state,
+      {:open_buffer, %{name: name, data: text, mode: buf_mode}}
    ) when is_bitstring(text) do
 
+      #TODO check this worked?? ok/error tuple
       new_buf = QuillEx.Structs.Buffer.new(%{
-         id: {:buffer, "untitled*"}, #TODO auto-generate name...
+         id: {:buffer, name},
          type: :text,
          data: text,
          mode: buf_mode,
@@ -21,10 +22,21 @@ defmodule QuillEx.Reducers.BufferReducer do
 
       new_radix_state = radix_state
       |> put_in([:root, :active_app], :editor)
-      |> put_in([:editor, :buffers], [new_buf])
+      |> put_in([:editor, :buffers], radix_state.editor.buffers ++ [new_buf])
       |> put_in([:editor, :active_buf], new_buf.id)
 
       {:ok, new_radix_state}
+   end
+
+   def process(%{editor: %{buffers: buf_list}} = radix_state, {:open_buffer, %{data: text, mode: buf_mode}}) when is_bitstring(text) do
+      new_buf_name = QuillEx.Structs.Buffer.new_untitled_buf_name(buf_list)
+      process(radix_state, {:open_buffer, %{name: new_buf_name, data: text, mode: buf_mode}})
+   end
+
+   def process(radix_state, {:open_buffer, %{file: filename, mode: buf_mode}}) when is_bitstring(filename) do
+      Logger.debug "Opening file: #{inspect filename}..."
+      text = File.read!(filename)
+      process(radix_state, {:open_buffer, %{name: filename, data: text, mode: buf_mode}})
    end
 
    def process(radix_state, {:modify_buf, buf_id, {:set_mode, buf_mode}})
@@ -32,69 +44,14 @@ defmodule QuillEx.Reducers.BufferReducer do
          {:ok, radix_state |> update_buf(%{id: buf_id}, %{mode: buf_mode})}
    end
 
-   
-   # def process(
-   #    %{root: %{active_app: active_app}, editor: %{active_buf: nil}} = radix_state,
-   #    {:open_buffer, %{data: text}}
-   # ) when active_app != :editor and is_bitstring(text) do
-
-   #    #       num_buffers = Enum.count(buf_list)
-   #    #       new_buf = Buffer.new(%{
-   #    #             id: {:buffer, "untitled_" <> Integer.to_string(num_buffers + 1) <> ".txt*"}, type: :text})
-
-   #    new_buf = QuillEx.Structs.Buffer.new(%{
-   #       id: {:buffer, "untitled*"}, #TODO auto-generate name...
-   #       type: :text,
-   #       data: text,
-   #       mode: {:vim, :normal},
-   #       dirty?: true
-   #    })
-
-   #    # calc the frame for the Menubar, we can choose to discard the other frames in the stack
-   #    %{framestack: [_menubar_f|editor_f]} =
-   #       ScenicWidgets.Core.Utils.FlexiFrame.calc(
-   #          radix_state.gui.viewport,
-   #          {:standard_rule, linemark: radix_state.menu_bar.height}
-   #       )
-
-   #    new_radix_state = radix_state
-   #    |> put_in([:editor, :buffers], [new_buf])
-   #    |> put_in([:editor, :active_buf], new_buf.id)
-
-   #    new_app_layer_graph =
-   #       QuillEx.GUI.Components.Editor.render(%{
-   #          frame: hd(editor_f),
-   #          radix_state: new_radix_state
-   #       })
-
-   #    final_radix_state = new_radix_state
-   #    |> put_in([:root, :active_app], :editor)
-   #    |> put_in([:root, :layers, @app_layer], new_app_layer_graph)
-
-   #    {:ok, final_radix_state}
-   # end
-
-  # def process(%{editor: %{buffers: buf_list}} = radix_state, {:open_buffer, %{filepath: filepath} = new_buf}) do
-  #   raise "Can't open a buffer from a file right now..."
-  #   new_buffer_id = {:buffer, filepath}
-  #   data = File.read!(filepath)
-
-  #   # TODO place the cursor at the end of the buffer
-  #   # new_buffer_list = buf_list ++ [new_buf |> Map.merge(%{id: id, data: data, cursor: {0, 0}})]
-  #   new_buffer_list = buf_list ++ [new_buf |> Map.merge(%{id: new_buffer_id, data: data, cursor: %{line: 1, col: 1}})]
-
-  #   new_radix_state = radix_state
-  #   |> put_in([:editor, :buffers], new_buffer_list)
-  #   |> put_in([:editor, :active_buf], new_buffer_id)
-
-  #   {:ok, new_radix_state}
-  # end
-
+   def process(radix_state, {:modify_buf, buf_id, {:set_mode, buf_mode}})
+      when buf_mode in [:edit, {:vim, :normal}, {:vim, :insert}] do
+         {:ok, radix_state |> update_buf(%{id: buf_id}, %{mode: buf_mode})}
+   end
 
   def process(%{editor: %{buffers: buf_list}} = radix_state, {:modify_buf, buf, {:insert, text, :at_cursor}}) do
     # Insert text at the position of the cursor (and thus, also move the cursor)
 
-    IO.puts "PUTTING IN TEXT"
     edit_buf = find_buf(radix_state, buf)
     edit_buf_cursor = hd(edit_buf.cursors)
 
@@ -135,8 +92,6 @@ defmodule QuillEx.Reducers.BufferReducer do
         {backspaced_text, _deleted_text} = before_cursor_text |> String.split_at(-1)
     
         full_backspaced_line = backspaced_text <> after_and_under_cursor_text
-
-        full_backspaced_line = backspaced_text <> after_and_under_cursor_text
         all_lines_including_backspaced = List.replace_at(all_lines, cursor_line-1, full_backspaced_line)
     
         # convert back to one long string...
@@ -152,11 +107,9 @@ defmodule QuillEx.Reducers.BufferReducer do
     {:ok, new_radix_state}
   end
 
-  def process(radix_state, {:activate_buffer, {:buffer, _id} = buf_ref}) do
+  def process(radix_state, {:activate, {:buffer, _id} = buf_ref}) do
     {:ok, radix_state |> put_in([:editor, :active_buf], buf_ref)}
   end
-
-
 
   def process(radix_state, {:scroll, :active_buf, delta_scroll}) do
     # NOTE: It is (a little unfortunately) necessary to keep scroll data up in
@@ -203,7 +156,7 @@ defmodule QuillEx.Reducers.BufferReducer do
   end
 
   def process(radix_state, action) do
-    IO.puts "BufferReducer failed to catch the action: #{inspect action}"
+    IO.puts "#{__MODULE__} failed to process action: #{inspect action}"
     dbg()
   end
 
@@ -349,6 +302,8 @@ defmodule QuillEx.Reducers.BufferReducer do
     {min(x, max_x), min(y, max_y)}
   end
 
+end
+
 
   ## ----------------------------------------------------------------
 
@@ -380,8 +335,6 @@ defmodule QuillEx.Reducers.BufferReducer do
   #     {:ok, radix |> Map.put(:buffers, new_buf_list) |> Map.put(:active_buf, hd(new_buf_list).id)}
   #   end
   # end
-end
-
 
 
 # defmodule Flamelex.Fluxus.Reducers.Buffer.Modify do
@@ -415,58 +368,7 @@ end
 # end
 
 
-
-
-# defmodule Flamelex.Fluxus.Reducers.Buffer do
-#     @moduledoc false
-#     use Flamelex.ProjectAliases
-#     require Logger
-#     alias Flamelex.Fluxus.Reducers.Buffer.Modify
-  
-#     @app_layer :one
-
-#     defguard is_valid_buf(name, text) when is_bitstring(name) and is_bitstring(text)
-
     
-#     def process(%{editor: %{buffers: buf_list}} = radix_state, {:open_buffer, %{name: name, data: text}}) when is_valid_buf(name, text) do
-#         #Logger.debug "opening new buffer..."
-
-#         new_buf = ScenicWidgets.TextPad.Structs.Buffer.new(%{
-#             id: {:buffer, "untitled*"},
-#             type: :text,
-#             data: text,
-#             mode: {:vim, :normal},
-#             dirty?: true
-#         })
-
-#         new_editor_graph = Scenic.Graph.build()
-#         |> Flamelex.GUI.TextFile.Layout.add_to_graph(%{
-#                 #TODO dont pass in menubar_height as a param to Frame :facepalm:
-#                 buffer_id: new_buf.id,
-#                 frame: Frame.new(radix_state.gui.viewport, menubar_height: 60), #TODO get this value from somewhere better
-#                 font: radix_state.gui.fonts.ibm_plex_mono,
-#                 state: new_buf
-#             }, id: new_buf.id)
-
-#         new_radix_state = radix_state
-#         |> put_in([:editor, :buffers], (if (is_nil(buf_list) or buf_list == []), do: [new_buf], else: buf_list ++ [new_buf]))
-#         |> put_in([:editor, :active_buf], new_buf.id)
-#         |> put_in([:root, :active_app], :editor) #TODO maybe don't put it all in RadixState, because then changes will be broadcast out everywhere... Maybe it's better to use BufferManager? Then again, maybe not...
-#         |> put_in([:root, :layers, @app_layer], new_editor_graph)
-
-#         {:ok, new_radix_state}
-#     end
-
-#     def process(%{editor: %{buffers: buf_list}} = radix_state, {:open_buffer, %{data: text}}) when is_bitstring(text) do
-#         new_buf_name = new_untitled_buf_name(buf_list)
-#         process(radix_state, {:open_buffer, %{name: new_buf_name, data: text}})
-#     end
-
-#     def process(radix_state, {:open_buffer, %{file: filename}}) when is_bitstring(filename) do
-#         Logger.debug "Opening file: #{inspect filename}..."
-#         text = File.read!(filename)
-#         process(radix_state, {:open_buffer, %{name: filename, data: text}})
-#     end
 
 #     def process(%{editor: %{buffers: []}} = radix_state, {:modify_buf, _buf_id, _modification} = action) do
 #         raise "Received :modify_buf action, but there are no open buffers. Action: #{inspect action}"    
@@ -529,71 +431,6 @@ end
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# defmodule Flamelex.Fluxus.Reducers.Buffer do
-#    @moduledoc false
-#    use Flamelex.ProjectAliases
-#    require Logger
-
-#    # @app_layer :one
-
-#    def process(radix_state, action) do
-#       # NOTE - basically we get QuillEx to do everything for us...
-#       QuillEx.Reducers.BufferReducer.process(radix_state, action)
-#    end
-
-# end
-
-
-
-#     # def process((%{editor: %{buffers: buf_list}} = radix_state, {:open_buffer, %{name: name, data: text}}) do
-#     #     new_radix_state = radix_state
-#     #     |> put_in([:root, :active_app], :desktop)
-#     #     |> put_in([:root, :layers, @app_layer], desktop_graph)
-
-#     #     {:ok, new_radix_state}
-#     # end
-
-#     # def process(%{editor: %{buffers: buf_list}} = radix_state, {:open_buffer, %{data: text} = new_buf})
-#     #     when is_bitstring(text) do
-
-#     #         num_buffers = Enum.count(buf_list)
-#     #         new_buf = Buffer.new(%{id: {:buffer, "untitled_" <> Integer.to_string(num_buffers + 1) <> ".txt*"}, type: :text})
-
-#     #         new_radix_state = radix_state
-#     #             |> put_in([:editor, :buffers], buf_list ++ [new_buf])
-#     #             |> put_in([:editor, :active_buf], new_buf.id)
-
-#     #         {:ok, new_radix_state}
-#     # end
-
-
-
-
-
-# # defmodule Flamelex.Fluxus.Reducers.Buffer do
-# #     @moduledoc false
-# #     use Flamelex.ProjectAliases
-# #     require Logger
-# #     alias Flamelex.Fluxus.Reducers.Buffer.Modify
-  
-# #     @app_layer :one
-
-# #     defguard is_valid_buf(name, text) when is_bitstring(name) and is_bitstring(text)
-
     
 # #     def process(%{editor: %{buffers: buf_list}} = radix_state, {:open_buffer, %{name: name, data: text}}) when is_valid_buf(name, text) do
 # #         #Logger.debug "opening new buffer..."
@@ -625,7 +462,7 @@ end
 # #     end
 
 # #     def process(%{editor: %{buffers: buf_list}} = radix_state, {:open_buffer, %{data: text}}) when is_bitstring(text) do
-# #         new_buf_name = new_untitled_buf_name(buf_list)
+# #         new_buf_name = QuillEx.Structs.Buffer.new_untitled_buf_name(buf_list)
 # #         process(radix_state, {:open_buffer, %{name: new_buf_name, data: text}})
 # #     end
 

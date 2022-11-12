@@ -246,9 +246,9 @@ defmodule QuillEx.Scene.RootScene do
 
       Enum.map(base_menu, fn
          {:sub_menu, "Buffer", base_buffer_menu} ->
-         {:sub_menu, "Buffer", base_buffer_menu ++ [{:sub_menu, "open-buffers", open_bufs_sub_menu}]}
+            {:sub_menu, "Buffer", base_buffer_menu ++ [{:sub_menu, "open-buffers", open_bufs_sub_menu}]}
          other_menu ->
-         other_menu
+            other_menu
       end)
    end
 

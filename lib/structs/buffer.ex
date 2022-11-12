@@ -1,67 +1,84 @@
 defmodule QuillEx.Structs.Buffer do
-    alias QuillEx.Structs.Buffer.Cursor
+   alias QuillEx.Structs.Buffer.Cursor
 
     
-    defstruct [
-        id: nil,                # a unique id for referencing the buffer
-        name: "unnamed",        # the name of the buffer that appears in the tab-bar
-        type: nil,              # There are several types of buffers e.g. :text, :list - the most common though is :text
-        data: nil,              # where the actual contents of the buffer is kept
-        mode: nil,              # Buffers can be in various "modes" e.g. {:vim, :normal}, :edit
-        source: nil,            # Description of where this buffer originally came from, e.g. {:file, filepath}
-        cursors: [],            # a list of all the cursors in the buffer
-        history: [],            # track all the modifications as we do them, for undo/redo purposes
-        scroll_acc: {0,0},      # Where we keep track of how much we've scrolled the buffer around
-        read_only?: false,      # a flag which lets us know if it's a read-only buffer
-        dirty?: false,          # a `dirty` buffer is one which is changed / modified in memory but not yet written to disk
-        timestamps: %{          # Where we track the timestamps for various operations
-            opened: nil,
-            last_update: nil,
-            last_save: nil,
-        }
-    ]
+   defstruct [
+      id: nil,                 # a unique id for referencing the buffer
+      name: "unnamed",         # the name of the buffer that appears in the tab-bar
+      type: :text,             # There are several types of buffers e.g. :text, :list - the most common though is :text
+      data: nil,               # where the actual contents of the buffer is kept
+      mode: :edit,             # Buffers can be in various "modes" e.g. {:vim, :normal}, :edit
+      source: nil,             # Description of where this buffer originally came from, e.g. {:file, filepath}
+      cursors: [],             # a list of all the cursors in the buffer
+      history: [],             # track all the modifications as we do them, for undo/redo purposes
+      scroll_acc: {0,0},       # Where we keep track of how much we've scrolled the buffer around
+      read_only?: false,       # a flag which lets us know if it's a read-only buffer
+      dirty?: true,            # a `dirty` buffer is one which is changed / modified in memory but not yet written to disk
+      timestamps: %{           # Where we track the timestamps for various operations
+         opened: nil,
+         last_update: nil,
+         last_save: nil,
+      }
+   ]
 
     @valid_types [:text, :list]
 
-    def new(%{id: {:buffer, name} = id, type: :text, data: text, mode: mode}) when is_bitstring(text) do
-        %__MODULE__{
-            id: id,
-            type: :text,
-            data: text,
-            name: name,
-            mode: mode,
-            cursors: [Cursor.new(%{num: 1})]
-        }
-    end
+    @vim_modes [{:vim, :insert}, {:vim, :normal}]
 
-    def new(%{id: {:buffer, name} = id, type: type, mode: mode}) when type in @valid_types do
-        %__MODULE__{
-            id: id,
-            type: type,
-            name: name,
-            mode: mode,
-            cursors: [Cursor.new(%{num: 1})]
-        }
-    end
+    @valid_modes [:edit] ++ @vim_modes
 
-    def new(%{id: {:buffer, name} = id, type: type}) when type in @valid_types do
-        %__MODULE__{
-            id: id,
-            type: type,
-            name: name,
-            mode: :edit,
-            cursors: [Cursor.new(%{num: 1})]
-        }
-    end
+   def new(%{
+         id: {:buffer, name} = id,
+         type: :text,
+         data: text,
+         mode: mode
+      })
+   when is_bitstring(text)
+    and mode in @valid_modes
+      do
 
-    def new(%{id: {:buffer, name} = id, type: type}) when type in @valid_types do
-        %__MODULE__{
-            id: id,
-            type: type,
-            name: name,
-            cursors: [Cursor.new(%{num: 1})]
-        }
-    end
+         cursor =
+            Cursor.calc_text_insertion_cursor_movement(Cursor.new(%{num: 1}), text)
+
+         %__MODULE__{
+               id: id,
+               type: :text,
+               data: text,
+               name: name,
+               mode: mode,
+               cursors: [cursor]
+         }
+   end
+
+   # def new(%{id: {:buffer, name} = id, type: type, mode: mode})
+   #    when type in @valid_types and mode in @valid_modes do
+   #       %__MODULE__{
+   #          id: id,
+   #          type: type,
+   #          name: name,
+   #          mode: mode,
+   #          cursors: [Cursor.new(%{num: 1})]
+   #       }
+   # end
+
+   #  def new(%{id: {:buffer, name} = id, type: type}) when type in @valid_types do
+   #      %__MODULE__{
+   #          id: id,
+   #          type: type,
+   #          name: name,
+   #          mode: :edit,
+   #          cursors: [Cursor.new(%{num: 1})]
+   #      }
+   #  end
+
+   #  def new(%{id: {:buffer, name} = id, type: type}) when type in @valid_types do
+   #      %__MODULE__{
+   #          id: id,
+   #          type: type,
+   #          name: name,
+   #          cursors: [Cursor.new(%{num: 1})]
+   #      }
+   #  end
 
     def new(%{id: {:buffer, name} = id}) do
         %__MODULE__{
@@ -69,6 +86,7 @@ defmodule QuillEx.Structs.Buffer do
             type: :text,
             data: "",
             name: name,
+            mode: :edit,
             cursors: [Cursor.new(%{num: 1})]
         }
     end
@@ -115,16 +133,16 @@ defmodule QuillEx.Structs.Buffer do
         %{buf|mode: new_mode}
     end
 
-    defp new_untitled_buf_name([]) do
+    def new_untitled_buf_name([]) do
         "untitled*"
     end
 
-    defp new_untitled_buf_name(buf_list) when is_list(buf_list) and length(buf_list) >= 1 do
+    def new_untitled_buf_name(buf_list) when is_list(buf_list) and length(buf_list) >= 1 do
         num_untitled_open =
             buf_list
             |> Enum.filter(fn
                 # %{id {:buffer, "untitled" <> _rest}, unsaved_changes?: true} ->
-                %{unsaved_changes?: true} ->
+                %{dirty?: true} ->
                     true
                 _else ->
                     false

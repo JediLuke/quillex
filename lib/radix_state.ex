@@ -9,11 +9,10 @@ defmodule QuillEx.Fluxus.Structs.RadixState do
       root: %{
         active_app: :editor,
         graph: nil,
-        layers: []
+        # layers: []
       },
       editor: %{
-        graph: nil,
-        buffers: [], # A list of %Buffer{} structs
+        buffers: [],
         active_buf: nil,
         config: %{
           scroll: %{
@@ -38,12 +37,9 @@ defmodule QuillEx.Fluxus.Structs.RadixState do
              name: :ibm_plex_mono,
              metrics: ibm_plex_mono_font_metrics
           })
-       }
+        }
       },
-
-
-      # overlay: %{},
-      
+      #TODO move this somewhere else...
       gui_config: %{
         menu_bar: %{
           height: 60,

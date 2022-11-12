@@ -24,7 +24,7 @@ defmodule QuillEx.API.Buffer do
   Set which buffer is the active buffer.
   """
   def activate(buffer_ref) do
-    QuillEx.action({BufferReducer, {:activate_buffer, buffer_ref}})
+    QuillEx.action({BufferReducer, {:activate, buffer_ref}})
   end
 
   @doc """
@@ -33,8 +33,8 @@ defmodule QuillEx.API.Buffer do
   This function does the same thing as `activate/1`, it's just another
   entry point via the API, included for better DX (dev-experience).
   """
-  def switch(buffer_ref) do
-    QuillEx.action({BufferReducer, {:activate_buffer, buffer_ref}})
+  def switch({:buffer, _name} = buffer_ref) do
+    QuillEx.action({BufferReducer, {:activate, buffer_ref}})
   end
 
   @doc """
