@@ -32,21 +32,18 @@ defmodule QuillEx.Structs.Buffer do
          type: :text,
          data: text,
          mode: mode
+        #  cursor: cursor = %Cursor{}
       })
    when is_bitstring(text)
     and mode in @valid_modes
       do
-
-         cursor =
-            Cursor.calc_text_insertion_cursor_movement(Cursor.new(%{num: 1}), text)
-
          %__MODULE__{
                id: id,
                type: :text,
                data: text,
                name: name,
                mode: mode,
-               cursors: [cursor]
+               cursors: [Cursor.new(%{num: 1})]
          }
    end
 

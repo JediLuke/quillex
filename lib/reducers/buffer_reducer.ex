@@ -3,13 +3,15 @@ defmodule QuillEx.Reducers.BufferReducer do
    require Logger
 
 
-
    def process(
       # NOTE: No need to re-draw the layers if we're already using :editor
       # %{root: %{active_app: :editor}, editor: %{active_buf: nil}} = radix_state,
       radix_state,
-      {:open_buffer, %{name: name, data: text, mode: buf_mode}}
+      {:open_buffer, %{name: name, data: text, mode: buf_mode} = args}
    ) when is_bitstring(text) do
+
+      # cursor =
+      #   Cursor.calc_text_insertion_cursor_movement(Cursor.new(%{num: 1}), text)
 
       #TODO check this worked?? ok/error tuple
       new_buf = QuillEx.Structs.Buffer.new(%{
@@ -110,6 +112,25 @@ defmodule QuillEx.Reducers.BufferReducer do
   def process(radix_state, {:activate, {:buffer, _id} = buf_ref}) do
     {:ok, radix_state |> put_in([:editor, :active_buf], buf_ref)}
   end
+
+  def process(%{root: %{active_app: :editor}, editor: %{buffers: buf_list, active_buf: active_buf}} = radix_state, {:close_buffer, buf_to_close}) do
+    new_buf_list = buf_list |> Enum.reject(&(&1.id == buf_to_close))
+
+    new_radix_state =
+      if new_buf_list == [] do
+        radix_state
+        |> put_in([:root, :active_app], :desktop)
+        |> put_in([:editor, :buffers], new_buf_list)
+        |> put_in([:editor, :active_buf], nil)
+      else
+        radix_state
+        |> put_in([:editor, :buffers], new_buf_list)
+        |> put_in([:editor, :active_buf], hd(new_buf_list).id)
+      end
+
+    {:ok, new_radix_state}
+  end
+
 
   def process(radix_state, {:scroll, :active_buf, delta_scroll}) do
     # NOTE: It is (a little unfortunately) necessary to keep scroll data up in
@@ -325,16 +346,6 @@ end
   #   raise "Cant save files yet"
   # end
 
-  # def handle(%{buffers: buf_list, active_buf: active_buf} = radix, {:close_buffer, buf_to_close})
-  #     when active_buf == buf_to_close do
-  #   new_buf_list = buf_list |> Enum.reject(&(&1.id == buf_to_close))
-
-  #   if new_buf_list == [] do
-  #     {:ok, radix |> Map.put(:buffers, []) |> Map.put(:active_buf, nil)}
-  #   else
-  #     {:ok, radix |> Map.put(:buffers, new_buf_list) |> Map.put(:active_buf, hd(new_buf_list).id)}
-  #   end
-  # end
 
 
 # defmodule Flamelex.Fluxus.Reducers.Buffer.Modify do
@@ -374,30 +385,9 @@ end
 #         raise "Received :modify_buf action, but there are no open buffers. Action: #{inspect action}"    
 #     end
 
-#     def process(%{editor: %{buffers: []}}, {:close_buffer, buffer}) do
-#         Logger.warn "Tried closing a buffer `#{inspect buffer}` but none are open."
-#         :ignore
-#     end
 
-#     def process(%{editor: %{buffers: buf_list}} = radix_state, {:close_buffer, buffer}) do
-#         new_buf_list = buf_list |> Enum.reject(& &1.id == buffer)
 
-#         new_radix_state =
-#             if new_buf_list == [] do
-#                 Flamelex.Fluxus.action({Flamelex.Fluxus.Reducers.Desktop, :show_desktop})
 
-#                 radix_state
-#                 |> put_in([:editor, :buffers], new_buf_list)
-#                 |> put_in([:editor, :active_buf], nil)
-#                 |> put_in([:root, :active_app], :desktop)
-#             else
-#                 radix_state
-#                 |> put_in([:editor, :buffers], new_buf_list)
-#                 |> put_in([:editor, :active_buf], hd(new_buf_list))
-#             end
-    
-#         {:ok, new_radix_state}
-#     end
 
 #     def process(%{editor: %{active_buf: buf_id}} = radix_state, {:modify_buf, buf_id, mod}) do #NOTE: `buf_id` has to be the same in both places for this clause to match
 #         new_radix_state = radix_state
@@ -476,30 +466,7 @@ end
 # #         raise "Received :modify_buf action, but there are no open buffers. Action: #{inspect action}"    
 # #     end
 
-# #     def process(%{editor: %{buffers: []}}, {:close_buffer, buffer}) do
-# #         Logger.warn "Tried closing a buffer `#{inspect buffer}` but none are open."
-# #         :ignore
-# #     end
 
-# #     def process(%{editor: %{buffers: buf_list}} = radix_state, {:close_buffer, buffer}) do
-# #         new_buf_list = buf_list |> Enum.reject(& &1.id == buffer)
-
-# #         new_radix_state =
-# #             if new_buf_list == [] do
-# #                 Flamelex.Fluxus.action({Flamelex.Fluxus.Reducers.Desktop, :show_desktop})
-
-# #                 radix_state
-# #                 |> put_in([:editor, :buffers], new_buf_list)
-# #                 |> put_in([:editor, :active_buf], nil)
-# #                 |> put_in([:root, :active_app], :desktop)
-# #             else
-# #                 radix_state
-# #                 |> put_in([:editor, :buffers], new_buf_list)
-# #                 |> put_in([:editor, :active_buf], hd(new_buf_list))
-# #             end
-    
-# #         {:ok, new_radix_state}
-# #     end
 
 # #     def process(%{editor: %{active_buf: buf_id}} = radix_state, {:modify_buf, buf_id, mod}) do #NOTE: `buf_id` has to be the same in both places for this clause to match
 # #         new_radix_state = radix_state
@@ -596,20 +563,7 @@ end
 # #        raise "Received :modify_buf action, but there are no open buffers. Action: #{inspect action}"    
 # #    end
 
-# #    def process(%{editor: %{buffers: []}}, {:close_buffer, buffer}) do
-# #        Logger.warn "Tried closing a buffer `#{inspect buffer}` but none are open."
-# #        :ignore
-# #    end
 
-# #    def process(%{editor: %{buffers: buf_list}} = radix_state, {:close_buffer, buffer}) do
-# #        new_buf_list = buf_list |> Enum.reject(& &1.id == buffer)
-
-# #        new_radix_state = radix_state
-# #        |> put_in([:editor, :buffers], new_buf_list)
-# #        |> put_in([:editor, :active_buf], nil)
-
-# #        {:ok, new_radix_state}
-# #    end
 
 # #    def process(%{editor: %{buffers: buffers}} = radix_state, {:modify_buf, buf_id, {:set_mode, m}}) do
 # #        # buf = buffers |> Enum.find(& &1.id == buf_id)

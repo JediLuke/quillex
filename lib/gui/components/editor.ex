@@ -37,6 +37,7 @@ defmodule QuillEx.GUI.Components.Editor do
     init_scene =
       scene
       |> assign(app: args.app)
+      |> assign(font: args.radix_state.editor.font)
       |> assign(frame: args.frame)
       |> assign(graph: init_graph)
       |> assign(state: init_state)
@@ -63,11 +64,26 @@ defmodule QuillEx.GUI.Components.Editor do
     # so we can keep accurate calculations for scrolling
     radix_store(scene)
     radix_store(scene).get()
-    |> radix_state(scene).change_editor_scroll_state(new_scroll_state)
+    |> radix_reducer(scene).change_editor_scroll_state(new_scroll_state)
     |> radix_store(scene).put(:without_broadcast)
 
     {:noreply, scene}
   end
+
+   def handle_info({:radix_state_change, %{editor: %{font: new_font}} = new_radix_state}, %{assigns: %{font: current_font}} = scene) when new_font != current_font do
+      Logger.debug "font changed..."
+
+      new_graph =
+         render(%{frame: scene.assigns.frame, radix_state: new_radix_state})
+
+      new_scene =
+         scene
+         |> assign(font: new_radix_state.editor.font)
+         |> assign(graph: new_graph)
+         |> push_graph(new_graph)
+
+      {:noreply, new_scene}
+   end
 
    def handle_info({:radix_state_change, %{editor: %{buffers: []}}}, scene) do
 
@@ -82,10 +98,8 @@ defmodule QuillEx.GUI.Components.Editor do
       {:noreply, new_scene}
    end
 
-  #TODO handle font changes (size & font)
-
    def handle_info({:radix_state_change, %{editor: %{active_buf: radix_active_buf}} = new_radix_state}, %{assigns: %{state: %{active_buf: state_active_buf}}} = scene) when radix_active_buf != state_active_buf do
-      Logger.debug "Active buffer changed..."
+      Logger.debug "Swapped the Active buffer to a different buf..."
 
       new_graph =
          render(%{frame: scene.assigns.frame, radix_state: new_radix_state})
@@ -104,6 +118,7 @@ defmodule QuillEx.GUI.Components.Editor do
 
    def handle_info({:radix_state_change, %{editor: %{buffers: buf_list}} = new_state}, scene)
       when length(buf_list) >= 1 do
+         Logger.debug "Active buffer got updated..."
 
          [active_buffer] = buf_list |> Enum.filter(&(&1.id == new_state.editor.active_buf))
          # tab_list = buf_list |> Enum.map(& &1.id)
@@ -160,7 +175,7 @@ defmodule QuillEx.GUI.Components.Editor do
             |> render_text_pad(%{
                frame: editor_frame,
                buffer: active_buffer,
-               font: radix_state.gui.fonts.primary |> Map.merge(%{size: 24})
+               font: radix_state.editor.font
             })
          end,
          id: :editor
@@ -203,8 +218,9 @@ defmodule QuillEx.GUI.Components.Editor do
     Module.concat(app, Fluxus.RadixStore)
   end
 
-  def radix_state(%{assigns: %{app: app}}) do
-    Module.concat(app, Fluxus.Structs.RadixState)
+  def radix_reducer(%{assigns: %{app: app}}) do
+   #  Module.concat(app, Fluxus.Reducers.RadixReducer)
+   QuillEx.Reducers.RadixReducer
   end
 
   defp theme do

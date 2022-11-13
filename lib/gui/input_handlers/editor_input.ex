@@ -3,7 +3,7 @@ defmodule QuillEx.UserInputHandler.Editor do
    # this module re-usable by Flamelex...
    use ScenicWidgets.ScenicEventsDefinitions
 
-   @ignorable_keys [@left_shift]
+   @ignorable_keys [@left_shift, @shift_space]
 
    def process(key, _buffer_api_module) when key in @ignorable_keys do
       IO.puts "~~~ ignorin..."

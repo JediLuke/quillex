@@ -154,7 +154,7 @@ defmodule QuillEx.Scene.RootScene do
       menubar_args = %{
          frame: frame,
          menu_map: calc_menu_map(radix_state),
-         font: radix_state.gui_config.fonts.menu_bar
+         font: radix_state.desktop.menu_bar.font
        }
 
       graph
@@ -179,48 +179,48 @@ defmodule QuillEx.Scene.RootScene do
                [
                {"ibm plex mono", fn ->
                   QuillEx.Fluxus.RadixStore.get()
-                  |> QuillEx.Fluxus.Structs.RadixState.change_font(:ibm_plex_mono)
+                  |> QuillEx.Reducers.RadixReducer.change_font(:ibm_plex_mono)
                   |> QuillEx.Fluxus.RadixStore.put()
                end},
                {"roboto", fn ->
                   QuillEx.Fluxus.RadixStore.get()
-                  |> QuillEx.Fluxus.Structs.RadixState.change_font(:roboto)
+                  |> QuillEx.Reducers.RadixReducer.change_font(:roboto)
                   |> QuillEx.Fluxus.RadixStore.put()
                end},
                {"roboto mono", fn ->
                   QuillEx.Fluxus.RadixStore.get()
-                  |> QuillEx.Fluxus.Structs.RadixState.change_font(:roboto_mono)
+                  |> QuillEx.Reducers.RadixReducer.change_font(:roboto_mono)
                   |> QuillEx.Fluxus.RadixStore.put()
                end},
                {"iosevka", fn ->
                   QuillEx.Fluxus.RadixStore.get()
-                  |> QuillEx.Fluxus.Structs.RadixState.change_font(:iosevka)
+                  |> QuillEx.Reducers.RadixReducer.change_font(:iosevka)
                   |> QuillEx.Fluxus.RadixStore.put()
                end},
                {"source code pro", fn ->
                   QuillEx.Fluxus.RadixStore.get()
-                  |> QuillEx.Fluxus.Structs.RadixState.change_font(:source_code_pro)
+                  |> QuillEx.Reducers.RadixReducer.change_font(:source_code_pro)
                   |> QuillEx.Fluxus.RadixStore.put()
                end},
                {"fira code", fn ->
                   QuillEx.Fluxus.RadixStore.get()
-                  |> QuillEx.Fluxus.Structs.RadixState.change_font(:fira_code)
+                  |> QuillEx.Reducers.RadixReducer.change_font(:fira_code)
                   |> QuillEx.Fluxus.RadixStore.put()
                end},
                {"bitter", fn ->
                   QuillEx.Fluxus.RadixStore.get()
-                  |> QuillEx.Fluxus.Structs.RadixState.change_font(:bitter)
+                  |> QuillEx.Reducers.RadixReducer.change_font(:bitter)
                   |> QuillEx.Fluxus.RadixStore.put()
                end}
                ]},
             {"make bigger", fn ->
                QuillEx.Fluxus.RadixStore.get()
-               |> QuillEx.Fluxus.Structs.RadixState.change_font_size(:increase)
+               |> QuillEx.Reducers.RadixReducer.change_font_size(:increase)
                |> QuillEx.Fluxus.RadixStore.put()
             end},
             {"make smaller", fn ->
                QuillEx.Fluxus.RadixStore.get()
-               |> QuillEx.Fluxus.Structs.RadixState.change_font_size(:decrease)
+               |> QuillEx.Reducers.RadixReducer.change_font_size(:decrease)
                |> QuillEx.Fluxus.RadixStore.put()
             end}
             ]}

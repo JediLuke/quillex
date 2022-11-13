@@ -11,7 +11,26 @@ defmodule QuillEx.Fluxus.Structs.RadixState do
         graph: nil,
         # layers: []
       },
+      gui: %{
+        viewport: nil,
+      },
+      desktop: %{
+        menu_bar: %{
+          height: 60,
+          button_width: 180,
+          font: %{
+            name: :ibm_plex_mono,
+            size: 36,
+            metrics: ibm_plex_mono_font_metrics
+          }
+        },
+      },
       editor: %{
+        font: ScenicWidgets.TextPad.Structs.Font.new(%{
+          name: :ibm_plex_mono,
+          size: 24,
+          metrics: ibm_plex_mono_font_metrics
+        }),
         buffers: [],
         active_buf: nil,
         config: %{
@@ -26,63 +45,8 @@ defmodule QuillEx.Fluxus.Structs.RadixState do
             }
           }
         }
-      },
-      menu_bar: %{
-        height: 60
-      },
-      gui: %{
-        viewport: nil,
-        fonts: %{
-          primary: ScenicWidgets.TextPad.Structs.Font.new(%{
-             name: :ibm_plex_mono,
-             metrics: ibm_plex_mono_font_metrics
-          })
-        }
-      },
-      #TODO move this somewhere else...
-      gui_config: %{
-        menu_bar: %{
-          height: 60,
-          item_width: 180
-        },
-        tab_selector: %{
-          height: 40
-        },
-        fonts: %{
-          primary: Font.new(%{
-            name: :ibm_plex_mono,
-            size: 24,
-            metrics: ibm_plex_mono_font_metrics
-          }),
-          menu_bar: Font.new(%{
-            name: :ibm_plex_mono,
-            size: 36,
-            metrics: ibm_plex_mono_font_metrics
-          })
-        },
       }
     }
   end
 
-  def change_font(%{gui_config: %{fonts: %{primary: current_font}}} = current_radix_state, new_font) when is_atom(new_font) do
-    {:ok, {_type, new_font_metrics}} = Scenic.Assets.Static.meta(new_font)
-
-    full_new_font_map = current_font |> Map.merge(%{name: new_font, metrics: new_font_metrics})
-
-    current_radix_state
-    |> put_in([:gui_config, :fonts, :primary], full_new_font_map)
-  end
-
-  def change_font_size(%{gui_config: %{fonts: %{primary: current_font}}} = current_radix_state, direction) when direction in [:increase, :decrease] do
-    delta = if direction == :increase, do: 4, else: -4
-    full_new_font_map = current_font |> Map.merge(%{size: current_font.size + delta})
-
-    current_radix_state
-    |> put_in([:gui_config, :fonts, :primary], full_new_font_map)
-  end
-
-  def change_editor_scroll_state(current_radix_state, %{inner: %{width: _w, height: _h}, frame: _f} = new_scroll_state) do
-    current_radix_state
-    |> put_in([:editor, :scroll_state], new_scroll_state)
-  end
 end
