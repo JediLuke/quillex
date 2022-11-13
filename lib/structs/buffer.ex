@@ -98,6 +98,16 @@ defmodule QuillEx.Structs.Buffer do
         old_buf |> Map.put(:data, text_2_insert)
     end
 
+    def update(%__MODULE__{data: old_text} = old_buf, {:insert_line, [after: n, text: new_line]}) when is_bitstring(new_line) do
+        lines = String.split(old_text, "\n")
+
+        new_lines = List.insert_at(lines, n, new_line) # NOTE: because Elixir List begins at 0, this puts the new line after n
+
+        new_full_text = Enum.reduce(new_lines, fn x, acc -> acc <> "\n" <> x end)
+
+        old_buf |> Map.put(:data, new_full_text)
+    end
+
     def update(%__MODULE__{data: old_text} = old_buf, {:insert, text_2_insert, {:at_cursor, %Cursor{line: l, col: c}}}) when is_bitstring(old_text) and is_bitstring(text_2_insert) do
         lines = String.split(old_text, "\n")     
         line_2_edit = Enum.at(lines, l-1)

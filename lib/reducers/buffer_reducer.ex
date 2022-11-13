@@ -1,6 +1,7 @@
 defmodule QuillEx.Reducers.BufferReducer do
    alias QuillEx.Reducers.BufferReducer.Utils
    require Logger
+   alias QuillEx.Reducers.BufferReducer.Utils
 
 
    def process(
@@ -172,6 +173,13 @@ defmodule QuillEx.Reducers.BufferReducer do
     new_radix_state =
       radix_state
       |> update_buf(edit_buf, %{cursor: new_cursor})
+
+    {:ok, new_radix_state}
+  end
+
+  def process(%{editor: %{buffers: buf_list}} = radix_state, {:modify_buf, buf, mod}) do
+    new_radix_state =
+      radix_state |> Utils.update_buf(buf, mod)
 
     {:ok, new_radix_state}
   end
