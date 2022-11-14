@@ -21,81 +21,39 @@ defmodule QuillEx.Structs.Buffer do
       }
    ]
 
-    @valid_types [:text, :list]
+   @valid_types [:text, :list]
+   @vim_modes [{:vim, :insert}, {:vim, :normal}]
+   @valid_modes [:edit] ++ @vim_modes
 
-    @vim_modes [{:vim, :insert}, {:vim, :normal}]
-
-    @valid_modes [:edit] ++ @vim_modes
-
-   def new(%{
-         id: {:buffer, name} = id,
-         type: :text,
-         data: text,
-         mode: mode
-        #  cursor: cursor = %Cursor{}
-      })
-   when is_bitstring(text)
-    and mode in @valid_modes
-      do
-         %__MODULE__{
-               id: id,
-               type: :text,
-               data: text,
-               name: name,
-               mode: mode,
-               cursors: [Cursor.new(%{num: 1})]
+   def new(%{id: {:buffer, name} = buf_id} = args) do
+      %__MODULE__{
+         id: buf_id,
+         name: validate_name(name),
+         type: :text, #TODO,
+         data: args[:data] || "",
+         mode: validate_mode(args[:mode]) || :edit,
+         source: args[:source] || nil,
+         cursors: args[:cursors] || [Cursor.new(%{num: 1})],
+         history: [],
+         scroll_acc: args[:scroll_acc] || {0, 0},
+         read_only?: args[:read_only?] || false,
+         dirty?: args[:dirty?] || false,
+         timestamps: %{
+               opened: DateTime.utc_now() #TODO use some kind of default timezone
          }
+      }
    end
-
-   # def new(%{id: {:buffer, name} = id, type: type, mode: mode})
-   #    when type in @valid_types and mode in @valid_modes do
-   #       %__MODULE__{
-   #          id: id,
-   #          type: type,
-   #          name: name,
-   #          mode: mode,
-   #          cursors: [Cursor.new(%{num: 1})]
-   #       }
-   # end
-
-   #  def new(%{id: {:buffer, name} = id, type: type}) when type in @valid_types do
-   #      %__MODULE__{
-   #          id: id,
-   #          type: type,
-   #          name: name,
-   #          mode: :edit,
-   #          cursors: [Cursor.new(%{num: 1})]
-   #      }
-   #  end
-
-   #  def new(%{id: {:buffer, name} = id, type: type}) when type in @valid_types do
-   #      %__MODULE__{
-   #          id: id,
-   #          type: type,
-   #          name: name,
-   #          cursors: [Cursor.new(%{num: 1})]
-   #      }
-   #  end
-
-    def new(%{id: {:buffer, name} = id}) do
-        %__MODULE__{
-            id: id,
-            type: :text,
-            data: "",
-            name: name,
-            mode: :edit,
-            cursors: [Cursor.new(%{num: 1})]
-        }
-    end
 
     def update(%__MODULE__{} = old_buf, %{scroll_acc: new_scroll}) do
         old_buf |> Map.put(:scroll_acc, new_scroll)
     end
 
-    #TODO update to dirty
     def update(%__MODULE__{data: nil} = old_buf, {:insert, text_2_insert, {:at_cursor, _cursor}}) do
-        # if we have no text, just put it straight in there...
-        old_buf |> Map.put(:data, text_2_insert)
+        %{old_buf|data: text_2_insert, dirty?: true}
+    end
+
+    def update(%__MODULE__{} = old_buf, %{dirty?: dirty?}) when is_boolean(dirty?) do
+        %{old_buf|dirty?: true}
     end
 
     def update(%__MODULE__{data: old_text} = old_buf, {:insert_line, [after: n, text: new_line]}) when is_bitstring(new_line) do
@@ -167,6 +125,16 @@ defmodule QuillEx.Structs.Buffer do
     #     backspaced_text
     # end
     
+    # def handle(%{buffers: buf_list} = radix, {:modify_buf, buf, {:append, text}}) do
+    #   new_buf_list =
+    #     buf_list
+    #     |> Enum.map(fn
+    #       %{id: ^buf} = buffer -> %{buffer | data: buffer.data <> text}
+    #       any_other_buffer -> any_other_buffer
+    #     end)
+
+    #   {:ok, radix |> Map.put(:buffers, new_buf_list)}
+    # end
 
     def new_untitled_buf_name([]) do
         "untitled*"
@@ -188,4 +156,13 @@ defmodule QuillEx.Structs.Buffer do
         "untitled#{inspect num_untitled_open+2}*" # add 2 because we go straight to untitled2 if we have 2 buffers open
     end
 
+    def validate_name(Flamelex.API.Kommander), do: "Kommander"
+    def validate_name(n) when is_bitstring(n), do: n
+
+    def validate_mode(nil), do: nil
+    def validate_mode(m) when m in @valid_modes, do: m
+    def validate_mode(invalid_mode) do
+        Logger.warn "invalid mode: #{inspect invalid_mode} given when initializing buffer!"
+        nil
+    end
 end
