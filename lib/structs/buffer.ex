@@ -125,6 +125,16 @@ defmodule QuillEx.Structs.Buffer do
         old_buf |> Map.put(:data, text)
     end
 
+    def update(%__MODULE__{data: old_text} = old_buf, {:delete_line, line_num}) do
+        lines =
+            String.split(old_text, "\n")     
+            |> List.delete_at(line_num-1)
+
+        new_full_text = Enum.reduce(lines, fn x, acc -> acc <> "\n" <> x end)
+
+        old_buf |> Map.put(:data, new_full_text)
+    end
+
     # NOTE - if we have more than 1 cursor, we need a more sophisticated update method...
     def update(%__MODULE__{cursors: [_old_cursor]} = old_buf, %{cursor: %Cursor{} = c}) do
         old_buf |> Map.put(:cursors, [c])
@@ -139,6 +149,24 @@ defmodule QuillEx.Structs.Buffer do
     def update(%__MODULE__{} = buf, %{mode: new_mode}) do
         %{buf|mode: new_mode}
     end
+
+    # def substitution(text) do
+
+    # end
+
+    # def deletion do
+
+    # end
+
+    # def insertion do
+
+    # end
+
+    # def delete(text, :last_character) do
+    #     {backspaced_text, _deleted_text} = text |> String.split_at(-1)
+    #     backspaced_text
+    # end
+    
 
     def new_untitled_buf_name([]) do
         "untitled*"
