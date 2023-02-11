@@ -145,6 +145,25 @@ defmodule QuillEx.Reducers.BufferReducer do
   end
 
   # assume this means the active_buffer
+  def process(radix_state, {:move_cursor, :active_buf, :last_line}) do
+    active_buf = Utils.filter_active_buf(radix_state)
+    buf_cursor = hd(active_buf.cursors)
+
+    new_cursor =
+      QuillEx.Tools.TextEdit.move_cursor(
+          active_buf.data,
+          buf_cursor,
+          :last_line
+      )
+
+    new_radix_state =
+      radix_state
+      |> Utils.update_buf(active_buf, %{cursor: new_cursor})
+
+    {:ok, new_radix_state}
+  end
+
+  #TODO we're implicitely assuming it's the active buffer here
   def process(radix_state, {:move_cursor, {:delta, {_column_delta, _line_delta} = cursor_delta}}) do
     edit_buf = Utils.filter_active_buf(radix_state)
     buf_cursor = hd(edit_buf.cursors)

@@ -87,6 +87,11 @@ defmodule QuillEx.Tools.TextEdit do
         {full_backspaced_text, new_cursor}
     end
 
+    def move_cursor(text, current_cursor, :last_line) do
+        lines = String.split(text, "\n") #TODO just make it a list of lines already...
+        current_cursor |> Map.put(:line, Enum.count(lines))
+    end
+
     def move_cursor(text, current_cursor, cursor_delta) when is_bitstring(text) do
         lines = String.split(text, "\n") #TODO just make it a list of lines already...
 
