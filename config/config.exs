@@ -1,8 +1,7 @@
 import Config
 
-config :scenic,
-       :assets,
-       module: QuillEx.Assets
+config :scenic, :assets,
+  module: QuillEx.Assets
 
 config :event_bus,
   # most events & input gets processed through here

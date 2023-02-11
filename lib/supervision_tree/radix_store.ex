@@ -36,7 +36,7 @@ defmodule QuillEx.Fluxus.RadixStore do
     #      the state updates on to each ScenicComponent, but then we
     #      start to have problems of how to handle addressing... the
     #      exact problem that PubSub is a perfect solution for.
-    QuillEx.Utils.PubSub.broadcast(topic: :radix_state_change, msg: {:radix_state_change, new_radix_state})
+    QuillEx.Lib.Utils.PubSub.broadcast(topic: :radix_state_change, msg: {:radix_state_change, new_radix_state})
     Agent.update(__MODULE__, fn _old -> new_radix_state end)
   end
 

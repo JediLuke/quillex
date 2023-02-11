@@ -1,4 +1,4 @@
-defmodule QuillEx.Utils.PubSub do
+defmodule QuillEx.Lib.Utils.PubSub do
   @registrar_proc QuillEx.PubSub
   @topic :quillex
 

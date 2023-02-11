@@ -8,7 +8,7 @@ defmodule QuillEx.Scene.RootScene do
   @menubar_height 60 #TODO
 
    def init(scene, _args, _opts) do
-      Logger.debug("#{__MODULE__} initializing...")
+      # Logger.debug("#{__MODULE__} initializing...")
 
       radix_state = QuillEx.Fluxus.RadixStore.get()
       init_graph = render(scene.viewport, radix_state)
@@ -22,7 +22,7 @@ defmodule QuillEx.Scene.RootScene do
          |> push_graph(init_graph)
 
       QuillEx.Fluxus.RadixStore.initialize(viewport: init_scene.viewport) #TODO do we ned this?? It's in the scene??
-      QuillEx.Utils.PubSub.subscribe(topic: :radix_state_change)
+      QuillEx.Lib.Utils.PubSub.subscribe(topic: :radix_state_change)
 
       request_input(init_scene, [:viewport, :key, :cursor_scroll])
 
@@ -110,7 +110,7 @@ defmodule QuillEx.Scene.RootScene do
       new_menu_map = calc_menu_map(new_radix_state)
 
       if new_menu_map != current_menu_map do
-         Logger.debug "refreshing the MenuBar..."
+         # Logger.debug "refreshing the MenuBar..."
 
          #TODO make new function in Scenic `cast_child`
          # scene |> cast_child(:menu_bar, {:put_menu_map, new_menu_map})

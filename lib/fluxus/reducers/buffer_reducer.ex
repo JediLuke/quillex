@@ -1,7 +1,6 @@
 defmodule QuillEx.Reducers.BufferReducer do
    alias QuillEx.Reducers.BufferReducer.Utils
    require Logger
-   alias QuillEx.Reducers.BufferReducer.Utils
 
 
    def process(
@@ -100,14 +99,19 @@ defmodule QuillEx.Reducers.BufferReducer do
       end
 
     new_radix_state = radix_state
-      |> Utils.update_buf(%{data: full_backspaced_text})
-      |> Utils.update_buf(%{cursor: new_cursor_coords})
+      |> Utils.update_active_buf(%{data: full_backspaced_text})
+      |> Utils.update_active_buf(%{cursor: new_cursor_coords})
 
     {:ok, new_radix_state}
   end
 
   def process(radix_state, {:activate, {:buffer, _id} = buf_ref}) do
-    {:ok, radix_state |> put_in([:editor, :active_buf], buf_ref)}
+    {
+      :ok,
+      radix_state
+      |> put_in([:root, :active_app], :editor)
+      |> put_in([:editor, :active_buf], buf_ref)
+    }
   end
 
   def process(%{root: %{active_app: :editor}, editor: %{buffers: buf_list, active_buf: active_buf}} = radix_state, {:close_buffer, buf_to_close}) do
@@ -137,33 +141,36 @@ defmodule QuillEx.Reducers.BufferReducer do
     # we may use it to calculate the changes when scrolling, and prevent changes
     # in the scroll accumulator if we're at or above the scroll limits.
     new_scroll_acc = Utils.calc_capped_scroll(radix_state, delta_scroll)
-    {:ok, radix_state |> Utils.update_buf(%{scroll_acc: new_scroll_acc})}
+    {:ok, radix_state |> Utils.update_active_buf(%{scroll_acc: new_scroll_acc})}
   end
 
   # assume this means the active_buffer
   def process(radix_state, {:move_cursor, {:delta, {_column_delta, _line_delta} = cursor_delta}}) do
     edit_buf = Utils.filter_active_buf(radix_state)
     buf_cursor = hd(edit_buf.cursors)
-    current_cursor_coords = {buf_cursor.line, buf_cursor.col}
+
+    new_cursor = QuillEx.Tools.TextEdit.move_cursor(edit_buf.data, buf_cursor, cursor_delta)
+
+    # current_cursor_coords = {buf_cursor.line, buf_cursor.col}
     
-    lines = String.split(edit_buf.data, "\n") #TODO just make it a list of lines already...
+    # lines = String.split(edit_buf.data, "\n") #TODO just make it a list of lines already...
 
-    # these coords are just a candidate because they may not be valid...
-    candidate_coords = {candidate_line, candidate_col} =
-      Scenic.Math.Vector2.add(current_cursor_coords, cursor_delta)
-      |> Utils.apply_floor({1,1}) # don't allow scrolling below the origin
-      |> Utils.apply_ceil({length(lines), Enum.max_by(lines, fn l -> String.length(l) end)}) # don't allow scrolling beyond the last line or the longest line
+    # # these coords are just a candidate because they may not be valid...
+    # candidate_coords = {candidate_line, candidate_col} =
+    #   Scenic.Math.Vector2.add(current_cursor_coords, cursor_delta)
+    #   |> Utils.apply_floor({1,1}) # don't allow scrolling below the origin
+    #   |> Utils.apply_ceil({length(lines), Enum.max_by(lines, fn l -> String.length(l) end)}) # don't allow scrolling beyond the last line or the longest line
 
-    candidate_line_text = Enum.at(lines, candidate_line-1)
+    # candidate_line_text = Enum.at(lines, candidate_line-1)
 
-    final_coords =
-      if String.length(candidate_line_text) <= candidate_col-1 do # NOTE: ned this -1 because if the cursor is sitting at the end of a line, e.g. a line with 8 chars, then it's column will be 9
-        {candidate_line, String.length(candidate_line_text)+1} # need the +1 because for e.g. a 4 letter line, to put the cursor at the end of the line, we need to put it in column 5
-      else
-        candidate_coords
-      end
+    # final_coords =
+    #   if String.length(candidate_line_text) <= candidate_col-1 do # NOTE: ned this -1 because if the cursor is sitting at the end of a line, e.g. a line with 8 chars, then it's column will be 9
+    #     {candidate_line, String.length(candidate_line_text)+1} # need the +1 because for e.g. a 4 letter line, to put the cursor at the end of the line, we need to put it in column 5
+    #   else
+    #     candidate_coords
+    #   end
 
-    new_cursor = QuillEx.Structs.Buffer.Cursor.move(buf_cursor, final_coords)
+    # new_cursor = QuillEx.Structs.Buffer.Cursor.move(buf_cursor, final_coords)
 
     new_radix_state =
       radix_state

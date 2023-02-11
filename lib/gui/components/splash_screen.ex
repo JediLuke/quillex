@@ -14,7 +14,7 @@ defmodule QuillEx.GUI.Components.SplashScreen do
       Logger.debug("#{__MODULE__} initializing...")
       # Process.register(self(), __MODULE__)
   
-      # QuillEx.Utils.PubSub.subscribe(topic: :radix_state_change)
+      # QuillEx.Lib.Utils.PubSub.subscribe(topic: :radix_state_change)
 
       init_graph = Scenic.Graph.build()
       |> Scenic.Primitives.rect(args.frame.size, fill: :purple, translate: args.frame.pin)

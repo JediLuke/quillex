@@ -7,7 +7,7 @@ defmodule QuillEx.EventListener do
   end
 
   def init(_args) do
-    Logger.debug("#{__MODULE__} initializing...")
+    # Logger.debug("#{__MODULE__} initializing...")
     Process.register(self(), __MODULE__)
     EventBus.subscribe({__MODULE__, ["general"]})
     {:ok, %{}}
@@ -47,8 +47,8 @@ defmodule QuillEx.EventListener do
   end
 
   def do_process(radix_state, action) do
-    details = %{radix_state: radix_state, action: action}
-    Logger.debug "#{__MODULE__} ignoring action... #{inspect(details)}"
+    # details = %{radix_state: radix_state, action: action}
+    # Logger.debug "#{__MODULE__} ignoring action... #{inspect(details)}"
     :ignore
   end
 end
