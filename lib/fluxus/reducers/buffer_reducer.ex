@@ -33,6 +33,7 @@ defmodule QuillEx.Reducers.BufferReducer do
 
    def process(radix_state, {:open_buffer, %{file: filename, mode: buf_mode}}) when is_bitstring(filename) do
       Logger.debug "Opening file: #{inspect filename}..."
+      #TODO need to check if the file is already open first... otherwise we end up putting the same entry into the list of buffers twice & Flamelex doesn't like that
       text = File.read!(filename)
       process(radix_state, {:open_buffer, %{name: filename, data: text, mode: buf_mode, source: filename}})
    end
@@ -145,7 +146,7 @@ defmodule QuillEx.Reducers.BufferReducer do
   end
 
   # assume this means the active_buffer
-  def process(radix_state, {:move_cursor, :active_buf, :last_line}) do
+  def process(radix_state, {:move_cursor, :active_buf, absolute_position}) do
     active_buf = Utils.filter_active_buf(radix_state)
     buf_cursor = hd(active_buf.cursors)
 
@@ -153,7 +154,7 @@ defmodule QuillEx.Reducers.BufferReducer do
       QuillEx.Tools.TextEdit.move_cursor(
           active_buf.data,
           buf_cursor,
-          :last_line
+          absolute_position
       )
 
     new_radix_state =

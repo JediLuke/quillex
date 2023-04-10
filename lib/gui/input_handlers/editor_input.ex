@@ -37,6 +37,8 @@ defmodule QuillEx.UserInputHandler.Editor do
       buffer_api_module.move_cursor(delta)
    end
 
+   # def process meta+v is paste
+
    def process({:cursor_scroll, {{_x_scroll, _y_scroll} = scroll_delta, _coords}}, buffer_api_module) do
       buffer_api_module.scroll(scroll_delta)
    end
