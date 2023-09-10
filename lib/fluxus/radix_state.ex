@@ -110,11 +110,16 @@ defmodule QuillEx.Fluxus.Structs.RadixState do
     # menu_font = Font.new(name: :ibm_plex_mono, size: 36, metrics: ibm_plex_mono_font_metrics)
     |
 
+    # convert a %Layout{} into a list/stack/tree of frames, which will get zipped with components
+
     %__MODULE__{
-      layout: :full_screen,
+      # layout: :full_screen,
+      layout: :v_split,
+      # layout: {:vertical_split, {0.17, :ratio}},
       # layout: {:standard_rule, linemark: @menubar_height},
       components: [
-        %QuillEx.GUI.Components.PlainText{text: text}
+        %QuillEx.GUI.Components.PlainText{text: text, color: :pink},
+        %QuillEx.GUI.Components.PlainText{text: "Second buffer!!", color: :grey}
       ]
       # root: %Root{}
       # gui: %GUI{},

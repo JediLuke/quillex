@@ -5,10 +5,12 @@ defmodule QuillEx.GUI.Components.PlainText do
   # Define the struct for PlainText
   # We could have 2 structs, one which is the state, and one which is the component
   # instead of defstruct macro, use like defwidget or defcomponent
-  defstruct text: nil
+  defstruct text: nil,
+            color: nil
 
   # Validate function to ensure proper parameters are being passed.
-  def validate({%__MODULE__{text: text} = state, %Frame{} = frame}) when is_binary(text) do
+  def validate({%__MODULE__{text: text} = state, %Frame{} = frame})
+      when is_binary(text) do
     {:ok, {state, frame}}
   end
 
@@ -33,21 +35,28 @@ defmodule QuillEx.GUI.Components.PlainText do
   @default_text_size 24
 
   # TODO apply scissor
-  def render(%__MODULE__{text: text}, %Frame{} = frame) when is_binary(text) do
-    Scenic.Graph.build(
-      font: :ibm_plex_mono,
-      scissor: Dimensions.box(frame.size)
-    )
+  def render(%__MODULE__{text: text} = state, %Frame{} = frame) when is_binary(text) do
+    Scenic.Graph.build(font: :ibm_plex_mono)
     |> Scenic.Primitives.group(
       fn graph ->
         graph
+        |> render_background(state, frame)
         |> Scenic.Primitives.text(text,
           t: {@left_margin, @default_text_size}
         )
       end,
       id: :plain_text,
+      scissor: Dimensions.box(frame.size),
       translate: Coordinates.point(frame.pin)
-      # translate: frame.pin
     )
+  end
+
+  def render_background(
+        %Scenic.Graph{} = graph,
+        %__MODULE__{} = state,
+        %Frame{size: f_size}
+      ) do
+    graph
+    |> Scenic.Primitives.rect(Dimensions.box(f_size), fill: state.color, opacity: 0.5)
   end
 end
