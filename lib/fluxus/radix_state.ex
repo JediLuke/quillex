@@ -104,15 +104,17 @@ defmodule QuillEx.Fluxus.Structs.RadixState do
   @menubar_height 60
 
   def new do
-    # {:ok, {_type, ibm_plex_mono_font_metrics}} = Scenic.Assets.Static.meta(:ibm_plex_mono)
+    text =
+      ~s|# {:ok, {_type, ibm_plex_mono_font_metrics}} = Scenic.Assets.Static.meta(:ibm_plex_mono)
     # font = Font.new(name: :ibm_plex_mono, size: 24, metrics: ibm_plex_mono_font_metrics)
     # menu_font = Font.new(name: :ibm_plex_mono, size: 36, metrics: ibm_plex_mono_font_metrics)
+    |
 
     %__MODULE__{
       layout: :full_screen,
       # layout: {:standard_rule, linemark: @menubar_height},
       components: [
-        %QuillEx.GUI.Components.PlainText{text: "DragonForce!"}
+        %QuillEx.GUI.Components.PlainText{text: text}
       ]
       # root: %Root{}
       # gui: %GUI{},

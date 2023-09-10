@@ -1,6 +1,6 @@
 defmodule QuillEx.GUI.Components.PlainText do
   use Scenic.Component
-  alias Widgex.Structs.Frame
+  alias Widgex.Structs.{Coordinates, Dimensions, Frame}
 
   # Define the struct for PlainText
   # We could have 2 structs, one which is the state, and one which is the component
@@ -26,14 +26,27 @@ defmodule QuillEx.GUI.Components.PlainText do
   #   {:noreply, new_scene}
   # end
 
+  # This is the left-hand margin, text-editors just look better with a bit of left margin
+  @left_margin 5
+
+  # Scenic uses this text size by default, we need to use it to apply translations
+  @default_text_size 24
+
   # TODO apply scissor
   def render(%__MODULE__{text: text}, %Frame{} = frame) when is_binary(text) do
-    Scenic.Graph.build()
+    Scenic.Graph.build(
+      font: :ibm_plex_mono,
+      scissor: Dimensions.box(frame.size)
+    )
     |> Scenic.Primitives.group(
       fn graph ->
-        graph |> Scenic.Primitives.text(text, font: :ibm_plex_mono, t: {0, 24})
+        graph
+        |> Scenic.Primitives.text(text,
+          t: {@left_margin, @default_text_size}
+        )
       end,
-      id: :plain_text
+      id: :plain_text,
+      translate: Coordinates.point(frame.pin)
       # translate: frame.pin
     )
   end
