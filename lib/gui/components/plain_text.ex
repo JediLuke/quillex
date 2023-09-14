@@ -6,12 +6,17 @@ defmodule QuillEx.GUI.Components.PlainText do
   # We could have 2 structs, one which is the state, and one which is the component
   # instead of defstruct macro, use like defwidget or defcomponent
   defstruct text: nil,
-            color: nil
+            color: nil,
+            scroll: {0, 0}
 
   # Validate function to ensure proper parameters are being passed.
   def validate({%__MODULE__{text: text} = state, %Frame{} = frame})
       when is_binary(text) do
     {:ok, {state, frame}}
+  end
+
+  def new(%{text: t}) when is_binary(t) do
+    %__MODULE__{text: t}
   end
 
   def init(scene, {%__MODULE__{} = state, %Frame{} = frame}, _opts) do
@@ -42,10 +47,10 @@ defmodule QuillEx.GUI.Components.PlainText do
         graph
         |> render_background(state, frame)
         |> Scenic.Primitives.text(text,
-          t: {@left_margin, @default_text_size}
+          translate: {@left_margin, @default_text_size}
         )
       end,
-      id: :plain_text,
+      id: __MODULE__,
       scissor: Dimensions.box(frame.size),
       translate: Coordinates.point(frame.pin)
     )
@@ -53,10 +58,25 @@ defmodule QuillEx.GUI.Components.PlainText do
 
   def render_background(
         %Scenic.Graph{} = graph,
-        %__MODULE__{} = state,
+        %__MODULE__{color: c} = state,
+        %Frame{size: f_size}
+      )
+      when not is_nil(c) do
+    graph
+    |> Scenic.Primitives.rect(Dimensions.box(f_size),
+      fill: state.color,
+      opacity: 0.5
+    )
+  end
+
+  def render_background(
+        %Scenic.Graph{} = graph,
+        _state,
         %Frame{size: f_size}
       ) do
     graph
-    |> Scenic.Primitives.rect(Dimensions.box(f_size), fill: state.color, opacity: 0.5)
+    |> Scenic.Primitives.rect(Dimensions.box(f_size),
+      opacity: 0.5
+    )
   end
 end

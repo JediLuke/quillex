@@ -50,10 +50,28 @@ defmodule QuillEx.Scene.RootScene.RenderTool do
     graph
   end
 
+  defp do_render_components(graph, [{nil, _f} | rest]) do
+    # if component is nil just draw nothing
+    graph |> do_render_components(rest)
+  end
+
   # defp do_render_components(graph, [%Widgex.Component{} = c | rest]) when is_struct(c) do
   defp do_render_components(graph, [{c, %Frame{} = f} | rest]) when is_struct(c) do
     graph
     |> c.__struct__.add_to_graph({c, f})
+    |> do_render_components(rest)
+  end
+
+  defp do_render_components(graph, [{sub_stack, sub_frame_stack} | rest])
+       when is_list(sub_stack) and is_list(sub_frame_stack) do
+    if length(sub_stack) != length(sub_frame_stack) do
+      raise "length of (sub!) components and framestack must match"
+    end
+
+    sub_component_frames = Enum.zip(sub_stack, sub_frame_stack)
+
+    graph
+    |> do_render_components(sub_component_frames)
     |> do_render_components(rest)
   end
 
