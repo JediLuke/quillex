@@ -6,7 +6,7 @@ defmodule QuillEx.GUI.Components.PlainText do
   # We could have 2 structs, one which is the state, and one which is the component
   # instead of defstruct macro, use like defwidget or defcomponent
   defstruct text: nil,
-            color: nil,
+            theme: nil,
             scroll: {0, 0}
 
   # Validate function to ensure proper parameters are being passed.
@@ -16,7 +16,15 @@ defmodule QuillEx.GUI.Components.PlainText do
   end
 
   def new(%{text: t}) when is_binary(t) do
+    raise "woopsey"
     %__MODULE__{text: t}
+  end
+
+  def draw(text) when is_binary(text) do
+    %__MODULE__{
+      text: text,
+      theme: QuillEx.GUI.Themes.midnight_shadow()
+    }
   end
 
   def init(scene, {%__MODULE__{} = state, %Frame{} = frame}, _opts) do
@@ -47,7 +55,8 @@ defmodule QuillEx.GUI.Components.PlainText do
         graph
         |> render_background(state, frame)
         |> Scenic.Primitives.text(text,
-          translate: {@left_margin, @default_text_size}
+          translate: {@left_margin, @default_text_size},
+          fill: state.theme.text
         )
       end,
       id: __MODULE__,
@@ -58,13 +67,12 @@ defmodule QuillEx.GUI.Components.PlainText do
 
   def render_background(
         %Scenic.Graph{} = graph,
-        %__MODULE__{color: c} = state,
+        %__MODULE__{} = state,
         %Frame{size: f_size}
-      )
-      when not is_nil(c) do
+      ) do
     graph
     |> Scenic.Primitives.rect(Dimensions.box(f_size),
-      fill: state.color,
+      fill: state.theme.background,
       opacity: 0.5
     )
   end
