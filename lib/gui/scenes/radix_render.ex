@@ -1,4 +1,4 @@
-defmodule QuillEx.Scene.RootScene.RenderTool do
+defmodule QuillEx.Scene.RadixRender do
   # alias QuillEx.GUI.Components.{Editor, SplashScreen}
   # alias ScenicWidgets.Core.Structs.Frame
   # alias ScenicWidgets.Core.Utils.FlexiFrame
@@ -17,7 +17,7 @@ defmodule QuillEx.Scene.RootScene.RenderTool do
 
     # |> render_menubar(%{frame: menubar_f, radix_state: radix_state})
 
-    Scenic.Graph.build()
+    Scenic.Graph.build(font: :ibm_plex_mono)
     |> Scenic.Primitives.group(
       fn graph ->
         graph |> render_components(vp, radix_state)
@@ -29,6 +29,11 @@ defmodule QuillEx.Scene.RootScene.RenderTool do
   def render_components(graph, _vp, %{components: []} = _radix_state) do
     graph
   end
+
+  # TODO join_together(layout, components) - the output of this
+  # function is a zipped-list of tuples with each component having
+  # been assigned a %Frame{} (and a layer??) - no, layer management
+  # happens at a higher level
 
   def render_components(graph, vp, radix_state) do
     # new_graph = graph

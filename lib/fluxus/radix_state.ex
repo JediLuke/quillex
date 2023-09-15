@@ -116,10 +116,12 @@ defmodule QuillEx.Fluxus.Structs.RadixState do
       # layout: :full_screen,
       # layout: :v_split,
       layout: {:vertical_split, {60, :px}},
+      # layout: {:horizontal_split, {60, :px}},
       # layout: {:vertical_split, {0.17, :ratio}},
       # layout: {:standard_rule, linemark: @menubar_height},
       components: [
-        %ScenicWidgets.MenuBar{},
+        # %ScenicWidgets.MenuBar{},
+        ScenicWidgets.UbuntuBar.draw(),
         # TODO simply put 2 components in a list, to reflect nested components
         %QuillEx.GUI.Components.PlainText{text: text, color: :pink}
         # %QuillEx.GUI.Components.PlainText{text: "Second buffer!!", color: :grey}

@@ -1,7 +1,7 @@
 defmodule QuillEx.Scene.RootScene do
   use Scenic.Scene
   alias QuillEx.Fluxus.Structs.RadixState
-  alias QuillEx.Scene.RootScene.RenderTool
+  alias QuillEx.Scene.RadixRender
   require Logger
 
   def init(
@@ -11,8 +11,11 @@ defmodule QuillEx.Scene.RootScene do
       ) do
     Logger.debug("#{__MODULE__} initializing...")
 
-    # radix_state = QuillEx.Fluxus.RadixStore.get()
-    init_graph = RenderTool.render(scene_viewport, radix_state)
+    theme =
+      init_graph =
+      scene_viewport
+      |> RadixRender.render(radix_state)
+      |> maybe_render_debug_layer(scene_viewport, radix_state)
 
     init_scene =
       scene
@@ -27,6 +30,21 @@ defmodule QuillEx.Scene.RootScene do
     {:ok, init_scene}
   end
 
+  defp maybe_render_debug_layer(graph, _viewport, _radix_state) do
+    # if radix_state.gui_config.debug do
+    #   Scenic.Graph.add_layer(
+    #     Scenic.Graph.new(:debug_layer),
+    #     Scenic.Graph.new(:debug_layer, [Scenic.Primitives.text("DEBUG MODE")])
+    #   )
+    # else
+    #   Scenic.Graph.new(:debug_layer)
+    # end
+
+    # for now, do nothing...
+    # in the future we could render an overlay showing the layout
+    graph
+  end
+
   def handle_input(
         {:viewport, {:reshape, {new_vp_width, new_vp_height} = new_size}},
         _context,
@@ -37,8 +55,9 @@ defmodule QuillEx.Scene.RootScene do
     {:noreply, scene}
   end
 
-  def handle_input({:viewport, {input, coords}}, context, scene) when input in [:enter, :exit] do
-    # don't do anything when the mouse leaves the viewport
+  def handle_input({:viewport, {input, _coords}}, _context, scene)
+      when input in [:enter, :exit] do
+    # don't do anything when the mouse enters/leaves the viewport
     {:noreply, scene}
   end
 
