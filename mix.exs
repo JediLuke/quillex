@@ -23,19 +23,17 @@ defmodule QuillEx.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      # {:scenic, "~> 0.11.0-beta.0"},
-      {:scenic, path: "../scenic", override: true},
+      {:scenic, "~> 0.11.0-beta.0"},
       # {:scenic_driver_local, "~> 0.11.0-beta.0"},
-      {:scenic_driver_local, path: "../scenic_driver_local", override: true},
-      # {:scenic_driver_local, git: "https://github.com/JediLuke/scenic_driver_local", branch: "no_line_wrap"},
-      # {:event_bus, path: "../event_bus", override: true},
-      {:event_bus, git: "https://github.com/JediLuke/event_bus", override: true},
+      # {:scenic_driver_local, path: "../scenic_driver_local", override: true},
+      {:scenic_driver_local,
+       git: "https://github.com/JediLuke/scenic_driver_local", branch: "luke_working"},
+      # {:scenic_widget_contrib, path: "../scenic-widget-contrib", override: true},
+      {:scenic_widget_contrib,
+       git: "https://github.com/JediLuke/scenic-widget-contrib", branch: "text_pad_wip"},
       {:elixir_uuid, "~> 1.2"},
-      {:scenic_widget_contrib, path: "../scenic-widget-contrib", override: true},
-      # {:scenic_widget_contrib, git: "https://github.com/JediLuke/scenic-widget-contrib", branch: "text_pad_wip"},
-      {:font_metrics, "~> 0.5"}
-      # {:font_metrics, path: "../font_metrics", override: true}
-      # {:font_metrics, git: "https://github.com/JediLuke/font_metrics", branch: "add_line_height_fn", override: true}
+      {:font_metrics, "~> 0.5"},
+      {:event_bus, git: "https://github.com/JediLuke/event_bus", override: true}
     ]
   end
 end
