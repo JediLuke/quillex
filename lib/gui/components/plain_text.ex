@@ -7,7 +7,11 @@ defmodule QuillEx.GUI.Components.PlainText do
   # instead of defstruct macro, use like defwidget or defcomponent
   defstruct text: nil,
             theme: nil,
-            scroll: {0, 0}
+            scroll: {0, 0},
+            file_bar: %{
+              show?: true,
+              filename: nil
+            }
 
   # Validate function to ensure proper parameters are being passed.
   def validate({%__MODULE__{text: text} = state, %Frame{} = frame})

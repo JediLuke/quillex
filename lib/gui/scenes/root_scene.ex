@@ -45,6 +45,11 @@ defmodule QuillEx.Scene.RootScene do
     graph
   end
 
+  def handle_cast(msg, scene) do
+    IO.inspect(msg, label: "MMM")
+    {:noreply, scene}
+  end
+
   def handle_input(
         {:viewport, {:reshape, {new_vp_width, new_vp_height} = new_size}},
         _context,

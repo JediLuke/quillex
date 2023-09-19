@@ -82,6 +82,8 @@ defmodule QuillEx.Fluxus.Structs.RadixState do
   # desktop: nil,
   # editor: nil
 
+  alias QuillEx.GUI.Components.PlainText
+
   defstruct layout: nil,
             components: []
 
@@ -122,7 +124,7 @@ defmodule QuillEx.Fluxus.Structs.RadixState do
       components: [
         # %ScenicWidgets.MenuBar{},
         ScenicWidgets.UbuntuBar.draw(),
-        QuillEx.GUI.Components.PlainText.draw(text)
+        PlainText.draw(text)
         # TODO simply put 2 components in a list, to reflect nested components
         # %QuillEx.GUI.Components.PlainText{text: text, color: :pink}
         # %QuillEx.GUI.Components.PlainText{text: "Second buffer!!", color: :grey}
