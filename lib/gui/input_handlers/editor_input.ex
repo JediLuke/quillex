@@ -22,6 +22,7 @@ defmodule QuillEx.UserInputHandler.Editor do
   #   :ignore
   # end
 
+  def process(_k), do: :ignore
   # def process(key, buffer_api_module) when key in @valid_text_input_characters do
   #   buffer_api_module.active_buf()
   #   |> buffer_api_module.modify({:insert, key |> key2string(), :at_cursor})

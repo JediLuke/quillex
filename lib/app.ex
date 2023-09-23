@@ -14,7 +14,8 @@ defmodule QuillEx.App do
       {Registry, keys: :duplicate, name: QuillEx.PubSub},
       {QuillEx.Fluxus.RadixStore, init_radix_state},
       {Scenic, [scenic_config(init_radix_state)]},
-      QuillEx.EventListener
+      # QuillEx.EventListener
+      QuillEx.Fluxus.ActionListener
     ]
 
     Supervisor.start_link(children, strategy: :one_for_one)

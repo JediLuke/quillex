@@ -42,11 +42,22 @@ defmodule QuillEx.Scene.RadixRender do
 
     # |> ScenicWidgets.FrameBox.draw(%{frame: hd(editor_f), color: :blue})
     # |> Editor.add_to_graph(args |> Map.merge(%{app: QuillEx}), id: :editor)
-    if length(radix_state.components) != length(framestack) do
-      raise "length of components and framestack must match"
-    end
 
-    component_frames = Enum.zip(radix_state.components, framestack)
+    component_frames =
+      cond do
+        length(radix_state.components) == length(framestack) ->
+          Enum.zip(radix_state.components, framestack)
+
+        length(radix_state.components) < length(framestack) ->
+          # just take the first 'n' frames
+          first_frames = Enum.take(framestack, length(radix_state.components))
+          Enum.zip(radix_state.components, framestack)
+
+        length(radix_state.components) > length(framestack) ->
+          raise "more components than we have frames, cannot render"
+      end
+
+    # component_frames = Enum.zip(radix_state.components, framestack)
 
     graph |> do_render_components(component_frames)
   end

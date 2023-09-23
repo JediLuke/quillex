@@ -1,11 +1,12 @@
 import Config
 
-config :scenic, :assets,
-  module: QuillEx.Assets
+config :scenic, :assets, module: QuillEx.Assets
 
 config :event_bus,
-  # most events & input gets processed through here
-  topics: [:general]
+  topics: [
+    :quill_ex_actions,
+    :quill_ex_user_input
+  ]
 
 config :logger, level: :info
 

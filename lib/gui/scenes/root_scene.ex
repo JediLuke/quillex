@@ -11,8 +11,9 @@ defmodule QuillEx.Scene.RootScene do
       ) do
     Logger.debug("#{__MODULE__} initializing...")
 
-    theme =
-      init_graph =
+    # theme =
+
+    init_graph =
       scene_viewport
       |> RadixRender.render(radix_state)
       |> maybe_render_debug_layer(scene_viewport, radix_state)
@@ -45,11 +46,6 @@ defmodule QuillEx.Scene.RootScene do
     graph
   end
 
-  def handle_cast(msg, scene) do
-    IO.inspect(msg, label: "MMM")
-    {:noreply, scene}
-  end
-
   def handle_input(
         {:viewport, {:reshape, {new_vp_width, new_vp_height} = new_size}},
         _context,
@@ -69,6 +65,30 @@ defmodule QuillEx.Scene.RootScene do
   def handle_input(input, context, scene) do
     # Logger.debug "#{__MODULE__} recv'd some (non-ignored) input: #{inspect input}"
     QuillEx.UserInputHandler.process(input)
+    {:noreply, scene}
+  end
+
+  def handle_cast(msg, scene) do
+    IO.inspect(msg, label: "MMM")
+    {:noreply, scene}
+  end
+
+  def handle_info(
+        {:radix_state_change, _new_radix_state},
+        scene
+      ) do
+    # actually here the ROotScene never has to reply to changes but we have it here for now
+    {:noreply, scene}
+  end
+
+  def handle_event(event, _from_pid, scene) do
+    # IO.inspect(event)
+    IO.puts("GOT AN EVENT BUYT I KNOW ITS A CLICK")
+    # IO.inspect(context)
+
+    QuillEx.Fluxus.action(:open_read_only_text_pane)
+
+    # IO.inspect(scene)
     {:noreply, scene}
   end
 
