@@ -57,12 +57,13 @@ defmodule QuillEx.GUI.Components.PlainTextScrollable do
     # in our case it will alway sbe the same because the UBuntuBar never changes...
     # new_state = draw()
 
-    IO.puts("DIF DIF DIF SCROLLABLE")
+    # IO.puts("DIF DIF DIF SCROLLABLE")
     # dbg()
 
     if old_state == new_state do
       {false, old_state}
     else
+      IO.puts("Scrollable DIFF DIFF DIFF")
       {true, new_state}
     end
   end

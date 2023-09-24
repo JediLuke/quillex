@@ -4,6 +4,7 @@ defmodule QuillEx.Fluxus.RadixReducer do
   are apart of the Fluxus system. This module just contains mutation
   functions for the RadixState.
   """
+  require Logger
 
   alias QuillEx.Fluxus.Structs.RadixState
 
@@ -72,4 +73,15 @@ defmodule QuillEx.Fluxus.RadixReducer do
   #   radix_state
   #   |> put_in([:editor, :scroll_state], new_scroll_state)
   # end
+
+  def process(radix_state, :test_input_action) do
+    IO.puts("PROCESSING TEST ACTION")
+    {:ok, radix_state}
+  end
+
+  def process(radix_state, unknown_action) do
+    IO.inspect(unknown_action, label: "ACXXXION")
+    Logger.warn("Unknown action: #{inspect(unknown_action)}")
+    {:ok, radix_state}
+  end
 end

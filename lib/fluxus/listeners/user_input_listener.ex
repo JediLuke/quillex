@@ -25,29 +25,40 @@ defmodule QuillEx.Fluxus.UserInputListener do
       :ignore
     else
       %EventBus.Model.Event{id: _id, topic: @topic, data: {:user_input, input}} = event
-      # TODO lock the store?
-      # NOTE NOTE NOTE - ok, here's the thing, break time, but then...
-      # we need to move the store to inside one process so that all updates to the store happen sequentially!!
-
-      radix_state = Flamelex.Fluxus.RadixStore.get()
-
-      case Flamelex.Fluxus.UserInputHandler.process(radix_state, input) do
-        :ignore ->
-          # try_custom_input_handler(radix_state, input, event_shadow)
-
-          # Logger.debug "#{__MODULE__} ignoring... #{inspect(%{radix_state: radix_state, action: action})}"
-          EventBus.mark_as_completed({__MODULE__, event_shadow})
-
-        {:ok, ^radix_state} ->
-          # Logger.debug "#{__MODULE__} ignoring (no state-change)..."
-          EventBus.mark_as_completed({__MODULE__, event_shadow})
-
-        {:ok, new_radix_state} ->
-          # Logger.debug "#{__MODULE__} processed event, state changed..."
-          Flamelex.Fluxus.RadixStore.put(new_radix_state)
-          EventBus.mark_as_completed({__MODULE__, event_shadow})
-      end
+      handle_input(input, event_shadow)
     end
+  end
+
+  def handle_input(input, event_shadow) do
+    # radix_state = QuillEx.Fluxus.RadixStore.get()
+
+    # action =
+
+    # case QuillEx.Fluxus.UserInputHandler.process(input) do
+    #   :ignore ->
+    #     EventBus.mark_as_completed({__MODULE__, event_shadow})
+    # end
+
+    # case QuillEx.Fluxus.UserInputHandler.process(radix_state, input) do
+    #   :ignore ->
+    #     # try_custom_input_handler(radix_state, input, event_shadow)
+
+    #     # Logger.debug "#{__MODULE__} ignoring... #{inspect(%{radix_state: radix_state, action: action})}"
+    #     EventBus.mark_as_completed({__MODULE__, event_shadow})
+
+    #   {:ok, ^radix_state} ->
+    #     # Logger.debug "#{__MODULE__} ignoring (no state-change)..."
+    #     EventBus.mark_as_completed({__MODULE__, event_shadow})
+
+    #   {:ok, new_radix_state} ->
+    #     # Logger.debug "#{__MODULE__} processed event, state changed..."
+    #     QuillEx.Fluxus.RadixStore.put(new_radix_state)
+    #     EventBus.mark_as_completed({__MODULE__, event_shadow})
+    # end
+
+    # QuillEx.Fluxus.RadixStore
+
+    raise "... you have died."
   end
 
   # TODO need to add to memex to get refills for my ADHD meds, maybe need to change my insurance?
