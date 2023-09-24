@@ -120,7 +120,6 @@ defmodule QuillEx.Scene.RootScene do
     #   scene.viewport
     #   |> RadixRender.render(new_radix_state, children)
 
-    # # dbg()
     # # |> maybe_render_debug_layer(scene_viewport, new_radix_state)
 
     # if new_graph.ids == scene.assigns.graph.ids do
@@ -164,11 +163,8 @@ defmodule QuillEx.Scene.RootScene do
   end
 
   def handle_event(event, _from_pid, scene) do
-    # IO.inspect(event)
     IO.puts("GOT AN EVENT BUYT I KNOW ITS A CLICK #{inspect(event)}}")
-    # IO.inspect(context)
 
-    # dbg()
     {:glyph_clicked_event, button_num} = event
 
     # {:ok, kids} = Scenic.Scene.children(scene)

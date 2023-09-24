@@ -189,7 +189,7 @@ defmodule QuillEx.Fluxus.Structs.RadixState do
     new_components =
       Enum.map(components, fn component ->
         # todo lol this one's brilliant
-        if (Map.get(component, :id) || component.widgex.id) == component_id do
+        if component.widgex.id == component_id do
           fun.(component)
         else
           component

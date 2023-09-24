@@ -46,6 +46,49 @@ defmodule QuillEx.Fluxus.RadixStore do
     {:reply, :ok, new_radix_state}
   end
 
+  def handle_call(
+        {:user_input, %{input: ii, component_id: component_id}},
+        from,
+        rdx_state
+      ) do
+    # TODO here, because this input has something to do with a particular component,
+    # we need to do something clever & figure out exactly what to do...
+
+    # for now I will just ignore it
+    Logger.info("WEIRD INPUT #{inspect(ii)} component #{inspect(component_id)}}")
+
+    ## I need to convert it to some piece of normal input, and then handle it as normal
+
+    new_rdx_state =
+      rdx_state
+      |> RadixState.update_component(component_id, fn component ->
+        # if this module exports the function handle_input/1, then call it, else do nothing
+
+        # component.handle_input(ii)
+        # TODO this is a hack, we need to be able to update the state of a component
+        # old_scroll = component.scroll
+        # fast_scroll = {0, @scroll_factor * delta_y}
+        # new_scroll = Scenic.Math.Vector2.add(old_scroll, fast_scroll)
+
+        # component |> Map.put(:scroll, new_scroll)
+
+        if function_exported?(component.__struct__, :handle_user_input, 2) do
+          IO.puts("HANDININGIN")
+          component.__struct__.handle_user_input(component, ii)
+        else
+          IO.puts(":NOO")
+          component
+        end
+      end)
+
+    QuillEx.Lib.Utils.PubSub.broadcast(
+      topic: :radix_state_change,
+      msg: {:radix_state_change, new_rdx_state}
+    )
+
+    {:reply, :ok, new_rdx_state}
+  end
+
   def handle_call({:user_input, ii}, from, state) do
     # TODO can we return multiple actions?? and handle them sequentially???
     # {:action, action} = QuillEx.Fluxus.UserInputHandler.handle(state, ii)
@@ -60,6 +103,7 @@ defmodule QuillEx.Fluxus.RadixStore do
 
     case QuillEx.Fluxus.UserInputHandler.handle(state, ii) do
       :ignored ->
+        # IO.puts("ignoring #{inspect(ii)}")
         {:reply, :ok, state}
 
       {:action, action} ->

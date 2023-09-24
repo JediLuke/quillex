@@ -44,12 +44,6 @@ defmodule QuillEx.GUI.Components.PlainTextScrollable do
 
   # end
 
-  def render(%Scenic.Graph{} = graph, %__MODULE__{} = s, %Frame{} = f) do
-    graph
-    |> paint_background(s, f)
-    |> draw_text(s, f)
-  end
-
   def radix_diff(%__MODULE__{} = old_state, new_rdx) do
     # old_component = Enum.find(old_rdx.components, &(&1.widgex.id == __MODULE__))
     new_state = Enum.find(new_rdx.components, &(&1.widgex.id == __MODULE__))
@@ -58,7 +52,6 @@ defmodule QuillEx.GUI.Components.PlainTextScrollable do
     # new_state = draw()
 
     # IO.puts("DIF DIF DIF SCROLLABLE")
-    # dbg()
 
     if old_state == new_state do
       {false, old_state}
@@ -66,6 +59,12 @@ defmodule QuillEx.GUI.Components.PlainTextScrollable do
       IO.puts("Scrollable DIFF DIFF DIFF")
       {true, new_state}
     end
+  end
+
+  def render(%Scenic.Graph{} = graph, %__MODULE__{} = s, %Frame{} = f) do
+    graph
+    |> paint_background(s, f)
+    |> draw_text(s, f)
   end
 
   def paint_background(graph, state, frame) do
@@ -85,10 +84,23 @@ defmodule QuillEx.GUI.Components.PlainTextScrollable do
     )
   end
 
-  def handle_input(input, context, scene) do
+  def handle_input({:cursor_scroll, {_scroll_delta, _cursor_coords}} = ii, context, scene) do
     # TODO this action name/details is temporary but I'm just establishing the link
-    QuillEx.Fluxus.user_input({:scroll, {input, scene.assigns.state.widgex.id}})
+    # QuillEx.Fluxus.user_input({:scroll, {input, scene.assigns.state.widgex.id}})
+    QuillEx.Fluxus.user_input(%{input: ii, component_id: scene.assigns.state.widgex.id})
     {:noreply, scene}
+  end
+
+  def handle_user_input(
+        %__MODULE__{} = state,
+        {:cursor_scroll, {{_delta_x, delta_y} = _delta_scroll, _coords_i_think_are_global?}}
+      ) do
+    # IO.inspect(input, label: ":OIHGOIH")
+    new_scroll =
+      Scenic.Math.Vector2.add(state.scroll, {0, 5 * delta_y})
+      |> IO.inspect(label: "SCROLLING")
+
+    %{state | scroll: new_scroll}
   end
 end
 

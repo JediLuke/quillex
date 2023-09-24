@@ -2,7 +2,16 @@ defmodule QuillEx.Fluxus.UserInputHandler do
   use ScenicWidgets.ScenicEventsDefinitions
 
   def handle(radix_state, input) do
-    {:action, :test_input_action}
+    # {:action, :test_input_action}
+
+    # {:scroll, {{:cursor_scroll, {{0.0, -1.0}, {459.0, 434.0}}}, QuillEx.GUI.Components.PlainTextScrollable}}
+
+    :ignored
+  end
+
+  def handle(radix_state, input) do
+    # {:action, :test_input_action}
+    :ignored
   end
 end
 

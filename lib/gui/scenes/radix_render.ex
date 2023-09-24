@@ -93,8 +93,6 @@ defmodule QuillEx.Scene.RadixRender do
     #     end
     #   end)
 
-    # dbg()
-
     graph |> do_render_components(component_frames)
   end
 
