@@ -64,7 +64,10 @@ defmodule QuillEx.Scene.RootScene do
 
   def handle_input(input, context, scene) do
     # Logger.debug "#{__MODULE__} recv'd some (non-ignored) input: #{inspect input}"
-    QuillEx.UserInputHandler.process(input)
+    # QuillEx.Useo
+    # rInputHandler.process(input)
+
+    # TODO mayube here, we need to handle input in the same thread as root process? This (I think) would at least make all input processed on the radix state at the time of input, vs throwing an event it may introduce timing errors...
     {:noreply, scene}
   end
 
@@ -115,6 +118,10 @@ defmodule QuillEx.Scene.RootScene do
     else
       if button_num == 1 do
         QuillEx.Fluxus.action(:open_text_pane)
+      else
+        if button_num == 2 do
+          QuillEx.Fluxus.action(:open_text_pane_scrollable)
+        end
       end
     end
 

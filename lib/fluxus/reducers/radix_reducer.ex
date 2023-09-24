@@ -23,6 +23,14 @@ defmodule QuillEx.Fluxus.RadixReducer do
     {:ok, new_rdx}
   end
 
+  def process(radix_state, :open_text_pane_scrollable) do
+    # IO.inspect(action, label: "ACXXXION")
+
+    new_rdx = radix_state |> RadixState.show_text_pane_scrollable()
+
+    {:ok, new_rdx}
+  end
+
   # def change_font(%{editor: %{font: current_font}} = radix_state, new_font)
   #     when is_atom(new_font) do
   #   {:ok, {_type, new_font_metrics}} = Scenic.Assets.Static.meta(new_font)

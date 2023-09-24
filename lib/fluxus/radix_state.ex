@@ -83,6 +83,7 @@ defmodule QuillEx.Fluxus.Structs.RadixState do
   # editor: nil
 
   alias QuillEx.GUI.Components.PlainText
+  alias QuillEx.GUI.Components.PlainTextScrollable
 
   defstruct layout: nil,
             components: []
@@ -152,6 +153,17 @@ defmodule QuillEx.Fluxus.Structs.RadixState do
     new_components = [
       ScenicWidgets.UbuntuBar.draw(),
       PlainText.draw(text)
+    ]
+
+    Map.put(rdx_state, :components, new_components)
+  end
+
+  def show_text_pane_scrollable(%__MODULE__{} = rdx_state) do
+    text = File.read!("test/support/spinozas_ethics_p1.txt")
+
+    new_components = [
+      ScenicWidgets.UbuntuBar.draw(),
+      PlainTextScrollable.draw(text)
     ]
 
     Map.put(rdx_state, :components, new_components)

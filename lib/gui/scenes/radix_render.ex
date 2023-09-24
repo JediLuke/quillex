@@ -78,7 +78,8 @@ defmodule QuillEx.Scene.RadixRender do
   # TODO maybe we enforce ID here somehjow??
   defp do_render_components(graph, [{c, %Frame{} = f} | rest]) when is_struct(c) do
     graph
-    |> c.__struct__.add_to_graph({c, f}, id: c.id)
+    # |> c.__struct__.add_to_graph({c, f}, id: c.id || c.widgex.id)
+    |> c.__struct__.add_to_graph({c, f})
     |> do_render_components(rest)
   end
 

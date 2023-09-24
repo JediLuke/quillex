@@ -1,4 +1,5 @@
 defmodule QuillEx.GUI.Components.PlainText do
+  # this module renders text inside a frame, but it can't be scrolled & has no rich-text or "smart" display, e.g. it can't handle tabs
   use Scenic.Component
   alias Widgex.Structs.{Coordinates, Dimensions, Frame}
 
