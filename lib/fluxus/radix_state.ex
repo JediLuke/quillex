@@ -168,4 +168,10 @@ defmodule QuillEx.Fluxus.Structs.RadixState do
 
     Map.put(rdx_state, :components, new_components)
   end
+
+  def scroll_editor(rdx_state, {:scroll, {input, editor_id}}) do
+    IO.inspect("SCROLLED =- #{inspect({input, editor_id})}")
+
+    rdx_state
+  end
 end

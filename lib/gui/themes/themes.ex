@@ -49,7 +49,26 @@ defmodule QuillEx.GUI.Themes do
       active: @midnight_pallette.light_green,
       thumb: @midnight_pallette.red_brown,
       focus: @midnight_pallette.blue,
-      highlight: @midnight_pallette.primary
+      highlight: @midnight_pallette.primary,
+
+      # these below are the extended colours
+
+      extended: %{
+        black_outliner: @midnight_pallette.black_outliner,
+        primary: @midnight_pallette.primary,
+        dark: @midnight_pallette.dark,
+        slate: @midnight_pallette.slate,
+        gray: @midnight_pallette.gray,
+        light_brown: @midnight_pallette.light_brown,
+        dark_gray: @midnight_pallette.dark_gray,
+        light_green: @midnight_pallette.light_green,
+        nuclear_green: @midnight_pallette.nuclear_green,
+        brown: @midnight_pallette.brown,
+        rly_dark_gray: @midnight_pallette.rly_dark_gray,
+        red_brown: @midnight_pallette.red_brown,
+        green: @midnight_pallette.green,
+        blue: @midnight_pallette.blue
+      }
     }
 
   # def midnight_shadow,

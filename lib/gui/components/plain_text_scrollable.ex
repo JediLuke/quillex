@@ -2,7 +2,9 @@ defmodule QuillEx.GUI.Components.PlainTextScrollable do
   use Widgex.Component
 
   defstruct widgex: nil,
-            text: ""
+            scenic: nil,
+            text: "",
+            scroll: {0, 0}
 
   def draw(text) when is_binary(text) do
     %__MODULE__{
@@ -10,13 +12,64 @@ defmodule QuillEx.GUI.Components.PlainTextScrollable do
         id: :plaintext,
         # frame: %Frame{},
         theme: QuillEx.GUI.Themes.midnight_shadow()
+        # layout: %Widgex.Layout{},
       },
-      text: text
+      scenic: %{
+        # hidden - show or hide the primitive
+        # fill - fill in the area of the text. Only solid colors!
+        # font - name (or key) of font to use
+        # font_size - point size of the font
+        font_size: 24
+        # font_blur - option to blur the characters
+        # text_align - alignment of lines of text
+        # text_height - spacing between lines of text
+      },
+      text: text,
+      scroll: {0, 0}
+      # file_bar: %{
+      #   show?: true,
+      #   filename: nil
+      # }
     }
   end
 
-  def render(%Scenic.Graph{} = graph, %__MODULE__{} = state, %Frame{} = f) do
-    graph |> fill_frame(f, color: state.widgex.theme.background)
+  # the idea here is that if we end up embedding this state inside a %Widgex.Component{}, instead of what we
+  # are doing now (which is the reverse, each component contains a %Widget{}), then this functioin will
+  # return the state of this component only
+  # def cast(_args) do
+  #   %__MODULE__{}
+  # end
+
+  # def radix_cast(radix_state, {:scroll, input}) do
+
+  # end
+
+  def render(%Scenic.Graph{} = graph, %__MODULE__{} = s, %Frame{} = f) do
+    graph
+    |> paint_background(s, f)
+    |> draw_text(s, f)
+  end
+
+  def paint_background(graph, state, frame) do
+    graph |> fill_frame(frame, input: [:cursor_scroll])
+  end
+
+  def draw_text(graph, state, frame) do
+    graph
+    |> Scenic.Primitives.text(state.text,
+      translate: {@left_margin, state.scenic.font_size},
+      fill: state.widgex.theme.text
+    )
+  end
+
+  def handle_input(input, context, scene) do
+    IO.inspect(input, label: "SCROLLING")
+
+    # TODO this needs to be cleaned up but in principle yes,
+    # the direct input fires an action that goes through the normal
+    # processing pipeline...
+    QuillEx.Fluxus.action({:scroll, {input, scene.assigns.state.widgex.id}})
+    {:noreply, scene}
   end
 end
 

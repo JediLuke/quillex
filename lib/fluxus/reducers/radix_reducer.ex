@@ -31,6 +31,20 @@ defmodule QuillEx.Fluxus.RadixReducer do
     {:ok, new_rdx}
   end
 
+  def process(radix_state, {:scroll, input}) do
+    # new_components = [
+    #   ScenicWidgets.UbuntuBar.draw(),
+    #   PlainText.draw(~s|Hello world!|)
+    # ]
+
+    # IO.inspect(action, label: "ACXXXION")
+    # radix_state.components
+
+    new_rdx = radix_state |> RadixState.scroll_editor({:scroll, input})
+
+    {:ok, new_rdx}
+  end
+
   # def change_font(%{editor: %{font: current_font}} = radix_state, new_font)
   #     when is_atom(new_font) do
   #   {:ok, {_type, new_font_metrics}} = Scenic.Assets.Static.meta(new_font)
