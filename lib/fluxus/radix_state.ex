@@ -141,7 +141,7 @@ defmodule QuillEx.Fluxus.Structs.RadixState do
   def show_text_pane(%__MODULE__{} = rdx_state) do
     new_components = [
       ScenicWidgets.UbuntuBar.draw(),
-      PlainText.draw(~s|Hello world!|)
+      PlainText.draw(:one, ~s|Hello world!|)
     ]
 
     Map.put(rdx_state, :components, new_components)
@@ -152,7 +152,7 @@ defmodule QuillEx.Fluxus.Structs.RadixState do
 
     new_components = [
       ScenicWidgets.UbuntuBar.draw(),
-      PlainText.draw(text)
+      PlainText.draw(:two, text)
     ]
 
     Map.put(rdx_state, :components, new_components)
@@ -169,9 +169,33 @@ defmodule QuillEx.Fluxus.Structs.RadixState do
     Map.put(rdx_state, :components, new_components)
   end
 
-  def scroll_editor(rdx_state, {:scroll, {input, editor_id}}) do
-    IO.inspect("SCROLLED =- #{inspect({input, editor_id})}")
-
+  @scroll_factor 3
+  def scroll_editor(
+        rdx_state,
+        {:scroll, {{:cursor_scroll, {{delta_x, delta_y}, _coords}}, component_id}}
+      ) do
     rdx_state
+    |> update_component(component_id, fn component ->
+      # TODO this is a hack, we need to be able to update the state of a component
+      old_scroll = component.scroll
+      fast_scroll = {0, @scroll_factor * delta_y}
+      new_scroll = Scenic.Math.Vector2.add(old_scroll, fast_scroll)
+
+      component |> Map.put(:scroll, new_scroll)
+    end)
+  end
+
+  def update_component(%{components: components} = rdx_state, component_id, fun) do
+    new_components =
+      Enum.map(components, fn component ->
+        # todo lol this one's brilliant
+        if (Map.get(component, :id) || component.widgex.id) == component_id do
+          fun.(component)
+        else
+          component
+        end
+      end)
+
+    Map.put(rdx_state, :components, new_components)
   end
 end

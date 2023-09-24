@@ -41,6 +41,7 @@ defmodule QuillEx.Fluxus.RadixReducer do
     # radix_state.components
 
     new_rdx = radix_state |> RadixState.scroll_editor({:scroll, input})
+    IO.puts("SCTROLL SDCROLL - #{inspect(Enum.at(new_rdx.components, 1).scroll)}]}")
 
     {:ok, new_rdx}
   end

@@ -9,7 +9,7 @@ defmodule QuillEx.GUI.Components.PlainTextScrollable do
   def draw(text) when is_binary(text) do
     %__MODULE__{
       widgex: %Widgex.Component.Widget{
-        id: :plaintext,
+        id: __MODULE__,
         # frame: %Frame{},
         theme: QuillEx.GUI.Themes.midnight_shadow()
         # layout: %Widgex.Layout{},
@@ -50,25 +50,43 @@ defmodule QuillEx.GUI.Components.PlainTextScrollable do
     |> draw_text(s, f)
   end
 
+  def radix_diff(%__MODULE__{} = old_state, new_rdx) do
+    # old_component = Enum.find(old_rdx.components, &(&1.widgex.id == __MODULE__))
+    new_state = Enum.find(new_rdx.components, &(&1.widgex.id == __MODULE__))
+
+    # in our case it will alway sbe the same because the UBuntuBar never changes...
+    # new_state = draw()
+
+    IO.puts("DIF DIF DIF SCROLLABLE")
+    # dbg()
+
+    if old_state == new_state do
+      {false, old_state}
+    else
+      {true, new_state}
+    end
+  end
+
   def paint_background(graph, state, frame) do
     graph |> fill_frame(frame, input: [:cursor_scroll])
   end
 
   def draw_text(graph, state, frame) do
+    # all text needs to be translated by the left margin and the font size just to render normally
+    text_pin = {@left_margin, state.scenic.font_size}
+    # then the actual pin we use to translate takes the scroll into account
+    pin = Scenic.Math.Vector2.add(text_pin, state.scroll)
+
     graph
     |> Scenic.Primitives.text(state.text,
-      translate: {@left_margin, state.scenic.font_size},
+      translate: pin,
       fill: state.widgex.theme.text
     )
   end
 
   def handle_input(input, context, scene) do
-    IO.inspect(input, label: "SCROLLING")
-
-    # TODO this needs to be cleaned up but in principle yes,
-    # the direct input fires an action that goes through the normal
-    # processing pipeline...
-    QuillEx.Fluxus.action({:scroll, {input, scene.assigns.state.widgex.id}})
+    # TODO this action name/details is temporary but I'm just establishing the link
+    QuillEx.Fluxus.user_input({:scroll, {input, scene.assigns.state.widgex.id}})
     {:noreply, scene}
   end
 end

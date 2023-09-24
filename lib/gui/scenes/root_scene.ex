@@ -72,7 +72,7 @@ defmodule QuillEx.Scene.RootScene do
   end
 
   def handle_cast(msg, scene) do
-    IO.inspect(msg, label: "MMM")
+    IO.inspect(msg, label: "MMM root scene")
     {:noreply, scene}
   end
 
@@ -82,25 +82,85 @@ defmodule QuillEx.Scene.RootScene do
       ) do
     # actually here the ROotScene never has to reply to changes but we have it here for now
 
+    # TODO possibly this is an answer.. widgex components have to implement some functiuon which compares 2 radix state & determinnes if the component has changed or not - and this will be different for root scene as it will for Ubuntu bar, etc...
+    no_changes? =
+      not components_changed?(scene.assigns.state, new_radix_state) and
+        not layout_changed?(scene.assigns.state, new_radix_state)
+
+    # Enum.map(
+    #   [:components, :layout],
+    #   fn key ->
+    #     scene.assigns.state[key] == new_radix_state[key]
+    #   end
+    # )
+
+    if no_changes? do
+      {:noreply, scene}
+    else
+      new_graph =
+        scene.viewport
+        |> RadixRender.render(new_radix_state)
+
+      new_scene =
+        scene
+        |> assign(state: new_radix_state)
+        |> assign(graph: new_graph)
+        |> push_graph(new_graph)
+
+      {:noreply, new_scene}
+    end
+
     # TODO this might end up being overkill / inefficient... but ultimately, do I even care??
     # I only care if I end up spinning up new processes all the time.. which unfortunately I do think is what's happening :P
 
     # TODO pass in the list of childten to RadixRender so that it knows to only cast, not re-render from scratch, if that Child is alread alive
-    children = Scenic.Scene.children(scene)
+    # {:ok, children} = Scenic.Scene.children(scene)
 
-    new_graph =
-      scene.viewport
-      |> RadixRender.render(new_radix_state, children)
+    # new_graph =
+    #   scene.viewport
+    #   |> RadixRender.render(new_radix_state, children)
 
-    # |> maybe_render_debug_layer(scene_viewport, new_radix_state)
+    # # dbg()
+    # # |> maybe_render_debug_layer(scene_viewport, new_radix_state)
 
-    new_scene =
-      scene
-      |> assign(state: new_radix_state)
-      |> assign(graph: new_graph)
-      |> push_graph(new_graph)
+    # if new_graph.ids == scene.assigns.graph.ids do
+    #   # no need to update the graph on this level
 
-    {:noreply, new_scene}
+    #   new_scene =
+    #     scene
+    #     |> assign(state: new_radix_state)
+
+    #   {:noreply, new_scene}
+    # else
+    #   new_scene =
+    #     scene
+    #     |> assign(state: new_radix_state)
+    #     |> assign(graph: new_graph)
+    #     |> push_graph(new_graph)
+
+    #   {:noreply, new_scene}
+    # end
+
+    # new_scene =
+    #   scene
+    #   |> assign(state: new_radix_state)
+    #   |> assign(graph: new_graph)
+    #   |> push_graph(new_graph)
+
+    # {:noreply, new_scene}
+  end
+
+  def components_changed?(old_radix_state, new_radix_state) do
+    component_ids = fn rdx_state ->
+      Enum.map(rdx_state.components, & &1.widgex.id)
+    end
+
+    component_ids.(old_radix_state) != component_ids.(new_radix_state)
+    # old_radix_state.components != new_radix_state.components
+  end
+
+  def layout_changed?(old_radix_state, new_radix_state) do
+    old_radix_state.layout != new_radix_state.layout
   end
 
   def handle_event(event, _from_pid, scene) do
@@ -108,6 +168,7 @@ defmodule QuillEx.Scene.RootScene do
     IO.puts("GOT AN EVENT BUYT I KNOW ITS A CLICK #{inspect(event)}}")
     # IO.inspect(context)
 
+    # dbg()
     {:glyph_clicked_event, button_num} = event
 
     # {:ok, kids} = Scenic.Scene.children(scene)

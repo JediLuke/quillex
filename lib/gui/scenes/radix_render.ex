@@ -8,7 +8,7 @@ defmodule QuillEx.Scene.RadixRender do
   def render(
         %Scenic.ViewPort{} = vp,
         %RadixState{} = radix_state,
-        children
+        children \\ []
       ) do
     # menu_bar_frame =
     #   Frame.new(vp, {:standard_rule, frame: 1, linemark: radix_state.menu_bar.height})
@@ -46,15 +46,23 @@ defmodule QuillEx.Scene.RadixRender do
     # |> ScenicWidgets.FrameBox.draw(%{frame: hd(editor_f), color: :blue})
     # |> Editor.add_to_graph(args |> Map.merge(%{app: QuillEx}), id: :editor)
 
+    # TODO after zipping them together here with a frame, look in the
+    # children for an existing process
+
     component_frames =
       cond do
         length(radix_state.components) == length(framestack) ->
           Enum.zip(radix_state.components, framestack)
 
+        # |> tag_children(children)
+
         length(radix_state.components) < length(framestack) ->
           # just take the first 'n' frames
           first_frames = Enum.take(framestack, length(radix_state.components))
+
           Enum.zip(radix_state.components, framestack)
+
+        # |> tag_children(children)
 
         length(radix_state.components) > length(framestack) ->
           raise "more components than we have frames, cannot render"
@@ -62,7 +70,54 @@ defmodule QuillEx.Scene.RadixRender do
 
     # component_frames = Enum.zip(radix_state.components, framestack)
 
+    # {:ok, [{:plaintext, #PID<0.336.0>}, {ScenicWidgets.UbuntuBar, #PID<0.339.0>}]}
+
+    # paired_component_frames = Enum.zip(children, component_frames)
+
+    # paired_component_frames =
+    #   Enum.map(component_frames, fn {c, f} ->
+    #     if process_alive?(c.widgex.pid) do
+    #       # {c, f}
+    #       # push the diff to the component
+    #       {pid, c, f}
+    #     else
+    #       {nil, f}
+    #     end
+
+    #     if(Enum.member?())
+
+    #     if c.widgex.id == :ubuntu_bar do
+    #       {c, f}
+    #     else
+    #       {c, f}
+    #     end
+    #   end)
+
+    # dbg()
+
     graph |> do_render_components(component_frames)
+  end
+
+  defp tag_children(component_frames, children) do
+    Enum.map(component_frames, fn {c, f} ->
+      case find_child(c.widgex.id, children) do
+        {component_id, pid} when is_pid(pid) ->
+          {c, f, pid}
+
+        nil ->
+          {c, f}
+      end
+
+      # if pid = find_child(c.widgex.id, children) do
+      #   {c, f, pid}
+      # else
+      #   {, f}
+      # end
+    end)
+  end
+
+  defp find_child(id, children) do
+    Enum.find(children, fn {component_id, _} -> component_id == id end)
   end
 
   defp do_render_components(graph, []) do
@@ -74,14 +129,30 @@ defmodule QuillEx.Scene.RadixRender do
     graph |> do_render_components(rest)
   end
 
+  # defp do_render_components(graph, [{c, f, pid} | rest]) when is_pid(pid) do
+  #   IO.puts("UPDATE DONT REDRAW")
+
+  #   graph
+  #   |> c.__struct__.add_to_graph({c, f}, id: Map.get(c, :id) || c.widgex.id)
+  #   # |> c.__struct__.add_to_graph({c, f}, id: c.widgex.id)
+  #   |> do_render_components(rest)
+  # end
+
   # defp do_render_components(graph, [%Widgex.Component{} = c | rest]) when is_struct(c) do
   # TODO maybe we enforce ID here somehjow??
   defp do_render_components(graph, [{c, %Frame{} = f} | rest]) when is_struct(c) do
     graph
     # |> c.__struct__.add_to_graph({c, f}, id: c.id || c.widgex.id)
-    |> c.__struct__.add_to_graph({c, f})
+    |> c.__struct__.add_to_graph({c, f}, id: c.widgex.id)
     |> do_render_components(rest)
   end
+
+  # defp do_render_components(graph, [{c, %Frame{} = f} | rest]) when is_struct(c) do
+  #   graph
+  #   # |> c.__struct__.add_to_graph({c, f}, id: c.id || c.widgex.id)
+  #   # # |> c.__struct__.add_to_graph({c, f})
+  #   # |> do_render_components(rest)
+  # end
 
   defp do_render_components(graph, [{sub_stack, sub_frame_stack} | rest])
        when is_list(sub_stack) and is_list(sub_frame_stack) do
