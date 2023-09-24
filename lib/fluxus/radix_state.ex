@@ -145,4 +145,15 @@ defmodule QuillEx.Fluxus.Structs.RadixState do
 
     Map.put(rdx_state, :components, new_components)
   end
+
+  def show_text_pane_two(%__MODULE__{} = rdx_state) do
+    text = File.read!("test/support/spinozas_ethics_p1.txt")
+
+    new_components = [
+      ScenicWidgets.UbuntuBar.draw(),
+      PlainText.draw(text)
+    ]
+
+    Map.put(rdx_state, :components, new_components)
+  end
 end

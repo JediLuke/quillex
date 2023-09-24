@@ -102,13 +102,21 @@ defmodule QuillEx.Scene.RootScene do
 
   def handle_event(event, _from_pid, scene) do
     # IO.inspect(event)
-    IO.puts("GOT AN EVENT BUYT I KNOW ITS A CLICK")
+    IO.puts("GOT AN EVENT BUYT I KNOW ITS A CLICK #{inspect(event)}}")
     # IO.inspect(context)
+
+    {:glyph_clicked_event, button_num} = event
 
     # {:ok, kids} = Scenic.Scene.children(scene)
     # IO.inspect(kids)
 
-    QuillEx.Fluxus.action(:open_read_only_text_pane)
+    if button_num == 0 do
+      QuillEx.Fluxus.action(:open_read_only_text_pane)
+    else
+      if button_num == 1 do
+        QuillEx.Fluxus.action(:open_text_pane)
+      end
+    end
 
     # IO.inspect(scene)
     {:noreply, scene}
