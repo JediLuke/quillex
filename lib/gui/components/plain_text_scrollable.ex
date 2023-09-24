@@ -93,13 +93,9 @@ defmodule QuillEx.GUI.Components.PlainTextScrollable do
 
   def handle_user_input(
         %__MODULE__{} = state,
-        {:cursor_scroll, {{_delta_x, delta_y} = _delta_scroll, _coords_i_think_are_global?}}
+        {:cursor_scroll, {{delta_x, delta_y} = _delta_scroll, _coords_i_think_are_global?}}
       ) do
-    # IO.inspect(input, label: ":OIHGOIH")
-    new_scroll =
-      Scenic.Math.Vector2.add(state.scroll, {0, 5 * delta_y})
-      |> IO.inspect(label: "SCROLLING")
-
+    new_scroll = Scenic.Math.Vector2.add(state.scroll, {5 * delta_x, 5 * delta_y})
     %{state | scroll: new_scroll}
   end
 end

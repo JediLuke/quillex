@@ -76,8 +76,9 @@ defmodule QuillEx.Fluxus.RadixStore do
           IO.puts("HANDININGIN")
           component.__struct__.handle_user_input(component, ii)
         else
-          IO.puts(":NOO")
-          component
+          raise "the component should export `handle_user_input/2`"
+          # IO.puts(":NOO")
+          # component
         end
       end)
 
