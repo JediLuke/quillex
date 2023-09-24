@@ -5,7 +5,8 @@ defmodule QuillEx.GUI.Components.PlainText do
   # Define the struct for PlainText
   # We could have 2 structs, one which is the state, and one which is the component
   # instead of defstruct macro, use like defwidget or defcomponent
-  defstruct text: nil,
+  defstruct id: nil,
+            text: nil,
             theme: nil,
             scroll: {0, 0},
             file_bar: %{
@@ -26,6 +27,7 @@ defmodule QuillEx.GUI.Components.PlainText do
 
   def draw(text) when is_binary(text) do
     %__MODULE__{
+      id: :plaintext,
       text: text,
       theme: QuillEx.GUI.Themes.midnight_shadow()
     }

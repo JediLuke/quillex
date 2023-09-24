@@ -7,7 +7,8 @@ defmodule QuillEx.Scene.RadixRender do
 
   def render(
         %Scenic.ViewPort{} = vp,
-        %RadixState{} = radix_state
+        %RadixState{} = radix_state,
+        children
       ) do
     # menu_bar_frame =
     #   Frame.new(vp, {:standard_rule, frame: 1, linemark: radix_state.menu_bar.height})
@@ -20,13 +21,13 @@ defmodule QuillEx.Scene.RadixRender do
     Scenic.Graph.build(font: :ibm_plex_mono)
     |> Scenic.Primitives.group(
       fn graph ->
-        graph |> render_components(vp, radix_state)
+        graph |> render_components(vp, radix_state, children)
       end,
       id: :quillex_root
     )
   end
 
-  def render_components(graph, _vp, %{components: []} = _radix_state) do
+  def render_components(graph, _vp, %{components: []} = _radix_state, _children) do
     graph
   end
 
@@ -35,8 +36,10 @@ defmodule QuillEx.Scene.RadixRender do
   # been assigned a %Frame{} (and a layer??) - no, layer management
   # happens at a higher level
 
-  def render_components(graph, vp, radix_state) do
+  def render_components(graph, vp, radix_state, children) do
     # new_graph = graph
+
+    # IO.inspect(children)
 
     framestack = Frame.stack(vp, radix_state.layout)
 
@@ -72,9 +75,10 @@ defmodule QuillEx.Scene.RadixRender do
   end
 
   # defp do_render_components(graph, [%Widgex.Component{} = c | rest]) when is_struct(c) do
+  # TODO maybe we enforce ID here somehjow??
   defp do_render_components(graph, [{c, %Frame{} = f} | rest]) when is_struct(c) do
     graph
-    |> c.__struct__.add_to_graph({c, f})
+    |> c.__struct__.add_to_graph({c, f}, id: c.id)
     |> do_render_components(rest)
   end
 

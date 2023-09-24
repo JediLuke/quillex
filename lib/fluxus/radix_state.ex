@@ -136,4 +136,13 @@ defmodule QuillEx.Fluxus.Structs.RadixState do
       # editor: %Editor{font: font, config: %Editor.Config{scroll: %Editor.Config.Scroll{}}}
     }
   end
+
+  def show_text_pane(%__MODULE__{} = rdx_state) do
+    new_components = [
+      ScenicWidgets.UbuntuBar.draw(),
+      PlainText.draw(~s|Hello world!|)
+    ]
+
+    Map.put(rdx_state, :components, new_components)
+  end
 end

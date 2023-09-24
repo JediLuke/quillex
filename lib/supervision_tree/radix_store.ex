@@ -49,4 +49,16 @@ defmodule QuillEx.Fluxus.RadixStore do
   def put(new_radix_state, :without_broadcast) do
     Agent.update(__MODULE__, fn _old -> new_radix_state end)
   end
+
+  def update(new_state) do
+    # Logger.debug("#{RadixStore} updating state & broadcasting new_state...")
+    # Logger.debug("#{RadixStore} updating state & broadcasting new_state: #{inspect(new_state)}")
+
+    QuillEx.Lib.Utils.PubSub.broadcast(
+      topic: :radix_state_change,
+      msg: {:radix_state_change, new_state}
+    )
+
+    Agent.update(__MODULE__, fn _old -> new_state end)
+  end
 end

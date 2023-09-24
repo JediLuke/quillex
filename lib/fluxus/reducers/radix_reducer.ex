@@ -5,9 +5,14 @@ defmodule QuillEx.Fluxus.RadixReducer do
   functions for the RadixState.
   """
 
+  alias QuillEx.Fluxus.Structs.RadixState
+
   def process(radix_state, action) do
     IO.inspect(action, label: "ACXXXION")
-    :ok
+
+    new_rdx = radix_state |> RadixState.show_text_pane()
+
+    {:ok, new_rdx}
   end
 
   def change_font(%{editor: %{font: current_font}} = radix_state, new_font)

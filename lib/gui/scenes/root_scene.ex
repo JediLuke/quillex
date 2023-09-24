@@ -5,7 +5,7 @@ defmodule QuillEx.Scene.RootScene do
   require Logger
 
   def init(
-        %Scenic.Scene{viewport: %Scenic.ViewPort{} = scene_viewport} = scene,
+        %Scenic.Scene{viewport: %Scenic.ViewPort{} = _scene_viewport} = scene,
         %RadixState{} = radix_state,
         _opts
       ) do
@@ -14,9 +14,9 @@ defmodule QuillEx.Scene.RootScene do
     # theme =
 
     init_graph =
-      scene_viewport
-      |> RadixRender.render(radix_state)
-      |> maybe_render_debug_layer(scene_viewport, radix_state)
+      scene.viewport
+      |> RadixRender.render(radix_state, [])
+      |> maybe_render_debug_layer(scene.viewport, radix_state)
 
     init_scene =
       scene
@@ -74,17 +74,39 @@ defmodule QuillEx.Scene.RootScene do
   end
 
   def handle_info(
-        {:radix_state_change, _new_radix_state},
+        {:radix_state_change, new_radix_state},
         scene
       ) do
     # actually here the ROotScene never has to reply to changes but we have it here for now
-    {:noreply, scene}
+
+    # TODO this might end up being overkill / inefficient... but ultimately, do I even care??
+    # I only care if I end up spinning up new processes all the time.. which unfortunately I do think is what's happening :P
+
+    # TODO pass in the list of childten to RadixRender so that it knows to only cast, not re-render from scratch, if that Child is alread alive
+    children = Scenic.Scene.children(scene)
+
+    new_graph =
+      scene.viewport
+      |> RadixRender.render(new_radix_state, children)
+
+    # |> maybe_render_debug_layer(scene_viewport, new_radix_state)
+
+    new_scene =
+      scene
+      |> assign(state: new_radix_state)
+      |> assign(graph: new_graph)
+      |> push_graph(new_graph)
+
+    {:noreply, new_scene}
   end
 
   def handle_event(event, _from_pid, scene) do
     # IO.inspect(event)
     IO.puts("GOT AN EVENT BUYT I KNOW ITS A CLICK")
     # IO.inspect(context)
+
+    # {:ok, kids} = Scenic.Scene.children(scene)
+    # IO.inspect(kids)
 
     QuillEx.Fluxus.action(:open_read_only_text_pane)
 
