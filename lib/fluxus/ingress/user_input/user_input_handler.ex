@@ -1,16 +1,35 @@
 defmodule QuillEx.Fluxus.UserInputHandler do
   use ScenicWidgets.ScenicEventsDefinitions
+  require Logger
 
-  def handle(radix_state, input) do
-    # {:action, :test_input_action}
+  # def handle(radix_state, input) when input in [@left_shift, @right_shift] do
+  def handle(%{lateral: false} = _radix_state, @left_shift) do
+    # def handle(radix_state, {:key, {:key_leftshift, 1, []}}) do
+    # def handle(radix_state, {:key, {:key_leftshift, 10, []}}) do
+    IO.puts("GO LATERSL")
+    {:action, {:minor_mode, :lateral}}
+  end
 
-    # {:scroll, {{:cursor_scroll, {{0.0, -1.0}, {459.0, 434.0}}}, QuillEx.GUI.Components.PlainTextScrollable}}
-
-    :ignored
+  # def handle(%{lateral: true} = _radix_state, @left_shift_release) do
+  # def handle(%{lateral: true} = _radix_state, {:key, {:key_leftshift, @key_released, []}}) do
+  # def handle(%{lateral: true} = _radix_state, {:key, {:key_leftshift, 1, []}}) do
+  def handle(%{lateral: true} = _radix_state, {:key, {:key_leftshift, 0, [:shift]}}) do
+    IO.puts("WATER AS COLDX AS IC")
+    # def handle(radix_state, {:key, {:key_leftshift, 1, []}}) do
+    # def handle(radix_state, {:key, {:key_leftshift, 10, []}}) do
+    {:action, {:minor_mode, nil}}
   end
 
   def handle(radix_state, input) do
     # {:action, :test_input_action}
+
+    # dbg()
+    # IO.inspect(input, label: "l1")
+    # IO.inspect(@left_shift, label: "l2")
+
+    IO.inspect(radix_state.lateral, label: "l3")
+
+    Logger.warn("UserInputHandler.handle, ignoring: #{inspect(input)}")
     :ignored
   end
 end

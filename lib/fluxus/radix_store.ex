@@ -51,11 +51,13 @@ defmodule QuillEx.Fluxus.RadixStore do
         from,
         rdx_state
       ) do
+    # rdx_state.components
+    # |> Enum.each(fn %{widgex: %{id: id}} = component ->
+    #   nil
+    # end)
+
     # TODO here, because this input has something to do with a particular component,
     # we need to do something clever & figure out exactly what to do...
-
-    # for now I will just ignore it
-    Logger.info("WEIRD INPUT #{inspect(ii)} component #{inspect(component_id)}}")
 
     ## I need to convert it to some piece of normal input, and then handle it as normal
 
@@ -72,11 +74,20 @@ defmodule QuillEx.Fluxus.RadixStore do
 
         # component |> Map.put(:scroll, new_scroll)
 
-        if function_exported?(component.__struct__, :handle_user_input, 2) do
-          IO.puts("HANDININGIN")
-          component.__struct__.handle_user_input(component, ii)
+        if function_exported?(component.__struct__, :handle_user_input, 3) do
+          case component.__struct__.handle_user_input(rdx_state, component, ii) do
+            :ignored ->
+              IO.puts("ignorin 0000000000000 #{inspect(ii)}")
+              component
+
+            {:action, action} ->
+              IO.puts("uysing ACTION")
+              # handle_call({:action, action}, from, state)
+              # todo need more guards lol
+              component.__struct__.handle_action(component, {:action, action})
+          end
         else
-          raise "the component should export `handle_user_input/2`"
+          raise "the component #{component.__struct__} should export `handle_user_input/2`"
           # IO.puts(":NOO")
           # component
         end
@@ -99,15 +110,17 @@ defmodule QuillEx.Fluxus.RadixStore do
     #   msg: {:radix_state_change, new_radix_state}
     # )
 
+    IO.puts("GOT INPUT #{inspect(ii)}")
     # # {:reply, {:ok, new_state}, new_state}
     # {:reply, :ok, new_state}
 
     case QuillEx.Fluxus.UserInputHandler.handle(state, ii) do
       :ignored ->
-        # IO.puts("ignoring #{inspect(ii)}")
+        IO.puts("ignorisssssssng #{inspect(ii)}")
         {:reply, :ok, state}
 
       {:action, action} ->
+        IO.puts("HANDINGF CALL GONNA TRAKE ACXRTION")
         handle_call({:action, action}, from, state)
         # {:actions, actions} ->
         #   Enum.reduce(actions, state, fn action, state ->
@@ -121,31 +134,31 @@ defmodule QuillEx.Fluxus.RadixStore do
   #   {:noreply, new_state}
   # end
 
-  def handle_cast({:put, new_radix_state, true}, _state) do
-    QuillEx.Lib.Utils.PubSub.broadcast(
-      topic: :radix_state_change,
-      msg: {:radix_state_change, new_radix_state}
-    )
+  # def handle_cast({:put, new_radix_state, true}, _state) do
+  #   QuillEx.Lib.Utils.PubSub.broadcast(
+  #     topic: :radix_state_change,
+  #     msg: {:radix_state_change, new_radix_state}
+  #   )
 
-    {:noreply, new_radix_state}
-  end
+  #   {:noreply, new_radix_state}
+  # end
 
-  def handle_cast({:put, new_radix_state, false}, _state) do
-    {:noreply, new_radix_state}
-  end
+  # def handle_cast({:put, new_radix_state, false}, _state) do
+  #   {:noreply, new_radix_state}
+  # end
 
-  def handle_cast({:update, new_state}, _state) do
-    QuillEx.Lib.Utils.PubSub.broadcast(
-      topic: :radix_state_change,
-      msg: {:radix_state_change, new_state}
-    )
+  # def handle_cast({:update, new_state}, _state) do
+  #   QuillEx.Lib.Utils.PubSub.broadcast(
+  #     topic: :radix_state_change,
+  #     msg: {:radix_state_change, new_state}
+  #   )
 
-    {:noreply, new_state}
-  end
+  #   {:noreply, new_state}
+  # end
 
-  def handle_call(:get, _from, state) do
-    {:reply, state, state}
-  end
+  # def handle_call(:get, _from, state) do
+  #   {:reply, state, state}
+  # end
 end
 
 # defmodule QuillEx.Fluxus.RadixStore do

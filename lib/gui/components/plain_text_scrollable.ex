@@ -92,10 +92,37 @@ defmodule QuillEx.GUI.Components.PlainTextScrollable do
   end
 
   def handle_user_input(
-        %__MODULE__{} = state,
-        {:cursor_scroll, {{delta_x, delta_y} = _delta_scroll, _coords_i_think_are_global?}}
+        %{lateral: false} = _radix_state,
+        %__MODULE__{} = _state,
+        {:cursor_scroll, {{_delta_x, delta_y} = delta_scroll, _coords_i_think_are_global?}}
       ) do
-    new_scroll = Scenic.Math.Vector2.add(state.scroll, {5 * delta_x, 5 * delta_y})
+    # new_scroll = Scenic.Math.Vector2.add(state.scroll, {5 * delta_x, 5 * delta_y})
+    # %{state | scroll: new_scroll}
+    {:action, {:scroll, delta_scroll}}
+  end
+
+  def handle_user_input(
+        %{lateral: true} = _radix_state,
+        %__MODULE__{} = _state,
+        {:cursor_scroll, {{_delta_x, delta_y} = delta_scroll, _coords_i_think_are_global?}}
+      ) do
+    # new_scroll = Scenic.Math.Vector2.add(state.scroll, {5 * delta_x, 5 * delta_y})
+    # %{state | scroll: new_scroll}
+    # reverse scrolling!!
+    {:action, {:scroll, {delta_y, 0}}}
+  end
+
+  @fast_scroll_factor 7
+  def handle_action(
+        %__MODULE__{} = state,
+        {:action, {:scroll, {delta_x, delta_y}}}
+      ) do
+    new_scroll =
+      Scenic.Math.Vector2.add(
+        state.scroll,
+        {@fast_scroll_factor * delta_x, @fast_scroll_factor * delta_y}
+      )
+
     %{state | scroll: new_scroll}
   end
 end

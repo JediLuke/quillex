@@ -16,6 +16,15 @@ defmodule QuillEx.Fluxus.RadixReducer do
     {:ok, new_rdx}
   end
 
+  def process(radix_state, {:minor_mode, m}) do
+    # IO.inspect(action, label: "ACXXXION")
+
+    IO.puts("CHANGING THE MINOR MODE")
+    new_rdx = radix_state |> RadixState.minor_mode(m)
+
+    {:ok, new_rdx}
+  end
+
   def process(radix_state, :open_text_pane) do
     # IO.inspect(action, label: "ACXXXION")
 

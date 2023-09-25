@@ -86,7 +86,8 @@ defmodule QuillEx.Fluxus.Structs.RadixState do
   alias QuillEx.GUI.Components.PlainTextScrollable
 
   defstruct layout: nil,
-            components: []
+            components: [],
+            lateral: false
 
   # menu_bar: %{
   #   height: nil
@@ -130,7 +131,8 @@ defmodule QuillEx.Fluxus.Structs.RadixState do
         # %QuillEx.GUI.Components.PlainText{text: text, color: :pink}
         # %QuillEx.GUI.Components.PlainText{text: "Second buffer!!", color: :grey}
         # %QuillEx.GUI.Components.EditorTwo{text: "Second buffer!!", color: :yellow}
-      ]
+      ],
+      lateral: false
       # root: %Root{}
       # gui: %GUI{},
       # desktop: %Desktop{menu_bar: %Desktop.MenuBar{font: menu_font}},
@@ -183,6 +185,17 @@ defmodule QuillEx.Fluxus.Structs.RadixState do
 
       component |> Map.put(:scroll, new_scroll)
     end)
+  end
+
+  def minor_mode(%{lateral: false} = rdx_state, :lateral) do
+    %{rdx_state | lateral: true}
+    # |> update_component(:one, fn component ->
+    #   component |> Map.put(:minor_mode, m)
+    # end)
+  end
+
+  def minor_mode(rdx_state, nil) do
+    %{rdx_state | lateral: false}
   end
 
   def update_component(%{components: components} = rdx_state, component_id, fun) do

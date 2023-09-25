@@ -26,7 +26,7 @@ defmodule QuillEx.Scene.RootScene do
 
     QuillEx.Lib.Utils.PubSub.subscribe(topic: :radix_state_change)
 
-    request_input(init_scene, [:viewport, :key, :cursor_scroll])
+    request_input(init_scene, [:viewport, :key])
 
     {:ok, init_scene}
   end
@@ -66,8 +66,12 @@ defmodule QuillEx.Scene.RootScene do
     # Logger.debug "#{__MODULE__} recv'd some (non-ignored) input: #{inspect input}"
     # QuillEx.Useo
     # rInputHandler.process(input)
+    # IO.puts("HJIHIHI")
 
     # TODO mayube here, we need to handle input in the same thread as root process? This (I think) would at least make all input processed on the radix state at the time of input, vs throwing an event it may introduce timing errors...
+
+    GenServer.call(QuillEx.Fluxus.RadixStore, {:user_input, input})
+
     {:noreply, scene}
   end
 
