@@ -1,4 +1,5 @@
 defmodule QuillEx.GUI.Themes do
+  # this is my color pallete that I made up...
   @midnight_pallette %{
     # I made this one up...
     black_outliner: {40, 33, 40},
@@ -29,6 +30,65 @@ defmodule QuillEx.GUI.Themes do
     # 6694da
     blue: {102, 148, 218}
   }
+
+  @solarized %{
+    dark_background_01: {0, 43, 54},
+    dark_background_02: {7, 54, 66},
+    base_content_01: {88, 110, 117},
+    base_content_02: {101, 123, 131},
+    base_content_03: {131, 148, 150},
+    base_content_04: {147, 161, 161},
+    light_background_01: {238, 232, 213},
+    light_background_02: {253, 246, 227},
+    accent_yellow: {181, 137, 0},
+    accent_orange: {203, 75, 22},
+    accent_red: {220, 50, 47},
+    accent_magenta: {211, 54, 130},
+    accent_violet: {108, 113, 196},
+    accent_blue: {38, 139, 210},
+    accent_cyan: {42, 161, 152},
+    accent_green: {133, 153, 0}
+  }
+
+  @dracula %{
+    background: {40, 42, 54},
+    current_line: {68, 71, 90},
+    selection: {68, 71, 90},
+    foreground: {248, 248, 242},
+    comment: {98, 114, 164},
+    cyan: {139, 233, 253},
+    green: {80, 250, 123},
+    orange: {255, 184, 108},
+    pink: {255, 121, 198},
+    purple: {189, 147, 249},
+    red: {255, 85, 85},
+    yellow: {241, 250, 140}
+  }
+
+  def theme(:solarized_light) do
+    %{
+      # background
+      bg: @solarized.light_background_01,
+      bg2: @solarized.light_background_02,
+      # foreground
+      fg: @solarized.base_content_01,
+      fg2: @solarized.base_content_01,
+      # base
+      base1: @solarized.base_content_01,
+      base2: @solarized.base_content_01,
+      base3: @solarized.base_content_01,
+      base4: @solarized.base_content_01,
+      # accent
+      accent1: @solarized.accent_yellow,
+      accent2: @solarized.accent_orange,
+      accent3: @solarized.accent_red,
+      accent4: @solarized.accent_magenta,
+      accent5: @solarized.accent_violet,
+      accent6: @solarized.accent_blue,
+      accent7: @solarized.accent_cyan,
+      accent8: @solarized.accent_green
+    }
+  end
 
   def scenic_light,
     do: %{

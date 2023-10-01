@@ -85,9 +85,12 @@ defmodule QuillEx.Fluxus.Structs.RadixState do
   alias QuillEx.GUI.Components.PlainText
   alias QuillEx.GUI.Components.PlainTextScrollable
 
+  @default_theme QuillEx.GUI.Themes.theme(:solarized_light)
+
   defstruct layout: nil,
             components: [],
-            lateral: false
+            lateral: false,
+            theme: @default_theme
 
   # menu_bar: %{
   #   height: nil
@@ -108,11 +111,15 @@ defmodule QuillEx.Fluxus.Structs.RadixState do
   @menubar_height 60
 
   def new do
-    text =
-      ~s|# {:ok, {_type, ibm_plex_mono_font_metrics}} = Scenic.Assets.Static.meta(:ibm_plex_mono)
-    # font = Font.new(name: :ibm_plex_mono, size: 24, metrics: ibm_plex_mono_font_metrics)
-    # menu_font = Font.new(name: :ibm_plex_mono, size: 36, metrics: ibm_plex_mono_font_metrics)
-    |
+    new(%{theme: @default_theme})
+  end
+
+  def new(%{theme: _t} = args) do
+    # text =
+    #   ~s|# {:ok, {_type, ibm_plex_mono_font_metrics}} = Scenic.Assets.Static.meta(:ibm_plex_mono)
+    # # font = Font.new(name: :ibm_plex_mono, size: 24, metrics: ibm_plex_mono_font_metrics)
+    # # menu_font = Font.new(name: :ibm_plex_mono, size: 36, metrics: ibm_plex_mono_font_metrics)
+    # |
 
     # convert a %Layout{} into a list/stack/tree of frames, which will get zipped with components
 
@@ -125,14 +132,15 @@ defmodule QuillEx.Fluxus.Structs.RadixState do
       # layout: {:standard_rule, linemark: @menubar_height},
       components: [
         # %ScenicWidgets.MenuBar{},
-        ScenicWidgets.UbuntuBar.draw()
+        ScenicWidgets.UbuntuBar.new(%{theme: args.theme})
         # PlainText.draw(text)
         # TODO simply put 2 components in a list, to reflect nested components
         # %QuillEx.GUI.Components.PlainText{text: text, color: :pink}
         # %QuillEx.GUI.Components.PlainText{text: "Second buffer!!", color: :grey}
         # %QuillEx.GUI.Components.EditorTwo{text: "Second buffer!!", color: :yellow}
       ],
-      lateral: false
+      lateral: false,
+      theme: args.theme
       # root: %Root{}
       # gui: %GUI{},
       # desktop: %Desktop{menu_bar: %Desktop.MenuBar{font: menu_font}},
@@ -142,7 +150,7 @@ defmodule QuillEx.Fluxus.Structs.RadixState do
 
   def show_text_pane(%__MODULE__{} = rdx_state) do
     new_components = [
-      ScenicWidgets.UbuntuBar.draw(),
+      ScenicWidgets.UbuntuBar.new(rdx_state),
       PlainText.draw(:one, ~s|Hello world!|)
     ]
 
@@ -153,7 +161,7 @@ defmodule QuillEx.Fluxus.Structs.RadixState do
     text = File.read!("test/support/spinozas_ethics_p1.txt")
 
     new_components = [
-      ScenicWidgets.UbuntuBar.draw(),
+      ScenicWidgets.UbuntuBar.new(rdx_state),
       PlainText.draw(:two, text)
     ]
 
@@ -164,8 +172,8 @@ defmodule QuillEx.Fluxus.Structs.RadixState do
     text = File.read!("test/support/spinozas_ethics_p1.txt")
 
     new_components = [
-      ScenicWidgets.UbuntuBar.draw(),
-      PlainTextScrollable.draw(text)
+      ScenicWidgets.UbuntuBar.new(rdx_state),
+      PlainTextScrollable.new(rdx_state, text)
     ]
 
     Map.put(rdx_state, :components, new_components)

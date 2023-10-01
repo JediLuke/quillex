@@ -13,20 +13,20 @@ defmodule QuillEx.Fluxus.RadixStore do
   #   GenServer.cast(__MODULE__, {:initialize, new_viewport})
   # end
 
-  def get do
-    Logger.warn("deprecate RadixStore.get")
-    GenServer.call(__MODULE__, :get)
-  end
+  # def get do
+  #   Logger.warn("deprecate RadixStore.get")
+  #   GenServer.call(__MODULE__, :get)
+  # end
 
-  def put(new_radix_state, broadcast \\ true) do
-    Logger.warn("deprecate RadixStore.put")
-    GenServer.cast(__MODULE__, {:put, new_radix_state, broadcast})
-  end
+  # def put(new_radix_state, broadcast \\ true) do
+  #   Logger.warn("deprecate RadixStore.put")
+  #   GenServer.cast(__MODULE__, {:put, new_radix_state, broadcast})
+  # end
 
-  def update(new_state) do
-    Logger.warn("deprecate RadixStore.update")
-    GenServer.cast(__MODULE__, {:update, new_state})
-  end
+  # def update(new_state) do
+  #   Logger.warn("deprecate RadixStore.update")
+  #   GenServer.cast(__MODULE__, {:update, new_state})
+  # end
 
   # Server Callbacks
 

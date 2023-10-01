@@ -6,12 +6,12 @@ defmodule QuillEx.GUI.Components.PlainTextScrollable do
             text: "",
             scroll: {0, 0}
 
-  def draw(text) when is_binary(text) do
+  def new(rdx_state, text) when is_binary(text) do
     %__MODULE__{
       widgex: %Widgex.Component.Widget{
         id: __MODULE__,
         # frame: %Frame{},
-        theme: QuillEx.GUI.Themes.midnight_shadow()
+        theme: rdx_state.theme
         # layout: %Widgex.Layout{},
       },
       scenic: %{
@@ -68,7 +68,7 @@ defmodule QuillEx.GUI.Components.PlainTextScrollable do
   end
 
   def paint_background(graph, state, frame) do
-    graph |> fill_frame(frame, input: [:cursor_scroll])
+    graph |> fill_frame(frame, fill: state.widgex.theme.bg, input: [:cursor_scroll])
   end
 
   def draw_text(graph, state, frame) do
@@ -80,7 +80,7 @@ defmodule QuillEx.GUI.Components.PlainTextScrollable do
     graph
     |> Scenic.Primitives.text(state.text,
       translate: pin,
-      fill: state.widgex.theme.text
+      fill: state.widgex.theme.fg
     )
   end
 

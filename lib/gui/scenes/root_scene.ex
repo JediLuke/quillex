@@ -174,13 +174,13 @@ defmodule QuillEx.Scene.RootScene do
     # {:ok, kids} = Scenic.Scene.children(scene)
     # IO.inspect(kids)
 
-    if button_num == 0 do
+    if button_num == :g1 do
       QuillEx.Fluxus.action(:open_read_only_text_pane)
     else
-      if button_num == 1 do
+      if button_num == :g2 do
         QuillEx.Fluxus.action(:open_text_pane)
       else
-        if button_num == 2 do
+        if button_num == :g3 do
           QuillEx.Fluxus.action(:open_text_pane_scrollable)
         end
       end
