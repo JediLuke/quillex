@@ -24,7 +24,7 @@ defmodule QuillEx.Fluxus.ActionListener do
     if not an_action?(event) do
       :ignore
     else
-      %EventBus.Model.Event{id: _id, topic: @topic, data: {:action, action}} = event
+      %{data: {:action, action}} = event
       radix_state = QuillEx.Fluxus.RadixStore.get()
 
       case QuillEx.Fluxus.RadixReducer.process(radix_state, action) do
@@ -58,6 +58,6 @@ defmodule QuillEx.Fluxus.ActionListener do
 
   # def handle_action
 
-  defp an_action?(%{data: {:action, _action}}), do: true
+  defp an_action?(%EventBus.Model.Event{topic: @topic, data: {:action, _a}}), do: true
   defp an_action?(_otherwise), do: false
 end

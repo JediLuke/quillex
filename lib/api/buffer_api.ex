@@ -4,7 +4,6 @@ defmodule QuillEx.API.Buffer do
   """
   alias QuillEx.Reducers.BufferReducer
 
-
   def new do
     QuillEx.action({BufferReducer, {:open_buffer, %{data: "", mode: :edit}}})
   end
@@ -95,17 +94,6 @@ defmodule QuillEx.API.Buffer do
   end
 end
 
-
-
-
-
-
-
-
-
-
-
-
 # defmodule Flamelex.Buffer.Text do
 #   @moduledoc """
 #   A buffer to hold & manipulate text.
@@ -115,7 +103,6 @@ end
 #   alias Flamelex.Buffer.Utils.TextBuffer.ModifyHelper
 #   alias Flamelex.Buffer.Utils.CursorMovementUtils, as: MoveCursor
 #   # require Logger
-
 
 #   def boot_sequence(%{source: :none, data: file_contents} = params) do
 #     init_state =
@@ -201,7 +188,6 @@ end
 #     {:reply, :ok, state}
 #   end
 
-
 #   # when a Task completes, if successful, it will most likely callback -
 #   # so we update the state of the Buffer, & trigger a GUI update
 #   #TODO maybe this is a little ambitious... we can just do what MoveCursor does, and have the task directly call the GUI to update it specifically
@@ -218,7 +204,6 @@ end
 #     #TODO need to update the GUI here?
 #     {:noreply, new_state}
 #   end
-
 
 #   # spin up a new process to do the handling...
 #   defp start_sub_task(state, module, function, args) do

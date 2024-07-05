@@ -21,14 +21,6 @@ defmodule QuillEx.Fluxus.UserInputHandler do
   end
 
   def handle(radix_state, input) do
-    # {:action, :test_input_action}
-
-    # dbg()
-    # IO.inspect(input, label: "l1")
-    # IO.inspect(@left_shift, label: "l2")
-
-    IO.inspect(radix_state.lateral, label: "l3")
-
     Logger.warn("UserInputHandler.handle, ignoring: #{inspect(input)}")
     :ignored
   end

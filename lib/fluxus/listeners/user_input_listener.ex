@@ -1,7 +1,6 @@
 defmodule QuillEx.Fluxus.UserInputListener do
   @moduledoc """
-  This process listens to events on the :general topic, and if they're
-  actions, makes stuff happen.
+  This process listens to events on the user_input_topic,
   """
   use GenServer
   require Logger
@@ -24,8 +23,9 @@ defmodule QuillEx.Fluxus.UserInputListener do
     if not user_input?(event) do
       :ignore
     else
-      %EventBus.Model.Event{id: _id, topic: @topic, data: {:user_input, input}} = event
-      handle_input(input, event_shadow)
+      %{data: {:user_input, radix_state, input}} = event
+      # handle_input(input, event_shadow)
+      raise "... you have died."
     end
   end
 
@@ -57,8 +57,6 @@ defmodule QuillEx.Fluxus.UserInputListener do
     # end
 
     # QuillEx.Fluxus.RadixStore
-
-    raise "... you have died."
   end
 
   # TODO need to add to memex to get refills for my ADHD meds, maybe need to change my insurance?
@@ -88,6 +86,8 @@ defmodule QuillEx.Fluxus.UserInputListener do
     end
   end
 
-  defp user_input?(%{data: {:user_input, _input}}), do: true
+  defp user_input?(%EventBus.Model.Event{topic: @topic, data: {:user_input, _radix_state, _ii}}),
+    do: true
+
   defp user_input?(_otherwise), do: false
 end

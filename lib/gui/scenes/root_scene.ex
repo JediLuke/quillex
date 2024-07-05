@@ -1,22 +1,45 @@
 defmodule QuillEx.Scene.RootScene do
   use Scenic.Scene
   alias QuillEx.Fluxus.Structs.RadixState
+  alias QuillEx.Fluxus.RadixStore
   alias QuillEx.Scene.RadixRender
   require Logger
 
-  def init(
-        %Scenic.Scene{viewport: %Scenic.ViewPort{} = _scene_viewport} = scene,
-        %RadixState{} = radix_state,
-        _opts
-      ) do
+  def init(%Scenic.Scene{} = scene, _init_args, _opts) do
     Logger.debug("#{__MODULE__} initializing...")
 
-    # theme =
+    # the Root scene pulls from the radix store on bootup, and then subscribes to changes
+    # the reason why I'm doing it this way, and not passing in the radix state
+    # from the top (which would be possible, because I initialize the
+    # radixstate during app bootup & pass it in to radix store, just so that
+    # this process can then go fetch it) is because it seems cleaner to me
+    # because if this process restarts then it will go & fetch the correct state &
+    # continue from there, vs if I pass it in then it will restart again with
+    # whatever I gave it originally (right??!?)
 
-    init_graph =
-      scene.viewport
-      |> RadixRender.render(radix_state, [])
-      |> maybe_render_debug_layer(scene.viewport, radix_state)
+    # now that I type this out... wouldn't that be a safer, better option?
+    # this process isn't supposed to crash, if it does crash probably it is due
+    # to bad state, and then probably I don't want to immediately go & fetch that
+    # bad state...
+
+    # for that reason I actually _am_ going to pass it in from the top
+
+    # After all this debate I changed my mind again, I dont want to be passing
+    # around big blobs of state, I want the RadixStore process to just keep
+    # the State and everything interacts with RadixState via that process, so
+    # this process does go & fetch RadixState on bootup
+
+    # Lol further addendum, I've decided that the reasoning of not wanting
+    # to pass the RadixState in because I didnt want to copy a huge state variable
+    # around is absurd given how muich I copy it around all over the place in
+    # the rest of the app, but I'm going to stick with just fetching it on
+    # startup because if the whole GUI does crash up to this level, I want
+    # it to start again from the current RadixStore
+
+    radix_state = RadixStore.get()
+    init_graph = RadixRender.render(scene.viewport, radix_state)
+
+    # |> maybe_render_debug_layer(scene.viewport, radix_state)
 
     init_scene =
       scene
@@ -31,20 +54,20 @@ defmodule QuillEx.Scene.RootScene do
     {:ok, init_scene}
   end
 
-  defp maybe_render_debug_layer(graph, _viewport, _radix_state) do
-    # if radix_state.gui_config.debug do
-    #   Scenic.Graph.add_layer(
-    #     Scenic.Graph.new(:debug_layer),
-    #     Scenic.Graph.new(:debug_layer, [Scenic.Primitives.text("DEBUG MODE")])
-    #   )
-    # else
-    #   Scenic.Graph.new(:debug_layer)
-    # end
+  # defp maybe_render_debug_layer(graph, _viewport, _radix_state) do
+  #   # if radix_state.gui_config.debug do
+  #   #   Scenic.Graph.add_layer(
+  #   #     Scenic.Graph.new(:debug_layer),
+  #   #     Scenic.Graph.new(:debug_layer, [Scenic.Primitives.text("DEBUG MODE")])
+  #   #   )
+  #   # else
+  #   #   Scenic.Graph.new(:debug_layer)
+  #   # end
 
-    # for now, do nothing...
-    # in the future we could render an overlay showing the layout
-    graph
-  end
+  #   # for now, do nothing...
+  #   # in the future we could render an overlay showing the layout
+  #   graph
+  # end
 
   def handle_input(
         {:viewport, {:reshape, {new_vp_width, new_vp_height} = new_size}},
@@ -53,6 +76,7 @@ defmodule QuillEx.Scene.RootScene do
       ) do
     Logger.warn("If this didn't cause errors each time it ran I would raise here!!")
     # raise "Ignoring VIEWPORT RESHAPE - should handle this!"
+    # TODO fire an action probably
     {:noreply, scene}
   end
 
@@ -62,7 +86,9 @@ defmodule QuillEx.Scene.RootScene do
     {:noreply, scene}
   end
 
-  def handle_input(input, context, scene) do
+  def handle_input(input, _context, scene) do
+    # TODO ok in QuillEx I'm going to experiment with doing this all sequentially
+
     # Logger.debug "#{__MODULE__} recv'd some (non-ignored) input: #{inspect input}"
     # QuillEx.Useo
     # rInputHandler.process(input)
@@ -70,8 +96,12 @@ defmodule QuillEx.Scene.RootScene do
 
     # TODO mayube here, we need to handle input in the same thread as root process? This (I think) would at least make all input processed on the radix state at the time of input, vs throwing an event it may introduce timing errors...
 
-    GenServer.call(QuillEx.Fluxus.RadixStore, {:user_input, input})
+    # GenServer.call(QuillEx.Fluxus.RadixStore, {:user_input, input})
 
+    # I am going to fully commit in QuillEx to trying the syncronous PubSub
+    # and see how it goes. I think it will be easier to reason about, and
+    # because each event is processed sequentially by the action listener
+    QuillEx.Fluxus.input(scene.assigns.state, input)
     {:noreply, scene}
   end
 
@@ -172,7 +202,6 @@ defmodule QuillEx.Scene.RootScene do
     {:glyph_clicked_event, button_num} = event
 
     # {:ok, kids} = Scenic.Scene.children(scene)
-    # IO.inspect(kids)
 
     if button_num == :g1 do
       QuillEx.Fluxus.action(:open_read_only_text_pane)
@@ -186,7 +215,6 @@ defmodule QuillEx.Scene.RootScene do
       end
     end
 
-    # IO.inspect(scene)
     {:noreply, scene}
   end
 

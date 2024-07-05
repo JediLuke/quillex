@@ -3,131 +3,126 @@ defmodule QuillEx.Fluxus.RadixStore do
   require Logger
   alias QuillEx.Fluxus.Structs.RadixState
 
-  # Client API
-
-  def start_link(%RadixState{} = radix_state) do
-    GenServer.start_link(__MODULE__, radix_state, name: __MODULE__)
+  def start_link(_bootup_args = []) do
+    GenServer.start_link(__MODULE__, [], name: __MODULE__)
   end
-
-  # def initialize(new_viewport) do
-  #   GenServer.cast(__MODULE__, {:initialize, new_viewport})
-  # end
-
-  # def get do
-  #   Logger.warn("deprecate RadixStore.get")
-  #   GenServer.call(__MODULE__, :get)
-  # end
 
   # def put(new_radix_state, broadcast \\ true) do
   #   Logger.warn("deprecate RadixStore.put")
   #   GenServer.cast(__MODULE__, {:put, new_radix_state, broadcast})
   # end
 
-  # def update(new_state) do
-  #   Logger.warn("deprecate RadixStore.update")
-  #   GenServer.cast(__MODULE__, {:update, new_state})
+  def update(new_state) do
+    GenServer.call(__MODULE__, {:update, new_state})
+  end
+
+  def init([] = _init_state) do
+    {:ok, RadixState.new()}
+  end
+
+  def get do
+    GenServer.call(__MODULE__, :get_state)
+  end
+
+  def handle_call(:get_state, _from, state) do
+    {:reply, state, state}
+  end
+
+  def handle_call({:update_state, new_state}, _from, _state) do
+    QuillEx.Lib.Utils.PubSub.broadcast(
+      topic: :radix_state_change,
+      msg: {:radix_state_change, new_state}
+    )
+
+    {:noreply, new_state}
+  end
+
+  # def handle_call({:action, a}, _from, rdx_state) do
+  #   RadixReducer.handle_action(rdx_state, {:action, a})
   # end
 
-  # Server Callbacks
+  # def handle_call(
+  #       {:user_input, %{input: ii, component_id: component_id}},
+  #       from,
+  #       rdx_state
+  #     ) do
+  #   # rdx_state.components
+  #   # |> Enum.each(fn %{widgex: %{id: id}} = component ->
+  #   #   nil
+  #   # end)
 
-  def init(radix_state) do
-    {:ok, radix_state}
-  end
+  #   # TODO here, because this input has something to do with a particular component,
+  #   # we need to do something clever & figure out exactly what to do...
 
-  def handle_call({:action, a}, _from, rdx_state) do
-    {:ok, new_radix_state} = QuillEx.Fluxus.RadixReducer.process(rdx_state, a)
+  #   ## I need to convert it to some piece of normal input, and then handle it as normal
 
-    QuillEx.Lib.Utils.PubSub.broadcast(
-      topic: :radix_state_change,
-      msg: {:radix_state_change, new_radix_state}
-    )
+  #   new_rdx_state =
+  #     rdx_state
+  #     |> RadixState.update_component(component_id, fn component ->
+  #       # if this module exports the function handle_input/1, then call it, else do nothing
 
-    # {:reply, {:ok, new_state}, new_state}
-    {:reply, :ok, new_radix_state}
-  end
+  #       # component.handle_input(ii)
+  #       # TODO this is a hack, we need to be able to update the state of a component
+  #       # old_scroll = component.scroll
+  #       # fast_scroll = {0, @scroll_factor * delta_y}
+  #       # new_scroll = Scenic.Math.Vector2.add(old_scroll, fast_scroll)
 
-  def handle_call(
-        {:user_input, %{input: ii, component_id: component_id}},
-        from,
-        rdx_state
-      ) do
-    # rdx_state.components
-    # |> Enum.each(fn %{widgex: %{id: id}} = component ->
-    #   nil
-    # end)
+  #       # component |> Map.put(:scroll, new_scroll)
 
-    # TODO here, because this input has something to do with a particular component,
-    # we need to do something clever & figure out exactly what to do...
+  #       if function_exported?(component.__struct__, :handle_user_input, 3) do
+  #         case component.__struct__.handle_user_input(rdx_state, component, ii) do
+  #           :ignored ->
+  #             IO.puts("ignorin 0000000000000 #{inspect(ii)}")
+  #             component
 
-    ## I need to convert it to some piece of normal input, and then handle it as normal
+  #           {:action, action} ->
+  #             IO.puts("uysing ACTION")
+  #             # handle_call({:action, action}, from, state)
+  #             # todo need more guards lol
+  #             component.__struct__.handle_action(component, {:action, action})
+  #         end
+  #       else
+  #         raise "the component #{component.__struct__} should export `handle_user_input/2`"
+  #         # IO.puts(":NOO")
+  #         # component
+  #       end
+  #     end)
 
-    new_rdx_state =
-      rdx_state
-      |> RadixState.update_component(component_id, fn component ->
-        # if this module exports the function handle_input/1, then call it, else do nothing
+  #   QuillEx.Lib.Utils.PubSub.broadcast(
+  #     topic: :radix_state_change,
+  #     msg: {:radix_state_change, new_rdx_state}
+  #   )
 
-        # component.handle_input(ii)
-        # TODO this is a hack, we need to be able to update the state of a component
-        # old_scroll = component.scroll
-        # fast_scroll = {0, @scroll_factor * delta_y}
-        # new_scroll = Scenic.Math.Vector2.add(old_scroll, fast_scroll)
+  #   {:reply, :ok, new_rdx_state}
+  # end
 
-        # component |> Map.put(:scroll, new_scroll)
+  # def handle_call({:user_input, ii}, from, state) do
+  #   # TODO can we return multiple actions?? and handle them sequentially???
+  #   # {:action, action} = QuillEx.Fluxus.UserInputHandler.handle(state, ii)
+  #   # handle_call({:action, action}, from, state)
+  #   # QuillEx.Lib.Utils.PubSub.broadcast(
+  #   #   topic: :radix_state_change,
+  #   #   msg: {:radix_state_change, new_radix_state}
+  #   # )
 
-        if function_exported?(component.__struct__, :handle_user_input, 3) do
-          case component.__struct__.handle_user_input(rdx_state, component, ii) do
-            :ignored ->
-              IO.puts("ignorin 0000000000000 #{inspect(ii)}")
-              component
+  #   IO.puts("GOT INPUT #{inspect(ii)}")
+  #   # # {:reply, {:ok, new_state}, new_state}
+  #   # {:reply, :ok, new_state}
 
-            {:action, action} ->
-              IO.puts("uysing ACTION")
-              # handle_call({:action, action}, from, state)
-              # todo need more guards lol
-              component.__struct__.handle_action(component, {:action, action})
-          end
-        else
-          raise "the component #{component.__struct__} should export `handle_user_input/2`"
-          # IO.puts(":NOO")
-          # component
-        end
-      end)
+  #   case QuillEx.Fluxus.UserInputHandler.handle(state, ii) do
+  #     :ignored ->
+  #       IO.puts("ignorisssssssng #{inspect(ii)}")
+  #       {:reply, :ok, state}
 
-    QuillEx.Lib.Utils.PubSub.broadcast(
-      topic: :radix_state_change,
-      msg: {:radix_state_change, new_rdx_state}
-    )
-
-    {:reply, :ok, new_rdx_state}
-  end
-
-  def handle_call({:user_input, ii}, from, state) do
-    # TODO can we return multiple actions?? and handle them sequentially???
-    # {:action, action} = QuillEx.Fluxus.UserInputHandler.handle(state, ii)
-    # handle_call({:action, action}, from, state)
-    # QuillEx.Lib.Utils.PubSub.broadcast(
-    #   topic: :radix_state_change,
-    #   msg: {:radix_state_change, new_radix_state}
-    # )
-
-    IO.puts("GOT INPUT #{inspect(ii)}")
-    # # {:reply, {:ok, new_state}, new_state}
-    # {:reply, :ok, new_state}
-
-    case QuillEx.Fluxus.UserInputHandler.handle(state, ii) do
-      :ignored ->
-        IO.puts("ignorisssssssng #{inspect(ii)}")
-        {:reply, :ok, state}
-
-      {:action, action} ->
-        IO.puts("HANDINGF CALL GONNA TRAKE ACXRTION")
-        handle_call({:action, action}, from, state)
-        # {:actions, actions} ->
-        #   Enum.reduce(actions, state, fn action, state ->
-        #     handle_call({:action, action}, from, state)
-        #   end)
-    end
-  end
+  #     {:action, action} ->
+  #       IO.puts("HANDINGF CALL GONNA TRAKE ACXRTION")
+  #       handle_call({:action, action}, from, state)
+  #       # {:actions, actions} ->
+  #       #   Enum.reduce(actions, state, fn action, state ->
+  #       #     handle_call({:action, action}, from, state)
+  #       #   end)
+  #   end
+  # end
 
   # def handle_cast({:initialize, new_viewport}, state) do
   #   new_state = Map.merge(state, %{gui: Map.put(state.gui, :viewport, new_viewport)})
@@ -145,19 +140,6 @@ defmodule QuillEx.Fluxus.RadixStore do
 
   # def handle_cast({:put, new_radix_state, false}, _state) do
   #   {:noreply, new_radix_state}
-  # end
-
-  # def handle_cast({:update, new_state}, _state) do
-  #   QuillEx.Lib.Utils.PubSub.broadcast(
-  #     topic: :radix_state_change,
-  #     msg: {:radix_state_change, new_state}
-  #   )
-
-  #   {:noreply, new_state}
-  # end
-
-  # def handle_call(:get, _from, state) do
-  #   {:reply, state, state}
   # end
 end
 
