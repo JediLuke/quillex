@@ -32,8 +32,6 @@ defmodule Quillex.GUI.Buffer do
       metrics: font_metrics
     }
 
-    IO.puts("if here then we isolated")
-
     colors = @cauldron
 
     graph
@@ -62,31 +60,5 @@ defmodule Quillex.GUI.Buffer do
       end,
       translate: frame.pin.point
     )
-
-    # def add_component_to_graph(graph, component_module, component_pid, opts) do
-    #   graph
-    #   |> Scenic.Primitives.group(fn g ->
-    #     g |> component_module.add_to_graph(%{pid: component_pid}, opts)
-    #   end)
-    # end
-
-    # |> MyApp.BufferServer.add_to_graph(%{pid: buf.pid}, [])
-
-    # TODO here is where we should add a Quillex.GUI.Buffer.add_to_graph
-
-    # graph =
-    #   Graph.build()
-    #   |> Primitives.group(fn graph ->
-    #     graph
-    #     |> Primitives.text(
-    #       text,
-    #       font: font,
-    #       color: colors.text,
-    #       position: {0, ascent},
-    #       align: :center
-    #     )
-    #   end)
-
-    # graph
   end
 end
