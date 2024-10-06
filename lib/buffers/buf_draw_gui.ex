@@ -18,6 +18,7 @@ defmodule Quillex.GUI.Buffer do
         %Widgex.Frame{} = frame,
         %Quillex.Structs.Buffer.BufRef{} = buf_ref
       ) do
+    # TODO fetch the text from the buffer anbd render it
     text = @no_limits_to_tomorrow
     font_size = 24
     font_name = :ibm_plex_mono

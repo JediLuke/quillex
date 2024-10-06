@@ -8,7 +8,7 @@ defmodule MyApp.BufferSupervisor do
   end
 
   def start_buffer_server(buffer_name) do
-    spec = {MyApp.BufferServer, buffer_name}
+    spec = {Quillex.FluxBuffer, buffer_name}
     DynamicSupervisor.start_child(__MODULE__, spec)
   end
 
