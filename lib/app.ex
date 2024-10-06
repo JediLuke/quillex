@@ -6,6 +6,27 @@ defmodule QuillEx.App do
   def start(_type, _args) do
     # QuillEx.Metrics.Instrumenter.setup()
 
+    boot_gui? = false
+
+    children =
+      if boot_gui? do
+        [
+          # QuillEx.Metrics.Stash,
+          {Registry, keys: :duplicate, name: QuillEx.PubSub},
+          QuillEx.Fluxus.RadixStore,
+          {Scenic, [scenic_config()]},
+          QuillEx.Fluxus.ActionListener,
+          QuillEx.Fluxus.UserInputListener
+        ]
+      else
+        [
+          {Registry, keys: :duplicate, name: QuillEx.PubSub},
+          {Registry, keys: :unique, name: Quillex.BufferRegistry},
+          QuillEx.Fluxus.RadixStore,
+          {MyApp.TopSupervisor, []}
+        ]
+      end
+
     # NOTE: The starting order here is important.
     # First we start the Registry beccause other processes depend on it.
     # Then we start RadixStore, it does not need to use the PubSub (and
@@ -13,16 +34,7 @@ defmodule QuillEx.App do
     # depends on it, it shall call the RadixStore and get the current
     # RadixState during initialization. Also all Listeners depend on both
     # the Registry and the RadixStore.
-    children = [
-      # QuillEx.Metrics.Stash,
-      {Registry, keys: :duplicate, name: QuillEx.PubSub},
-      QuillEx.Fluxus.RadixStore,
-      {Scenic, [scenic_config()]},
-      QuillEx.Fluxus.ActionListener,
-      QuillEx.Fluxus.UserInputListener
-    ]
-
-    Supervisor.start_link(children, strategy: :one_for_one)
+    children = Supervisor.start_link(children, strategy: :one_for_one)
   end
 
   @window_title "QuillEx"
