@@ -21,8 +21,6 @@ defmodule QuillEx.App do
       else
         [
           {Registry, keys: :duplicate, name: QuillEx.PubSub},
-          {Registry, keys: :unique, name: Quillex.BufferRegistry},
-          # QuillEx.Fluxus.RadixStore,
           {Quillex.Buffers.TopSupervisor, []}
         ]
       end

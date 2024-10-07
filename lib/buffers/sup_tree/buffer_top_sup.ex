@@ -7,6 +7,7 @@ defmodule Quillex.Buffers.TopSupervisor do
 
   def init(_init_arg) do
     children = [
+      {Registry, keys: :unique, name: Quillex.BufferRegistry},
       {Quillex.Buffer.BufferManager, []},
       {Quillex.BufferSupervisor, []}
     ]

@@ -14,7 +14,7 @@ defmodule Quillex.Buffer.Process do
   # use Scenic.Scene
 
   def start_link(%Quillex.Structs.Buffer{} = buf) do
-    GenServer.start_link(__MODULE__, buf, name: via_tuple(buf.uuid))
+    GenServer.start_link(__MODULE__, buf, name: via_tuple({buf.uuid, __MODULE__}))
   end
 
   def init(%Quillex.Structs.Buffer{} = buf) do

@@ -1,12 +1,12 @@
 defmodule Quillex.GUI.Components.Buffer.Reducer do
-  def process_all(state, actions) do
-    Enum.reduce(actions, state, fn action, state_acc ->
-      case process(state_acc, action) do
-        :ignore -> state_acc
-        new_state -> new_state
-      end
-    end)
-  end
+  # def process_all(state, actions) do
+  #   Enum.reduce(actions, state, fn action, state_acc ->
+  #     case process(state_acc, action) do
+  #       :ignore -> state_acc
+  #       new_state -> new_state
+  #     end
+  #   end)
+  # end
 
   # def process(state, {:insert_text, buffer_name, text}) do
   #   buffer = Map.get(state, buffer_name)

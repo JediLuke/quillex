@@ -42,12 +42,6 @@ defmodule Quillex.GUI.Component.Buffer.CursorCaret do
     # Start the blinking timer
     {:ok, timer} = :timer.send_interval(@blink_interval, :blink)
 
-    # Capture keyboard input events
-    # scene = capture_input(scene, [:key])
-
-    Quillex.Utils.PubSub.subscribe(topic: {:buffers, args.buffer_uuid})
-
-    # Assign initial state
     scene =
       scene
       |> assign(graph: graph)
@@ -88,25 +82,25 @@ defmodule Quillex.GUI.Component.Buffer.CursorCaret do
     {:noreply, scene}
   end
 
-  def handle_info({:user_input_fwd, @right_arrow}, scene) do
-    # ignore user input in this component for now since input
-    # needs to get routed through the parent component
-    # {:noreply, scene}
-    IO.puts("right arrow")
-    move_cursor(scene, :right)
-  end
-
-  def handle_info({:user_input_fwd, iid}, scene) do
-    # ignore user input in this component for now since input
-    IO.inspect(iid)
-    IO.inspect(@right_arrow)
-    # needs to get routed through the parent component
-    {:noreply, scene}
-  end
-
-  # def handle_info({:move_cursor, direction, _x}, scene) do
-  #   move_cursor(scene, direction)
+  # def handle_info({:user_input_fwd, @right_arrow}, scene) do
+  #   # ignore user input in this component for now since input
+  #   # needs to get routed through the parent component
+  #   # {:noreply, scene}
+  #   IO.puts("right arrow")
+  #   move_cursor(scene, :right)
   # end
+
+  # def handle_info({:user_input_fwd, iid}, scene) do
+  #   # ignore user input in this component for now since input
+  #   IO.inspect(iid)
+  #   IO.inspect(@right_arrow)
+  #   # needs to get routed through the parent component
+  #   {:noreply, scene}
+  # end
+
+  def handle_cast({:move_cursor, direction, _x}, scene) do
+    move_cursor(scene, direction)
+  end
 
   # # Handle input events
   # def handle_input({:key, {:key_left, 1, _}}, _context, scene) do
