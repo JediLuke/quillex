@@ -11,7 +11,7 @@ defmodule Quillex.BufferSupervisor do
 
     buf = Quillex.Structs.Buffer.new(args)
 
-    spec = {Quillex.Buffer.Proc, buf}
+    spec = {Quillex.Buffer.Process, buf}
     {:ok, buffer_pid} = DynamicSupervisor.start_child(__MODULE__, spec)
 
     buf_ref = Quillex.Structs.Buffer.BufRef.generate(buf, buffer_pid)

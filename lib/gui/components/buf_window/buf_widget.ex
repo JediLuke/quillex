@@ -16,39 +16,22 @@ defmodule Quillex.GUI.Components.Buffer do
   }
 
   def validate(
-        %{frame: %Widgex.Frame{} = f, buf_ref: %Quillex.Structs.Buffer.BufRef{} = buf_ref} = data
+        %{
+          frame: %Widgex.Frame{} = f,
+          buf_ref: %Quillex.Structs.Buffer.BufRef{} = buf_ref
+        } = data
       ) do
-    # go fetch the bu
-
-    # {:ok, %{frame: f, state: buf}}
     {:ok, data}
   end
 
-  # def validate(_), do: :invalid_data
-
-  # @impl Scenic.Component
-  # def init(%{frame: frame, state: buf_ref} = data, opts) do
-  #   graph = draw(Graph.build(), frame, buf_ref)
-
-  #   # You can add custom initialization logic here if necessary.
-  #   {:ok, %{graph: graph, frame: frame, buf_ref: buf_ref}, push: graph}
-  # end
-
-  def init(
-        scene,
-        # %{frame: %Widgex.Frame{} = frame, state: %Quillex.Structs.Buffer{} = buf},
-        data,
-        _opts
-      ) do
-    {:ok, %Quillex.Structs.Buffer{} = buf} = GenServer.call(data.buf_ref.pid, :get_state)
+  def init(scene, data, _opts) do
     # TODO this would be a cool place to do something better here...
+    {:ok, %Quillex.Structs.Buffer{} = buf} = GenServer.call(data.buf_ref.pid, :get_state)
     # buf = Flamelex.Fluxus.RadixStore.get().apps.qlx_wrap.buffers |> List.first()
 
     graph =
       Scenic.Graph.build()
       |> draw(data.frame, buf)
-
-    # |> BufferWidget.add_to_graph(%{frame: data.frame, buf_ref: data.buf_ref})
 
     init_scene =
       scene

@@ -1,4 +1,4 @@
-defmodule Quillex.Buffer.Proc do
+defmodule Quillex.Buffer.Process do
   @moduledoc """
   This is the _actual buffer_ process, which runs not as part
   of the GUI, it runs under the Buffer SUpervision tree.
@@ -30,7 +30,7 @@ defmodule Quillex.Buffer.Proc do
     # IO.puts("BUFFER GOT INPUT: #{inspect(input)}")
 
     # TODO use wormhole here
-    case Quillex.Buffer.Proc.UserInputHandler.handle(state, input) do
+    case Quillex.GUI.Components.Buffer.UserInputHandler.handle(state, input) do
       :ignore ->
         {:noreply, state}
 
@@ -41,7 +41,7 @@ defmodule Quillex.Buffer.Proc do
       actions when is_list(actions) ->
         IO.puts("SHOULD BE DOING: #{inspect(actions)}")
 
-        case Quillex.Buffer.Proc.Reducer.process_all(state, actions) do
+        case Quillex.GUI.Components.Buffer.Reducer.process_all(state, actions) do
           :ignore ->
             {:noreply, state}
 
@@ -62,11 +62,6 @@ defmodule Quillex.Buffer.Proc do
             # throw 2 actions, one for the buffer, one for the component?? we'll see
             # new_graph = Render.go(scene.assigns.frame, new_state)
 
-            # new_scene =
-            #   scene
-            #   |> assign(state: new_state)
-            #   |> push_graph(new_graph)
-
             notify_gui(new_state)
 
             {:noreply, new_state}
@@ -75,6 +70,7 @@ defmodule Quillex.Buffer.Proc do
   end
 
   def notify_gui(buf) do
+    raise "dunno lol"
     Quillex.Utils.PubSub.broadcast(topic: {:buffers, buf.uuid}, msg: {:state_change, buf})
   end
 

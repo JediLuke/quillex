@@ -1,7 +1,10 @@
-defmodule Quillex.Buffer.Proc.Reducer do
+defmodule Quillex.GUI.Components.Buffer.Reducer do
   def process_all(state, actions) do
     Enum.reduce(actions, state, fn action, state_acc ->
-      process(state_acc, action)
+      case process(state_acc, action) do
+        :ignore -> state_acc
+        new_state -> new_state
+      end
     end)
   end
 
@@ -13,7 +16,7 @@ defmodule Quillex.Buffer.Proc.Reducer do
 
   def process(state, {:move_cursor, direction, x}) do
     # buffer = Map.get(state, buffer_name)
-    # new_cursor = Quillex.Buffer.Proc.Cursor.move(buffer.cursor, direction)
+    # new_cursor = Quillex.Buffer.Process.Cursor.move(buffer.cursor, direction)
     # Map.put(state, buffer_name, Map.put(buffer, :cursor, new_cursor))
     IO.puts("Moving cursor #{direction} by #{x}")
     :ignore

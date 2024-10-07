@@ -1,4 +1,4 @@
-defmodule Quillex.Buffer.Proc.UserInputHandler do
+defmodule Quillex.GUI.Components.Buffer.UserInputHandler do
   @moduledoc """
   Handles user input for the FluxBuffer component.
   """

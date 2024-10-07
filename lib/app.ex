@@ -23,7 +23,7 @@ defmodule QuillEx.App do
           {Registry, keys: :duplicate, name: QuillEx.PubSub},
           {Registry, keys: :unique, name: Quillex.BufferRegistry},
           # QuillEx.Fluxus.RadixStore,
-          {MyApp.TopSupervisor, []}
+          {Quillex.Buffers.TopSupervisor, []}
         ]
       end
 
