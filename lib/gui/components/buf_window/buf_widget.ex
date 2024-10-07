@@ -1,21 +1,6 @@
 defmodule Quillex.GUI.Components.Buffer do
   use Scenic.Component
-  alias Flamelex.GUI.Utils.Draw
-  alias Scenic.Graph
   use ScenicWidgets.ScenicEventsDefinitions
-
-  @no_limits_to_tomorrow "~ The only limit to our realization of tomorrow is our doubts of today ~"
-  # - Frankin D. Roosevelt
-
-  @typewriter %{
-    text: :black,
-    slate: :white
-  }
-
-  @cauldron %{
-    text: :white,
-    slate: :medium_slate_blue
-  }
 
   def validate(
         %{
@@ -28,12 +13,13 @@ defmodule Quillex.GUI.Components.Buffer do
 
   def init(scene, data, _opts) do
     # TODO this would be a cool place to do something better here...
+    # I'm going to keep experimenting with this, I think it's more in-keeping
+    # with the Zen of scenic to go and fetch state upon our boot, since that
+    # keeps the integrity our gui thread even if the external data sdource if bad,
+    # plus I think it's more efficient in terms of data transfer to just get it once rather than pass it around everywhere (maybe?)
     {:ok, %Quillex.Structs.Buffer{} = buf} = GenServer.call(data.buf_ref.pid, :get_state)
-    # buf = Flamelex.Fluxus.RadixStore.get().apps.qlx_wrap.buffers |> List.first()
 
-    graph =
-      Scenic.Graph.build()
-      |> draw(data.frame, buf)
+    graph = Quillex.GUI.Components.Buffer.Render.go(data.frame, buf)
 
     init_scene =
       scene
@@ -94,53 +80,4 @@ defmodule Quillex.GUI.Components.Buffer do
 
   #     {:noreply, scene}
   #   end
-
-  # The draw function that builds the graph and renders the buffer
-  # TODO apply scissor, move to renbder module
-  defp draw(%Graph{} = graph, %Widgex.Frame{} = frame, buf) do
-    # Fetch the text from the buffer, for now use default placeholder text
-    text = @no_limits_to_tomorrow
-    font_size = 24
-    font_name = :ibm_plex_mono
-
-    # Fetch font metrics (this could be passed into the state)
-    font_metrics = Flamelex.Fluxus.RadixStore.get().fonts.ibm_plex_mono.metrics
-    ascent = FontMetrics.ascent(font_size, font_metrics)
-
-    font = %{
-      name: font_name,
-      size: font_size,
-      metrics: font_metrics
-    }
-
-    colors = @cauldron
-
-    # Build the graph for rendering
-    graph
-    |> Scenic.Primitives.group(
-      fn graph ->
-        graph
-        |> Draw.background(frame, colors.slate)
-        |> Scenic.Primitives.text(
-          text,
-          font_size: font_size,
-          font: font_name,
-          fill: colors.text,
-          translate: {10, ascent + 10}
-        )
-        # TODO maybe send it a list of lines instead? Do the rope calc here??
-        |> Quillex.GUI.Component.Buffer.CursorCaret.add_to_graph(
-          %{
-            buffer_uuid: buf.uuid,
-            coords: {10, 10},
-            height: font_size,
-            mode: :cursor,
-            font: font
-          },
-          id: :cursor
-        )
-      end,
-      translate: frame.pin.point
-    )
-  end
 end
