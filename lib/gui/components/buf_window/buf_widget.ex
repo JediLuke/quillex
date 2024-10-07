@@ -45,6 +45,11 @@ defmodule Quillex.GUI.Components.Buffer do
     {:ok, init_scene}
   end
 
+  def handle_info({:user_input_fwd, _input}, state) do
+    # ignore user input in the actual Buffer process, wait for the GUI to convert it to actions
+    {:noreply, state}
+  end
+
   # The draw function that builds the graph and renders the buffer
   defp draw(%Graph{} = graph, %Widgex.Frame{} = frame, buf) do
     # Fetch the text from the buffer, for now use default placeholder text

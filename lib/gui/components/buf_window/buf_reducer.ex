@@ -14,13 +14,21 @@ defmodule Quillex.GUI.Components.Buffer.Reducer do
   #   Map.put(state, buffer_name, Map.put(buffer, :data, new_text))
   # end
 
-  def process(state, {:move_cursor, direction, x}) do
-    # buffer = Map.get(state, buffer_name)
-    # new_cursor = Quillex.Buffer.Process.Cursor.move(buffer.cursor, direction)
-    # Map.put(state, buffer_name, Map.put(buffer, :cursor, new_cursor))
-    IO.puts("Moving cursor #{direction} by #{x}")
-    :ignore
-  end
+  # def process(state, {:move_cursor, direction, x}) do
+  #   # buffer = Map.get(state, buffer_name)
+  #   # new_cursor = Quillex.Buffer.Process.Cursor.move(buffer.cursor, direction)
+  #   # Map.put(state, buffer_name, Map.put(buffer, :cursor, new_cursor))
+  #   # IO.puts("Moving cursor #{direction} by #{x}")
+  #   # :ignore
+
+  #   # Quillex.Buffer.BufferManager.cast_to_buffer(
+  #   #   buf_ref,
+  #   #   {:user_input_fwd, input}
+  #   # )
+  #   # GenServer.cast(state.pid, msg)
+
+  #   :re_routed
+  # end
 end
 
 # defmodule QuillEx.Reducers.BufferReducer do

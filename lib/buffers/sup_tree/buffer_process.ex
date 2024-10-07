@@ -26,48 +26,53 @@ defmodule Quillex.Buffer.Process do
     {:reply, {:ok, state}, state}
   end
 
-  def handle_cast({:user_input_fwd, input}, %{mode: :edit} = state) do
-    # IO.puts("BUFFER GOT INPUT: #{inspect(input)}")
-
-    # TODO use wormhole here
-    case Quillex.GUI.Components.Buffer.UserInputHandler.handle(state, input) do
-      :ignore ->
-        {:noreply, state}
-
-      :re_routed ->
-        IO.puts("RE ROUTED #{inspect(input)}")
-        {:noreply, state}
-
-      actions when is_list(actions) ->
-        IO.puts("SHOULD BE DOING: #{inspect(actions)}")
-
-        case Quillex.GUI.Components.Buffer.Reducer.process_all(state, actions) do
-          :ignore ->
-            {:noreply, state}
-
-          :re_routed ->
-            {:noreply, state}
-
-          %Quillex.Structs.Buffer{} = new_state ->
-            # This ideally is where Scenic is able to go, no need to re-render if the state hasn't changed,
-            # however at this point I dont know how to do it... we might need to diff
-            # states or something very complex
-
-            # for now we just try and make sure that anything which needs to be done
-            # by a lower level component, gets L:re-routed to that component - this means
-            # that the FluxBuffer state should only change when its probably necessary to
-            # re-render anyway
-
-            # if something needs to be managed on both levels e.g. the cursor position, maybe
-            # throw 2 actions, one for the buffer, one for the component?? we'll see
-            # new_graph = Render.go(scene.assigns.frame, new_state)
-
-            notify_gui(new_state)
-
-            {:noreply, new_state}
-        end
-    end
+  def handle_info({:user_input_fwd, _input}, state) do
+    # ignore user input in the actual Buffer process, wait for the GUI to convert it to actions
+    {:noreply, state}
   end
+
+  # def handle_cast({:user_input_fwd, input}, %{mode: :edit} = state) do
+  #   # IO.puts("BUFFER GOT INPUT: #{inspect(input)}")
+
+  #   # TODO use wormhole here
+  #   case Quillex.GUI.Components.Buffer.UserInputHandler.handle(state, input) do
+  #     :ignore ->
+  #       {:noreply, state}
+
+  #     :re_routed ->
+  #       IO.puts("RE ROUTED #{inspect(input)}")
+  #       {:noreply, state}
+
+  #     actions when is_list(actions) ->
+  #       IO.puts("SHOULD BE DOING: #{inspect(actions)}")
+
+  #       case Quillex.GUI.Components.Buffer.Reducer.process_all(state, actions) do
+  #         :ignore ->
+  #           {:noreply, state}
+
+  #         :re_routed ->
+  #           {:noreply, state}
+
+  #         %Quillex.Structs.Buffer{} = new_state ->
+  #           # This ideally is where Scenic is able to go, no need to re-render if the state hasn't changed,
+  #           # however at this point I dont know how to do it... we might need to diff
+  #           # states or something very complex
+
+  #           # for now we just try and make sure that anything which needs to be done
+  #           # by a lower level component, gets L:re-routed to that component - this means
+  #           # that the FluxBuffer state should only change when its probably necessary to
+  #           # re-render anyway
+
+  #           # if something needs to be managed on both levels e.g. the cursor position, maybe
+  #           # throw 2 actions, one for the buffer, one for the component?? we'll see
+  #           # new_graph = Render.go(scene.assigns.frame, new_state)
+
+  #           notify_gui(new_state)
+
+  #           {:noreply, new_state}
+  #       end
+  #   end
+  # end
 
   def notify_gui(buf) do
     raise "dunno lol"

@@ -1,5 +1,6 @@
 defmodule Quillex.GUI.Component.Buffer.CursorCaret do
   use Scenic.Component
+  use ScenicWidgets.ScenicEventsDefinitions
   require Logger
 
   # Width of the cursor in pixels
@@ -44,7 +45,7 @@ defmodule Quillex.GUI.Component.Buffer.CursorCaret do
     # Capture keyboard input events
     # scene = capture_input(scene, [:key])
 
-    Flamelex.Lib.Utils.PubSub.subscribe(topic: {:buffers, args.buffer_uuid})
+    Quillex.Utils.PubSub.subscribe(topic: {:buffers, args.buffer_uuid})
 
     # Assign initial state
     scene =
@@ -87,15 +88,25 @@ defmodule Quillex.GUI.Component.Buffer.CursorCaret do
     {:noreply, scene}
   end
 
-  def handle_info({:user_input_fwd, _iid}, scene) do
+  def handle_info({:user_input_fwd, @right_arrow}, scene) do
     # ignore user input in this component for now since input
+    # needs to get routed through the parent component
+    # {:noreply, scene}
+    IO.puts("right arrow")
+    move_cursor(scene, :right)
+  end
+
+  def handle_info({:user_input_fwd, iid}, scene) do
+    # ignore user input in this component for now since input
+    IO.inspect(iid)
+    IO.inspect(@right_arrow)
     # needs to get routed through the parent component
     {:noreply, scene}
   end
 
-  def handle_info({:move_cursor, direction, _x}, scene) do
-    move_cursor(scene, direction)
-  end
+  # def handle_info({:move_cursor, direction, _x}, scene) do
+  #   move_cursor(scene, direction)
+  # end
 
   # # Handle input events
   # def handle_input({:key, {:key_left, 1, _}}, _context, scene) do
