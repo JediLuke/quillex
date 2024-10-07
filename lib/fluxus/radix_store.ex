@@ -29,7 +29,7 @@
 #   end
 
 #   def handle_call({:update_state, new_state}, _from, _state) do
-#     QuillEx.Lib.Utils.PubSub.broadcast(
+#     Quillex.Utils.PubSub.broadcast(
 #       topic: :radix_state_change,
 #       msg: {:radix_state_change, new_state}
 #     )
@@ -88,7 +88,7 @@
 #   #       end
 #   #     end)
 
-#   #   QuillEx.Lib.Utils.PubSub.broadcast(
+#   #   Quillex.Utils.PubSub.broadcast(
 #   #     topic: :radix_state_change,
 #   #     msg: {:radix_state_change, new_rdx_state}
 #   #   )
@@ -100,7 +100,7 @@
 #   #   # TODO can we return multiple actions?? and handle them sequentially???
 #   #   # {:action, action} = QuillEx.Fluxus.UserInputHandler.handle(state, ii)
 #   #   # handle_call({:action, action}, from, state)
-#   #   # QuillEx.Lib.Utils.PubSub.broadcast(
+#   #   # Quillex.Utils.PubSub.broadcast(
 #   #   #   topic: :radix_state_change,
 #   #   #   msg: {:radix_state_change, new_radix_state}
 #   #   # )
@@ -130,7 +130,7 @@
 #   # end
 
 #   # def handle_cast({:put, new_radix_state, true}, _state) do
-#   #   QuillEx.Lib.Utils.PubSub.broadcast(
+#   #   Quillex.Utils.PubSub.broadcast(
 #   #     topic: :radix_state_change,
 #   #     msg: {:radix_state_change, new_radix_state}
 #   #   )
@@ -183,7 +183,7 @@
 # #     #      the state updates on to each ScenicComponent, but then we
 # #     #      start to have problems of how to handle addressing... the
 # #     #      exact problem that PubSub is a perfect solution for.
-# #     QuillEx.Lib.Utils.PubSub.broadcast(
+# #     Quillex.Utils.PubSub.broadcast(
 # #       topic: :radix_state_change,
 # #       msg: {:radix_state_change, new_radix_state}
 # #     )
@@ -199,7 +199,7 @@
 # #     # Logger.debug("#{RadixStore} updating state & broadcasting new_state...")
 # #     # Logger.debug("#{RadixStore} updating state & broadcasting new_state: #{inspect(new_state)}")
 
-# #     QuillEx.Lib.Utils.PubSub.broadcast(
+# #     Quillex.Utils.PubSub.broadcast(
 # #       topic: :radix_state_change,
 # #       msg: {:radix_state_change, new_state}
 # #     )

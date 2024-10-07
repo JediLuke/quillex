@@ -12,7 +12,7 @@ defmodule QuillEx.Fluxus.RadixReducer do
   def handle_action(radix_state, {:action, a}) do
     {:ok, new_radix_state} = QuillEx.Fluxus.RadixReducer.process(radix_state, a)
 
-    QuillEx.Lib.Utils.PubSub.broadcast(
+    Quillex.Utils.PubSub.broadcast(
       topic: :radix_state_change,
       msg: {:radix_state_change, new_radix_state}
     )

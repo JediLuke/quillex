@@ -1,9 +1,9 @@
 defmodule Quillex.Buffer do
-  # defdelegate new(args), to: Quillex.Buffer.BufferManager
-  defdelegate new(args), to: Quillex.Buffer.BufferManager, as: :start_new_buffer
+  defdelegate new(), to: Quillex.Buffer.BufferManager, as: :new_buffer
+  defdelegate new(args), to: Quillex.Buffer.BufferManager, as: :new_buffer
 
   # # TODO maybe rename slate or quill one day...
-  # alias QuillEx.Structs.Buffer.Cursor
+  # alias Quillex.Structs.Buffer.Cursor
 
   # @valid_types [:text, :list]
   # @vim_modes [{:vim, :insert}, {:vim, :normal}]

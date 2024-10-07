@@ -1,6 +1,8 @@
-defmodule QuillEx.Structs.Buffer do
+defmodule Quillex.Structs.Buffer do
   # TODO maybe rename slate or quill one day...
-  alias QuillEx.Structs.Buffer.Cursor
+  alias Quillex.Structs.Buffer.Cursor
+
+  @unnamed "unnamed"
 
   defstruct [
     # a unique uuid for referencing the buffer
@@ -8,7 +10,7 @@ defmodule QuillEx.Structs.Buffer do
     # # a string identifier, no two open buffers can have the same id
     # id: nil,
     # the name of the buffer that appears in the tab-bar (NOT unique!)
-    name: "unnamed",
+    name: @unnamed,
     # There are several types of buffers e.g. :text, :list - the most common though is :text
     type: :text,
     # where the actual contents of the buffer is kept
@@ -91,17 +93,11 @@ defmodule QuillEx.Structs.Buffer do
   #     }
   #   end
   # when is_boolean(ro?) do
-  def new(
-        %{
-          # "id" => id,
-          "name" => name
-          # "read_only?" => ro?
-        } = args
-      ) do
+  def new(args) do
     %__MODULE__{
       uuid: UUID.uuid4(),
       # id: id,
-      name: name,
+      name: Map.get(args, "name", @unnamed),
       type: :text,
       data: Map.get(args, "data", ""),
       # mode: validate_mode(args[:mode]) || :edit,

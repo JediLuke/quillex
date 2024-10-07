@@ -6,7 +6,7 @@ defmodule Quillex.Structs.Buffer.BufRef do
     :name
   ]
 
-  def generate(%QuillEx.Structs.Buffer{} = buf, pid) when is_pid(pid) do
+  def generate(%Quillex.Structs.Buffer{} = buf, pid) when is_pid(pid) do
     %__MODULE__{
       uuid: buf.uuid,
       name: buf.name,

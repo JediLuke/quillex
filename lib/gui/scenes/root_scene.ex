@@ -47,7 +47,7 @@
 #       |> assign(graph: init_graph)
 #       |> push_graph(init_graph)
 
-#     QuillEx.Lib.Utils.PubSub.subscribe(topic: :radix_state_change)
+#     Quillex.Utils.PubSub.subscribe(topic: :radix_state_change)
 
 #     request_input(init_scene, [:viewport, :key])
 
