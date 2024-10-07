@@ -48,7 +48,7 @@ defmodule Quillex.GUI.Buffer do
           translate: {10, ascent + 10}
           # translate: {10, 10}
         )
-        |> Flamelex.GUI.Component.Editor.CursorCaret.add_to_graph(
+        |> Quillex.GUI.Component.Buffer.CursorCaret.add_to_graph(
           %{
             buffer_uuid: buf_ref.uuid,
             coords: {10, 10},
