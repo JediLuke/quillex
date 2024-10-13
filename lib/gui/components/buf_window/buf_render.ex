@@ -53,57 +53,11 @@ defmodule Quillex.GUI.Components.Buffer.Render do
         colors
       )
       when is_list(lines) do
-    # Enum.reduce(lines, graph, fn line, graph_acc ->
-    #   graph_acc
-    #   |> Scenic.Primitives.text(
-    #     line,
-    #     font_size: font_size,
-    #     font: font_name,
-    #     fill: colors.text,
-    #     translate: {10, ascent + 10}
-    #   )
-    #   |> Map.update!(:translate, fn {x, y} -> {x, y + font_size} end)
-    # end)
-
-    # TODO maybe send it a list of lines instead? Do the rope calc here??
-
-    # this is the very direct method, the way above is actually
-    # treating the rendering of each line as a separate operation,
-    # which is probably the way to go
-    # graph
-    # |> Scenic.Primitives.text(
-    #   convert_lines_to_text(lines),
-    #   font_size: font.size,
-    #   font: font.name,
-    #   fill: colors.text,
-    #   translate: {10, font.ascent + 10}
-    # )
-
     graph
     |> render_lines(lines, font, colors)
   end
 
-  # def render_lines(
-  #       %Scenic.Graph{} = graph,
-  #       lines,
-  #       font,
-  #       colors
-  #     )
-  #     when is_list(lines) do
-  #   Enum.reduce(lines, graph, fn line, graph_acc ->
-  #     graph_acc
-  #     |> Scenic.Primitives.text(
-  #       line,
-  #       font_size: font.size,
-  #       font: font.name,
-  #       fill: colors.text,
-  #       translate: {10, font.ascent + 10}
-  #     )
-
-  #     # |> Map.update!(:translate, fn {x, y} -> {x, y + font.size} end)
-  #   end)
-  # end
-
+  @line_space 4
   def render_lines(
         %Scenic.Graph{} = graph,
         lines,
@@ -113,6 +67,7 @@ defmodule Quillex.GUI.Components.Buffer.Render do
       when is_list(lines) do
     # Calculate font metrics
     # line_height = FontMetrics.line_height(font.size, font.metrics)
+    # line_height = font.size + @line_space
     line_height = font.size
     ascent = FontMetrics.ascent(font.size, font.metrics)
     # Starting y-position for the first line
@@ -171,11 +126,15 @@ defmodule Quillex.GUI.Components.Buffer.Render do
         font,
         colors
       ) do
+    ascent = FontMetrics.ascent(font.size, font.metrics)
+    # Starting y-position for the first line
+    initial_y = ascent
+
     graph
     |> Quillex.GUI.Component.Buffer.CursorCaret.add_to_graph(
       %{
         buffer_uuid: buf.uuid,
-        coords: {10, 10},
+        coords: {45, 2},
         height: font.size,
         mode: :cursor,
         font: font
@@ -188,3 +147,50 @@ defmodule Quillex.GUI.Components.Buffer.Render do
     Enum.join(lines, "\n")
   end
 end
+
+# def render_lines(
+#       %Scenic.Graph{} = graph,
+#       lines,
+#       font,
+#       colors
+#     )
+#     when is_list(lines) do
+#   Enum.reduce(lines, graph, fn line, graph_acc ->
+#     graph_acc
+#     |> Scenic.Primitives.text(
+#       line,
+#       font_size: font.size,
+#       font: font.name,
+#       fill: colors.text,
+#       translate: {10, font.ascent + 10}
+#     )
+
+#     # |> Map.update!(:translate, fn {x, y} -> {x, y + font.size} end)
+#   end)
+# end
+
+# Enum.reduce(lines, graph, fn line, graph_acc ->
+#   graph_acc
+#   |> Scenic.Primitives.text(
+#     line,
+#     font_size: font_size,
+#     font: font_name,
+#     fill: colors.text,
+#     translate: {10, ascent + 10}
+#   )
+#   |> Map.update!(:translate, fn {x, y} -> {x, y + font_size} end)
+# end)
+
+# TODO maybe send it a list of lines instead? Do the rope calc here??
+
+# this is the very direct method, the way above is actually
+# treating the rendering of each line as a separate operation,
+# which is probably the way to go
+# graph
+# |> Scenic.Primitives.text(
+#   convert_lines_to_text(lines),
+#   font_size: font.size,
+#   font: font.name,
+#   fill: colors.text,
+#   translate: {10, font.ascent + 10}
+# )
