@@ -14,11 +14,12 @@ defmodule Quillex.Buffer.Process do
   # use Scenic.Scene
 
   def start_link(%Quillex.Structs.Buffer{} = buf) do
-    GenServer.start_link(__MODULE__, buf, name: via_tuple({buf.uuid, __MODULE__}))
+    buf_tag = {buf.uuid, __MODULE__}
+    via_tuple = {:via, Registry, {Quillex.BufferRegistry, buf_tag}}
+    GenServer.start_link(__MODULE__, buf, name: via_tuple)
   end
 
   def init(%Quillex.Structs.Buffer{} = buf) do
-    Quillex.Utils.PubSub.subscribe(topic: {:buffers, buf.uuid})
     {:ok, _state = buf}
   end
 
@@ -26,10 +27,10 @@ defmodule Quillex.Buffer.Process do
     {:reply, {:ok, state}, state}
   end
 
-  def handle_info({:user_input_fwd, _input}, state) do
-    # ignore user input in the actual Buffer process, wait for the GUI to convert it to actions
-    {:noreply, state}
-  end
+  # def handle_info({:user_input_fwd, _input}, state) do
+  #   # ignore user input in the actual Buffer process, wait for the GUI to convert it to actions
+  #   {:noreply, state}
+  # end
 
   # def handle_cast({:user_input_fwd, input}, %{mode: :edit} = state) do
   #   # IO.puts("BUFFER GOT INPUT: #{inspect(input)}")
@@ -76,10 +77,8 @@ defmodule Quillex.Buffer.Process do
 
   def notify_gui(buf) do
     raise "dunno lol"
-    Quillex.Utils.PubSub.broadcast(topic: {:buffers, buf.uuid}, msg: {:state_change, buf})
+    # Quillex.Utils.PubSub.broadcast(topic: {:buffers, buf.uuid}, msg: {:state_change, buf})
   end
-
-  defp via_tuple(name), do: {:via, Registry, {Quillex.BufferRegistry, name}}
 end
 
 #         %Editor.State{} = new_state ->

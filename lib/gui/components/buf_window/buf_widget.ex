@@ -28,12 +28,14 @@ defmodule Quillex.GUI.Components.Buffer do
       |> assign(state: buf)
       |> push_graph(graph)
 
-    # TODO I _think_ this will register the GUI widget the same way we register the actual Buffer process
-    Registry.register(Quillex.BufferRegistry, {data.buf_ref.uuid, __MODULE__}, nil)
-
-    Quillex.Utils.PubSub.subscribe(topic: {:buffers, buf.uuid})
+    register_process(data.buf_ref)
 
     {:ok, init_scene}
+  end
+
+  def register_process(buf_ref) do
+    # this will register the GUI widget the same way we register the actual Buffer process
+    Registry.register(Quillex.BufferRegistry, {buf_ref.uuid, __MODULE__}, nil)
   end
 
   # a convenience function to make it easy to forward user input to the GUI component

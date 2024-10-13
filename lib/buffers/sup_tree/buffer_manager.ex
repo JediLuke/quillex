@@ -12,7 +12,13 @@ defmodule Quillex.Buffer.BufferManager do
   def new_buffer, do: new_buffer(%{})
 
   def new_buffer(args) do
-    GenServer.call(__MODULE__, {:new_buffer, args})
+    # from the users point of view, there is such a thing as a 'new' buffer,
+    # but from the system's point of view, it's just opening another buffer & is not special
+    GenServer.call(__MODULE__, {:open_buffer, args})
+  end
+
+  def open_buffer(args) do
+    GenServer.call(__MODULE__, {:open_buffer, args})
   end
 
   # this encapsulates the logic of sending messages to buffers,
@@ -27,13 +33,14 @@ defmodule Quillex.Buffer.BufferManager do
     GenServer.cast(buf_ref.pid, msg)
   end
 
-  def handle_call({:new_buffer, args}, _from, state) do
+  def handle_call({:open_buffer, args}, _from, state) do
     # TODO check we're not trying to open the same buffer twice
     case Quillex.BufferSupervisor.start_new_buffer_process(args) do
       {:ok, %Quillex.Structs.Buffer.BufRef{} = buf_ref} ->
         {:reply, {:ok, buf_ref}, state}
 
       {:error, reason} ->
+        raise "in practice this can never happen since `start_new_buffer_process` always returns `{:ok, buf_ref}`"
         {:reply, {:error, reason}, state}
     end
   end
