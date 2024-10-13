@@ -104,6 +104,15 @@ defmodule Quillex.GUI.Components.Buffer.Render do
             fill: {:color_rgba, {255, 255, 255, Integer.floor_div(255, 3)}},
             id: {:line_bg_box, idx}
           )
+          |> Scenic.Primitives.rect(
+            # {frame.dimens.width, frame.dimens.height},
+            {frame.size.width - 2, line_height},
+            # id: :background,
+            # fill: theme.active,
+            stroke: {2, :white},
+            translate: {1, 0}
+            # scissor: frame.size.box
+          )
         else
           graph
         end

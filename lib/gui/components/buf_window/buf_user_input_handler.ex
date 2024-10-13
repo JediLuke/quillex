@@ -10,6 +10,17 @@ defmodule Quillex.GUI.Components.Buffer.UserInputHandler do
     [{:move_cursor, :right, 1}]
   end
 
+  def handle(rdx, @down_arrow) do
+    Logger.warn("#{__MODULE__} getting RIGHT ARROW")
+    [{:move_cursor, :down, 1}]
+  end
+
+  def handle(rdx, @lowercase_f) do
+    Logger.warn("#{__MODULE__} gettingLOWERCASSE F")
+    # TODO address the cursor by number to account for multiple cursors
+    [{:insert, key2string(@lowercase_f), :at_cursor}]
+  end
+
   def handle(rdx, any_input) do
     Logger.warn("#{__MODULE__} ignoring input: #{inspect(any_input)}")
     :ignore

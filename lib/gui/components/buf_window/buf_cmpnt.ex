@@ -59,10 +59,28 @@ defmodule Quillex.GUI.Components.Buffer do
     {:noreply, scene}
   end
 
-  def handle_info({:user_input_fwd, _input}, scene) do
+  def handle_info({:user_input_fwd, input}, scene) do
     # todo here should convert input to actions, then broascast actions to do on the pubsub
     # ignore user input in the actual Buffer process, wait for the GUI to convert it to actions
-    {:noreply, scene}
+
+    case Quillex.GUI.Components.Buffer.UserInputHandler.handle(scene, input) do
+      :ignore ->
+        {:noreply, scene}
+
+      actions when is_list(actions) ->
+        # process_actions(scene, actions)
+        IO.puts("NEED TO HANDLE #{inspect(actions)}")
+        {:noreply, scene}
+        # new_rdx =
+        #   Enum.reduce(actions, rdx, fn action, rdx_acc ->
+        #     case Flamelex.Fluxus.RadixReducer.process(rdx_acc, action) do
+        #       :ignore ->
+        #         :ignore
+
+        #       new_rdx ->
+        #         new_rdx
+        #     end
+    end
   end
 
   # TODO
