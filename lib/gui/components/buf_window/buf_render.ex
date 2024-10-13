@@ -39,43 +39,9 @@ defmodule Quillex.GUI.Components.Buffer.Render do
         |> Draw.background(frame, colors.slate)
         |> render_text(frame, data, font, colors)
         |> render_cursor(frame, buf, :start_of_buffer, font, colors)
-
-        # |> Quillex.GUI.Component.Buffer.CursorCaret.add_to_graph(
-        #   %{
-        #     buffer_uuid: buf.uuid,
-        #     coords: {10, 10},
-        #     # height: font_size,
-        #     mode: :cursor,
-        #     font: font
-        #   },
-        #   id: :cursor
-        # )
       end,
-      # TODO apply scissor
-      translate: frame.pin.point
-    )
-  end
-
-  def render_cursor(
-        %Scenic.Graph{} = graph,
-        %Widgex.Frame{} = frame,
-        %Quillex.Structs.Buffer{} = buf,
-        # coords,
-        :start_of_buffer,
-        # height,
-        font,
-        colors
-      ) do
-    graph
-    |> Quillex.GUI.Component.Buffer.CursorCaret.add_to_graph(
-      %{
-        buffer_uuid: buf.uuid,
-        coords: {10, 10},
-        height: font.size,
-        mode: :cursor,
-        font: font
-      },
-      id: :cursor
+      translate: frame.pin.point,
+      scissor: frame.size.box
     )
   end
 
@@ -104,13 +70,58 @@ defmodule Quillex.GUI.Components.Buffer.Render do
     # this is the very direct method, the way above is actually
     # treating the rendering of each line as a separate operation,
     # which is probably the way to go
+    # graph
+    # |> Scenic.Primitives.text(
+    #   convert_lines_to_text(lines),
+    #   font_size: font.size,
+    #   font: font.name,
+    #   fill: colors.text,
+    #   translate: {10, font.ascent + 10}
+    # )
+
     graph
-    |> Scenic.Primitives.text(
-      convert_lines_to_text(lines),
-      font_size: font.size,
-      font: font.name,
-      fill: colors.text,
-      translate: {10, font.ascent + 10}
+    |> render_lines(lines, font, colors)
+  end
+
+  def render_lines(
+        %Scenic.Graph{} = graph,
+        lines,
+        font,
+        colors
+      )
+      when is_list(lines) do
+    Enum.reduce(lines, graph, fn line, graph_acc ->
+      graph_acc
+      |> Scenic.Primitives.text(
+        line,
+        font_size: font.size,
+        font: font.name,
+        fill: colors.text,
+        translate: {10, font.ascent + 10}
+      )
+
+      # |> Map.update!(:translate, fn {x, y} -> {x, y + font.size} end)
+    end)
+  end
+
+  def render_cursor(
+        %Scenic.Graph{} = graph,
+        %Widgex.Frame{} = frame,
+        %Quillex.Structs.Buffer{} = buf,
+        :start_of_buffer,
+        font,
+        colors
+      ) do
+    graph
+    |> Quillex.GUI.Component.Buffer.CursorCaret.add_to_graph(
+      %{
+        buffer_uuid: buf.uuid,
+        coords: {10, 10},
+        height: font.size,
+        mode: :cursor,
+        font: font
+      },
+      id: :cursor
     )
   end
 
