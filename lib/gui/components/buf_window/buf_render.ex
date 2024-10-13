@@ -18,8 +18,6 @@ defmodule Quillex.GUI.Components.Buffer.Render do
   def go(%Widgex.Frame{} = frame, %Quillex.Structs.Buffer{} = buf) do
     colors = @cauldron
 
-    data = if buf.data == [], do: [@no_limits_to_tomorrow], else: buf.data
-
     font_size = 24
     font_name = :ibm_plex_mono
     font_metrics = Flamelex.Fluxus.RadixStore.get().fonts.ibm_plex_mono.metrics
@@ -37,7 +35,7 @@ defmodule Quillex.GUI.Components.Buffer.Render do
       fn graph ->
         graph
         |> Draw.background(frame, colors.slate)
-        |> render_text(frame, data, font, colors)
+        |> render_text(frame, buf, font, colors)
         |> render_cursor(frame, buf, :start_of_buffer, font, colors)
       end,
       translate: frame.pin.point,
@@ -46,32 +44,36 @@ defmodule Quillex.GUI.Components.Buffer.Render do
   end
 
   def render_text(
-        %Scenic.Graph{} = graph,
-        %Widgex.Frame{} = frame,
-        lines,
+        graph,
+        frame,
+        buf,
         font,
         colors
-      )
-      when is_list(lines) do
-    graph
-    |> render_lines(lines, font, colors)
+      ) do
+    render_lines(graph, frame, buf, font, colors)
   end
 
+  @margin_left 5
   @line_space 4
   def render_lines(
         %Scenic.Graph{} = graph,
-        lines,
+        %Widgex.Frame{} = frame,
+        %Quillex.Structs.Buffer{data: lines} = buf,
         font,
         colors
       )
       when is_list(lines) do
+    lines = if buf.data == [], do: [@no_limits_to_tomorrow], else: buf.data
+
     # Calculate font metrics
     # line_height = FontMetrics.line_height(font.size, font.metrics)
     # line_height = font.size + @line_space
     line_height = font.size
     ascent = FontMetrics.ascent(font.size, font.metrics)
     # Starting y-position for the first line
-    initial_y = ascent
+    # initial_y = ascent
+    # TODO why 3? No magic numbers!!
+    initial_y = font.size - 3
     # Width reserved for line numbers (adjust as needed)
     line_number_width = 40
 
@@ -81,41 +83,63 @@ defmodule Quillex.GUI.Components.Buffer.Render do
     |> Enum.reduce(graph, fn {line, idx}, graph_acc ->
       y_position = initial_y + (idx - 1) * line_height
 
-      # Draw the line number background rectangle
-      graph_acc =
-        graph_acc
-        |> Scenic.Primitives.rect(
-          {line_number_width, line_height},
-          # Adjust for ascent
-          translate: {0, y_position - ascent},
-          # Semi-transparent white
-          fill: {:color_rgba, {255, 255, 255, Integer.floor_div(255, 3)}},
-          id: {:line_number_bg, idx}
-        )
-
-      # Draw the line number text
-      graph_acc =
-        graph_acc
-        |> Scenic.Primitives.text(
-          "#{idx}",
-          font_size: font.size,
-          font: font.name,
-          fill: :black,
-          translate: {5, y_position},
-          id: {:line_number_text, idx}
-        )
-
-      # Draw the line text
       graph_acc
+      |> render_line_num(idx, y_position, font, line_number_width, line_height, ascent)
       |> Scenic.Primitives.text(
         line,
         font_size: font.size,
         font: font.name,
         fill: colors.text,
-        translate: {line_number_width + 5, y_position},
+        translate: {line_number_width + @margin_left, y_position},
         id: {:line_text, idx}
       )
+      |> then(fn graph ->
+        if idx == 1 do
+          graph
+          |> Scenic.Primitives.rect(
+            {frame.size.width, line_height},
+            # Adjust for ascent
+            translate: {0, 0},
+            # Semi-transparent white
+            fill: {:color_rgba, {255, 255, 255, Integer.floor_div(255, 3)}},
+            id: {:line_bg_box, idx}
+          )
+        else
+          graph
+        end
+
+        # graph
+        # |> Scenic.Primitives.rect(
+        #   {1000, line_height},
+        #   # Adjust for ascent
+        #   translate: {line_number_width + @margin_left, y_position - ascent},
+        #   # Semi-transparent white
+        #   fill: {:color_rgba, {255, 255, 255, Integer.floor_div(255, 3)}},
+        #   id: {:line_bg, idx}
+        # )
+      end)
     end)
+  end
+
+  def render_line_num(graph, idx, y_position, font, line_number_width, line_height, ascent) do
+    # Draw the line number text
+    graph
+    |> Scenic.Primitives.rect(
+      {line_number_width, line_height},
+      # Adjust for ascent
+      translate: {0, y_position - ascent},
+      # Semi-transparent white
+      fill: {:color_rgba, {255, 255, 255, Integer.floor_div(255, 3)}},
+      id: {:line_number_bg, idx}
+    )
+    |> Scenic.Primitives.text(
+      "#{idx}",
+      font_size: font.size,
+      font: font.name,
+      fill: :black,
+      translate: {5, y_position},
+      id: {:line_number_text, idx}
+    )
   end
 
   def render_cursor(
@@ -134,7 +158,7 @@ defmodule Quillex.GUI.Components.Buffer.Render do
     |> Quillex.GUI.Component.Buffer.CursorCaret.add_to_graph(
       %{
         buffer_uuid: buf.uuid,
-        coords: {45, 2},
+        coords: {40 + @margin_left, 0},
         height: font.size,
         mode: :cursor,
         font: font
