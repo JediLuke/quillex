@@ -1,5 +1,6 @@
 defmodule Quillex.Buffer.BufferManager do
   use GenServer
+  require Logger
 
   def start_link(init_arg) do
     GenServer.start_link(__MODULE__, init_arg, name: __MODULE__)
@@ -39,8 +40,12 @@ defmodule Quillex.Buffer.BufferManager do
       {:ok, %Quillex.Structs.Buffer.BufRef{} = buf_ref} ->
         {:reply, {:ok, buf_ref}, state}
 
+      {:error, :file_not_found} ->
+        {:reply, {:error, :file_not_found}, state}
+
       {:error, reason} ->
-        raise "in practice this can never happen since `start_new_buffer_process` always returns `{:ok, buf_ref}`"
+        # raise "in practice this can never happen since `start_new_buffer_process` always returns `{:ok, buf_ref}`"
+        Logger.warn("Failed to open buffer: #{inspect(reason)}")
         {:reply, {:error, reason}, state}
     end
   end

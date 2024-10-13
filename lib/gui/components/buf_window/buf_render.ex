@@ -83,6 +83,27 @@ defmodule Quillex.GUI.Components.Buffer.Render do
     |> render_lines(lines, font, colors)
   end
 
+  # def render_lines(
+  #       %Scenic.Graph{} = graph,
+  #       lines,
+  #       font,
+  #       colors
+  #     )
+  #     when is_list(lines) do
+  #   Enum.reduce(lines, graph, fn line, graph_acc ->
+  #     graph_acc
+  #     |> Scenic.Primitives.text(
+  #       line,
+  #       font_size: font.size,
+  #       font: font.name,
+  #       fill: colors.text,
+  #       translate: {10, font.ascent + 10}
+  #     )
+
+  #     # |> Map.update!(:translate, fn {x, y} -> {x, y + font.size} end)
+  #   end)
+  # end
+
   def render_lines(
         %Scenic.Graph{} = graph,
         lines,
@@ -90,17 +111,55 @@ defmodule Quillex.GUI.Components.Buffer.Render do
         colors
       )
       when is_list(lines) do
-    Enum.reduce(lines, graph, fn line, graph_acc ->
+    # Calculate font metrics
+    # line_height = FontMetrics.line_height(font.size, font.metrics)
+    line_height = font.size
+    ascent = FontMetrics.ascent(font.size, font.metrics)
+    # Starting y-position for the first line
+    initial_y = ascent
+    # Width reserved for line numbers (adjust as needed)
+    line_number_width = 40
+
+    lines
+    # Start indexing from 1 for line numbers
+    |> Enum.with_index(1)
+    |> Enum.reduce(graph, fn {line, idx}, graph_acc ->
+      y_position = initial_y + (idx - 1) * line_height
+
+      # Draw the line number background rectangle
+      graph_acc =
+        graph_acc
+        |> Scenic.Primitives.rect(
+          {line_number_width, line_height},
+          # Adjust for ascent
+          translate: {0, y_position - ascent},
+          # Semi-transparent white
+          fill: {:color_rgba, {255, 255, 255, Integer.floor_div(255, 3)}},
+          id: {:line_number_bg, idx}
+        )
+
+      # Draw the line number text
+      graph_acc =
+        graph_acc
+        |> Scenic.Primitives.text(
+          "#{idx}",
+          font_size: font.size,
+          font: font.name,
+          fill: :black,
+          translate: {5, y_position},
+          id: {:line_number_text, idx}
+        )
+
+      # Draw the line text
       graph_acc
       |> Scenic.Primitives.text(
         line,
         font_size: font.size,
         font: font.name,
         fill: colors.text,
-        translate: {10, font.ascent + 10}
+        translate: {line_number_width + 5, y_position},
+        id: {:line_text, idx}
       )
-
-      # |> Map.update!(:translate, fn {x, y} -> {x, y + font.size} end)
     end)
   end
 

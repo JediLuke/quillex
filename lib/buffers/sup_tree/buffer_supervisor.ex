@@ -25,12 +25,30 @@ defmodule Quillex.BufferSupervisor do
   #   # filename also a good id
   #   # TODO check `id` is unque here!
 
-  def start_new_buffer_process(%{filepath: filepath}) when is_binary(filepath) do
-    {:ok, file_content} = File.read(filepath)
-    lines = String.split(file_content, "\n")
-    buf = Quillex.Structs.Buffer.new(%{data: lines, source: %{filepath: filepath}})
+  # def start_new_buffer_process(%{filepath: filepath}) when is_binary(filepath) do
+  #   {:ok, file_content} = File.read(filepath)
+  #   lines = String.split(file_content, "\n")
+  #   buf = Quillex.Structs.Buffer.new(%{data: lines, source: %{filepath: filepath}})
 
-    do_start_buffer(buf)
+  #   do_start_buffer(buf)
+  # end
+  def start_new_buffer_process(%{filepath: filepath}) when is_binary(filepath) do
+    # Check if file exists before attempting to read it
+    case File.exists?(filepath) do
+      true ->
+        case File.read(filepath) do
+          {:ok, file_content} ->
+            lines = String.split(file_content, "\n")
+            buf = Quillex.Structs.Buffer.new(%{data: lines, source: %{filepath: filepath}})
+            do_start_buffer(buf)
+
+          {:error, reason} ->
+            {:error, {:failed_to_read_file, reason}}
+        end
+
+      false ->
+        {:error, :file_not_found}
+    end
   end
 
   def start_new_buffer_process(args) do
