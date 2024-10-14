@@ -1,12 +1,12 @@
 defmodule Quillex.GUI.Components.Buffer.Reducer do
   alias Quillex.GUI.Components.Buffer
 
-  def process(buf, {:set_mode, m}) do
+  def process(%Quillex.Structs.Buffer{} = buf, {:set_mode, m}) do
     buf
     |> Buffer.Mutator.set_mode(m)
   end
 
-  def process(buf, {:move_cursor, direction, x}) do
+  def process(%Quillex.Structs.Buffer{} = buf, {:move_cursor, direction, x}) do
     # {:ok, [cursor_pid]} = Scenic.Scene.child(scene, :cursor)
     # GenServer.cast(cursor_pid, {:move_cursor, :right, 1})
 
@@ -14,7 +14,7 @@ defmodule Quillex.GUI.Components.Buffer.Reducer do
     |> Buffer.Mutator.move_cursor(direction, x)
   end
 
-  def process(buf, action) do
+  def process(%Quillex.Structs.Buffer{} = buf, action) do
     IO.puts("BUFFER REDUCER GOT ACTION: #{inspect(action)}")
     :ignore
   end

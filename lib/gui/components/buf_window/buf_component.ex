@@ -20,7 +20,7 @@ defmodule Quillex.GUI.Components.Buffer do
     # plus I think it's more efficient in terms of data transfer to just get it once rather than pass it around everywhere (maybe?)
     {:ok, %Quillex.Structs.Buffer{} = buf} = GenServer.call(data.buf_ref.pid, :get_state)
 
-    graph = Quillex.GUI.Components.Buffer.Render.go(data.frame, buf)
+    graph = Buffer.Render.go(data.frame, buf)
 
     init_scene =
       scene
@@ -60,19 +60,31 @@ defmodule Quillex.GUI.Components.Buffer do
 
     # states = %{new: new_state, old: old_state}
 
-    # graph =
-    #   scene.assigns.graph
-    #   |> process_name_changes(scene.assigns.state)
-    #   |> process_text_changes(old_state.data, new_state.data)
-    #   |> process_cursor_changes(scene.assigns.state)
-
-    graph = Quillex.GUI.Components.Buffer.Render.go(scene.assigns.frame, new_state)
-
     new_scene =
       scene
-      |> assign(graph: graph)
+      #   |> process_name_changes(scene.assigns.state)
+      #   |> process_text_changes(old_state.data, new_state.data)
+      |> Buffer.Render.process_cursor_changes(new_state)
       |> assign(state: new_state)
-      |> push_graph(graph)
+
+    # graph = Quillex.GUI.Components.Buffer.Render.go(scene.assigns.frame, new_state)
+
+    # new_scene =
+    #   scene
+    #   |> assign(graph: graph)
+    #   |> assign(state: new_state)
+
+    if new_scene.assigns.graph != scene.assigns.graph do
+      push_graph(new_scene, new_scene.assigns.graph)
+    end
+
+    {:noreply, new_scene}
+
+    # new_scene =
+    #   scene
+    #   |> assign(graph: graph)
+    #   |> assign(state: new_state)
+    #   |> push_graph(graph)
 
     {:noreply, new_scene}
   end

@@ -181,6 +181,32 @@ defmodule Quillex.GUI.Components.Buffer.Render do
     )
   end
 
+  def process_cursor_changes(%Scenic.Scene{} = scene, new_state) do
+    # TODO handle mode here I guess
+
+    [c] = new_state.cursors
+
+    cursor_mode =
+      case new_state.mode do
+        {:vim, :insert} -> :cursor
+        {:vim, :normal} -> :block
+      end
+
+    c = Map.merge(c, %{mode: cursor_mode})
+
+    {:ok, [cursor_pid]} = Scenic.Scene.child(scene, :cursor)
+    GenServer.cast(cursor_pid, {:state_change, c})
+
+    # new_state
+
+    # new_scene =
+    #   scene
+    #   |> assign(graph: graph)
+    #   |> assign(state: new_state)
+
+    scene
+  end
+
   defp convert_lines_to_text(lines) when is_list(lines) do
     Enum.join(lines, "\n")
   end

@@ -68,6 +68,45 @@ defmodule Quillex.GUI.Component.Buffer.CursorCaret do
     {:ok, scene}
   end
 
+  def handle_cast(
+        {:state_change, %{line: line, col: col, mode: mode}},
+        %{
+          assigns: %{
+            visible: visible,
+            graph: graph,
+            font: font,
+            x_pos: x_pos,
+            y_pos: y_pos,
+            char_width: char_width,
+            height: height
+          }
+        } = scene
+      ) do
+    # Update the graph
+    graph =
+      graph
+      |> Scenic.Graph.modify(
+        :cursor,
+        &Scenic.Primitives.update_opts(&1,
+          translate: {x_pos + (col - 1) * char_width, y_pos + (line - 1) * height}
+        )
+      )
+      # Update the width based on the mode
+      |> Scenic.Graph.modify(
+        :cursor_rect,
+        &Scenic.Primitives.rectangle(&1, {calc_width(mode, font), height})
+      )
+
+    # Update the scene
+    scene =
+      scene
+      |> assign(graph: graph)
+      |> assign(mode: mode)
+      |> push_graph(graph)
+
+    {:noreply, scene}
+  end
+
   # Handle blinking
   def handle_info(:blink, %{assigns: %{visible: visible, graph: graph}} = scene) do
     # Toggle visibility
