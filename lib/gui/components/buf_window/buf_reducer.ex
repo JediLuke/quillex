@@ -6,11 +6,29 @@ defmodule Quillex.GUI.Components.Buffer.Reducer do
     |> Buffer.Mutator.set_mode(m)
   end
 
+  def process(buf, {:move_cursor, direction, x}) do
+    # {:ok, [cursor_pid]} = Scenic.Scene.child(scene, :cursor)
+    # GenServer.cast(cursor_pid, {:move_cursor, :right, 1})
+
+    buf
+    |> Buffer.Mutator.move_cursor(direction, x)
+  end
+
   def process(buf, action) do
     IO.puts("BUFFER REDUCER GOT ACTION: #{inspect(action)}")
     :ignore
   end
 end
+
+# def handle_info({:user_input_fwd, @right_arrow}, %{assigns: %{state: %{mode: :edit}}} = scene) do
+#   # todo here should convert input to actions, then broascast actions to do on the pubsub
+#   # ignore user input in the actual Buffer process, wait for the GUI to convert it to actions
+
+#   {:ok, [cursor_pid]} = Scenic.Scene.child(scene, :cursor)
+#   GenServer.cast(cursor_pid, {:move_cursor, :right, 1})
+
+#   {:noreply, scene}
+# end
 
 # def process(state, {:insert_text, buffer_name, text}) do
 #   buffer = Map.get(state, buffer_name)

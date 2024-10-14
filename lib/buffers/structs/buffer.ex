@@ -55,8 +55,7 @@ defmodule Quillex.Structs.Buffer do
     # mode: validate_mode(args[:mode]) || :edit,
     mode = Map.get(args, :mode) || Map.get(args, "mode") || {:vim, :insert}
     source = Map.get(args, :source) || Map.get(args, "source") || nil
-    # cursors = Map.get(args, :cursors) || Map.get(args, "cursors") || [Cursor.new(%{num: 1})]
-    cursors = Map.get(args, :cursors) || Map.get(args, "cursors") || []
+    cursors = Map.get(args, :cursors) || Map.get(args, "cursors") || [Cursor.new()]
     scroll_acc = Map.get(args, :scroll_acc) || Map.get(args, "scroll_acc") || {0, 0}
     read_only? = Map.get(args, :read_only?) || Map.get(args, "read_only?") || false
 

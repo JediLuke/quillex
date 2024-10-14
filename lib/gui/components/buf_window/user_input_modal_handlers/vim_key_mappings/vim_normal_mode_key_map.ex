@@ -1,25 +1,30 @@
 defmodule Quillex.GUI.Components.Buffer.UserInputHandler.VimKeyMappings.NormalMode do
   use ScenicWidgets.ScenicEventsDefinitions
 
-  def handle(@lowercase_i) do
-    [{:set_mode, {:vim, :insert}}]
+  def handle(_buf, @lowercase_i) do
+    {:set_mode, {:vim, :insert}}
   end
 
   # hjkl navigation
-  def handle(@lowercase_h) do
-    [{:move_cursor, :left, 1}]
+  def handle(_buf, @lowercase_h) do
+    {:move_cursor, :left, 1}
   end
 
-  def handle(@lowercase_j) do
-    [{:move_cursor, :down, 1}]
+  def handle(_buf, @lowercase_j) do
+    {:move_cursor, :down, 1}
   end
 
-  def handle(@lowercase_k) do
-    [{:move_cursor, :up, 1}]
+  def handle(_buf, @lowercase_k) do
+    {:move_cursor, :up, 1}
   end
 
-  def handle(@lowercase_l) do
-    [{:move_cursor, :right, 1}]
+  def handle(_buf, @lowercase_l) do
+    {:move_cursor, :right, 1}
+  end
+
+  def handle(_buf, input) do
+    IO.puts("NormalMode: Unhandled input: #{inspect(input)}")
+    :ignore
   end
 end
 

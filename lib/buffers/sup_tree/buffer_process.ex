@@ -35,8 +35,6 @@ defmodule Quillex.Buffer.Process do
   end
 
   def handle_cast({:action, actions}, state) when is_list(actions) do
-    IO.puts("BUFFER GOT ACTIONS: #{inspect(actions)}")
-
     # TODO use wormhole here
     new_state =
       actions

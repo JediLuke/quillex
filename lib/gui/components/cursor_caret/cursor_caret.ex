@@ -21,7 +21,15 @@ defmodule Quillex.GUI.Component.Buffer.CursorCaret do
   # Initialize the component
   def init(scene, args, _opts) do
     # Extract initial position and mode
-    %{coords: {x_pos, y_pos}, height: height, mode: mode, font: font} = args
+    %{
+      starting_pin: {x_pos, y_pos},
+      coords: {line, col},
+      height: height,
+      mode: mode,
+      font: font
+    } = args
+
+    char_width = FontMetrics.width("W", font.size, font.metrics)
 
     # Build the initial graph
     graph =
@@ -36,7 +44,8 @@ defmodule Quillex.GUI.Component.Buffer.CursorCaret do
           )
         end,
         id: :cursor,
-        translate: {x_pos, y_pos}
+        # note we need to minus one here cause we start line/col at 1,1, nobody ever says put your cursor on line zero !
+        translate: {x_pos + (col - 1) * char_width, y_pos + (line - 1) * height}
       )
 
     # Start the blinking timer
@@ -53,7 +62,7 @@ defmodule Quillex.GUI.Component.Buffer.CursorCaret do
       # Cursor is initially visible
       |> assign(visible: true)
       |> assign(timer: timer)
-      |> assign(char_width: FontMetrics.width("W", font.size, font.metrics))
+      |> assign(char_width: char_width)
       |> push_graph(graph)
 
     {:ok, scene}

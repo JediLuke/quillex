@@ -22,6 +22,17 @@ defmodule Quillex.Buffer.BufferManager do
     GenServer.call(__MODULE__, {:open_buffer, args})
   end
 
+  # a convenience function to make it easy to forward user input to the GUI component
+  # def fwd_input(%Quillex.Structs.Buffer.BufRef{} = buf_ref, input) do
+  #   case Registry.lookup(Quillex.BufferRegistry, {buf_ref.uuid, __MODULE__}) do
+  #     [{pid, _meta}] ->
+  #       send(pid, {:user_input_fwd, input})
+
+  #     [] ->
+  #       raise "Could not find GUI component for buffer: #{inspect(buf_ref)}"
+  #   end
+  # end
+
   # this encapsulates the logic of sending messages to buffers,
   # so that we're not just casting direct to specific (potentially stale) pid references
   def cast_to_buffer(%{uuid: buf_uuid}, msg) do

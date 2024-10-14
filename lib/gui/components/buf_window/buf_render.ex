@@ -36,7 +36,7 @@ defmodule Quillex.GUI.Components.Buffer.Render do
         graph
         |> Draw.background(frame, colors.slate)
         |> render_text(frame, buf, font, colors)
-        |> render_cursor(frame, buf, :start_of_buffer, font, colors)
+        |> render_cursor(frame, buf, font, colors)
       end,
       translate: frame.pin.point,
       scissor: frame.size.box
@@ -55,6 +55,7 @@ defmodule Quillex.GUI.Components.Buffer.Render do
 
   @margin_left 5
   @line_space 4
+  @line_num_column_width 40
   def render_lines(
         %Scenic.Graph{} = graph,
         %Widgex.Frame{} = frame,
@@ -74,8 +75,6 @@ defmodule Quillex.GUI.Components.Buffer.Render do
     # initial_y = ascent
     # TODO why 3? No magic numbers!!
     initial_y = font.size - 3
-    # Width reserved for line numbers (adjust as needed)
-    line_number_width = 40
 
     lines
     # Start indexing from 1 for line numbers
@@ -84,13 +83,13 @@ defmodule Quillex.GUI.Components.Buffer.Render do
       y_position = initial_y + (idx - 1) * line_height
 
       graph_acc
-      |> render_line_num(idx, y_position, font, line_number_width, line_height, ascent)
+      |> render_line_num(idx, y_position, font, @line_num_column_width, line_height, ascent)
       |> Scenic.Primitives.text(
         line,
         font_size: font.size,
         font: font.name,
         fill: colors.text,
-        translate: {line_number_width + @margin_left, y_position},
+        translate: {@line_num_column_width + @margin_left, y_position},
         id: {:line_text, idx}
       )
       |> then(fn graph ->
@@ -154,8 +153,7 @@ defmodule Quillex.GUI.Components.Buffer.Render do
   def render_cursor(
         %Scenic.Graph{} = graph,
         %Widgex.Frame{} = frame,
-        %Quillex.Structs.Buffer{} = buf,
-        :start_of_buffer,
+        %Quillex.Structs.Buffer{cursors: [c]} = buf,
         font,
         colors
       ) do
@@ -173,7 +171,8 @@ defmodule Quillex.GUI.Components.Buffer.Render do
     |> Quillex.GUI.Component.Buffer.CursorCaret.add_to_graph(
       %{
         buffer_uuid: buf.uuid,
-        coords: {40 + @margin_left, 0},
+        starting_pin: {@line_num_column_width + @margin_left, 0},
+        coords: {c.line, c.col},
         height: font.size,
         mode: cursor_mode,
         font: font

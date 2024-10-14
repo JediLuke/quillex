@@ -39,27 +39,6 @@ defmodule Quillex.GUI.Components.Buffer do
     Registry.register(Quillex.BufferRegistry, {buf_ref.uuid, __MODULE__}, nil)
   end
 
-  # a convenience function to make it easy to forward user input to the GUI component
-  def fwd_input(%Quillex.Structs.Buffer.BufRef{} = buf_ref, input) do
-    case Registry.lookup(Quillex.BufferRegistry, {buf_ref.uuid, __MODULE__}) do
-      [{pid, _meta}] ->
-        send(pid, {:user_input_fwd, input})
-
-      [] ->
-        raise "Could not find GUI component for buffer: #{inspect(buf_ref)}"
-    end
-  end
-
-  # def handle_info({:user_input_fwd, @right_arrow}, %{assigns: %{state: %{mode: :edit}}} = scene) do
-  #   # todo here should convert input to actions, then broascast actions to do on the pubsub
-  #   # ignore user input in the actual Buffer process, wait for the GUI to convert it to actions
-
-  #   {:ok, [cursor_pid]} = Scenic.Scene.child(scene, :cursor)
-  #   GenServer.cast(cursor_pid, {:move_cursor, :right, 1})
-
-  #   {:noreply, scene}
-  # end
-
   def handle_info({:user_input_fwd, input}, scene) do
     # the GUI component converts raw user input to actions,
     # which are then passed back up the component tree for processing
@@ -74,12 +53,18 @@ defmodule Quillex.GUI.Components.Buffer do
     end
   end
 
-  def handle_info({:state_change, new_state}, scene) do
+  def handle_info({:state_change, new_state}, %{assigns: %{state: old_state}} = scene) do
     # when the Buffer process state changes, we update the GUI component
 
     # TODO this will work but I want to figure out how to do it without re-rendering & restarting new components all the time!!
 
-    IO.inspect(new_state, label: "NS")
+    # states = %{new: new_state, old: old_state}
+
+    # graph =
+    #   scene.assigns.graph
+    #   |> process_name_changes(scene.assigns.state)
+    #   |> process_text_changes(old_state.data, new_state.data)
+    #   |> process_cursor_changes(scene.assigns.state)
 
     graph = Quillex.GUI.Components.Buffer.Render.go(scene.assigns.frame, new_state)
 
