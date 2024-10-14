@@ -8,6 +8,7 @@ defmodule Quillex.Structs.Buffer.Cursor do
     # which column the cursor is on. Think of this like a block cursor ("normal mode") not a baret cursor ("insert mode")
     col: 1
     # mode: m
+    # TODO consider cursors by other users, or by AI agents
   ]
 
   def new(%{num: n}) when is_integer(n) and n >= 1 do

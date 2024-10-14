@@ -26,6 +26,17 @@ defmodule Quillex.Structs.Buffer do
     read_only?: true,
     # a `dirty` buffer is one which is changed / modified in memory but not yet written to disk
     dirty?: true,
+    # opts: %{
+    #   alignment: :left,
+    #   wrap: :no_wrap,
+    #   scroll: %{
+    #     direction: :all,
+    #     # An accumulator for the amount of scroll
+    #     acc: {0, 0}
+    #   },
+    #   # toggles the display of line numbers in the left margin
+    #   show_line_nums?: false
+    # },
     # Where we track the timestamps for various operations
     timestamps: %{
       opened: nil,
@@ -42,7 +53,7 @@ defmodule Quillex.Structs.Buffer do
     data = Map.get(args, :data) || Map.get(args, "data") || []
     data = if is_list(data), do: data, else: raise("Buffer data must be a list of strings")
     # mode: validate_mode(args[:mode]) || :edit,
-    mode = Map.get(args, :mode) || Map.get(args, "mode") || :edit
+    mode = Map.get(args, :mode) || Map.get(args, "mode") || {:vim, :insert}
     source = Map.get(args, :source) || Map.get(args, "source") || nil
     # cursors = Map.get(args, :cursors) || Map.get(args, "cursors") || [Cursor.new(%{num: 1})]
     cursors = Map.get(args, :cursors) || Map.get(args, "cursors") || []

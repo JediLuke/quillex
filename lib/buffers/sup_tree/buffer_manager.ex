@@ -24,14 +24,44 @@ defmodule Quillex.Buffer.BufferManager do
 
   # this encapsulates the logic of sending messages to buffers,
   # so that we're not just casting direct to specific (potentially stale) pid references
-  def cast_to_buffer(%Quillex.Structs.Buffer.BufRef{} = buf_ref, msg) do
+  def cast_to_buffer(%{uuid: buf_uuid}, msg) do
     # TODO consider using the process lookup here incase pids have gone stale, but so far, seems to be working...
     # TODO maybe this is fine maybe needs to be more robust (do a lookup on name dont use pid)
     # this is an example of what I was doing before
     # GenServer.cast(buf.pid, {:user_input_fwd, input})
+    # IO.puts("doing the cast... to #{inspect(buf_ref)}")
+    # send(buf_ref.pid, msg)
 
-    IO.puts("doing the cast... to #{inspect(buf_ref)}")
-    GenServer.cast(buf_ref.pid, msg)
+    # note that this is cast to buffer but we _send_ to the buffer gui,
+    # to that the API is a bit different to prevent confusion
+    Registry.lookup(
+      Quillex.BufferRegistry,
+      {buf_uuid, Quillex.Buffer.Process}
+    )
+    |> case do
+      [{pid, _meta}] ->
+        GenServer.cast(pid, msg)
+
+      _else ->
+        raise "Could not find Buffer process, uuid: #{inspect(buf_uuid)}"
+    end
+  end
+
+  # similar to the above only instead of sending to the Buffer process,
+  # this sends it to the Buffer GUI component process (the Scenic component)
+  def send_to_buffer_gui_component(%{uuid: buf_uuid}, msg) do
+    # case Registry.lookup(Quillex.BufferRegistry, {buf_ref.uuid, Quillex.GUI.Components.Buffer}) do
+    Registry.lookup(
+      Quillex.BufferRegistry,
+      {buf_uuid, Quillex.GUI.Components.Buffer}
+    )
+    |> case do
+      [{pid, _meta}] ->
+        send(pid, msg)
+
+      _else ->
+        raise "Could not find Buffer process, uuid: #{inspect(buf_uuid)}"
+    end
   end
 
   def handle_call({:open_buffer, args}, _from, state) do

@@ -1,35 +1,38 @@
 defmodule Quillex.GUI.Components.Buffer.Reducer do
-  # def process_all(state, actions) do
-  #   Enum.reduce(actions, state, fn action, state_acc ->
-  #     case process(state_acc, action) do
-  #       :ignore -> state_acc
-  #       new_state -> new_state
-  #     end
-  #   end)
-  # end
+  alias Quillex.GUI.Components.Buffer
 
-  # def process(state, {:insert_text, buffer_name, text}) do
-  #   buffer = Map.get(state, buffer_name)
-  #   new_text = buffer.data <> text
-  #   Map.put(state, buffer_name, Map.put(buffer, :data, new_text))
-  # end
+  def process(buf, {:set_mode, m}) do
+    buf
+    |> Buffer.Mutator.set_mode(m)
+  end
 
-  # def process(state, {:move_cursor, direction, x}) do
-  #   # buffer = Map.get(state, buffer_name)
-  #   # new_cursor = Quillex.Buffer.Process.Cursor.move(buffer.cursor, direction)
-  #   # Map.put(state, buffer_name, Map.put(buffer, :cursor, new_cursor))
-  #   # IO.puts("Moving cursor #{direction} by #{x}")
-  #   # :ignore
-
-  #   # Quillex.Buffer.BufferManager.cast_to_buffer(
-  #   #   buf_ref,
-  #   #   {:user_input_fwd, input}
-  #   # )
-  #   # GenServer.cast(state.pid, msg)
-
-  #   :re_routed
-  # end
+  def process(buf, action) do
+    IO.puts("BUFFER REDUCER GOT ACTION: #{inspect(action)}")
+    :ignore
+  end
 end
+
+# def process(state, {:insert_text, buffer_name, text}) do
+#   buffer = Map.get(state, buffer_name)
+#   new_text = buffer.data <> text
+#   Map.put(state, buffer_name, Map.put(buffer, :data, new_text))
+# end
+
+# def process(state, {:move_cursor, direction, x}) do
+#   # buffer = Map.get(state, buffer_name)
+#   # new_cursor = Quillex.Buffer.Process.Cursor.move(buffer.cursor, direction)
+#   # Map.put(state, buffer_name, Map.put(buffer, :cursor, new_cursor))
+#   # IO.puts("Moving cursor #{direction} by #{x}")
+#   # :ignore
+
+#   # Quillex.Buffer.BufferManager.send_to_buffer(
+#   #   buf_ref,
+#   #   {:user_input_fwd, input}
+#   # )
+#   # GenServer.cast(state.pid, msg)
+
+#   :re_routed
+# end
 
 # defmodule QuillEx.Reducers.BufferReducer do
 #   alias QuillEx.Reducers.BufferReducer.Utils

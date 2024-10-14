@@ -163,13 +163,19 @@ defmodule Quillex.GUI.Components.Buffer.Render do
     # Starting y-position for the first line
     initial_y = ascent
 
+    cursor_mode =
+      case buf.mode do
+        {:vim, :insert} -> :cursor
+        {:vim, :normal} -> :block
+      end
+
     graph
     |> Quillex.GUI.Component.Buffer.CursorCaret.add_to_graph(
       %{
         buffer_uuid: buf.uuid,
         coords: {40 + @margin_left, 0},
         height: font.size,
-        mode: :cursor,
+        mode: cursor_mode,
         font: font
       },
       id: :cursor
