@@ -14,6 +14,15 @@ defmodule Quillex.GUI.Components.Buffer.Reducer do
     |> Buffer.Mutator.move_cursor(direction, x)
   end
 
+  def process(%Quillex.Structs.Buffer{} = buf, {:insert, text, :at_cursor}) do
+    [c] = buf.cursors
+    num_chars = String.length(text)
+
+    buf
+    |> Buffer.Mutator.insert_text({c.line, c.col}, text)
+    |> Buffer.Mutator.move_cursor(:right, num_chars)
+  end
+
   def process(%Quillex.Structs.Buffer{} = buf, action) do
     IO.puts("BUFFER REDUCER GOT ACTION: #{inspect(action)}")
     :ignore

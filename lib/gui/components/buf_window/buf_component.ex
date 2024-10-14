@@ -63,7 +63,7 @@ defmodule Quillex.GUI.Components.Buffer do
     new_scene =
       scene
       #   |> process_name_changes(scene.assigns.state)
-      #   |> process_text_changes(old_state.data, new_state.data)
+      |> Buffer.Render.process_text_changes(new_state)
       |> Buffer.Render.process_cursor_changes(new_state)
       |> assign(state: new_state)
 

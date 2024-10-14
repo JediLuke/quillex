@@ -181,9 +181,84 @@ defmodule Quillex.GUI.Components.Buffer.Render do
     )
   end
 
-  def process_cursor_changes(%Scenic.Scene{} = scene, new_state) do
-    # TODO handle mode here I guess
+  def process_text_changes(%Scenic.Scene{} = scene, new_state) do
+    raise "cant propcess text changes yet but Scenic is so good it works anyway"
+    font_size = 24
+    font_name = :ibm_plex_mono
+    font_metrics = Flamelex.Fluxus.RadixStore.get().fonts.ibm_plex_mono.metrics
+    ascent = FontMetrics.ascent(font_size, font_metrics)
 
+    font = %{
+      name: font_name,
+      size: font_size,
+      ascent: ascent,
+      metrics: font_metrics
+    }
+
+    old_lines = scene.assigns.state.data
+    new_lines = new_state.data
+
+    # font = scene.assigns.font
+    # colors = scene.assigns.colors
+    colors = @cauldron
+    line_height = font.size
+    line_num_column_width = @line_num_column_width
+    margin_left = @margin_left
+
+    graph = scene.assigns.graph
+
+    # Update existing lines and collect indices of changed lines
+    updated_graph =
+      Enum.reduce(Enum.with_index(old_lines), graph, fn {old_line, idx}, acc_graph ->
+        new_line = Enum.at(new_lines, idx)
+
+        cond do
+          new_line == nil ->
+            # Line deleted
+            Scenic.Graph.delete(acc_graph, {:line_text, idx})
+
+          old_line != new_line ->
+            # Line changed
+            Scenic.Graph.modify(acc_graph, {:line_text, idx}, fn primitive ->
+              Scenic.Primitive.put(primitive, :text, new_line)
+            end)
+
+          true ->
+            # Line unchanged
+            acc_graph
+        end
+      end)
+
+    # Add new lines
+    updated_graph =
+      Enum.reduce(length(old_lines)..(length(new_lines) - 1), updated_graph, fn idx, acc_graph ->
+        new_line = Enum.at(new_lines, idx)
+        y_position = idx * line_height
+
+        primitive =
+          Scenic.Primitives.text(
+            new_line,
+            id: {:line_text, idx},
+            font_size: font.size,
+            font: font.name,
+            fill: colors.text,
+            translate: {line_num_column_width + margin_left, y_position}
+          )
+
+        Scenic.Graph.add_primitive(acc_graph, primitive)
+      end)
+
+    # Update the scene
+    new_scene =
+      scene
+      |> Scenic.Scene.assign(graph: updated_graph)
+      |> Scenic.Scene.assign(state: new_state)
+      |> Scenic.Scene.push_graph(updated_graph)
+
+    new_scene
+  end
+
+  def process_cursor_changes(%Scenic.Scene{} = scene, new_state) do
     [c] = new_state.cursors
 
     cursor_mode =
@@ -197,19 +272,12 @@ defmodule Quillex.GUI.Components.Buffer.Render do
     {:ok, [cursor_pid]} = Scenic.Scene.child(scene, :cursor)
     GenServer.cast(cursor_pid, {:state_change, c})
 
-    # new_state
-
-    # new_scene =
-    #   scene
-    #   |> assign(graph: graph)
-    #   |> assign(state: new_state)
-
     scene
   end
 
-  defp convert_lines_to_text(lines) when is_list(lines) do
-    Enum.join(lines, "\n")
-  end
+  # defp convert_lines_to_text(lines) when is_list(lines) do
+  #   Enum.join(lines, "\n")
+  # end
 end
 
 # def render_lines(

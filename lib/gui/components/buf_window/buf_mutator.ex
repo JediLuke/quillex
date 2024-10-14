@@ -21,4 +21,12 @@ defmodule Quillex.GUI.Components.Buffer.Mutator do
 
     %{buf | cursors: [new_cursor]}
   end
+
+  def insert_text(buf, {line, col}, text) do
+    # updated_line = String.insert_at(Enum.at(buf.data, line - 1), col - 1, text)
+    {left_text, right_text} = String.split_at(Enum.at(buf.data, line - 1), col - 1)
+    updated_line = left_text <> text <> right_text
+    updated_data = List.replace_at(buf.data, line - 1, updated_line)
+    %{buf | data: updated_data}
+  end
 end
