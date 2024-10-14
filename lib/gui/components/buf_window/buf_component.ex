@@ -12,6 +12,11 @@ defmodule Quillex.GUI.Components.Buffer do
     {:ok, data}
   end
 
+  @cauldron %{
+    text: :white,
+    slate: :medium_slate_blue
+  }
+
   def init(scene, data, _opts) do
     # TODO this would be a cool place to do something better here...
     # I'm going to keep experimenting with this, I think it's more in-keeping
@@ -20,13 +25,29 @@ defmodule Quillex.GUI.Components.Buffer do
     # plus I think it's more efficient in terms of data transfer to just get it once rather than pass it around everywhere (maybe?)
     {:ok, %Quillex.Structs.Buffer{} = buf} = GenServer.call(data.buf_ref.pid, :get_state)
 
-    graph = Buffer.Render.go(data.frame, buf)
+    font_size = 24
+    font_name = :ibm_plex_mono
+    font_metrics = Flamelex.Fluxus.RadixStore.get().fonts.ibm_plex_mono.metrics
+    ascent = FontMetrics.ascent(font_size, font_metrics)
+
+    font = %{
+      name: font_name,
+      size: font_size,
+      ascent: ascent,
+      metrics: font_metrics
+    }
+
+    colors = @cauldron
+
+    graph = Buffer.Render.go(data.frame, buf, font, colors)
 
     init_scene =
       scene
       |> assign(frame: data.frame)
       |> assign(graph: graph)
       |> assign(state: buf)
+      |> assign(font: font)
+      |> assign(colors: colors)
       |> push_graph(graph)
 
     register_process(data.buf_ref)
@@ -73,12 +94,18 @@ defmodule Quillex.GUI.Components.Buffer do
     #   scene
     #   |> assign(graph: graph)
     #   |> assign(state: new_state)
-
-    if new_scene.assigns.graph != scene.assigns.graph do
-      push_graph(new_scene, new_scene.assigns.graph)
-    end
+    new_scene = push_graph(new_scene, new_scene.assigns.graph)
 
     {:noreply, new_scene}
+
+    # if new_scene.assigns.graph != scene.assigns.graph do
+    # push_graph(new_scene, new_scene.assigns.graph)
+    # else
+    #   IO.puts("NO CHANGE")
+    #   IO.inspect(new_scene.assigns.graph)
+    # end
+
+    # {:noreply, new_scene}
 
     # new_scene =
     #   scene
@@ -86,7 +113,7 @@ defmodule Quillex.GUI.Components.Buffer do
     #   |> assign(state: new_state)
     #   |> push_graph(graph)
 
-    {:noreply, new_scene}
+    # {:noreply, new_scene}
   end
 
   # def fwd_actions(buf, actions) do
