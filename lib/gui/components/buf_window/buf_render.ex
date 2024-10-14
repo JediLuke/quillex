@@ -2,9 +2,6 @@ defmodule Quillex.GUI.Components.Buffer.Render do
   alias Quillex.GUI.Components.Buffer
   alias Flamelex.GUI.Utils.Draw
 
-  @no_limits_to_tomorrow "~ The only limit to our realization of tomorrow is our doubts of today ~"
-  # - Frankin D. Roosevelt
-
   @typewriter %{
     text: :black,
     slate: :white
@@ -83,7 +80,9 @@ defmodule Quillex.GUI.Components.Buffer.Render do
         colors
       )
       when is_list(lines) do
-    lines = if buf.data == [], do: [@no_limits_to_tomorrow], else: buf.data
+    # lines = if buf.data == [], do: [@no_limits_to_tomorrow], else: buf.data
+    # lines = buf.data
+    lines = if buf.data == [], do: [""], else: buf.data
 
     # Calculate font metrics
     # line_height = FontMetrics.line_height(font.size, font.metrics)
@@ -201,45 +200,24 @@ defmodule Quillex.GUI.Components.Buffer.Render do
   end
 
   def process_text_changes(%Scenic.Scene{} = scene, new_state) do
+    # TODO this is a bit of a hack, we assume only the line
+    # that the cursor is on has changes, so we only update that line
+    # this is pretty fast but will probably hit a limit at some point
     [%{line: l_num}] = new_state.cursors
 
-    old_line = Enum.at(scene.assigns.state.data, l_num - 1)
-    new_line = Enum.at(new_state.data, l_num - 1)
+    # TODO probably shouldn't need these hacks with || but if data is an empty list, looking at first element returns nil
+    old_line = Enum.at(scene.assigns.state.data, l_num - 1) || ""
+    new_line = Enum.at(new_state.data, l_num - 1) || ""
 
     if old_line == new_line do
       scene
     else
-      IO.inspect(new_line)
-
-      before = Scenic.Graph.get(scene.assigns.graph, {:line_text, l_num - 1})
-
       new_graph =
         scene.assigns.graph
         |> Scenic.Graph.modify(
           {:line_text, l_num},
           &Scenic.Primitives.text(&1, new_line)
-          # &Scenic.Primitives.text(
-          #   new_state.data[l_num - 1],
-          #   font_size: scene.assigns.font.size,
-          #   font: scene.assigns.font.name,
-          #   fill: scene.assigns.colors.text,
-          #   translate: {10, scene.assigns.font.ascent + 10}
-          #   # translate: {@line_num_column_width + @margin_left, y_position},
-          # )
-          # |> Scenic.Primitives.text(
-          #   line,
-          #   font_size: font.size,
-          #   font: font.name,
-          #   fill: colors.text,
-          #   translate: {@line_num_column_width + @margin_left, y_position},
-          #   id: {:line_text, idx}
-          # ))
         )
-
-      after_mod = Scenic.Graph.get(new_graph, {:line_text, l_num - 1})
-
-      IO.inspect(before)
-      IO.inspect(after_mod)
 
       scene |> Scenic.Scene.assign(graph: new_graph)
     end

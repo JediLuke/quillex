@@ -1,7 +1,11 @@
+# TODO rename to BufrWindow
 defmodule Quillex.GUI.Components.Buffer do
   use Scenic.Component
   use ScenicWidgets.ScenicEventsDefinitions
   alias Quillex.GUI.Components.Buffer
+
+  @no_limits_to_tomorrow "~ The only limit to our realization of tomorrow is our doubts of today ~"
+  # - Frankin D. Roosevelt
 
   def validate(
         %{
@@ -24,6 +28,15 @@ defmodule Quillex.GUI.Components.Buffer do
     # keeps the integrity our gui thread even if the external data sdource if bad,
     # plus I think it's more efficient in terms of data transfer to just get it once rather than pass it around everywhere (maybe?)
     {:ok, %Quillex.Structs.Buffer{} = buf} = GenServer.call(data.buf_ref.pid, :get_state)
+
+    # this dissapears after you type or do something, but I like it! It's magical!
+    buf =
+      if buf.data == [] do
+        buf
+        |> Buffer.Mutator.insert_text({1, 1}, "#{@no_limits_to_tomorrow}")
+      else
+        buf
+      end
 
     font_size = 24
     font_name = :ibm_plex_mono
@@ -79,7 +92,8 @@ defmodule Quillex.GUI.Components.Buffer do
 
     # TODO this will work but I want to figure out how to do it without re-rendering & restarting new components all the time!!
 
-    # states = %{new: new_state, old: old_state}
+    # TODO somehow we want to resist re-rendering all the time, we should mutate instead
+    # by pushing input events down to the lowest level that can handle them
 
     new_scene =
       scene
@@ -88,45 +102,11 @@ defmodule Quillex.GUI.Components.Buffer do
       |> Buffer.Render.process_cursor_changes(new_state)
       |> assign(state: new_state)
 
-    # graph = Quillex.GUI.Components.Buffer.Render.go(scene.assigns.frame, new_state)
-
-    # new_scene =
-    #   scene
-    #   |> assign(graph: graph)
-    #   |> assign(state: new_state)
+    # TODO maybe this will work, to optimize not calling push_graph? if new_scene.assigns.graph != scene.assigns.graph do
     new_scene = push_graph(new_scene, new_scene.assigns.graph)
 
     {:noreply, new_scene}
-
-    # if new_scene.assigns.graph != scene.assigns.graph do
-    # push_graph(new_scene, new_scene.assigns.graph)
-    # else
-    #   IO.puts("NO CHANGE")
-    #   IO.inspect(new_scene.assigns.graph)
-    # end
-
-    # {:noreply, new_scene}
-
-    # new_scene =
-    #   scene
-    #   |> assign(graph: graph)
-    #   |> assign(state: new_state)
-    #   |> push_graph(graph)
-
-    # {:noreply, new_scene}
   end
-
-  # def fwd_actions(buf, actions) do
-  #   IO.puts("FWDING ACTIONS: #{inspect(actions)}")
-
-  #   case Registry.lookup(Quillex.BufferRegistry, {buf.uuid, Quillex.Buffer}) do
-  #     [{pid, _meta}] ->
-  #       send(pid, {:action, actions})
-
-  #     [] ->
-  #       raise "Could not find Buffer process for buffer: #{inspect(buf)}"
-  #   end
-  # end
 end
 
 # TODO
@@ -146,6 +126,3 @@ end
 
 #     {:noreply, scene}
 #   end
-
-#   # # TODO somehow we want to resist re-rendering all the time, we should mutate instead
-#   # # by pushing input events down to the lowest level that can handle them

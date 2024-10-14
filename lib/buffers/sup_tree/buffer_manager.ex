@@ -22,6 +22,19 @@ defmodule Quillex.Buffer.BufferManager do
     GenServer.call(__MODULE__, {:open_buffer, args})
   end
 
+  # This used to be in GUI.Componnents.Buffer
+  # def fwd_actions(buf, actions) do
+  #   IO.puts("FWDING ACTIONS: #{inspect(actions)}")
+
+  #   case Registry.lookup(Quillex.BufferRegistry, {buf.uuid, Quillex.Buffer}) do
+  #     [{pid, _meta}] ->
+  #       send(pid, {:action, actions})
+
+  #     [] ->
+  #       raise "Could not find Buffer process for buffer: #{inspect(buf)}"
+  #   end
+  # end
+
   # a convenience function to make it easy to forward user input to the GUI component
   # def fwd_input(%Quillex.Structs.Buffer.BufRef{} = buf_ref, input) do
   #   case Registry.lookup(Quillex.BufferRegistry, {buf_ref.uuid, __MODULE__}) do
