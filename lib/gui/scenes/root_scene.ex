@@ -1,58 +1,60 @@
-# defmodule QuillEx.Scene.RootScene do
-#   use Scenic.Scene
-#   alias QuillEx.Fluxus.Structs.RadixState
-#   alias QuillEx.Fluxus.RadixStore
-#   alias QuillEx.Scene.RadixRender
-#   require Logger
+defmodule QuillEx.Scene.RootScene do
+  use Scenic.Scene
+  #   alias QuillEx.Fluxus.Structs.RadixState
+  #   alias QuillEx.Fluxus.RadixStore
+  #   alias QuillEx.Scene.RadixRender
+  require Logger
 
-#   def init(%Scenic.Scene{} = scene, _init_args, _opts) do
-#     Logger.debug("#{__MODULE__} initializing...")
+  def init(%Scenic.Scene{} = scene, _init_args, _opts) do
+    Logger.debug("#{__MODULE__} initializing...")
 
-#     # the Root scene pulls from the radix store on bootup, and then subscribes to changes
-#     # the reason why I'm doing it this way, and not passing in the radix state
-#     # from the top (which would be possible, because I initialize the
-#     # radixstate during app bootup & pass it in to radix store, just so that
-#     # this process can then go fetch it) is because it seems cleaner to me
-#     # because if this process restarts then it will go & fetch the correct state &
-#     # continue from there, vs if I pass it in then it will restart again with
-#     # whatever I gave it originally (right??!?)
+    #     # the Root scene pulls from the radix store on bootup, and then subscribes to changes
+    #     # the reason why I'm doing it this way, and not passing in the radix state
+    #     # from the top (which would be possible, because I initialize the
+    #     # radixstate during app bootup & pass it in to radix store, just so that
+    #     # this process can then go fetch it) is because it seems cleaner to me
+    #     # because if this process restarts then it will go & fetch the correct state &
+    #     # continue from there, vs if I pass it in then it will restart again with
+    #     # whatever I gave it originally (right??!?)
 
-#     # now that I type this out... wouldn't that be a safer, better option?
-#     # this process isn't supposed to crash, if it does crash probably it is due
-#     # to bad state, and then probably I don't want to immediately go & fetch that
-#     # bad state...
+    #     # now that I type this out... wouldn't that be a safer, better option?
+    #     # this process isn't supposed to crash, if it does crash probably it is due
+    #     # to bad state, and then probably I don't want to immediately go & fetch that
+    #     # bad state...
 
-#     # for that reason I actually _am_ going to pass it in from the top
+    #     # for that reason I actually _am_ going to pass it in from the top
 
-#     # After all this debate I changed my mind again, I dont want to be passing
-#     # around big blobs of state, I want the RadixStore process to just keep
-#     # the State and everything interacts with RadixState via that process, so
-#     # this process does go & fetch RadixState on bootup
+    #     # After all this debate I changed my mind again, I dont want to be passing
+    #     # around big blobs of state, I want the RadixStore process to just keep
+    #     # the State and everything interacts with RadixState via that process, so
+    #     # this process does go & fetch RadixState on bootup
 
-#     # Lol further addendum, I've decided that the reasoning of not wanting
-#     # to pass the RadixState in because I didnt want to copy a huge state variable
-#     # around is absurd given how muich I copy it around all over the place in
-#     # the rest of the app, but I'm going to stick with just fetching it on
-#     # startup because if the whole GUI does crash up to this level, I want
-#     # it to start again from the current RadixStore
+    #     # Lol further addendum, I've decided that the reasoning of not wanting
+    #     # to pass the RadixState in because I didnt want to copy a huge state variable
+    #     # around is absurd given how muich I copy it around all over the place in
+    #     # the rest of the app, but I'm going to stick with just fetching it on
+    #     # startup because if the whole GUI does crash up to this level, I want
+    #     # it to start again from the current RadixStore
 
-#     radix_state = RadixStore.get()
-#     init_graph = RadixRender.render(scene.viewport, radix_state)
+    #     radix_state = RadixStore.get()
+    #     init_graph = RadixRender.render(scene.viewport, radix_state)
+    init_graph = Scenic.Graph.build()
 
-#     # |> maybe_render_debug_layer(scene.viewport, radix_state)
+    #     # |> maybe_render_debug_layer(scene.viewport, radix_state)
 
-#     init_scene =
-#       scene
-#       |> assign(state: radix_state)
-#       |> assign(graph: init_graph)
-#       |> push_graph(init_graph)
+    init_scene =
+      scene
+      #       |> assign(state: radix_state)
+      |> assign(graph: init_graph)
+      |> push_graph(init_graph)
 
-#     Quillex.Utils.PubSub.subscribe(topic: :radix_state_change)
+    #     Quillex.Utils.PubSub.subscribe(topic: :radix_state_change)
 
-#     request_input(init_scene, [:viewport, :key])
+    #     request_input(init_scene, [:viewport, :key])
 
-#     {:ok, init_scene}
-#   end
+    {:ok, init_scene}
+  end
+end
 
 #   # defp maybe_render_debug_layer(graph, _viewport, _radix_state) do
 #   #   # if radix_state.gui_config.debug do

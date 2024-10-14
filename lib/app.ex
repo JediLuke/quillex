@@ -6,22 +6,23 @@ defmodule QuillEx.App do
   def start(_type, _args) do
     # QuillEx.Metrics.Instrumenter.setup()
 
-    boot_gui? = false
-
     children =
-      if boot_gui? do
-        [
-          # QuillEx.Metrics.Stash,
-          {Registry, keys: :duplicate, name: QuillEx.PubSub},
-          QuillEx.Fluxus.RadixStore,
-          {Scenic, [scenic_config()]},
-          QuillEx.Fluxus.ActionListener,
-          QuillEx.Fluxus.UserInputListener
-        ]
-      else
+      if started_by_flamelex?() do
+        # don't boot the GUI, Flamelex is managing Scenic
         [
           {Registry, keys: :duplicate, name: QuillEx.PubSub},
           {Quillex.Buffers.TopSupervisor, []}
+        ]
+      else
+        # run the Quillex GUI by starting Scenic
+        [
+          # QuillEx.Metrics.Stash,
+          {Registry, keys: :duplicate, name: QuillEx.PubSub},
+          # QuillEx.Fluxus.RadixStore,
+          {Quillex.Buffers.TopSupervisor, []},
+          {Scenic, [scenic_config()]}
+          # QuillEx.Fluxus.ActionListener,
+          # QuillEx.Fluxus.UserInputListener
         ]
       end
 
@@ -35,7 +36,7 @@ defmodule QuillEx.App do
     children = Supervisor.start_link(children, strategy: :one_for_one)
   end
 
-  @window_title "QuillEx"
+  @window_title "Quillex"
   @default_resolution {1680, 1005}
   def scenic_config() do
     [
@@ -54,5 +55,9 @@ defmodule QuillEx.App do
         ]
       ]
     ]
+  end
+
+  def started_by_flamelex? do
+    Application.get_env(:quillex, :started_by_flamelex?, false)
   end
 end

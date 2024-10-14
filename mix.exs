@@ -25,11 +25,24 @@ defmodule QuillEx.MixProject do
     [
       {:scenic, "~> 0.11.0-beta.0"},
       {:scenic_driver_local, "~> 0.11.0-beta.0"},
-      {:scenic_widget_contrib,
-       git: "https://github.com/JediLuke/scenic-widget-contrib", branch: "text_pad_wip"},
+      # {:scenic_widget_contrib,
+      #  git: "https://github.com/JediLuke/scenic-widget-contrib", branch: "text_pad_wip"},
+      {:scenic_widget_contrib, path: "../scenic-widget-contrib", override: true},
       {:elixir_uuid, "~> 1.2"},
       {:font_metrics, "~> 0.5"},
       {:event_bus, "~> 1.7.0"}
+      # # {:scenic, "~> 0.11.0-beta.0"},
+      # {:scenic, path: "../scenic", override: true},
+      # # {:scenic_driver_local, "~> 0.11.0-beta.0"},
+      # # {:scenic_driver_local, path: "../scenic_driver_local", override: true},
+      # {:scenic_driver_local,
+      #  git: "https://github.com/JediLuke/scenic_driver_local", branch: "luke_working"},
+      # {:scenic_widget_contrib, path: "../scenic-widget-contrib", override: true},
+      # # {:scenic_widget_contrib,
+      # #  git: "https://github.com/JediLuke/scenic-widget-contrib", branch: "text_pad_wip"},
+      # {:elixir_uuid, "~> 1.2"},
+      # {:font_metrics, "~> 0.5"},
+      # {:event_bus, git: "https://github.com/JediLuke/event_bus", override: true}
     ]
   end
 end
