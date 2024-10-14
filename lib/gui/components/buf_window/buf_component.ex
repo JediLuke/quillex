@@ -4,6 +4,29 @@ defmodule Quillex.GUI.Components.Buffer do
   use ScenicWidgets.ScenicEventsDefinitions
   alias Quillex.GUI.Components.Buffer
 
+  # This creates a text-input interface like Notepad/Gedit.
+
+  # As much as possible, this Component is just a "thin" rendering component.
+  # ALl logic like editing the component is done at a "higher level" and then
+  # the graphics are updated by casting messages to this Component.
+
+  # ## TODO future features
+
+  # - line wrap
+  # - make arrow navigation work for non-monospaced fonts
+  # - mouse click to move cursor
+  # - selectable text using mouse
+  # - cut & paste?
+  # - Automtically scroll when the cursor movement goes close to the edge of the screen
+  # - Mouse-draggable scroll bars
+
+  #   # Scroll wrapping - for this, I can go ahead with existing text (which wraps),
+  #   # but treat it as larger than another container. However, ultimately
+  #   # I want to be able to disable the scroll-wrapping talked about above,
+  #   # so that I can render  continuous line, & potentially scroll it
+
+  #   # Other unimplemented cases: Max 1 line height (e.g. KommandBuffer)
+
   @no_limits_to_tomorrow "~ The only limit to our realization of tomorrow is our doubts of today ~"
   # - Frankin D. Roosevelt
 
@@ -89,11 +112,9 @@ defmodule Quillex.GUI.Components.Buffer do
 
   def handle_info({:state_change, new_state}, %{assigns: %{state: old_state}} = scene) do
     # when the Buffer process state changes, we update the GUI component
-
-    # TODO this will work but I want to figure out how to do it without re-rendering & restarting new components all the time!!
-
-    # TODO somehow we want to resist re-rendering all the time, we should mutate instead
-    # by pushing input events down to the lowest level that can handle them
+    # we want to resist re-rendering all the time, instead we modify the graph
+    # to reflect the changes in the buffer state. It's a bit more work, but it's
+    # worth it for performance reasons
 
     new_scene =
       scene

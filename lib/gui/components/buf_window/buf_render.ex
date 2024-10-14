@@ -100,6 +100,9 @@ defmodule Quillex.GUI.Components.Buffer.Render do
     |> Enum.reduce(graph, fn {line, idx}, graph_acc ->
       y_position = initial_y + (idx - 1) * line_height
 
+      # TODO this is what scenic does https://github.com/boydm/scenic/blob/master/lib/scenic/component/input/text_field.ex#L198
+      # translate: {args.margin.left, args.margin.top + ascent - 2} #TODO the -2 just looks good, I dunno
+
       graph_acc
       |> render_line_num(idx, y_position, font, @line_num_column_width, line_height, ascent)
       |> Scenic.Primitives.text(
