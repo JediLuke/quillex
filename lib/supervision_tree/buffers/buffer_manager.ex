@@ -73,7 +73,7 @@ defmodule Quillex.Buffer.BufferManager do
 
   # similar to the above only instead of sending to the Buffer process,
   # this sends it to the Buffer GUI component process (the Scenic component)
-  def send_to_buffer_gui_component(%{uuid: buf_uuid}, msg) do
+  def send_to_gui_component(%{uuid: buf_uuid}, msg) do
     # case Registry.lookup(Quillex.BufferRegistry, {buf_ref.uuid, Quillex.GUI.Components.Buffer}) do
     Registry.lookup(
       Quillex.BufferRegistry,

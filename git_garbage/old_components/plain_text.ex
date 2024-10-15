@@ -79,29 +79,3 @@
 #       translate: frame.pin.point
 #     )
 #   end
-
-#   def render_background(
-#         %Scenic.Graph{} = graph,
-#         %__MODULE__{} = state,
-#         %Widgex.Frame{size: f_size}
-#       ) do
-#     graph
-#     # |> Scenic.Primitives.rect(Dimensions.box(f_size),
-#     |> Scenic.Primitives.rect(f_size.box,
-#       fill: state.theme.background,
-#       opacity: 0.5
-#     )
-#   end
-
-#   def render_background(
-#         %Scenic.Graph{} = graph,
-#         _state,
-#         %Widgex.Frame{size: f_size}
-#       ) do
-#     graph
-#     # |> Scenic.Primitives.rect(Dimensions.box(f_size),
-#     |> Scenic.Primitives.rect(f_size.box,
-#       opacity: 0.5
-#     )
-#   end
-# end

@@ -67,7 +67,7 @@ defmodule Quillex.Buffer.Process do
   end
 
   def notify_gui(buf) do
-    Quillex.Buffer.BufferManager.send_to_buffer_gui_component(buf, {:state_change, buf})
+    Quillex.Buffer.BufferManager.send_to_gui_component(buf, {:state_change, buf})
   end
 end
 

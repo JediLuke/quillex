@@ -4,6 +4,8 @@ defmodule QuillEx.Scene.RootScene do
   #   alias QuillEx.Fluxus.RadixStore
   #   alias QuillEx.Scene.RadixRender
   require Logger
+  alias Quillex.Buffer.BufferManager
+  alias Quillex.GUI.RadixReducer
 
   # the Root scene pulls from the radix store on bootup, and then subscribes to changes
   # the reason why I'm doing it this way, and not passing in the radix state
@@ -33,34 +35,83 @@ defmodule QuillEx.Scene.RootScene do
   # startup because if the whole GUI does crash up to this level, I want
   # it to start again from the current RadixStore
 
-  def init(%Scenic.Scene{} = scene, _init_args, _opts) do
+  def init(%Scenic.Scene{} = scene, _args, _opts) do
     Logger.debug("#{__MODULE__} initializing...")
 
-    scene = scene |> assign(font: font())
+    # TODO this shouldn't be done during the init, what if this process crashes?
+    # then again... if the process does crash, what else is it supposed to do except start a new buffer?
+    # since that's the functionality I want from the users perspective, to open up to a new buffer
+    {:ok, buf_ref} = Quillex.Buffer.BufferManager.new_buffer(%{mode: :gedit})
 
-    init_graph = render(scene)
-
-    init_scene =
+    scene =
       scene
-      |> assign(graph: init_graph)
-      |> push_graph(init_graph)
+      |> assign(font: font())
+      |> assign(frame: Widgex.Frame.new(scene.viewport))
+      |> assign(buffers: [buf_ref])
 
-    request_input(init_scene, [:viewport, :key])
+    graph = render(scene)
 
-    {:ok, init_scene}
+    scene =
+      scene
+      |> assign(graph: graph)
+      |> push_graph(graph)
+
+    request_input(scene, [:viewport, :key])
+
+    {:ok, scene}
+  end
+
+  # the way input works is that we route input to the active buffer
+  # component, which then converts it to actions, which are then then
+  # propagated back up - so basically input is handled at the "lowest level"
+  # in the tree that we can route it to (i.e. before it needs to cause
+  # some other higher-level state to re-compute), and these components
+  # have the responsibility of converting the input to actions. The
+  # Quillex.GUI.Components.Buffer component simply casts these up to it's
+  # parent, which is this RootScene, which then processes the actions
+  def handle_cast(
+        {:gui_action, %{uuid: buf_uuid}, actions},
+        scene
+      )
+      when is_list(actions) do
+    Logger.debug("#{__MODULE__} recv'd a gui_action: #{inspect(actions)}")
+
+    new_scene =
+      Enum.reduce(actions, scene, fn action, scene_acc ->
+        RadixReducer.process(scene_acc, action)
+      end)
+
+    new_graph = render(new_scene)
+
+    new_scene =
+      new_scene
+      |> assign(graph: new_graph)
+      |> push_graph(new_graph)
+
+    {:noreply, new_scene}
+  end
+
+  def handle_cast(
+        {:gui_action, buf, action},
+        scene
+      ) do
+    # if it's not a list it's probably just a single action, wrap
+    # it in a list so that we can process it
+    handle_cast({:gui_action, buf, [action]}, scene)
   end
 
   def handle_input(
-        {:viewport, {:reshape, {new_vp_width, new_vp_height} = size}},
+        {:viewport, {:reshape, {_new_vp_width, _new_vp_height} = new_vp_size}},
         _context,
         scene
       ) do
-    # Logger.warn("If this didn't cause errors each time it ran I would raise here!!")
-    # # raise "Ignoring VIEWPORT RESHAPE - should handle this!"
-    # {:noreply, scene}
+    Logger.debug("#{__MODULE__} recv'd a reshape event: #{inspect(new_vp_size)}")
 
-    IO.inspect(scene.viewport)
-    IO.inspect(size)
+    # NOTE we could use `scene.assigns.frame.pin.point` or just {0, 0}
+    # since, doesn't it have to be {0, 0} anyway??
+    new_frame = Widgex.Frame.new(pin: {0, 0}, size: new_vp_size)
+
+    scene = scene |> assign(frame: new_frame)
 
     new_graph = render(scene)
 
@@ -68,8 +119,6 @@ defmodule QuillEx.Scene.RootScene do
       scene
       |> assign(graph: new_graph)
       |> push_graph(new_graph)
-
-    # request_input(init_scene, [:viewport, :key])
 
     {:noreply, new_scene}
   end
@@ -81,7 +130,13 @@ defmodule QuillEx.Scene.RootScene do
   end
 
   def handle_input(input, _context, scene) do
-    Logger.debug("#{__MODULE__} recv'd some (ignored) input: #{inspect(input)}")
+    # Logger.debug("#{__MODULE__} recv'd some (ignored) input: #{inspect(input)}")
+
+    # forward input to the buffer GUI component to handle
+    a_buf = scene |> active_buf()
+
+    BufferManager.send_to_gui_component(a_buf, {:user_input_fwd, input})
+
     {:noreply, scene}
   end
 
@@ -89,6 +144,10 @@ defmodule QuillEx.Scene.RootScene do
     Logger.debug("#{__MODULE__} recv'd an (ignored) event: #{inspect(event)}")
     {:noreply, scene}
   end
+
+  ##
+  ##  Helpers ---------------------------------------------------------
+  ##
 
   def font do
     font_size = 24
@@ -103,11 +162,14 @@ defmodule QuillEx.Scene.RootScene do
     })
   end
 
-  @toolbar_height 60
-  def render(scene) do
-    frame = Widgex.Frame.new(scene.viewport)
-    [top_toolbar_frame, text_buffer_frame] = Widgex.Frame.v_split(frame, px: @toolbar_height)
+  @toolbar_height 50
+  def render(%{assigns: %{frame: %Widgex.Frame{} = frame}} = scene) do
+    [
+      top_toolbar_frame,
+      text_buffer_frame
+    ] = Widgex.Frame.v_split(frame, px: @toolbar_height)
 
+    # draw toolbar last so it renders on *top* of the text buffer ;)
     Scenic.Graph.build()
     |> draw_text_buffer(scene, text_buffer_frame)
     |> draw_top_toolbar(top_toolbar_frame)
@@ -134,7 +196,7 @@ defmodule QuillEx.Scene.RootScene do
         %Scenic.Scene{} = scene,
         %Widgex.Frame{} = frame
       ) do
-    {:ok, buf_ref} = Quillex.Buffer.BufferManager.new_buffer(%{})
+    active_buf = active_buf(scene)
 
     graph
     |> Scenic.Primitives.group(
@@ -143,13 +205,18 @@ defmodule QuillEx.Scene.RootScene do
         # |> Widgex.Frame.draw_guidewires(frame)
         |> Quillex.GUI.Components.Buffer.add_to_graph(%{
           frame: frame,
-          buf_ref: buf_ref,
+          buf_ref: active_buf,
           font: scene.assigns.font
         })
       end,
       id: :top_toolbar,
       translate: frame.pin.point
     )
+  end
+
+  def active_buf(scene) do
+    # TODO when we get tabs, we will have to look up what tab we're in, for now asume always first buffer
+    hd(scene.assigns.buffers)
   end
 end
 

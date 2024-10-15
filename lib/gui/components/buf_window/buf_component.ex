@@ -62,18 +62,6 @@ defmodule Quillex.GUI.Components.Buffer do
         buf
       end
 
-    # font_size = 24
-    # font_name = :ibm_plex_mono
-    # font_metrics = Flamelex.Fluxus.RadixStore.get().fonts.ibm_plex_mono.metrics
-    # ascent = FontMetrics.ascent(font_size, font_metrics)
-
-    # font = %{
-    #   name: font_name,
-    #   size: font_size,
-    #   ascent: ascent,
-    #   metrics: font_metrics
-    # }
-
     colors = @cauldron
 
     graph = Buffer.Render.go(data.frame, buf, data.font, colors)

@@ -125,6 +125,7 @@ defmodule Quillex.GUI.Components.Buffer.Render do
 
     cursor_mode =
       case buf.mode do
+        :gedit -> :cursor
         {:vim, :insert} -> :cursor
         {:vim, :normal} -> :block
       end
@@ -154,18 +155,14 @@ defmodule Quillex.GUI.Components.Buffer.Render do
     line_height = font.size
     # Start indexing from 1 for line numbers
 
-    # graph
-    # |> then(fn graph ->
     graph
     |> Scenic.Primitives.rect(
       {frame.size.width, line_height},
-      translate: {0, 0},
       fill: {:color_rgba, @semi_transparent_white}
     )
     |> Scenic.Primitives.rect(
       {frame.size.width - 2, line_height},
-      stroke: {1, :white},
-      translate: {1, 0}
+      stroke: {1, :white}
     )
   end
 

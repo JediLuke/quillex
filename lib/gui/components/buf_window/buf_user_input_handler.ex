@@ -25,6 +25,10 @@ defmodule Quillex.GUI.Components.Buffer.UserInputHandler do
   # there's no action that gets altered depending on where the cursor is,
   # if ther is it's a higher level state change anyway so handle it within radix state
 
+  def handle(%{mode: :gedit} = buf, input) do
+    InsertMode.handle(buf, input)
+  end
+
   def handle(%{mode: {:vim, :insert}} = buf, input) do
     InsertMode.handle(buf, input)
   end
