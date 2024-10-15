@@ -32,8 +32,9 @@ defmodule Quillex.GUI.Components.Buffer do
 
   def validate(
         %{
-          frame: %Widgex.Frame{} = f,
-          buf_ref: %Quillex.Structs.Buffer.BufRef{} = buf_ref
+          frame: %Widgex.Frame{} = _f,
+          buf_ref: %Quillex.Structs.Buffer.BufRef{} = _buf_ref,
+          font: %Quillex.Structs.Buffer.Font{} = _font
         } = data
       ) do
     {:ok, data}
@@ -61,28 +62,28 @@ defmodule Quillex.GUI.Components.Buffer do
         buf
       end
 
-    font_size = 24
-    font_name = :ibm_plex_mono
-    font_metrics = Flamelex.Fluxus.RadixStore.get().fonts.ibm_plex_mono.metrics
-    ascent = FontMetrics.ascent(font_size, font_metrics)
+    # font_size = 24
+    # font_name = :ibm_plex_mono
+    # font_metrics = Flamelex.Fluxus.RadixStore.get().fonts.ibm_plex_mono.metrics
+    # ascent = FontMetrics.ascent(font_size, font_metrics)
 
-    font = %{
-      name: font_name,
-      size: font_size,
-      ascent: ascent,
-      metrics: font_metrics
-    }
+    # font = %{
+    #   name: font_name,
+    #   size: font_size,
+    #   ascent: ascent,
+    #   metrics: font_metrics
+    # }
 
     colors = @cauldron
 
-    graph = Buffer.Render.go(data.frame, buf, font, colors)
+    graph = Buffer.Render.go(data.frame, buf, data.font, colors)
 
     init_scene =
       scene
       |> assign(frame: data.frame)
       |> assign(graph: graph)
       |> assign(state: buf)
-      |> assign(font: font)
+      |> assign(font: data.font)
       |> assign(colors: colors)
       |> push_graph(graph)
 

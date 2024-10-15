@@ -13,30 +13,17 @@ defmodule Quillex.GUI.Components.Buffer.Render do
   }
 
   def go(%Widgex.Frame{} = frame, %Quillex.Structs.Buffer{} = buf, font, colors) do
-    # colors = @cauldron
-
-    # font_size = 24
-    # font_name = :ibm_plex_mono
-    # font_metrics = Flamelex.Fluxus.RadixStore.get().fonts.ibm_plex_mono.metrics
-    # ascent = FontMetrics.ascent(font_size, font_metrics)
-
-    # font = %{
-    #   name: font_name,
-    #   size: font_size,
-    #   ascent: ascent,
-    #   metrics: font_metrics
-    # }
-
     Scenic.Graph.build()
     |> Scenic.Primitives.group(
       fn graph ->
         graph
-        # TODO try this 50% opaque
-        |> Draw.background(frame, colors.slate)
+        |> Scenic.Primitives.rect(frame.size.box,
+          fill: colors.slate
+        )
         |> render_text(frame, buf, font, colors)
         |> render_cursor(frame, buf, font, colors)
+        |> render_active_row_decoration(frame, buf, font, colors)
       end,
-      translate: frame.pin.point,
       scissor: frame.size.box
     )
   end
@@ -54,19 +41,7 @@ defmodule Quillex.GUI.Components.Buffer.Render do
         render_lines(graph, frame, buf, font, colors)
       end,
       id: :text
-      # translate: frame.pin.point,
-      # scissor: frame.size.box
     )
-
-    #             # REMINDER: render/1 has to be implemented by the modules "using" this behaviour, and that is the function being called here
-    #             init_graph |> render(args |> Map.merge(%{first_render?: true}))
-    #           end,
-    #           # TODO do we need rego tag here?
-    #           id: ref,
-    #           translate: {frame.top_left.x, frame.top_left.y}
-    #         )
-
-    # render_lines(graph, frame, buf, font, colors)
   end
 
   @margin_left 5
@@ -113,40 +88,6 @@ defmodule Quillex.GUI.Components.Buffer.Render do
         translate: {@line_num_column_width + @margin_left, y_position},
         id: {:line_text, idx}
       )
-      |> then(fn graph ->
-        if idx == 1 do
-          graph
-          |> Scenic.Primitives.rect(
-            {frame.size.width, line_height},
-            # Adjust for ascent
-            translate: {0, 0},
-            # Semi-transparent white
-            fill: {:color_rgba, {255, 255, 255, Integer.floor_div(255, 3)}},
-            id: {:line_bg_box, idx}
-          )
-          |> Scenic.Primitives.rect(
-            # {frame.dimens.width, frame.dimens.height},
-            {frame.size.width - 2, line_height},
-            # id: :background,
-            # fill: theme.active,
-            stroke: {2, :white},
-            translate: {1, 0}
-            # scissor: frame.size.box
-          )
-        else
-          graph
-        end
-
-        # graph
-        # |> Scenic.Primitives.rect(
-        #   {1000, line_height},
-        #   # Adjust for ascent
-        #   translate: {line_number_width + @margin_left, y_position - ascent},
-        #   # Semi-transparent white
-        #   fill: {:color_rgba, {255, 255, 255, Integer.floor_div(255, 3)}},
-        #   id: {:line_bg, idx}
-        # )
-      end)
     end)
   end
 
@@ -199,6 +140,32 @@ defmodule Quillex.GUI.Components.Buffer.Render do
         font: font
       },
       id: :cursor
+    )
+  end
+
+  @semi_transparent_white {255, 255, 255, Integer.floor_div(255, 3)}
+  def render_active_row_decoration(
+        %Scenic.Graph{} = graph,
+        %Widgex.Frame{} = frame,
+        %Quillex.Structs.Buffer{cursors: [c]} = buf,
+        font,
+        _colors
+      ) do
+    line_height = font.size
+    # Start indexing from 1 for line numbers
+
+    # graph
+    # |> then(fn graph ->
+    graph
+    |> Scenic.Primitives.rect(
+      {frame.size.width, line_height},
+      translate: {0, 0},
+      fill: {:color_rgba, @semi_transparent_white}
+    )
+    |> Scenic.Primitives.rect(
+      {frame.size.width - 2, line_height},
+      stroke: {1, :white},
+      translate: {1, 0}
     )
   end
 

@@ -1,4 +1,4 @@
-defmodule QuillEx do
+defmodule Quillex do
   # @doc """
   # Publish an action to the internal event-bus.
   # """

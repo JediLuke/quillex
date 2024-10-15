@@ -1,23 +1,22 @@
-defmodule QuillEx.Structs.BufferTest do
-    use ExUnit.Case
-    alias QuillEx.Structs.Buffer
+defmodule Quillex.Structs.BufferTest do
+  use ExUnit.Case
+  alias Quillex.Structs.Buffer
 
-    test "make a new Buffer" do
-        new_buf = Buffer.new(%{id: {:buffer, "luke_buf"}})
-        assert new_buf == %QuillEx.Structs.Buffer{
-            id: {:buffer, "luke_buf"},
-            name: "luke_buf",
-            type: :text,
-            data: "",
-            cursors: [%QuillEx.Structs.Buffer.Cursor{num: 1, line: 1, col: 1}],
-            history: [],
-            scroll_acc: {0, 0},
-            read_only?: false
-        }
-    end
+  test "make a new Buffer" do
+    new_buf = Buffer.new(%{id: {:buffer, "luke_buf"}})
 
+    assert new_buf == %Quillex.Structs.Buffer{
+             id: {:buffer, "luke_buf"},
+             name: "luke_buf",
+             type: :text,
+             data: "",
+             cursors: [%Quillex.Structs.Buffer.Cursor{num: 1, line: 1, col: 1}],
+             history: [],
+             scroll_acc: {0, 0},
+             read_only?: false
+           }
+  end
 end
- 
 
 # defmodule ScenicWidgets.TextPad.Structs.Buffer2Test do
 #     use ExUnit.Case
@@ -76,16 +75,8 @@ end
 
 #         assert updated_buf.data == expected_final_data
 #     end
-    
+
 # end
-  
-
-
-
-
-
-
-
 
 # defmodule ScenicWidgets.TextPad.Structs.BufferTest do
 #     use ExUnit.Case
@@ -144,38 +135,24 @@ end
 
 #         assert updated_buf.data == expected_final_data
 #     end
-    
+
 # end
-  
-
-
-
-
-
-
-
-
-
-
-
 
 # defmodule Flamelex.Test.Buffer.Utils.TextBuffer.ModifyHelperTest do
 #     use ExUnit.Case
 #     alias Flamelex.Buffer.Utils.TextBuffer.ModifyHelper
-  
-  
+
 #       # sourced from: https://vim.fandom.com/wiki/Vim_buffer_FAQ
 #       @sentence_a "A buffer is a file loaded into memory for editing.\n"
 #       @sentence_b "All opened files are associated with a buffer.\n"
 #       @sentence_c "There are also buffers not associated with any file.\n"
-  
-  
+
 #     test "inserting text into a buffer, by specifying the overall character position to insert it" do
 #       buffer_state = %{data: @sentence_a <> @sentence_b <> @sentence_c}
 #       modification = {:insert, "Luke is the best!", String.length(@sentence_a)}
-  
+
 #       {:ok, modified_buffer} = ModifyHelper.modify(buffer_state, modification)
-  
+
 #       assert modified_buffer.data == @sentence_a <> "Luke is the best!" <> @sentence_b <> @sentence_c
 #       assert Enum.count(modified_buffer.lines) == 3 # NOTE: I never added any newline in my Modification
 #       assert modified_buffer.unsaved_changes? == true
@@ -185,18 +162,18 @@ end
 #         %{line: 3, text: @sentence_c |> String.trim()}
 #       ]
 #     end
-  
+
 #     # test "insert some text onto a line"
-  
+
 #     describe "with standard test buffer" do
 #       setup [:standard_test_buffer]
-  
+
 #       test "append a new line (insert under the current line)", %{buffer_state: buffer_state} do
 #         assert Enum.count(buffer_state.lines) == 3
-  
+
 #         modification =  %{append: "\n", line: 1} # appent to line 1, means, we expect line 2 to be a blank new line
 #         {:ok, modified_buffer} = ModifyHelper.modify(buffer_state, modification)
-  
+
 #         assert Enum.count(modified_buffer.lines) == 4
 #         assert modified_buffer.unsaved_changes? == true
 #         assert modified_buffer.data == @sentence_a <> "\n" <> @sentence_b <> @sentence_c
@@ -208,8 +185,7 @@ end
 #         ]
 #       end
 #     end
-  
-  
+
 #     test "insert some text into a buffer based on the cursor coordinates" do
 #       buffer_state = %{
 #         data: %{data: @sentence_a <> @sentence_b <> @sentence_c},
@@ -225,7 +201,7 @@ end
 #         unsaved_changes?: false
 #       }
 #       modification = {:insert, " are freee!! And never,", %{coords: {:cursor, 1}}}
-  
+
 #       {:ok, modified_buffer} = ModifyHelper.modify(buffer_state, modification)
 #       assert Enum.count(modified_buffer.lines) == 3 # NOTE: I never added any newline in my Modification
 #       assert modified_buffer.unsaved_changes? == true
@@ -235,8 +211,7 @@ end
 #         %{line: 3, text: @sentence_c |> String.trim()}
 #       ]
 #     end
-  
-  
+
 #     defp standard_test_buffer(context) do
 #       buffer_state = %{
 #         data: @sentence_a <> @sentence_b <> @sentence_c,
@@ -248,32 +223,23 @@ end
 #         cursors: [%{line: 1, col: 1}],
 #         unsaved_changes?: false
 #       }
-  
+
 #       context |> Map.merge(%{buffer_state: buffer_state})
 #     end
 #   end
-  
 
-
-
-
-
-
-
-
-
-# defmodule QuillEx.Structs.BufferTest do
+# defmodule Quillex.Structs.BufferTest do
 #     use ExUnit.Case
-#     alias QuillEx.Structs.Buffer
+#     alias Quillex.Structs.Buffer
 
 #     test "make a new Buffer" do
 #         new_buf = Buffer.new(%{id: {:buffer, "luke_buf"}})
-#         assert new_buf == %QuillEx.Structs.Buffer{
+#         assert new_buf == %Quillex.Structs.Buffer{
 #             id: {:buffer, "luke_buf"},
 #             name: "luke_buf",
 #             data: nil,
 #             details: nil,
-#             cursors: [%QuillEx.Structs.Buffer.Cursor{num: 1, line: 1, col: 1}],
+#             cursors: [%Quillex.Structs.Buffer.Cursor{num: 1, line: 1, col: 1}],
 #             history: [],
 #             scroll_acc: {0, 0},
 #             read_only?: false
@@ -317,6 +283,5 @@ end
 
 #         assert updated_buf.data == expected_final_data
 #     end
-    
+
 # end
-  

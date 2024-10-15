@@ -36,7 +36,9 @@ defmodule QuillEx.Scene.RootScene do
   def init(%Scenic.Scene{} = scene, _init_args, _opts) do
     Logger.debug("#{__MODULE__} initializing...")
 
-    init_graph = init_render(scene)
+    scene = scene |> assign(font: font())
+
+    init_graph = render(scene)
 
     init_scene =
       scene
@@ -48,23 +50,74 @@ defmodule QuillEx.Scene.RootScene do
     {:ok, init_scene}
   end
 
+  def handle_input(
+        {:viewport, {:reshape, {new_vp_width, new_vp_height} = size}},
+        _context,
+        scene
+      ) do
+    # Logger.warn("If this didn't cause errors each time it ran I would raise here!!")
+    # # raise "Ignoring VIEWPORT RESHAPE - should handle this!"
+    # {:noreply, scene}
+
+    IO.inspect(scene.viewport)
+    IO.inspect(size)
+
+    new_graph = render(scene)
+
+    new_scene =
+      scene
+      |> assign(graph: new_graph)
+      |> push_graph(new_graph)
+
+    # request_input(init_scene, [:viewport, :key])
+
+    {:noreply, new_scene}
+  end
+
+  def handle_input({:viewport, {input, _coords}}, _context, scene)
+      when input in [:enter, :exit] do
+    # don't do anything when the mouse enters/leaves the viewport
+    {:noreply, scene}
+  end
+
   def handle_input(input, _context, scene) do
     Logger.debug("#{__MODULE__} recv'd some (ignored) input: #{inspect(input)}")
     {:noreply, scene}
   end
 
-  def init_render(scene) do
-    vp_frame = Widgex.Frame.new(scene.viewport)
-    [top_toolbar_frame, text_buffer_frame] = Widgex.Frame.v_split(vp_frame, px: 60)
-
-    Scenic.Graph.build()
-    |> draw_top_toolbar(top_toolbar_frame)
-
-    # |> draw_text_buffer(text_buffer_frame)
+  def handle_event(event, _from, scene) do
+    Logger.debug("#{__MODULE__} recv'd an (ignored) event: #{inspect(event)}")
+    {:noreply, scene}
   end
 
-  @toolbar_bg_color :green
-  def draw_top_toolbar(%Scenic.Graph{} = graph, %Widgex.Frame{} = frame) do
+  def font do
+    font_size = 24
+    font_name = :ibm_plex_mono
+
+    {:ok, font_metrics} = TruetypeMetrics.load("./assets/fonts/IBMPlexMono-Regular.ttf")
+
+    Quillex.Structs.Buffer.Font.new(%{
+      name: font_name,
+      size: font_size,
+      metrics: font_metrics
+    })
+  end
+
+  @toolbar_height 60
+  def render(scene) do
+    frame = Widgex.Frame.new(scene.viewport)
+    [top_toolbar_frame, text_buffer_frame] = Widgex.Frame.v_split(frame, px: @toolbar_height)
+
+    Scenic.Graph.build()
+    |> draw_text_buffer(scene, text_buffer_frame)
+    |> draw_top_toolbar(top_toolbar_frame)
+  end
+
+  @toolbar_bg_color {48, 48, 48}
+  def draw_top_toolbar(
+        %Scenic.Graph{} = graph,
+        %Widgex.Frame{} = frame
+      ) do
     graph
     |> Scenic.Primitives.group(
       fn graph ->
@@ -75,242 +128,342 @@ defmodule QuillEx.Scene.RootScene do
       translate: frame.pin.point
     )
   end
+
+  def draw_text_buffer(
+        %Scenic.Graph{} = graph,
+        %Scenic.Scene{} = scene,
+        %Widgex.Frame{} = frame
+      ) do
+    {:ok, buf_ref} = Quillex.Buffer.BufferManager.new_buffer(%{})
+
+    graph
+    |> Scenic.Primitives.group(
+      fn graph ->
+        graph
+        # |> Widgex.Frame.draw_guidewires(frame)
+        |> Quillex.GUI.Components.Buffer.add_to_graph(%{
+          frame: frame,
+          buf_ref: buf_ref,
+          font: scene.assigns.font
+        })
+      end,
+      id: :top_toolbar,
+      translate: frame.pin.point
+    )
+  end
 end
 
-#   # defp maybe_render_debug_layer(graph, _viewport, _radix_state) do
-#   #   # if radix_state.gui_config.debug do
-#   #   #   Scenic.Graph.add_layer(
-#   #   #     Scenic.Graph.new(:debug_layer),
-#   #   #     Scenic.Graph.new(:debug_layer, [Scenic.Primitives.text("DEBUG MODE")])
-#   #   #   )
-#   #   # else
-#   #   #   Scenic.Graph.new(:debug_layer)
-#   #   # end
+# TODO this might end up being overkill / inefficient... but ultimately, do I even care??
+# I only care if I end up spinning up new processes all the time.. which unfortunately I do think is what's happening :P
 
-#   #   # for now, do nothing...
-#   #   # in the future we could render an overlay showing the layout
-#   #   graph
-#   # end
+# TODO pass in the list of childten to RadixRender so that it knows to only cast, not re-render from scratch, if that Child is alread alive
+# {:ok, children} = Scenic.Scene.children(scene)
 
-#   def handle_input(
-#         {:viewport, {:reshape, {new_vp_width, new_vp_height} = new_size}},
-#         _context,
-#         scene
+# new_graph =
+#   scene.viewport
+#   |> RadixRender.render(new_radix_state, children)
+
+# # |> maybe_render_debug_layer(scene_viewport, new_radix_state)
+
+# if new_graph.ids == scene.assigns.graph.ids do
+#   # no need to update the graph on this level
+
+#   new_scene =
+#     scene
+#     |> assign(state: new_radix_state)
+
+#   {:noreply, new_scene}
+# else
+#   new_scene =
+#     scene
+#     |> assign(state: new_radix_state)
+#     |> assign(graph: new_graph)
+#     |> push_graph(new_graph)
+
+#   {:noreply, new_scene}
+# end
+
+## -----------------------------------------------------------------
+
+# defmodule QuillEx.Scene.RadixRender do
+#   # alias QuillEx.GUI.Components.{Editor, SplashScreen}
+#   # alias ScenicWidgets.Core.Structs.Frame
+#   # alias ScenicWidgets.Core.Utils.FlexiFrame
+#   alias QuillEx.Fluxus.Structs.RadixState
+#   alias Widgex.Frame
+
+#   def render(
+#         %Scenic.ViewPort{} = vp,
+#         %RadixState{} = radix_state,
+#         children \\ []
 #       ) do
-#     Logger.warn("If this didn't cause errors each time it ran I would raise here!!")
-#     # raise "Ignoring VIEWPORT RESHAPE - should handle this!"
-#     # TODO fire an action probably
-#     {:noreply, scene}
+#     # menu_bar_frame =
+#     #   Frame.new(vp, {:standard_rule, frame: 1, linemark: radix_state.menu_bar.height})
+
+#     # editor_frame =
+#     #   Frame.new(vp, {:standard_rule, frame: 2, linemark: radix_state.menu_bar.height})
+
+#     # |> render_menubar(%{frame: menubar_f, radix_state: radix_state})
+
+#     Scenic.Graph.build(font: :ibm_plex_mono)
+#     |> Scenic.Primitives.group(
+#       fn graph ->
+#         graph |> render_components(vp, radix_state, children)
+#       end,
+#       id: :quillex_root
+#     )
 #   end
 
-#   def handle_input({:viewport, {input, _coords}}, _context, scene)
-#       when input in [:enter, :exit] do
-#     # don't do anything when the mouse enters/leaves the viewport
-#     {:noreply, scene}
+#   def render_components(graph, _vp, %{components: []} = _radix_state, _children) do
+#     graph
 #   end
 
-#   def handle_input(input, _context, scene) do
-#     # TODO ok in QuillEx I'm going to experiment with doing this all sequentially
+#   # TODO join_together(layout, components) - the output of this
+#   # function is a zipped-list of tuples with each component having
+#   # been assigned a %Frame{} (and a layer??) - no, layer management
+#   # happens at a higher level
 
-#     # Logger.debug "#{__MODULE__} recv'd some (non-ignored) input: #{inspect input}"
-#     # QuillEx.Useo
-#     # rInputHandler.process(input)
-#     # IO.puts("HJIHIHI")
+#   def render_components(graph, vp, radix_state, children) do
+#     # new_graph = graph
 
-#     # TODO mayube here, we need to handle input in the same thread as root process? This (I think) would at least make all input processed on the radix state at the time of input, vs throwing an event it may introduce timing errors...
+#     # IO.inspect(children)
 
-#     # GenServer.call(QuillEx.Fluxus.RadixStore, {:user_input, input})
+#     framestack = Frame.v_split(vp, radix_state.layout)
 
-#     # I am going to fully commit in QuillEx to trying the syncronous PubSub
-#     # and see how it goes. I think it will be easier to reason about, and
-#     # because each event is processed sequentially by the action listener
-#     QuillEx.Fluxus.user_input(scene.assigns.state, input)
-#     {:noreply, scene}
-#   end
+#     # |> ScenicWidgets.FrameBox.draw(%{frame: hd(editor_f), color: :blue})
+#     # |> Editor.add_to_graph(args |> Map.merge(%{app: QuillEx}), id: :editor)
 
-#   def handle_cast(msg, scene) do
-#     IO.inspect(msg, label: "MMM root scene")
-#     {:noreply, scene}
-#   end
+#     # TODO after zipping them together here with a frame, look in the
+#     # children for an existing process
 
-#   def handle_info(
-#         {:radix_state_change, new_radix_state},
-#         scene
-#       ) do
-#     # actually here the ROotScene never has to reply to changes but we have it here for now
+#     component_frames =
+#       cond do
+#         length(radix_state.components) == length(framestack) ->
+#           Enum.zip(radix_state.components, framestack)
 
-#     # TODO possibly this is an answer.. widgex components have to implement some functiuon which compares 2 radix state & determinnes if the component has changed or not - and this will be different for root scene as it will for Ubuntu bar, etc...
-#     no_changes? =
-#       not components_changed?(scene.assigns.state, new_radix_state) and
-#         not layout_changed?(scene.assigns.state, new_radix_state)
+#         # |> tag_children(children)
 
-#     # Enum.map(
-#     #   [:components, :layout],
-#     #   fn key ->
-#     #     scene.assigns.state[key] == new_radix_state[key]
-#     #   end
-#     # )
+#         length(radix_state.components) < length(framestack) ->
+#           # just take the first 'n' frames
+#           first_frames = Enum.take(framestack, length(radix_state.components))
 
-#     if no_changes? do
-#       {:noreply, scene}
-#     else
-#       new_graph =
-#         scene.viewport
-#         |> RadixRender.render(new_radix_state)
+#           Enum.zip(radix_state.components, framestack)
 
-#       new_scene =
-#         scene
-#         |> assign(state: new_radix_state)
-#         |> assign(graph: new_graph)
-#         |> push_graph(new_graph)
+#         # |> tag_children(children)
 
-#       {:noreply, new_scene}
-#     end
-
-#     # TODO this might end up being overkill / inefficient... but ultimately, do I even care??
-#     # I only care if I end up spinning up new processes all the time.. which unfortunately I do think is what's happening :P
-
-#     # TODO pass in the list of childten to RadixRender so that it knows to only cast, not re-render from scratch, if that Child is alread alive
-#     # {:ok, children} = Scenic.Scene.children(scene)
-
-#     # new_graph =
-#     #   scene.viewport
-#     #   |> RadixRender.render(new_radix_state, children)
-
-#     # # |> maybe_render_debug_layer(scene_viewport, new_radix_state)
-
-#     # if new_graph.ids == scene.assigns.graph.ids do
-#     #   # no need to update the graph on this level
-
-#     #   new_scene =
-#     #     scene
-#     #     |> assign(state: new_radix_state)
-
-#     #   {:noreply, new_scene}
-#     # else
-#     #   new_scene =
-#     #     scene
-#     #     |> assign(state: new_radix_state)
-#     #     |> assign(graph: new_graph)
-#     #     |> push_graph(new_graph)
-
-#     #   {:noreply, new_scene}
-#     # end
-
-#     # new_scene =
-#     #   scene
-#     #   |> assign(state: new_radix_state)
-#     #   |> assign(graph: new_graph)
-#     #   |> push_graph(new_graph)
-
-#     # {:noreply, new_scene}
-#   end
-
-#   def components_changed?(old_radix_state, new_radix_state) do
-#     component_ids = fn rdx_state ->
-#       Enum.map(rdx_state.components, & &1.widgex.id)
-#     end
-
-#     component_ids.(old_radix_state) != component_ids.(new_radix_state)
-#     # old_radix_state.components != new_radix_state.components
-#   end
-
-#   def layout_changed?(old_radix_state, new_radix_state) do
-#     old_radix_state.layout != new_radix_state.layout
-#   end
-
-#   def handle_event(event, _from_pid, scene) do
-#     IO.puts("GOT AN EVENT BUYT I KNOW ITS A CLICK #{inspect(event)}}")
-
-#     {:glyph_clicked_event, button_num} = event
-
-#     # {:ok, kids} = Scenic.Scene.children(scene)
-
-#     if button_num == :g1 do
-#       QuillEx.Fluxus.action(:open_read_only_text_pane)
-#     else
-#       if button_num == :g2 do
-#         QuillEx.Fluxus.action(:open_text_pane)
-#       else
-#         if button_num == :g3 do
-#           QuillEx.Fluxus.action(:open_text_pane_scrollable)
-#         end
+#         length(radix_state.components) > length(framestack) ->
+#           raise "more components than we have frames, cannot render"
 #       end
-#     end
 
-#     {:noreply, scene}
+#     # component_frames = Enum.zip(radix_state.components, framestack)
+
+#     # {:ok, [{:plaintext, #PID<0.336.0>}, {ScenicWidgets.UbuntuBar, #PID<0.339.0>}]}
+
+#     # paired_component_frames = Enum.zip(children, component_frames)
+
+#     # paired_component_frames =
+#     #   Enum.map(component_frames, fn {c, f} ->
+#     #     if process_alive?(c.widgex.pid) do
+#     #       # {c, f}
+#     #       # push the diff to the component
+#     #       {pid, c, f}
+#     #     else
+#     #       {nil, f}
+#     #     end
+
+#     #     if(Enum.member?())
+
+#     #     if c.widgex.id == :ubuntu_bar do
+#     #       {c, f}
+#     #     else
+#     #       {c, f}
+#     #     end
+#     #   end)
+
+#     graph |> do_render_components(component_frames)
 #   end
 
-#   # def handle_info(
-#   #       {:radix_state_change, new_radix_state},
-#   #       # %{assigns: %{menu_map: current_menu_map}} = scene
-#   #     ) do
-#   #   # check font change?
-#   #   new_font = new_radix_state.gui_config.fonts.primary
-#   #   current_font = scene.assigns.state.gui_config.fonts.primary
+#   defp tag_children(component_frames, children) do
+#     Enum.map(component_frames, fn {c, f} ->
+#       case find_child(c.widgex.id, children) do
+#         {component_id, pid} when is_pid(pid) ->
+#           {c, f, pid}
 
-#   #   # redraw everything...
-#   #   if new_font != current_font do
-#   #     new_graph = scene.assigns.graph
-#   #     # |> Scenic.Graph.delete(:quillex_main) #TODO go back to blank graph??
-#   #     # |> render(scene.assigns.viewport, new_radix_state)
-#   #     # render(scene.assigns.viewport, new_radix_state)
+#         nil ->
+#           {c, f}
+#       end
 
-#   #     new_scene =
-#   #       scene
-#   #       |> assign(state: new_radix_state)
-#   #       |> assign(graph: new_graph)
+#       # if pid = find_child(c.widgex.id, children) do
+#       #   {c, f, pid}
+#       # else
+#       #   {, f}
+#       # end
+#     end)
+#   end
 
-#   #     # |> assign(menu_map: calc_menu_map(new_radix_state))
+#   defp find_child(id, children) do
+#     Enum.find(children, fn {component_id, _} -> component_id == id end)
+#   end
 
-#   #     IO.puts("PUSH PUSH PUSH")
+#   defp do_render_components(graph, []) do
+#     graph
+#   end
 
-#   #     new_scene |> push_graph(new_graph)
+#   defp do_render_components(graph, [{nil, _f} | rest]) do
+#     # if component is nil just draw nothing
+#     graph |> do_render_components(rest)
+#   end
 
-#   #     {:noreply, new_scene |> assign(state: new_radix_state)}
-#   #   else
-#   #     # check menu bar changed??
-#   #     new_menu_map = calc_menu_map(new_radix_state)
+#   # defp do_render_components(graph, [{c, f, pid} | rest]) when is_pid(pid) do
+#   #   IO.puts("UPDATE DONT REDRAW")
 
-#   #     new_scene =
-#   #       if new_menu_map != current_menu_map do
-#   #         Logger.debug("refreshing the MenuBar...")
-#   #         GenServer.cast(ScenicWidgets.MenuBar, {:put_menu_map, new_menu_map})
-#   #         scene |> assign(menu_map: new_menu_map)
-#   #       else
-#   #         scene
-#   #       end
-
-#   #     {:noreply, new_scene}
-#   #   end
+#   #   graph
+#   #   |> c.__struct__.add_to_graph({c, f}, id: Map.get(c, :id) || c.widgex.id)
+#   #   # |> c.__struct__.add_to_graph({c, f}, id: c.widgex.id)
+#   #   |> do_render_components(rest)
 #   # end
 
-#   # # TODO expand this to include all changesd to menubar, including font type...
-#   # def handle_info(
-#   #       {:radix_state_change, new_radix_state},
-#   #       %{assigns: %{menu_map: current_menu_map}} = scene
-#   #     ) do
-#   #   new_menu_map = calc_menu_map(new_radix_state)
+#   # defp do_render_components(graph, [%Widgex.Component{} = c | rest]) when is_struct(c) do
+#   # TODO maybe we enforce ID here somehjow??
+#   defp do_render_components(graph, [{c, %Widgex.Frame{} = f} | rest]) when is_struct(c) do
+#     graph
+#     # |> c.__struct__.add_to_graph({c, f}, id: c.id || c.widgex.id)
+#     |> c.__struct__.add_to_graph({c, f}, id: c.widgex.id)
+#     |> do_render_components(rest)
+#   end
 
-#   #   IO.puts("HIHIHIHIHIHI")
+#   # defp do_render_components(graph, [{c, %Frame{} = f} | rest]) when is_struct(c) do
+#   #   graph
+#   #   # |> c.__struct__.add_to_graph({c, f}, id: c.id || c.widgex.id)
+#   #   # # |> c.__struct__.add_to_graph({c, f})
+#   #   # |> do_render_components(rest)
+#   # end
 
-#   #   if new_menu_map != current_menu_map do
-#   #     IO.puts("UES UES YES WE GOT A NEW MENU MAP")
-#   #     # Logger.debug "refreshing the MenuBar..."
+#   defp do_render_components(graph, [{sub_stack, sub_frame_stack} | rest])
+#        when is_list(sub_stack) and is_list(sub_frame_stack) do
+#     if length(sub_stack) != length(sub_frame_stack) do
+#       raise "length of (sub!) components and framestack must match"
+#     end
 
-#   #     # TODO make new function in Scenic `cast_child`
-#   #     # scene |> cast_child(:menu_bar, {:put_menu_map, new_menu_map})
-#   #     case child(scene, :menu_bar) do
-#   #       {:ok, []} ->
-#   #         Logger.warn("Could not find the MenuBar process.")
-#   #         {:noreply, scene}
+#     sub_component_frames = Enum.zip(sub_stack, sub_frame_stack)
 
-#   #       {:ok, [pid]} ->
-#   #         GenServer.cast(pid, {:put_menu_map, new_menu_map})
-#   #         {:noreply, scene |> assign(menu_map: new_menu_map)}
-#   #     end
-#   #   else
-#   #     {:noreply, scene}
-#   #   end
+#     graph
+#     |> do_render_components(sub_component_frames)
+#     |> do_render_components(rest)
+#   end
+
+#   # def render_menubar(graph, %{frame: frame, radix_state: radix_state}) do
+#   #   menubar_args = %{
+#   #     frame: frame,
+#   #     menu_map: calc_menu_map(radix_state),
+#   #     font: radix_state.desktop.menu_bar.font
+#   #   }
+
+#   #   graph
+#   #   # |> ScenicWidgets.FrameBox.draw(%{frame: menubar_f, color: :red})
+#   #   |> ScenicWidgets.MenuBar.add_to_graph(menubar_args, id: :menu_bar)
+#   # end
+
+#   # def calc_menu_map(%{editor: %{buffers: []}}) do
+#   #   [
+#   #     {:sub_menu, "Buffer",
+#   #      [
+#   #        {"new", &QuillEx.API.Buffer.new/0}
+#   #      ]},
+#   #     {:sub_menu, "View",
+#   #      [
+#   #        {"toggle line nums", fn -> raise "no" end},
+#   #        {"toggle file tray", fn -> raise "no" end},
+#   #        {"toggle tab bar", fn -> raise "no" end},
+#   #        {:sub_menu, "font",
+#   #         [
+#   #           {:sub_menu, "primary font",
+#   #            [
+#   #              {"ibm plex mono",
+#   #               fn ->
+#   #                 QuillEx.Fluxus.RadixStore.get()
+#   #                 |> QuillEx.Reducers.RadixReducer.change_font(:ibm_plex_mono)
+#   #                 |> QuillEx.Fluxus.RadixStore.put()
+#   #               end},
+#   #              {"roboto",
+#   #               fn ->
+#   #                 QuillEx.Fluxus.RadixStore.get()
+#   #                 |> QuillEx.Reducers.RadixReducer.change_font(:roboto)
+#   #                 |> QuillEx.Fluxus.RadixStore.put()
+#   #               end},
+#   #              {"roboto mono",
+#   #               fn ->
+#   #                 QuillEx.Fluxus.RadixStore.get()
+#   #                 |> QuillEx.Reducers.RadixReducer.change_font(:roboto_mono)
+#   #                 |> QuillEx.Fluxus.RadixStore.put()
+#   #               end},
+#   #              {"iosevka",
+#   #               fn ->
+#   #                 QuillEx.Fluxus.RadixStore.get()
+#   #                 |> QuillEx.Reducers.RadixReducer.change_font(:iosevka)
+#   #                 |> QuillEx.Fluxus.RadixStore.put()
+#   #               end},
+#   #              {"source code pro",
+#   #               fn ->
+#   #                 QuillEx.Fluxus.RadixStore.get()
+#   #                 |> QuillEx.Reducers.RadixReducer.change_font(:source_code_pro)
+#   #                 |> QuillEx.Fluxus.RadixStore.put()
+#   #               end},
+#   #              {"fira code",
+#   #               fn ->
+#   #                 QuillEx.Fluxus.RadixStore.get()
+#   #                 |> QuillEx.Reducers.RadixReducer.change_font(:fira_code)
+#   #                 |> QuillEx.Fluxus.RadixStore.put()
+#   #               end},
+#   #              {"bitter",
+#   #               fn ->
+#   #                 QuillEx.Fluxus.RadixStore.get()
+#   #                 |> QuillEx.Reducers.RadixReducer.change_font(:bitter)
+#   #                 |> QuillEx.Fluxus.RadixStore.put()
+#   #               end}
+#   #            ]},
+#   #           {"make bigger",
+#   #            fn ->
+#   #              QuillEx.Fluxus.RadixStore.get()
+#   #              |> QuillEx.Reducers.RadixReducer.change_font_size(:increase)
+#   #              |> QuillEx.Fluxus.RadixStore.put()
+#   #            end},
+#   #           {"make smaller",
+#   #            fn ->
+#   #              QuillEx.Fluxus.RadixStore.get()
+#   #              |> QuillEx.Reducers.RadixReducer.change_font_size(:decrease)
+#   #              |> QuillEx.Fluxus.RadixStore.put()
+#   #            end}
+#   #         ]}
+#   #      ]},
+#   #     {:sub_menu, "Help",
+#   #      [
+#   #        {"about QuillEx", &QuillEx.API.Misc.makers_mark/0}
+#   #      ]}
+#   #   ]
+#   # end
+
+#   # def calc_menu_map(%{editor: %{buffers: buffers}})
+#   #     when is_list(buffers) and length(buffers) >= 1 do
+#   #   # NOTE: Here what we do is just take the base menu (with no open buffers)
+#   #   # and add the new buffer menu in to it using Enum.map
+
+#   #   base_menu = calc_menu_map(%{editor: %{buffers: []}})
+
+#   #   open_bufs_sub_menu =
+#   #     buffers
+#   #     |> Enum.map(fn %{id: {:buffer, name} = buf_id} ->
+#   #       # NOTE: Wrap this call in it's closure so it's a function of arity /0
+#   #       {name, fn -> QuillEx.API.Buffer.activate(buf_id) end}
+#   #     end)
+
+#   #   Enum.map(base_menu, fn
+#   #     {:sub_menu, "Buffer", base_buffer_menu} ->
+#   #       {:sub_menu, "Buffer",
+#   #        base_buffer_menu ++ [{:sub_menu, "open-buffers", open_bufs_sub_menu}]}
+
+#   #     other_menu ->
+#   #       other_menu
+#   #   end)
 #   # end
 # end
