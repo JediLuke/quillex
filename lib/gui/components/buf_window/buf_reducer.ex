@@ -33,6 +33,13 @@ defmodule Quillex.GUI.Components.Buffer.Reducer do
     |> Buffer.Mutator.move_cursor(:right, num_chars)
   end
 
+  def process(%Quillex.Structs.BufState{} = buf, {:delete, :before_cursor}) do
+    [cursor] = buf.cursors
+
+    buf
+    |> Buffer.Mutator.delete_char_before_cursor(cursor)
+  end
+
   def process(%Quillex.Structs.BufState{} = buf, action) do
     IO.puts("BUFFER REDUCER GOT ACTION: #{inspect(action)}")
     :ignore

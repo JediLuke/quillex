@@ -23,9 +23,10 @@ defmodule Quillex.GUI.Components.Buffer.Render do
       fn graph ->
         graph
         |> Scenic.Primitives.rect(frame.size.box, fill: colors.slate)
+        |> render_line_numbers_background(frame, @line_num_column_width)
         |> render_text(frame, buf, font, colors)
-        |> render_cursor(frame, buf, font, colors)
-        |> render_active_row_decoration(frame, buf, font, colors)
+
+        # |> render_active_row_decoration(frame, buf, font, colors)
       end,
       scissor: frame.size.box
     )
@@ -35,8 +36,13 @@ defmodule Quillex.GUI.Components.Buffer.Render do
   def render_text(graph, frame, buf, font, colors) do
     graph
     |> Scenic.Primitives.group(
-      fn graph -> render_lines(graph, frame, buf, font, colors) end,
+      fn graph ->
+        graph
+        |> render_lines(frame, buf, font, colors)
+        |> render_cursor(frame, buf, font, colors)
+      end,
       id: :text_group
+      # translate: {0, 5}
     )
   end
 
@@ -68,12 +74,12 @@ defmodule Quillex.GUI.Components.Buffer.Render do
   # Render line numbers
   def render_line_num(graph, idx, y_position, font, line_height) do
     graph
-    |> Scenic.Primitives.rect(
-      {@line_num_column_width, line_height},
-      translate: {0, y_position - font.ascent},
-      fill: {:color_rgba, @semi_transparent_white},
-      id: {:line_number_bg, idx}
-    )
+    # |> Scenic.Primitives.rect(
+    #   {@line_num_column_width, line_height},
+    #   translate: {0, y_position - font.ascent},
+    #   fill: {:color_rgba, @semi_transparent_white},
+    #   id: {:line_number_bg, idx}
+    # )
     |> Scenic.Primitives.text(
       "#{idx}",
       font_size: font.size,
@@ -105,6 +111,16 @@ defmodule Quillex.GUI.Components.Buffer.Render do
         font: font
       },
       id: :cursor
+    )
+  end
+
+  def render_line_numbers_background(graph, %{size: %{height: height}}, width) do
+    graph
+    |> Scenic.Primitives.rect(
+      {width, height},
+      # translate: {0, y_position - font.ascent},
+      fill: {:color_rgba, @semi_transparent_white}
+      # id: {:line_number_bg, idx}
     )
   end
 

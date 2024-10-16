@@ -66,4 +66,46 @@ defmodule Quillex.GUI.Components.Buffer.Mutator do
     # Update the buffer's data and set the dirty flag
     %{buf | data: updated_data, dirty?: true}
   end
+
+  def delete_char_before_cursor(buf, %Quillex.Structs.BufState.Cursor{} = cursor) do
+    line_index = cursor.line - 1
+    col_index = cursor.col - 1
+
+    cond do
+      # Cursor is not at the beginning of the line
+      col_index > 0 ->
+        current_line = Enum.at(buf.data, line_index)
+        {left_text, right_text} = String.split_at(current_line, col_index)
+        {left_text, _deleted_char} = String.split_at(left_text, -1)
+        updated_line = left_text <> right_text
+        updated_data = List.replace_at(buf.data, line_index, updated_line)
+        new_cursor = %{cursor | col: cursor.col - 1}
+        %{buf | data: updated_data, cursors: [new_cursor], dirty?: true}
+
+      # Cursor is at the beginning of a line that's not the first line
+      col_index == 0 and line_index > 0 ->
+        prev_line_index = line_index - 1
+        prev_line = Enum.at(buf.data, prev_line_index)
+        current_line = Enum.at(buf.data, line_index)
+        updated_line = prev_line <> current_line
+
+        updated_data =
+          buf.data
+          |> List.delete_at(line_index)
+          |> List.replace_at(prev_line_index, updated_line)
+
+        new_cursor = %{
+          cursor
+          | line: cursor.line - 1,
+            col: String.length(prev_line) + 1
+        }
+
+        %{buf | data: updated_data, cursors: [new_cursor], dirty?: true}
+
+      # Cursor is at the very beginning of the buffer
+      true ->
+        # Cannot delete before the start of the buffer
+        buf
+    end
+  end
 end
