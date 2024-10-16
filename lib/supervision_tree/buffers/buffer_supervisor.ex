@@ -15,7 +15,7 @@ defmodule Quillex.BufferSupervisor do
             lines = String.split(file_content, "\n")
 
             buf =
-              Quillex.Structs.Buffer.new(
+              Quillex.Structs.BufState.new(
                 Map.merge(args, %{data: lines, source: %{filepath: filepath}})
               )
 
@@ -32,7 +32,7 @@ defmodule Quillex.BufferSupervisor do
 
   def start_new_buffer_process(args) do
     # TODO this could be better (not validated input) but it's ok for now
-    buf = Quillex.Structs.Buffer.new(args)
+    buf = Quillex.Structs.BufState.new(args)
     do_start_buffer(buf)
   end
 
@@ -44,12 +44,12 @@ defmodule Quillex.BufferSupervisor do
     DynamicSupervisor.init(strategy: :one_for_one)
   end
 
-  def do_start_buffer(%Quillex.Structs.Buffer{} = buf) do
+  def do_start_buffer(%Quillex.Structs.BufState{} = buf) do
     spec = {Quillex.Buffer.Process, buf}
 
     {:ok, buffer_pid} = DynamicSupervisor.start_child(__MODULE__, spec)
 
-    buf_ref = Quillex.Structs.Buffer.BufRef.generate(buf, buffer_pid)
+    buf_ref = Quillex.Structs.BufState.BufRef.generate(buf, buffer_pid)
 
     {:ok, buf_ref}
   end
