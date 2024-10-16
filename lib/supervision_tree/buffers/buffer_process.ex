@@ -7,7 +7,8 @@ defmodule Quillex.Buffer.Process do
   """
   use GenServer
   use ScenicWidgets.ScenicEventsDefinitions
-  # alias Quillex.Structs.Buffer
+  alias Quillex.GUI.Components.Buffer
+  alias Quillex.Buffer.BufferManager
 
   # TODO this is the way... combine the buffer & the component!!
   # NOTE that didnt go so well actually... but good try
@@ -15,13 +16,13 @@ defmodule Quillex.Buffer.Process do
   # @behaviour Scenic.Component
   # use Scenic.Scene
 
-  def start_link(%Quillex.Structs.Buffer{} = buf) do
+  def start_link(%Quillex.Structs.BufState{} = buf) do
     buf_tag = {buf.uuid, __MODULE__}
     via_tuple = {:via, Registry, {Quillex.BufferRegistry, buf_tag}}
     GenServer.start_link(__MODULE__, buf, name: via_tuple)
   end
 
-  def init(%Quillex.Structs.Buffer{} = buf) do
+  def init(%Quillex.Structs.BufState{} = buf) do
     {:ok, _state = buf}
   end
 
@@ -29,17 +30,12 @@ defmodule Quillex.Buffer.Process do
     {:reply, {:ok, state}, state}
   end
 
-  def handle_cast({:action, a}, state) when is_tuple(a) do
-    # convenience API for single actions
-    handle_cast({:action, [a]}, state)
-  end
-
   def handle_cast({:action, actions}, state) when is_list(actions) do
     # TODO use wormhole here
     new_state =
       actions
       |> Enum.reduce(state, fn action, state_acc ->
-        Quillex.GUI.Components.Buffer.Reducer.process(state_acc, action)
+        Buffer.Reducer.process(state_acc, action)
         |> case do
           :ignore ->
             state_acc
@@ -66,8 +62,47 @@ defmodule Quillex.Buffer.Process do
     {:noreply, new_state}
   end
 
+  def handle_cast({:action, a}, state) when is_tuple(a) do
+    # convenience API for single actions
+    handle_cast({:action, [a]}, state)
+  end
+
+  #   # TODO handle_update, in such a way that we just go through init/3 again, but
+  #   # without needing to spin up sub-processes.... eliminate all the extra handle_cast logic
+
+  #   def handle_cast({:redraw, %{data: nil} = args}, scene) do
+  #     lines = [""]
+  #     GenServer.cast(self(), {:redraw, Map.put(args, :data, lines)})
+  #     {:noreply, scene}
+  #   end
+  #   def handle_cast({:redraw, %{data: text} = args}, scene) when is_bitstring(text) do
+  #     lines = String.split(text, @newline_char)
+  #     GenServer.cast(self(), {:redraw, Map.put(args, :data, lines)})
+  #     {:noreply, scene}
+  #   end
+
+  #   def handle_cast({:redraw, buffer}, scene) do
+  #     new_graph =
+  #       scene.assigns.graph
+  #       |> scroll_text_area(scene, buffer)
+  #       |> update_data(scene, buffer)
+  #       |> update_cursor(scene, buffer)
+
+  #     update_scroll_limits(scene, buffer)
+
+  #     if new_graph == scene.assigns.graph do
+  #       {:noreply, scene}
+  #     else
+  #       new_scene =
+  #         scene
+  #         |> assign(graph: new_graph)
+  #         |> push_graph(new_graph)
+
+  #       {:noreply, new_scene}
+  #     end
+  #   end
   def notify_gui(buf) do
-    Quillex.Buffer.BufferManager.send_to_gui_component(buf, {:state_change, buf})
+    BufferManager.send_to_gui_component(buf, {:state_change, buf})
   end
 end
 

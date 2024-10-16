@@ -10,3 +10,8 @@
 #    end
 
 # end
+
+#   def random_string do
+#     # https://dev.to/diogoko/random-strings-in-elixir-e8i
+#     for _ <- 1..10, into: "", do: <<Enum.random('0123456789abcdef')>>
+#   end

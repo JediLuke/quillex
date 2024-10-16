@@ -1,4 +1,4 @@
-defmodule Quillex.Structs.Buffer.Font do
+defmodule Quillex.Structs.BufState.Font do
   @moduledoc """
   Used to pass fonts to TextPad.
   """

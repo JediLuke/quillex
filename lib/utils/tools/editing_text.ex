@@ -137,7 +137,7 @@ defmodule QuillEx.Tools.TextEdit do
     |> Map.put(:line, new_line)
     |> Map.put(:col, new_col)
 
-    # new_cursor = Quillex.Structs.Buffer.Cursor.move(current_cursor, final_coords)
+    # new_cursor = Quillex.Structs.BufState.Cursor.move(current_cursor, final_coords)
 
     # new_cursor
   end

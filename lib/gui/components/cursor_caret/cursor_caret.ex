@@ -1,4 +1,4 @@
-defmodule Quillex.GUI.Component.Buffer.CursorCaret do
+defmodule Quillex.GUI.Components.Buffer.CursorCaret do
   use Scenic.Component
   use ScenicWidgets.ScenicEventsDefinitions
   require Logger

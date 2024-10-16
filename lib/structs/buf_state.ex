@@ -1,5 +1,5 @@
-defmodule Quillex.Structs.Buffer do
-  alias Quillex.Structs.Buffer.Cursor
+defmodule Quillex.Structs.BufState do
+  alias Quillex.Structs.BufState.Cursor
 
   @unnamed "unnamed"
 

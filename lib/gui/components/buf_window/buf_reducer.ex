@@ -1,12 +1,12 @@
 defmodule Quillex.GUI.Components.Buffer.Reducer do
   alias Quillex.GUI.Components.Buffer
 
-  def process(%Quillex.Structs.Buffer{} = buf, {:set_mode, m}) do
+  def process(%Quillex.Structs.BufState{} = buf, {:set_mode, m}) do
     buf
     |> Buffer.Mutator.set_mode(m)
   end
 
-  def process(%Quillex.Structs.Buffer{} = buf, {:move_cursor, direction, x}) do
+  def process(%Quillex.Structs.BufState{} = buf, {:move_cursor, direction, x}) do
     # {:ok, [cursor_pid]} = Scenic.Scene.child(scene, :cursor)
     # GenServer.cast(cursor_pid, {:move_cursor, :right, 1})
 
@@ -14,7 +14,17 @@ defmodule Quillex.GUI.Components.Buffer.Reducer do
     |> Buffer.Mutator.move_cursor(direction, x)
   end
 
-  def process(%Quillex.Structs.Buffer{} = buf, {:insert, text, :at_cursor}) do
+  def process(%Quillex.Structs.BufState{} = buf, {:newline, :at_cursor}) do
+    [c] = buf.cursors
+
+    buf
+    |> Buffer.Mutator.insert_new_line(:at_cursor)
+    |> Buffer.Mutator.move_cursor({c.line + 1, 1})
+
+    # |> Buffer.History.record_action({:newline, :at_cursor})
+  end
+
+  def process(%Quillex.Structs.BufState{} = buf, {:insert, text, :at_cursor}) do
     [c] = buf.cursors
     num_chars = String.length(text)
 
@@ -23,7 +33,7 @@ defmodule Quillex.GUI.Components.Buffer.Reducer do
     |> Buffer.Mutator.move_cursor(:right, num_chars)
   end
 
-  def process(%Quillex.Structs.Buffer{} = buf, action) do
+  def process(%Quillex.Structs.BufState{} = buf, action) do
     IO.puts("BUFFER REDUCER GOT ACTION: #{inspect(action)}")
     :ignore
   end
@@ -74,7 +84,7 @@ end
 #       when is_bitstring(text) do
 #     # TODO check this worked?? ok/error tuple
 #     new_buf =
-#       Quillex.Structs.Buffer.new(
+#       Quillex.Structs.BufState.new(
 #         Map.merge(args, %{
 #           id: {:buffer, name},
 #           type: :text,
@@ -98,7 +108,7 @@ end
 #         {:open_buffer, %{data: text, mode: buf_mode}}
 #       )
 #       when is_bitstring(text) do
-#     new_buf_name = Quillex.Structs.Buffer.new_untitled_buf_name(buf_list)
+#     new_buf_name = Quillex.Structs.BufState.new_untitled_buf_name(buf_list)
 #     process(radix_state, {:open_buffer, %{name: new_buf_name, data: text, mode: buf_mode}})
 #   end
 
@@ -135,7 +145,7 @@ end
 #     edit_buf_cursor = hd(edit_buf.cursors)
 
 #     new_cursor =
-#       Quillex.Structs.Buffer.Cursor.calc_text_insertion_cursor_movement(edit_buf_cursor, text)
+#       Quillex.Structs.BufState.Cursor.calc_text_insertion_cursor_movement(edit_buf_cursor, text)
 
 #     new_radix_state =
 #       radix_state
@@ -286,7 +296,7 @@ end
 #     #     candidate_coords
 #     #   end
 
-#     # new_cursor = Quillex.Structs.Buffer.Cursor.move(buf_cursor, final_coords)
+#     # new_cursor = Quillex.Structs.BufState.Cursor.move(buf_cursor, final_coords)
 
 #     new_radix_state =
 #       radix_state
@@ -336,7 +346,7 @@ end
 #       when is_bitstring(text) do
 #     # TODO check this worked?? ok/error tuple
 #     # new_buf =
-#     #   Quillex.Structs.Buffer.new(
+#     #   Quillex.Structs.BufState.new(
 #     #     Map.merge(args, %{
 #     #       id: {:buffer, name},
 #     #       type: :text,
@@ -362,7 +372,7 @@ end
 #         {:open_buffer, %{data: text, mode: buf_mode}}
 #       )
 #       when is_bitstring(text) do
-#     new_buf_name = Quillex.Structs.Buffer.new_untitled_buf_name(buf_list)
+#     new_buf_name = Quillex.Structs.BufState.new_untitled_buf_name(buf_list)
 #     process(radix_state, {:open_buffer, %{name: new_buf_name, data: text, mode: buf_mode}})
 #   end
 
@@ -399,7 +409,7 @@ end
 #     edit_buf_cursor = hd(edit_buf.cursors)
 
 #     new_cursor =
-#       Quillex.Structs.Buffer.Cursor.calc_text_insertion_cursor_movement(edit_buf_cursor, text)
+#       Quillex.Structs.BufState.Cursor.calc_text_insertion_cursor_movement(edit_buf_cursor, text)
 
 #     new_radix_state =
 #       radix_state
@@ -550,7 +560,7 @@ end
 #     #     candidate_coords
 #     #   end
 
-#     # new_cursor = Quillex.Structs.Buffer.Cursor.move(buf_cursor, final_coords)
+#     # new_cursor = Quillex.Structs.BufState.Cursor.move(buf_cursor, final_coords)
 
 #     new_radix_state =
 #       radix_state
@@ -616,7 +626,7 @@ end
 #      radix_state
 #      |> put_in([:editor, :buffers], buf_list |> Enum.map(fn
 #         %{id: ^old_buf_id} = old_buf ->
-#            Quillex.Structs.Buffer.update(old_buf, changes)
+#            Quillex.Structs.BufState.update(old_buf, changes)
 #         any_other_buffer ->
 #            any_other_buffer
 #      end))

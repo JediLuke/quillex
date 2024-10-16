@@ -1,7 +1,10 @@
-defmodule Quillex.Structs.Buffer.Cursor do
+defmodule Quillex.Structs.BufState.Cursor do
+  use ScenicWidgets.Core.Utils.CustomGuards
+
   defstruct [
     # TODO maybe we don't need cursor nums, we can just use the place in the list of cursors as their number...
     # which number cursor this is in the buffer, cursor 1 is considered the main cursor
+    # TODO consider using UUId to identify cursors
     num: nil,
     # which line the cursor is on
     line: 1,
@@ -13,6 +16,13 @@ defmodule Quillex.Structs.Buffer.Cursor do
 
   def new do
     %__MODULE__{}
+  end
+
+  def new(line, col) when all_positive_integers(line, col) do
+    %__MODULE__{
+      line: line,
+      col: col
+    }
   end
 
   # def new(%{num: n}) when is_integer(n) and n >= 1 do

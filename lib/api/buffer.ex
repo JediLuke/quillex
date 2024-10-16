@@ -5,7 +5,7 @@ defmodule Quillex.Buffer do
   defdelegate open(args), to: Quillex.Buffer.BufferManager, as: :open_buffer
 
   # # TODO maybe rename slate or quill one day...
-  # alias Quillex.Structs.Buffer.Cursor
+  # alias Quillex.Structs.BufState.Cursor
 
   # @valid_types [:text, :list]
   # @vim_modes [{:vim, :insert}, {:vim, :normal}]
@@ -146,3 +146,23 @@ defmodule Quillex.Buffer do
   #   nil
   # end
 end
+
+# defmodule QuillEx.GUI.Components.PlainText do
+#   # this module renders text inside a frame, but it can't be scrolled & has no rich-text or "smart" display, e.g. it can't handle tabs
+#   use Scenic.Component
+#   alias Widgex.Structs.{Coordinates, Dimensions}
+
+#   # Define the struct for PlainText
+#   # We could have 2 structs, one which is the state, and one which is the component
+#   # instead of defstruct macro, use like defwidget or defcomponent
+#   defstruct id: nil,
+#             widgex: %{
+#               id: :plaintext
+#             },
+#             text: nil,
+#             theme: nil,
+#             scroll: {0, 0},
+#             file_bar: %{
+#               show?: true,
+#               filename: nil
+#             }

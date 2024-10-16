@@ -11,6 +11,10 @@ defmodule Quillex.GUI.Components.Buffer.UserInputHandler.VimKeyMappings.InsertMo
     {:set_mode, {:vim, :normal}}
   end
 
+  def handle(_buf, @enter_key) do
+    {:newline, :at_cursor}
+  end
+
   def handle(_buf, input) when input in @arrow_keys do
     case input do
       @left_arrow -> {:move_cursor, :left, 1}

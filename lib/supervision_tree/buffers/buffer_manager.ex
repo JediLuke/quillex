@@ -36,7 +36,7 @@ defmodule Quillex.Buffer.BufferManager do
   # end
 
   # a convenience function to make it easy to forward user input to the GUI component
-  # def fwd_input(%Quillex.Structs.Buffer.BufRef{} = buf_ref, input) do
+  # def fwd_input(%Quillex.Structs.BufState.BufRef{} = buf_ref, input) do
   #   case Registry.lookup(Quillex.BufferRegistry, {buf_ref.uuid, __MODULE__}) do
   #     [{pid, _meta}] ->
   #       send(pid, {:user_input_fwd, input})
@@ -91,7 +91,7 @@ defmodule Quillex.Buffer.BufferManager do
   def handle_call({:open_buffer, args}, _from, state) do
     # TODO check we're not trying to open the same buffer twice
     case Quillex.BufferSupervisor.start_new_buffer_process(args) do
-      {:ok, %Quillex.Structs.Buffer.BufRef{} = buf_ref} ->
+      {:ok, %Quillex.Structs.BufState.BufRef{} = buf_ref} ->
         {:reply, {:ok, buf_ref}, state}
 
       {:error, :file_not_found} ->

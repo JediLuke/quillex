@@ -1,4 +1,4 @@
-defmodule Quillex.Structs.Buffer.BufRef do
+defmodule Quillex.Structs.BufState.BufRef do
   defstruct [
     :uuid,
     :pid,
@@ -9,7 +9,7 @@ defmodule Quillex.Structs.Buffer.BufRef do
     # TODO needs a source, for filenames - we will try without it for a while & see
   ]
 
-  def generate(%Quillex.Structs.Buffer{} = buf, pid) when is_pid(pid) do
+  def generate(%Quillex.Structs.BufState{} = buf, pid) when is_pid(pid) do
     %__MODULE__{
       uuid: buf.uuid,
       name: buf.name,

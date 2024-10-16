@@ -1,16 +1,16 @@
-defmodule Quillex.Structs.BufferTest do
+defmodule Quillex.Structs.BufStateTest do
   use ExUnit.Case
-  alias Quillex.Structs.Buffer
+  alias Quillex.Structs.BufState
 
   test "make a new Buffer" do
     new_buf = Buffer.new(%{id: {:buffer, "luke_buf"}})
 
-    assert new_buf == %Quillex.Structs.Buffer{
+    assert new_buf == %Quillex.Structs.BufState{
              id: {:buffer, "luke_buf"},
              name: "luke_buf",
              type: :text,
              data: "",
-             cursors: [%Quillex.Structs.Buffer.Cursor{num: 1, line: 1, col: 1}],
+             cursors: [%Quillex.Structs.BufState.Cursor{num: 1, line: 1, col: 1}],
              history: [],
              scroll_acc: {0, 0},
              read_only?: false
@@ -228,18 +228,18 @@ end
 #     end
 #   end
 
-# defmodule Quillex.Structs.BufferTest do
+# defmodule Quillex.Structs.BufStateTest do
 #     use ExUnit.Case
-#     alias Quillex.Structs.Buffer
+#     alias Quillex.Structs.BufState
 
 #     test "make a new Buffer" do
 #         new_buf = Buffer.new(%{id: {:buffer, "luke_buf"}})
-#         assert new_buf == %Quillex.Structs.Buffer{
+#         assert new_buf == %Quillex.Structs.BufState{
 #             id: {:buffer, "luke_buf"},
 #             name: "luke_buf",
 #             data: nil,
 #             details: nil,
-#             cursors: [%Quillex.Structs.Buffer.Cursor{num: 1, line: 1, col: 1}],
+#             cursors: [%Quillex.Structs.BufState.Cursor{num: 1, line: 1, col: 1}],
 #             history: [],
 #             scroll_acc: {0, 0},
 #             read_only?: false
