@@ -1,30 +1,249 @@
+# defmodule Quillex.GUI.Components.Buffer.UserInputHandler.VimKeyMappings.NormalMode do
+#   use ScenicWidgets.ScenicEventsDefinitions
+
+#   def handle(_buf, @lowercase_i) do
+#     {:set_mode, {:vim, :insert}}
+#   end
+
+#   # hjkl navigation
+#   def handle(_buf, @lowercase_h) do
+#     {:move_cursor, :left, 1}
+#   end
+
+#   def handle(_buf, @lowercase_j) do
+#     {:move_cursor, :down, 1}
+#   end
+
+#   def handle(_buf, @lowercase_k) do
+#     {:move_cursor, :up, 1}
+#   end
+
+#   def handle(_buf, @lowercase_l) do
+#     {:move_cursor, :right, 1}
+#   end
+
+#   def handle(_buf, input) do
+#     IO.puts("NormalMode: Unhandled input: #{inspect(input)}")
+#     :ignore
+#   end
+# end
+
 defmodule Quillex.GUI.Components.Buffer.UserInputHandler.VimKeyMappings.NormalMode do
   use ScenicWidgets.ScenicEventsDefinitions
 
-  def handle(_buf, @lowercase_i) do
+  # Handle held keys as repeated presses
+  def handle(buf, {:key, {key, @key_held, mods}}) do
+    handle(buf, {:key, {key, @key_pressed, mods}})
+  end
+
+  # Reset operator and count on Escape
+  def handle(buf, @escape_key) do
+    buf = reset_operator_and_count(buf)
+    {:set_mode, {:vim, :normal}}
+  end
+
+  # Enter insert mode with 'i'
+  def handle(buf, @lowercase_i) do
+    buf = reset_operator_and_count(buf)
     {:set_mode, {:vim, :insert}}
   end
 
-  # hjkl navigation
-  def handle(_buf, @lowercase_h) do
-    {:move_cursor, :left, 1}
+  # Enter insert mode after the cursor with 'a'
+  def handle(buf, @lowercase_a) do
+    buf = reset_operator_and_count(buf)
+
+    [
+      {:move_cursor, :right, 1},
+      {:set_mode, {:vim, :insert}}
+    ]
   end
 
-  def handle(_buf, @lowercase_j) do
-    {:move_cursor, :down, 1}
+  # Open a new line below and enter insert mode with 'o'
+  def handle(buf, @lowercase_o) do
+    buf = reset_operator_and_count(buf)
+
+    [
+      {:move_cursor, :line_end},
+      {:newline, :below_cursor},
+      {:set_mode, {:vim, :insert}}
+    ]
   end
 
-  def handle(_buf, @lowercase_k) do
-    {:move_cursor, :up, 1}
+  # Open a new line above and enter insert mode with 'O'
+  def handle(buf, @uppercase_O) do
+    buf = reset_operator_and_count(buf)
+
+    [
+      {:move_cursor, :line_start},
+      {:newline, :above_cursor},
+      {:set_mode, {:vim, :insert}}
+    ]
   end
 
-  def handle(_buf, @lowercase_l) do
-    {:move_cursor, :right, 1}
+  # Cursor movement commands
+  def handle(buf, input) when input in [@lowercase_h, @lowercase_j, @lowercase_k, @lowercase_l] do
+    buf = reset_operator_and_count(buf)
+
+    movement =
+      case input do
+        @lowercase_h -> :left
+        @lowercase_j -> :down
+        @lowercase_k -> :up
+        @lowercase_l -> :right
+      end
+
+    {:move_cursor, movement, buf.count || 1}
   end
 
-  def handle(_buf, input) do
+  # Arrow keys navigation
+  def handle(buf, input) when input in @arrow_keys do
+    buf = reset_operator_and_count(buf)
+
+    movement =
+      case input do
+        @left_arrow -> :left
+        @up_arrow -> :up
+        @right_arrow -> :right
+        @down_arrow -> :down
+      end
+
+    {:move_cursor, movement, buf.count || 1}
+  end
+
+  # 0 moves to the beginning of the line
+  def handle(buf, @number_0) do
+    buf = reset_operator_and_count(buf)
+    {:move_cursor, :line_start}
+  end
+
+  # $ moves to the end of the line
+  def handle(buf, @dollar_sign) do
+    buf = reset_operator_and_count(buf)
+    {:move_cursor, :line_end}
+  end
+
+  # 'w' moves to the next word
+  def handle(buf, @lowercase_w) do
+    handle_movement(buf, :next_word)
+  end
+
+  # 'b' moves to the previous word
+  def handle(buf, @lowercase_b) do
+    handle_movement(buf, :prev_word)
+  end
+
+  # 'e' moves to the end of the word
+  def handle(buf, @lowercase_e) do
+    handle_movement(buf, :end_of_word)
+  end
+
+  # 'x' deletes the character under the cursor
+  def handle(buf, @lowercase_x) do
+    count = buf.count || 1
+    buf = reset_operator_and_count(buf)
+    {:delete_chars, :at_cursor, count}
+  end
+
+  # 'u' undoes the last change
+  def handle(buf, @lowercase_u) do
+    buf = reset_operator_and_count(buf)
+    {:undo}
+  end
+
+  # 'r' redoes the change
+  def handle(buf, @ctrl_r) do
+    buf = reset_operator_and_count(buf)
+    {:redo}
+  end
+
+  # Handle operators like 'd', 'y', 'c'
+  def handle(buf = %{operator: op}, key) when op in [:d, :y, :c] do
+    action = operator_action(buf.operator, key, buf.count || 1)
+    buf = reset_operator_and_count(buf)
+    action
+  end
+
+  # Start operator pending state
+  def handle(buf, key) when key in [@lowercase_d, @lowercase_y, @lowercase_c] do
+    Map.put(buf, :operator, operator_key(key))
+  end
+
+  # Handle 'gg' command to move to the first line
+  def handle(buf = %{previous_key: @lowercase_g}, @lowercase_g) do
+    buf = reset_operator_and_count(buf)
+    {:move_cursor, :first_line}
+  end
+
+  # Start 'g' command
+  def handle(buf, @lowercase_g) do
+    Map.put(buf, :previous_key, @lowercase_g)
+  end
+
+  # Handle counts (numbers)
+  def handle(buf, key) when key in @number_keys do
+    digit = key_to_digit(key)
+    count = (buf.count || 0) * 10 + digit
+    Map.put(buf, :count, count)
+  end
+
+  # Unhandled inputs
+  def handle(buf, input) do
+    buf = reset_operator_and_count(buf)
     IO.puts("NormalMode: Unhandled input: #{inspect(input)}")
     :ignore
+  end
+
+  # Helper functions
+
+  defp reset_operator_and_count(buf) do
+    buf
+    |> Map.delete(:operator)
+    |> Map.delete(:count)
+    |> Map.delete(:previous_key)
+  end
+
+  defp handle_movement(buf, motion) do
+    count = buf.count || 1
+
+    action =
+      case buf.operator do
+        :d -> {:delete_motion, motion, count}
+        :y -> {:yank_motion, motion, count}
+        :c -> [{:delete_motion, motion, count}, {:set_mode, {:vim, :insert}}]
+        nil -> {:move_cursor, motion, count}
+      end
+
+    reset_operator_and_count(buf)
+    action
+  end
+
+  defp operator_action(:d, key, count) do
+    case key do
+      @lowercase_d -> {:delete_line, count}
+      _ -> :ignore
+    end
+  end
+
+  defp operator_action(:y, key, count) do
+    case key do
+      @lowercase_y -> {:yank_line, count}
+      _ -> :ignore
+    end
+  end
+
+  defp operator_action(:c, key, count) do
+    case key do
+      @lowercase_c -> [{:delete_line, count}, {:set_mode, {:vim, :insert}}]
+      _ -> :ignore
+    end
+  end
+
+  defp operator_key(@lowercase_d), do: :d
+  defp operator_key(@lowercase_y), do: :y
+  defp operator_key(@lowercase_c), do: :c
+
+  defp key_to_digit(key) do
+    Enum.find_index(@number_keys, fn k -> k == key end)
   end
 end
 

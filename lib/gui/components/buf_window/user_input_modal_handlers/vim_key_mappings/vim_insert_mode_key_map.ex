@@ -1,20 +1,47 @@
 defmodule Quillex.GUI.Components.Buffer.UserInputHandler.VimKeyMappings.InsertMode do
   use ScenicWidgets.ScenicEventsDefinitions
 
-  # treat held down keys as repeated presses
+  # Treat held down keys as repeated presses
   def handle(buf, {:key, {key, @key_held, mods}}) do
     handle(buf, {:key, {key, @key_pressed, mods}})
   end
 
-  # escape boots us back out to normal mode
-  def handle(_buf, @escape_key) do
+  # Escape, Ctrl-C, and Ctrl-[ exit insert mode
+  def handle(_buf, input) when input in [@escape_key, @ctrl_c, @ctrl_open_bracket] do
     {:set_mode, {:vim, :normal}}
   end
 
+  # Enter key inserts a newline
   def handle(_buf, @enter_key) do
     {:newline, :at_cursor}
   end
 
+  # Backspace and Ctrl-H delete character before cursor
+  def handle(_buf, input) when input in [@backspace_key, @ctrl_h] do
+    {:delete, :before_cursor}
+  end
+
+  # Delete key deletes character after cursor
+  def handle(_buf, @delete_key) do
+    {:delete, :at_cursor}
+  end
+
+  # Ctrl-W deletes previous word
+  def handle(_buf, @ctrl_w) do
+    :delete_previous_word
+  end
+
+  # Ctrl-U deletes to beginning of line
+  def handle(_buf, @ctrl_u) do
+    :delete_to_start_of_line
+  end
+
+  # Tab key inserts a tab character
+  def handle(_buf, @tab_key) do
+    {:insert, "\t", :at_cursor}
+  end
+
+  # Arrow keys move cursor
   def handle(_buf, input) when input in @arrow_keys do
     case input do
       @left_arrow -> {:move_cursor, :left, 1}
@@ -24,10 +51,22 @@ defmodule Quillex.GUI.Components.Buffer.UserInputHandler.VimKeyMappings.InsertMo
     end
   end
 
-  def handle(_buf, input) when input in @all_letters do
+  # Home key moves cursor to the beginning of the line
+  def handle(_buf, @home_key) do
+    {:move_cursor, :line_start}
+  end
+
+  # End key moves cursor to the end of the line
+  def handle(_buf, @end_key) do
+    {:move_cursor, :line_end}
+  end
+
+  # Valid text input characters (letters, numbers, punctuation, space, etc.)
+  def handle(_buf, input) when input in @valid_text_input_characters do
     {:insert, key2string(input), :at_cursor}
   end
 
+  # Unhandled inputs
   def handle(_buf, input) do
     IO.puts("InsertMode: Unhandled input: #{inspect(input)}")
     :ignore
