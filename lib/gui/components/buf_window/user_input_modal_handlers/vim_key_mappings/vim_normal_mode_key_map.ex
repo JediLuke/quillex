@@ -28,6 +28,54 @@
 #   end
 # end
 
+# Step 2: Enter Editing Mode
+
+# To enter editing/insert mode use any of the following commands based on your preference,
+
+# Command
+
+# Description
+
+# i
+
+# Press “i” to enter insert mode before the cursor.
+
+# I
+
+# Press “I” to enter insert mode at the beginning of the current line.
+
+# a
+
+# Press “a” to enter insert mode after the cursor.
+
+# A
+
+# Press “A” to enter insert mode at the end of the current line.
+
+# o
+
+# Press “o” to open a new line below the current line and enter insert mode.
+
+# O
+
+# Press “O” to open a new line above the current line and enter insert mode.
+
+# While many commands exist, here are a few basics:
+
+# x: Delete the character under the cursor
+
+# dd: Delete the current line
+
+# yy: Yank (copy) the current line
+
+# p: Paste the yanked content
+
+# w: Move the cursor to the next word
+
+# b: Move the cursor to the beginning of the word
+
+# e: Move the cursor to the end of the word
+
 defmodule Quillex.GUI.Components.Buffer.UserInputHandler.VimKeyMappings.NormalMode do
   use ScenicWidgets.ScenicEventsDefinitions
 

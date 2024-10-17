@@ -85,7 +85,8 @@ defmodule Quillex.GUI.Components.Buffer.Render do
       font_size: font.size,
       font: font.name,
       fill: :black,
-      translate: {5, y_position},
+      text_align: :right,
+      translate: {@line_num_column_width - 5, y_position},
       id: {:line_number_text, idx}
     )
   end
