@@ -40,6 +40,23 @@ defmodule Quillex.GUI.Components.Buffer.Reducer do
     |> Buffer.Mutator.delete_char_before_cursor(cursor)
   end
 
+  # def process(%{uuid: buf_uuid, source: nil} = buf, {:save, buf_uuid}) do
+  #   # {:cast_parent, {:save, buf_uuid}}
+  #   # raise "how did we even get here"
+
+  #   # send a request to GUI to go into "request save" mode I guess?
+
+  #   buf
+  #   # TODO add "save_requested" or something to the buf
+  # end
+
+  # def process(%{uuid: buf_uuid, source: %{filename: f}} = buf, {:save, buf_uuid}) do
+  #   # since we can't save if we don't know the filename, we need to push this
+  #   # back to the GUI and request they open a save GUI or something
+  #   IO.puts("GOT REQ TO SAVE IN BUF CMPNT BUT CANT CAUSE NO FILENAME, FWDing...")
+  #   {:fwd, Quillex.GUI.Components.Buffer, {:request_save, %{uuid: buf.uuid}}}
+  # end
+
   def process(%Quillex.Structs.BufState{} = buf, action) do
     IO.puts("BUFFER REDUCER GOT ACTION: #{inspect(action)}")
     :ignore

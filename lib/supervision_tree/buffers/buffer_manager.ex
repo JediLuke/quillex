@@ -83,7 +83,7 @@ defmodule Quillex.Buffer.BufferManager do
       [{pid, _meta}] ->
         send(pid, msg)
 
-      _else ->
+      [] ->
         raise "Could not find Buffer process, uuid: #{inspect(buf_uuid)}"
     end
   end

@@ -25,6 +25,7 @@ defmodule Quillex.GUI.Components.Buffer.Render do
         |> Scenic.Primitives.rect(frame.size.box, fill: colors.slate)
         |> render_line_numbers_background(frame, @line_num_column_width)
         |> render_text(frame, buf, font, colors)
+        |> render_status_bar(frame, buf)
 
         # |> render_active_row_decoration(frame, buf, font, colors)
       end,
@@ -122,6 +123,17 @@ defmodule Quillex.GUI.Components.Buffer.Render do
       # translate: {0, y_position - font.ascent},
       fill: {:color_rgba, @semi_transparent_white}
       # id: {:line_number_bg, idx}
+    )
+  end
+
+  @status_bar_height 40
+  def render_status_bar(graph, frame, buf) do
+    graph
+    |> Scenic.Primitives.rect(
+      {frame.size.width, @status_bar_height},
+      translate: {0, frame.size.height - @status_bar_height},
+      fill: :grey,
+      id: :status_bar
     )
   end
 

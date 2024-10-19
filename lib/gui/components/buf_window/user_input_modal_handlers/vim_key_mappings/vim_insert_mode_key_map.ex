@@ -26,15 +26,22 @@ defmodule Quillex.GUI.Components.Buffer.UserInputHandler.VimKeyMappings.InsertMo
     {:delete, :at_cursor}
   end
 
-  # Ctrl-W deletes previous word
-  def handle(_buf, @ctrl_w) do
-    :delete_previous_word
+  # ctrl-s saves the buffer
+  def handle(buf, @ctrl_s) do
+    # TODO we should be passing around BuifRefs, not stupid refs like this,
+    # I got caught sending just the UUID instead of the map, waste of time...
+    {:request_save, %{uuid: buf.uuid}}
   end
 
-  # Ctrl-U deletes to beginning of line
-  def handle(_buf, @ctrl_u) do
-    :delete_to_start_of_line
-  end
+  # # Ctrl-W deletes previous word
+  # def handle(_buf, @ctrl_w) do
+  #   :delete_previous_word
+  # end
+
+  # # Ctrl-U deletes to beginning of line
+  # def handle(_buf, @ctrl_u) do
+  #   :delete_to_start_of_line
+  # end
 
   # Tab key inserts a tab character
   def handle(_buf, @tab_key) do

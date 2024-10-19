@@ -108,7 +108,7 @@ defmodule Quillex.GUI.Components.Buffer do
     # we want to resist re-rendering all the time, instead we modify the graph
     # to reflect the changes in the buffer state. It's a bit more work, but it's
     # worth it for performance reasons
-    IO.inspect(new_state, label: "NEW STATE")
+    # IO.inspect(new_state, label: "NEW STATE")
 
     new_scene = Buffer.Render.re_render_scene(scene, new_state)
 
@@ -118,6 +118,11 @@ defmodule Quillex.GUI.Components.Buffer do
 
     {:noreply, new_scene}
   end
+
+  # def handle_info({:buffer_request, msgs}, scene) do
+  #   IO.puts("YEH YEH WE GOT YOUR LOUSY #{inspect(msgs)}")
+  #   {:noreply, scene}
+  # end
 end
 
 # TODO
