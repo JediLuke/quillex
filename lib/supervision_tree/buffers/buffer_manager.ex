@@ -46,6 +46,20 @@ defmodule Quillex.Buffer.BufferManager do
   #   end
   # end
 
+  def call_buffer(%{uuid: buf_uuid}, msg) do
+    Registry.lookup(
+      Quillex.BufferRegistry,
+      {buf_uuid, Quillex.Buffer.Process}
+    )
+    |> case do
+      [{pid, _meta}] ->
+        GenServer.call(pid, msg)
+
+      [] ->
+        raise "Could not find Buffer process, uuid: #{inspect(buf_uuid)}"
+    end
+  end
+
   # this encapsulates the logic of sending messages to buffers,
   # so that we're not just casting direct to specific (potentially stale) pid references
   def cast_to_buffer(%{uuid: buf_uuid}, msg) do

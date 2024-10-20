@@ -40,6 +40,25 @@ defmodule Quillex.Buffer.Process do
           :ignore ->
             state_acc
 
+          # {:cast_parent, actions} ->
+          #   # in these situations we need to pass the action back up to the parent,
+          #   # this can happen when "exceptions" occur e.g. we get an action
+          #   # to save a file, but we don't have a filename to save it to
+          #   # cast_parent(scene, {:action, actions})
+          #   state_acc
+
+          # the above seems correct until you realise that this is the _buffer_
+          # process, not the GUI component, so we can't just cast_parent because
+          # we aren't in the Scenic process tree - buffers are kind of weird this way
+          # so we need to re-route the action to the GUI component, potentially,
+          # or some other kind of "request" e.g. {:req_save, buf_ref}
+
+          # :re_routed ->
+          #   state_acc
+          # {:fwd, Quillex.GUI.Components.Buffer, msgs} ->
+          #   BufferManager.send_to_gui_component(state_acc, {:buffer_request, msgs})
+          #   state_acc
+
           new_state ->
             new_state
         end

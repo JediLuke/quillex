@@ -951,9 +951,6 @@ end
 #     scene
 #   end
 
-#   # defp convert_lines_to_text(lines) when is_list(lines) do
-#   #   Enum.join(lines, "\n")
-#   # end
 # end
 
 # #   # This is the left-hand margin, text-editors just look better with a bit of left margin
@@ -1016,15 +1013,3 @@ end
 # # end)
 
 # # TODO maybe send it a list of lines instead? Do the rope calc here??
-
-# # this is the very direct method, the way above is actually
-# # treating the rendering of each line as a separate operation,
-# # which is probably the way to go
-# # graph
-# # |> Scenic.Primitives.text(
-# #   convert_lines_to_text(lines),
-# #   font_size: font.size,
-# #   font: font.name,
-# #   fill: colors.text,
-# #   translate: {10, font.ascent + 10}
-# # )
