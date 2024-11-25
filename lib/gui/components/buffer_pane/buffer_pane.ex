@@ -1,8 +1,8 @@
 # TODO rename to BufrWindow
-defmodule Quillex.GUI.Components.Buffer do
+defmodule Quillex.GUI.Components.BufferPane do
   use Scenic.Component
   use ScenicWidgets.ScenicEventsDefinitions
-  alias Quillex.GUI.Components.Buffer
+  alias Quillex.GUI.Components.BufferPane
 
   # This creates a text-input interface like Notepad/Gedit.
 
@@ -61,14 +61,14 @@ defmodule Quillex.GUI.Components.Buffer do
     buf =
       if buf.data == [] do
         buf
-        |> Buffer.Mutator.insert_text({1, 1}, "#{@no_limits_to_tomorrow}")
+        |> BufferPane.Mutator.insert_text({1, 1}, "#{@no_limits_to_tomorrow}")
       else
         buf
       end
 
     colors = @cauldron
 
-    graph = Buffer.Render.go(data.frame, buf, data.font, colors)
+    graph = BufferPane.Renderizer.go(data.frame, buf, data.font, colors)
 
     init_scene =
       scene
@@ -79,28 +79,9 @@ defmodule Quillex.GUI.Components.Buffer do
       |> assign(colors: colors)
       |> push_graph(graph)
 
-    register_process(data.buf_ref)
+    Registry.register(Quillex.BufferRegistry, {data.buf_ref.uuid, __MODULE__}, nil)
 
     {:ok, init_scene}
-  end
-
-  def register_process(buf_ref) do
-    # this will register the GUI widget the same way we register the actual Buffer process
-    Registry.register(Quillex.BufferRegistry, {buf_ref.uuid, __MODULE__}, nil)
-  end
-
-  def handle_info({:user_input_fwd, input}, scene) do
-    # the GUI component converts raw user input to actions,
-    # which are then passed back up the component tree for processing
-    case Buffer.UserInputHandler.handle(scene.assigns.state, input) do
-      :ignore ->
-        {:noreply, scene}
-
-      actions ->
-        # TODO consider remembering & passing back the %BufRef{} here, though this gets the job done
-        cast_parent(scene, {:gui_action, %{uuid: scene.assigns.state.uuid}, actions})
-        {:noreply, scene}
-    end
   end
 
   def handle_info({:state_change, new_state}, %{assigns: %{state: old_state}} = scene) do
@@ -110,7 +91,7 @@ defmodule Quillex.GUI.Components.Buffer do
     # worth it for performance reasons
     # IO.inspect(new_state, label: "NEW STATE")
 
-    new_scene = Buffer.Render.re_render_scene(scene, new_state)
+    new_scene = BufferPane.Renderizer.re_render_scene(scene, new_state)
 
     # TODO maybe this code below  will work to optimize not calling push_graph if we dont need to? Is this a significant saving?
     # if new_scene.assigns.graph != scene.assigns.graph do
@@ -119,10 +100,20 @@ defmodule Quillex.GUI.Components.Buffer do
     {:noreply, new_scene}
   end
 
-  # def handle_info({:buffer_request, msgs}, scene) do
-  #   IO.puts("YEH YEH WE GOT YOUR LOUSY #{inspect(msgs)}")
-  #   {:noreply, scene}
-  # end
+  def handle_info({:user_input, input}, scene) do
+    # the GUI component converts raw user input to actions,
+    # which are then passed back up the component tree for processing
+    IO.puts "GOT USER INPUT #{inspect input}"
+    case BufferPane.UserInputHandler.handle(scene.assigns.state, input) do
+      :ignore ->
+        {:noreply, scene}
+
+      actions ->
+        # TODO consider remembering & passing back the %BufRef{} here, though this gets the job done
+        cast_parent(scene, {:action, %{uuid: scene.assigns.state.uuid}, actions})
+        {:noreply, scene}
+    end
+  end
 end
 
 # TODO
@@ -212,8 +203,8 @@ end
 # #   {:noreply, scene}
 # # end
 
-# # GenServer.cast(pid, {:redraw, %{data: active_buffer.data, cursor: hd(active_buffer.cursors)}})
-# # GenServer.cast(pid, {:redraw, %{scroll_acc: active_buffer.scroll_acc}})
+# # GenServer.cast(pid, {:redraw, %{data: active_BufferPane.data, cursor: hd(active_BufferPane.cursors)}})
+# # GenServer.cast(pid, {:redraw, %{scroll_acc: active_BufferPane.scroll_acc}})
 # # def handle_update(%{text: t, cursor: %Cursor{} = c, scroll_acc: s} = data, opts, scene) when is_bitstring(t) do
 
 # # TODO ok this is stupid, we need to go through validate/1 to use this, even though most of it is a waste of time...

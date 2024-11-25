@@ -4,17 +4,18 @@ defmodule Quillex.Buffer.Process do
   of the GUI, it runs under the Buffer SUpervision tree.
 
   Ignore user input in the actual Buffer process, wait for the GUI to convert it to actions
-  """
-  use GenServer
-  use ScenicWidgets.ScenicEventsDefinitions
-  alias Quillex.GUI.Components.Buffer
-  alias Quillex.Buffer.BufferManager
 
-  # TODO this is the way... combine the buffer & the component!!
+
+    # TODO this is the way... combine the buffer & the component!!
   # NOTE that didnt go so well actually... but good try
   # use Scenic.Component
   # @behaviour Scenic.Component
   # use Scenic.Scene
+
+
+  """
+  use GenServer
+  alias Quillex.GUI.Components.BufferPane
 
   def start_link(%Quillex.Structs.BufState{} = buf) do
     buf_tag = {buf.uuid, __MODULE__}
@@ -30,12 +31,12 @@ defmodule Quillex.Buffer.Process do
     {:reply, {:ok, state}, state}
   end
 
-  def handle_cast({:action, actions}, state) when is_list(actions) do
+  def handle_call({:action, actions}, _from, state) when is_list(actions) do
     # TODO use wormhole here
     new_state =
       actions
       |> Enum.reduce(state, fn action, state_acc ->
-        Buffer.Reducer.process(state_acc, action)
+        BufferPane.Reducer.process(state_acc, action)
         |> case do
           :ignore ->
             state_acc
@@ -78,12 +79,12 @@ defmodule Quillex.Buffer.Process do
 
     notify_gui(new_state)
 
-    {:noreply, new_state}
+    {:reply, :ok, new_state}
   end
 
-  def handle_cast({:action, a}, state) when is_tuple(a) do
+  def handle_call({:action, a}, from, state) when is_tuple(a) do
     # convenience API for single actions
-    handle_cast({:action, [a]}, state)
+    handle_call({:action, [a]}, from, state)
   end
 
   #   # TODO handle_update, in such a way that we just go through init/3 again, but
@@ -121,7 +122,7 @@ defmodule Quillex.Buffer.Process do
   #     end
   #   end
   def notify_gui(buf) do
-    BufferManager.send_to_gui_component(buf, {:state_change, buf})
+    Quillex.Buffer.BufferManager.send_to_gui_component(buf, {:state_change, buf})
   end
 end
 

@@ -1,5 +1,5 @@
-defmodule Quillex.GUI.Components.Buffer.Render do
-  alias Quillex.GUI.Components.Buffer
+defmodule Quillex.GUI.Components.BufferPane.Renderizer do
+  alias Quillex.GUI.Components.BufferPane
 
   @typewriter %{
     text: :black,
@@ -25,7 +25,7 @@ defmodule Quillex.GUI.Components.Buffer.Render do
         |> Scenic.Primitives.rect(frame.size.box, fill: colors.slate)
         |> render_line_numbers_background(frame, @line_num_column_width)
         |> render_text(frame, buf, font, colors)
-        |> render_status_bar(frame, buf)
+        # |> render_status_bar(frame, buf)
 
         # |> render_active_row_decoration(frame, buf, font, colors)
       end,
@@ -43,7 +43,8 @@ defmodule Quillex.GUI.Components.Buffer.Render do
         |> render_cursor(frame, buf, font, colors)
       end,
       id: :text_group
-      # translate: {0, 5}
+      # TODO this should work but for some reason it doesnt move the second line down so it looks weird...
+      # translate: {0, 4}
     )
   end
 
@@ -96,14 +97,14 @@ defmodule Quillex.GUI.Components.Buffer.Render do
   def render_cursor(graph, _frame, %Quillex.Structs.BufState{cursors: [c]} = buf, font, _colors) do
     cursor_mode =
       case buf.mode do
-        :gedit -> :cursor
+        :edit -> :cursor
         {:vim, :insert} -> :cursor
         {:vim, :normal} -> :block
         _ -> :cursor
       end
 
     graph
-    |> Quillex.GUI.Components.Buffer.CursorCaret.add_to_graph(
+    |> Quillex.GUI.Components.BufferPane.CursorCaret.add_to_graph(
       %{
         buffer_uuid: buf.uuid,
         starting_pin: {@line_num_column_width + @margin_left, 0},
@@ -234,7 +235,7 @@ defmodule Quillex.GUI.Components.Buffer.Render do
 
     cursor_mode =
       case new_state.mode do
-        :gedit -> :cursor
+        :edit -> :cursor
         {:vim, :insert} -> :cursor
         {:vim, :normal} -> :block
         _ -> :cursor
@@ -249,7 +250,7 @@ defmodule Quillex.GUI.Components.Buffer.Render do
   end
 end
 
-# defmodule Quillex.GUI.Components.Buffer.Render do
+# defmodule Quillex.GUI.Components.BufferPane.Renderizer do
 #   alias Quillex.GUI.Components.Buffer
 #   alias Flamelex.GUI.Utils.Draw
 
@@ -645,7 +646,7 @@ end
 
 #     cursor_mode =
 #       case buf.mode do
-#         :gedit -> :cursor
+#         :edit -> :cursor
 #         {:vim, :insert} -> :cursor
 #         {:vim, :normal} -> :block
 #       end
@@ -938,7 +939,7 @@ end
 
 #     cursor_mode =
 #       case new_state.mode do
-#         :gedit -> :cursor
+#         :edit -> :cursor
 #         {:vim, :insert} -> :cursor
 #         {:vim, :normal} -> :block
 #       end

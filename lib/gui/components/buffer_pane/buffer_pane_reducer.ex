@@ -1,9 +1,9 @@
-defmodule Quillex.GUI.Components.Buffer.Reducer do
-  alias Quillex.GUI.Components.Buffer
+defmodule Quillex.GUI.Components.BufferPane.Reducer do
+  alias Quillex.GUI.Components.BufferPane
 
   def process(%Quillex.Structs.BufState{} = buf, {:set_mode, m}) do
     buf
-    |> Buffer.Mutator.set_mode(m)
+    |> BufferPane.Mutator.set_mode(m)
   end
 
   def process(%Quillex.Structs.BufState{} = buf, {:move_cursor, direction, x}) do
@@ -11,15 +11,15 @@ defmodule Quillex.GUI.Components.Buffer.Reducer do
     # GenServer.cast(cursor_pid, {:move_cursor, :right, 1})
 
     buf
-    |> Buffer.Mutator.move_cursor(direction, x)
+    |> BufferPane.Mutator.move_cursor(direction, x)
   end
 
   def process(%Quillex.Structs.BufState{} = buf, {:newline, :at_cursor}) do
     [c] = buf.cursors
 
     buf
-    |> Buffer.Mutator.insert_new_line(:at_cursor)
-    |> Buffer.Mutator.move_cursor({c.line + 1, 1})
+    |> BufferPane.Mutator.insert_new_line(:at_cursor)
+    |> BufferPane.Mutator.move_cursor({c.line + 1, 1})
 
     # |> Buffer.History.record_action({:newline, :at_cursor})
   end
@@ -29,15 +29,15 @@ defmodule Quillex.GUI.Components.Buffer.Reducer do
     num_chars = String.length(text)
 
     buf
-    |> Buffer.Mutator.insert_text({c.line, c.col}, text)
-    |> Buffer.Mutator.move_cursor(:right, num_chars)
+    |> BufferPane.Mutator.insert_text({c.line, c.col}, text)
+    |> BufferPane.Mutator.move_cursor(:right, num_chars)
   end
 
   def process(%Quillex.Structs.BufState{} = buf, {:delete, :before_cursor}) do
     [cursor] = buf.cursors
 
     buf
-    |> Buffer.Mutator.delete_char_before_cursor(cursor)
+    |> BufferPane.Mutator.delete_char_before_cursor(cursor)
   end
 
   # def process(%{uuid: buf_uuid, source: nil} = buf, {:save, buf_uuid}) do

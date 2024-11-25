@@ -1,8 +1,11 @@
 defmodule Quillex.Buffer do
+
   defdelegate new(), to: Quillex.Buffer.BufferManager, as: :new_buffer
   defdelegate new(args), to: Quillex.Buffer.BufferManager, as: :new_buffer
 
   defdelegate open(args), to: Quillex.Buffer.BufferManager, as: :open_buffer
+
+  defdelegate list(), to: Quillex.Buffer.BufferManager, as: :list_buffers
 
   # # TODO maybe rename slate or quill one day...
   # alias Quillex.Structs.BufState.Cursor

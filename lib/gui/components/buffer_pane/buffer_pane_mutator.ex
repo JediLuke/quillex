@@ -1,4 +1,4 @@
-defmodule Quillex.GUI.Components.Buffer.Mutator do
+defmodule Quillex.GUI.Components.BufferPane.Mutator do
   alias Quillex.Structs.BufState.Cursor
 
   @valid_modes [:edit, :presentation, {:vim, :normal}, {:vim, :insert}, {:vim, :visual}]

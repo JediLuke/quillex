@@ -7,32 +7,21 @@ defmodule QuillEx.App do
     # QuillEx.Metrics.Instrumenter.setup()
 
     children =
+      # don't boot the GUI, Flamelex is managing Scenic
       if started_by_flamelex?() do
-        # don't boot the GUI, Flamelex is managing Scenic
         [
           {Registry, keys: :duplicate, name: QuillEx.PubSub},
           {Quillex.Buffers.TopSupervisor, []}
         ]
       else
-        # run the Quillex GUI by starting Scenic
         [
           # QuillEx.Metrics.Stash,
           {Registry, keys: :duplicate, name: QuillEx.PubSub},
-          # QuillEx.Fluxus.RadixStore,
           {Quillex.Buffers.TopSupervisor, []},
           {Scenic, [scenic_config()]}
-          # QuillEx.Fluxus.ActionListener,
-          # QuillEx.Fluxus.UserInputListener
         ]
       end
 
-    # NOTE: The starting order here is important.
-    # First we start the Registry beccause other processes depend on it.
-    # Then we start RadixStore, it does not need to use the PubSub (and
-    # won't try to broadcast during initialization) but the Root Scene
-    # depends on it, it shall call the RadixStore and get the current
-    # RadixState during initialization. Also all Listeners depend on both
-    # the Registry and the RadixStore.
     children = Supervisor.start_link(children, strategy: :one_for_one)
   end
 
@@ -42,7 +31,7 @@ defmodule QuillEx.App do
     [
       name: :main_viewport,
       size: @default_resolution,
-      default_scene: {QuillEx.Scene.RootScene, []},
+      default_scene: {QuillEx.RootScene, []},
       drivers: [
         [
           module: Scenic.Driver.Local,
