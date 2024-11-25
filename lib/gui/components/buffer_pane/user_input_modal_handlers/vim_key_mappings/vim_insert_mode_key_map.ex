@@ -1,4 +1,4 @@
-defmodule Quillex.GUI.Components.Buffer.UserInputHandler.VimKeyMappings.InsertMode do
+defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.VimKeyMappings.InsertMode do
   use ScenicWidgets.ScenicEventsDefinitions
 
   # Treat held down keys as repeated presses

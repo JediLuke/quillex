@@ -1,4 +1,4 @@
-# defmodule Quillex.GUI.Components.Buffer.UserInputHandler.VimKeyMappings.NormalMode do
+# defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.VimKeyMappings.NormalMode do
 #   use ScenicWidgets.ScenicEventsDefinitions
 
 #   def handle(_buf, @lowercase_i) do
@@ -76,7 +76,7 @@
 
 # e: Move the cursor to the end of the word
 
-defmodule Quillex.GUI.Components.Buffer.UserInputHandler.VimKeyMappings.NormalMode do
+defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.VimKeyMappings.NormalMode do
   use ScenicWidgets.ScenicEventsDefinitions
 
   # Handle held keys as repeated presses
