@@ -14,25 +14,21 @@ defmodule QuillEx.RootScene do
   # Quillex.GUI.Components.Buffer component simply casts these up to it's
   # parent, which is this RootScene, which then processes the actions
 
-  def active_buf(scene) do
-    # TODO when we get tabs, we will have to look up what tab we're in, for now asume always first buffer
-    hd(scene.assigns.state.buffers)
-  end
-
   def init(%Scenic.Scene{} = scene, _args, _opts) do
 
     # initialize a new (empty) buffer on startup
     {:ok, buf_ref} = Quillex.Buffer.BufferManager.new_buffer(%{mode: :edit})
 
+    state = RootScene.State.new(%{
+      frame: Widgex.Frame.new(scene.viewport),
+      buffers: [buf_ref]
+    })
+
+    graph = RootScene.Renderizer.render(Scenic.Graph.build(), state)
+
     scene =
       scene
-      |> assign(frame: Widgex.Frame.new(scene.viewport))
-      |> assign(state: RootScene.State.new(%{buffers: [buf_ref]}))
-
-    graph = RootScene.Renderizer.init_render(scene)
-
-    scene =
-      scene
+      |> assign(state: state)
       |> assign(graph: graph)
       |> push_graph(graph)
 
@@ -54,34 +50,40 @@ defmodule QuillEx.RootScene do
     _context,
     scene
   ) do
-    Logger.debug("#{__MODULE__} recv'd a reshape event: #{inspect(new_vp_size)}")
+    # Logger.debug("#{__MODULE__} recv'd a reshape event: #{inspect(new_vp_size)}")
 
-    # NOTE we could use `scene.assigns.frame.pin.point` or just {0, 0}
-    # since, doesn't it have to be {0, 0} anyway??
-    new_frame = Widgex.Frame.new(pin: {0, 0}, size: new_vp_size)
+    # # NOTE we could use `scene.assigns.frame.pin.point` or just {0, 0}
+    # # since, doesn't it have to be {0, 0} anyway??
+    # new_frame = Widgex.Frame.new(pin: {0, 0}, size: new_vp_size)
 
-    # do a full init render (make a new graph, for the new frame) and
-    # then re-render it to update the new graph with the current state
+    # # do a full init render (make a new graph, for the new frame) and
+    # # then re-render it to update the new graph with the current state
 
-    scene =
-      scene
-      |> assign(frame: new_frame)
-      |> assign(graph: RootScene.Renderizer.init_render(scene))
+    # scene =
+    #   scene
+    #   |> assign(frame: new_frame)
+    #   |> assign(graph: RootScene.Renderizer.init_render(scene))
 
-    new_graph =
-      RootScene.Renderizer.re_render(scene, scene.assigns.state)
+    # new_graph =
+    #   RootScene.Renderizer.re_render(scene, scene.assigns.state)
 
-    new_scene =
-      scene
-      |> assign(graph: new_graph)
-      |> push_graph(new_graph)
+    # new_scene =
+    #   scene
+    #   |> assign(graph: new_graph)
+    #   |> push_graph(new_graph)
 
-    {:noreply, new_scene}
+    # {:noreply, new_scene}
+
+
+    #TODO this gets called twice on bootup, once to render and another with a "reshape event"??
+    # either figure out why that's happening and fix that, or else (and maybe we do this anyway) we
+    # shouldn't be re-rendering from scratch on this one, we should just adjust the frames
+    {:noreply, scene}
   end
 
   def handle_input(input, _context, scene) do
-    #TODO this... isn't always true
-    BufferManager.send_to_gui_component(active_buf(scene), {:user_input, input})
+    #TODO this... isn't always true - should use UserInputHandler here
+    BufferManager.cast_to_gui_component(QuillEx.RootScene.State.active_buf(scene), {:user_input, input})
     {:noreply, scene}
   end
 
@@ -94,15 +96,20 @@ defmodule QuillEx.RootScene do
           :ignore ->
             acc_state
 
+          :cast_to_children ->
+            Scenic.Scene.cast_children(scene, action)
+            acc_state
+
           new_acc_state ->
             new_acc_state
         end
       end)
 
-    new_graph = RootScene.Renderizer.re_render(scene, new_state)
+    new_graph = RootScene.Renderizer.render(scene.assigns.graph, new_state)
 
     new_scene =
       scene
+      |> assign(state: new_state)
       |> assign(graph: new_graph)
       |> push_graph(new_graph)
 
@@ -110,20 +117,16 @@ defmodule QuillEx.RootScene do
   end
 
   def handle_cast({:action, a}, scene) do
+    # wrap singular actions in a list and push through the multi-action pipeline anyway
     handle_cast({:action, [a]}, scene)
   end
 
+  # these actions bubble up from the BufferPane component, we simply forward them to the Buffer process
   def handle_cast(
-        #TODO consider using %BufRef{} here
-        {:action, %{uuid: buf_uuid}, actions},
+        {:action, %Quillex.Structs.BufState.BufRef{} = buf_ref, actions},
         scene
       ) do
-    Logger.debug("#{__MODULE__} recv'd a gui_action: #{inspect(actions)}")
-
-    # forward buffer actions to the buffer process
-    # TODO this... isn't always true (until we use %BufRef{} anyway)
-    BufferManager.call_buffer(%{uuid: buf_uuid}, {:action, actions})
-
+    BufferManager.call_buffer(buf_ref, {:action, actions})
     {:noreply, scene}
   end
 end

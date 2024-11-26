@@ -16,12 +16,10 @@ defmodule Quillex.Structs.BufState do
     mode: :edit,
     # Description of where this buffer originally came from, e.g. {:file, filepath}
     source: nil,
-    # a list of all the cursors in the buffer
+    # a list of all the cursors in the buffer (these go into the buffer, not the buffer pane, because cursors are still used even through the API)
     cursors: [],
     # track all the modifications as we do them, for undo/redo purposes
     history: [],
-    # Where we keep track of how much we've scrolled the buffer around
-    scroll_acc: {0, 0},
     # a flag which lets us know if it's a read-only buffer, read-only buffers can't be modified
     read_only?: true,
     # a `dirty` buffer is one which is changed / modified in memory but not yet written to disk
@@ -56,7 +54,7 @@ defmodule Quillex.Structs.BufState do
     mode = Map.get(args, :mode) || Map.get(args, "mode") || {:vim, :insert}
     source = Map.get(args, :source) || Map.get(args, "source") || nil
     cursors = Map.get(args, :cursors) || Map.get(args, "cursors") || [Cursor.new()]
-    scroll_acc = Map.get(args, :scroll_acc) || Map.get(args, "scroll_acc") || {0, 0}
+    # scroll_acc = Map.get(args, :scroll_acc) || Map.get(args, "scroll_acc") || {0, 0}
     read_only? = Map.get(args, :read_only?) || Map.get(args, "read_only?") || false
 
     %__MODULE__{
@@ -68,7 +66,6 @@ defmodule Quillex.Structs.BufState do
       source: source,
       cursors: cursors,
       history: [],
-      scroll_acc: scroll_acc,
       read_only?: read_only?,
       dirty?: false,
       timestamps: %{

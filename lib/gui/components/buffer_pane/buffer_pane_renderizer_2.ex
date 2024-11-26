@@ -1,77 +1,60 @@
-defmodule Quillex.GUI.Components.BufferPane.Renderizer do
+defmodule Quillex.GUI.Components.BufferPane.RenderizerTwo do
   alias Quillex.GUI.Components.BufferPane
 
-  @margin_left 5
-  @line_space 4
-  @line_num_column_width 40
-  @semi_transparent_white {255, 255, 255, Integer.floor_div(255, 3)}
+  # @line_space 4
+  # @semi_transparent_white {255, 255, 255, Integer.floor_div(255, 3)}
 
-  # Entry point for initial rendering
-  def go(%Widgex.Frame{} = frame, %Quillex.Structs.BufState{} = buf, font, colors) do
-    Scenic.Graph.build()
-    |> Scenic.Primitives.group(
-      fn graph ->
-        graph
-        |> Scenic.Primitives.rect(frame.size.box, fill: colors.slate)
-        |> render_line_numbers_background(frame, @line_num_column_width)
-        |> render_text(frame, buf, font, colors)
-        # |> render_status_bar(frame, buf)
-
-        # |> render_active_row_decoration(frame, buf, font, colors)
-      end,
-      scissor: frame.size.box
-    )
-  end
-
-  # Render the text group
-  def render_text(graph, frame, buf, font, colors) do
+  def render(
+    %Scenic.Graph{} = graph,
+    %BufferPane.State{} = state,
+    %Quillex.Structs.BufState{} = buf
+  ) do
     graph
-    |> Scenic.Primitives.group(
-      fn graph ->
-        graph
-        |> render_lines(frame, buf, font, colors)
-        |> render_cursor(frame, buf, font, colors)
-      end,
-      id: :text_group
-      # TODO this should work but for some reason it doesnt move the second line down so it looks weird...
-      # translate: {0, 4}
-    )
+    |> render_background(state)
+    |> render_text_lines(state, buf)
+    # |> render_cursor(frame, buf, font)
   end
 
-  # Render each line of text and line numbers
-  def render_lines(graph, _frame, %Quillex.Structs.BufState{data: lines} = buf, font, colors)
-      when is_list(lines) do
-    lines = if lines == [], do: [""], else: lines
+  defp render_background(graph, state) do
+    case Scenic.Graph.get(graph, :background) do
+      [] ->
+        graph
+        |> Scenic.Primitives.rect(state.frame.size.box,
+            id: :background,
+            fill: state.colors.slate
+        )
+
+      _primitive ->
+        graph
+        |> Scenic.Graph.modify(:background,
+          &Scenic.Primitives.update_opts(&1, fill: state.colors.slate)
+        )
+    end
+  end
+
+  defp render_text_lines(graph, state, %Quillex.Structs.BufState{data: lines} = buf) do
+    font = state.font
     line_height = font.size
-    ascent = FontMetrics.ascent(font.size, font.metrics)
     initial_y = font.size - 3
 
+    # Ensure there's at least one empty line if no data is present
+    lines = if lines == [], do: [""], else: lines
+
+    # Process each line
     Enum.with_index(lines, 1)
-    |> Enum.reduce(graph, fn {line, idx}, graph_acc ->
+    |> Enum.reduce(graph, fn {line, idx}, acc_graph ->
       y_position = initial_y + (idx - 1) * line_height
 
-      graph_acc
-      |> render_line_num(idx, y_position, font, line_height)
-      |> Scenic.Primitives.text(
-        line,
-        font_size: font.size,
-        font: font.name,
-        fill: colors.text,
-        translate: {@line_num_column_width + @margin_left, y_position},
-        id: {:line_text, idx}
-      )
+      acc_graph
+      |> render_line_number(idx, y_position, font)
+      |> render_line_text(line, idx, y_position, font, state.colors.text)
     end)
   end
 
-  # Render line numbers
-  def render_line_num(graph, idx, y_position, font, line_height) do
+
+  @line_num_column_width 40 # how wide the left-hand 'line numbers' column is
+  defp render_line_number(graph, idx, y_position, font) do
     graph
-    # |> Scenic.Primitives.rect(
-    #   {@line_num_column_width, line_height},
-    #   translate: {0, y_position - font.ascent},
-    #   fill: {:color_rgba, @semi_transparent_white},
-    #   id: {:line_number_bg, idx}
-    # )
     |> Scenic.Primitives.text(
       "#{idx}",
       font_size: font.size,
@@ -83,161 +66,309 @@ defmodule Quillex.GUI.Components.BufferPane.Renderizer do
     )
   end
 
-  # Render the cursor
-  def render_cursor(graph, _frame, %Quillex.Structs.BufState{cursors: [c]} = buf, font, _colors) do
-    cursor_mode =
-      case buf.mode do
-        :edit -> :cursor
-        {:vim, :insert} -> :cursor
-        {:vim, :normal} -> :block
-        _ -> :cursor
-      end
-
+  @margin_left 5
+  defp render_line_text(graph, line, idx, y_position, font, color) do
     graph
-    |> Quillex.GUI.Components.BufferPane.CursorCaret.add_to_graph(
-      %{
-        buffer_uuid: buf.uuid,
-        starting_pin: {@line_num_column_width + @margin_left, 0},
-        coords: {c.line, c.col},
-        height: font.size,
-        mode: cursor_mode,
-        font: font
-      },
-      id: :cursor
+    |> Scenic.Primitives.text(
+      line,
+      font_size: font.size,
+      font: font.name,
+      fill: color,
+      translate: {@line_num_column_width + @margin_left, y_position},
+      id: {:line_text, idx}
     )
   end
 
-  def render_line_numbers_background(graph, %{size: %{height: height}}, width) do
-    graph
-    |> Scenic.Primitives.rect(
-      {width, height},
-      # translate: {0, y_position - font.ascent},
-      fill: {:color_rgba, @semi_transparent_white}
-      # id: {:line_number_bg, idx}
-    )
-  end
 
-  @status_bar_height 40
-  def render_status_bar(graph, frame, buf) do
-    graph
-    |> Scenic.Primitives.rect(
-      {frame.size.width, @status_bar_height},
-      translate: {0, frame.size.height - @status_bar_height},
-      fill: :grey,
-      id: :status_bar
-    )
-  end
+      # # this dissapears after you type or do something, but I like it! It's magical!
+      # buf =
+      #   if buf.data == [] do
+      #     buf
+      #     |> BufferPane.Mutator.insert_text({1, 1}, "#{@no_limits_to_tomorrow}")
+      #   else
+      #     buf
+      #   end
 
-  # Highlight the active row
-  def render_active_row_decoration(
-        graph,
-        frame,
-        %Quillex.Structs.BufState{cursors: [c]},
-        font,
-        _colors
-      ) do
-    line_height = font.size
-    y_position = (c.line - 1) * line_height
 
-    graph
-    |> Scenic.Primitives.rect(
-      {frame.size.width, line_height},
-      fill: {:color_rgba, @semi_transparent_white},
-      translate: {0, y_position},
-      id: :active_row
-    )
-    |> Scenic.Primitives.rect(
-      {frame.size.width - 2, line_height},
-      stroke: {1, :white},
-      translate: {1, y_position},
-      id: :active_row_border
-    )
-  end
 
-  # Handle re-rendering when state changes
-  def re_render_scene(scene, %Quillex.Structs.BufState{} = new_state) do
-    scene
-    |> process_text_changes(new_state)
-    |> process_cursor_changes(new_state)
-    |> Scenic.Scene.assign(state: new_state)
-  end
 
-  # Process text changes efficiently
-  def process_text_changes(%Scenic.Scene{} = scene, %Quillex.Structs.BufState{} = new_state) do
-    old_lines = scene.assigns.state.data || []
-    new_lines = new_state.data || []
-    max_lines = max(length(old_lines), length(new_lines))
-    font = scene.assigns.font
-    colors = scene.assigns.colors
 
-    updated_graph =
-      Enum.reduce(1..max_lines, scene.assigns.graph, fn idx, acc_graph ->
-        old_line = Enum.at(old_lines, idx - 1)
-        new_line = Enum.at(new_lines, idx - 1)
-        y_position = calculate_line_y_position(idx, font)
 
-        cond do
-          old_line == new_line ->
-            acc_graph
+  # def render() do
+  #   Scenic.Graph.build()
+  #   |> Scenic.Primitives.group(
+  #     fn graph ->
+  #       graph
+  #       |> Scenic.Primitives.rect(state.frame.size.box,
+  #         id: :background,
+  #         fill: state.colors.slate
+  #       )
+  #       # |> render_line_numbers_background(frame, @line_num_column_width)
+  #       # |> render_text(frame, buf, font, colors)
+  #       # |> render_status_bar(frame, buf)
 
-          old_line != nil and new_line == nil ->
-            # Line deleted
-            acc_graph
-            |> Scenic.Graph.delete({:line_text, idx})
-            |> Scenic.Graph.delete({:line_number_bg, idx})
-            |> Scenic.Graph.delete({:line_number_text, idx})
+  #       # |> render_active_row_decoration(frame, buf, font, colors)
+  #     end,
+  #     scissor: state.frame.size.box
+  #   )
+  # end
 
-          old_line == nil and new_line != nil ->
-            # Line added
-            acc_graph
-            |> render_line_num(idx, y_position, font, font.size)
-            |> Scenic.Primitives.text(
-              new_line,
-              font_size: font.size,
-              font: font.name,
-              fill: colors.text,
-              translate: {@line_num_column_width + @margin_left, y_position},
-              id: {:line_text, idx}
-            )
+      # Scenic.Graph.map(graph, :background,
+    # fn x -> IO.puts "#{inspect x} end"
+    #   # nil ->
+    #   #   IO.puts "HIHO SILVER"
+    #   #   graph
+    #   #   |> Scenic.Primitives.rect(state.frame.size.box,
+    #   #       id: :background,
+    #   #       fill: state.colors.slate
+    #   #   )
 
-          old_line != new_line ->
-            # Line changed
-            acc_graph
-            |> Scenic.Graph.modify({:line_text, idx}, &Scenic.Primitives.text(&1, new_line))
-        end
-      end)
 
-    scene
-    |> Scenic.Scene.assign(graph: updated_graph)
-    |> Scenic.Scene.push_graph(updated_graph)
-  end
+    # Scenic.Graph.modify(graph, :background, fn
+    #   nil ->
+    #     Scenic.Primitives.rect(state.frame.size.box, fill: state.colors.slate, id: :background)
 
-  # Calculate Y position for a line
-  defp calculate_line_y_position(idx, font) do
-    line_height = font.size
-    initial_y = font.size - 3
-    initial_y + (idx - 1) * line_height
-  end
+    #   background ->
+    #     graph
+    #     |> Scenic.Primitives.update_opts(:background, :fill, state.colors.slate)
+    # end)
 
-  # Update cursor position and mode
-  def process_cursor_changes(%Scenic.Scene{} = scene, %Quillex.Structs.BufState{} = new_state) do
-    [c] = new_state.cursors
+    # end)
 
-    cursor_mode =
-      case new_state.mode do
-        :edit -> :cursor
-        {:vim, :insert} -> :cursor
-        {:vim, :normal} -> :block
-        _ -> :cursor
-      end
 
-    cursor_state = Map.put(c, :mode, cursor_mode)
 
-    {:ok, [cursor_pid]} = Scenic.Scene.child(scene, :cursor)
-    GenServer.cast(cursor_pid, {:state_change, cursor_state})
+  # # Entry point for initial rendering
+  # def go(%Widgex.Frame{} = frame, %Quillex.Structs.BufState{} = buf, font, colors) do
+  #   Scenic.Graph.build()
+  #   |> Scenic.Primitives.group(
+  #     fn graph ->
+  #       graph
+  #       |> Scenic.Primitives.rect(frame.size.box, fill: colors.slate)
+  #       |> render_line_numbers_background(frame, @line_num_column_width)
+  #       |> render_text(frame, buf, font, colors)
+  #       # |> render_status_bar(frame, buf)
 
-    scene
-  end
+  #       # |> render_active_row_decoration(frame, buf, font, colors)
+  #     end,
+  #     scissor: frame.size.box
+  #   )
+  # end
+
+  # # Render the text group
+  # def render_text(graph, frame, buf, font, colors) do
+  #   graph
+  #   |> Scenic.Primitives.group(
+  #     fn graph ->
+  #       graph
+  #       |> render_lines(frame, buf, font, colors)
+  #       |> render_cursor(frame, buf, font, colors)
+  #     end,
+  #     id: :text_group
+  #     # TODO this should work but for some reason it doesnt move the second line down so it looks weird...
+  #     # translate: {0, 4}
+  #   )
+  # end
+
+  # # Render each line of text and line numbers
+  # def render_lines(graph, _frame, %Quillex.Structs.BufState{data: lines} = buf, font, colors)
+  #     when is_list(lines) do
+  #   lines = if lines == [], do: [""], else: lines
+  #   line_height = font.size
+  #   ascent = FontMetrics.ascent(font.size, font.metrics)
+  #   initial_y = font.size - 3
+
+  #   Enum.with_index(lines, 1)
+  #   |> Enum.reduce(graph, fn {line, idx}, graph_acc ->
+  #     y_position = initial_y + (idx - 1) * line_height
+
+  #     graph_acc
+  #     |> render_line_num(idx, y_position, font, line_height)
+  #     |> Scenic.Primitives.text(
+  #       line,
+  #       font_size: font.size,
+  #       font: font.name,
+  #       fill: colors.text,
+  #       translate: {@line_num_column_width + @margin_left, y_position},
+  #       id: {:line_text, idx}
+  #     )
+  #   end)
+  # end
+
+  # # Render line numbers
+  # def render_line_num(graph, idx, y_position, font, line_height) do
+  #   graph
+  #   # |> Scenic.Primitives.rect(
+  #   #   {@line_num_column_width, line_height},
+  #   #   translate: {0, y_position - font.ascent},
+  #   #   fill: {:color_rgba, @semi_transparent_white},
+  #   #   id: {:line_number_bg, idx}
+  #   # )
+  #   |> Scenic.Primitives.text(
+  #     "#{idx}",
+  #     font_size: font.size,
+  #     font: font.name,
+  #     fill: :black,
+  #     text_align: :right,
+  #     translate: {@line_num_column_width - 5, y_position},
+  #     id: {:line_number_text, idx}
+  #   )
+  # end
+
+  # # Render the cursor
+  # def render_cursor(graph, _frame, %Quillex.Structs.BufState{cursors: [c]} = buf, font, _colors) do
+  #   cursor_mode =
+  #     case buf.mode do
+  #       :edit -> :cursor
+  #       {:vim, :insert} -> :cursor
+  #       {:vim, :normal} -> :block
+  #       _ -> :cursor
+  #     end
+
+  #   graph
+  #   |> Quillex.GUI.Components.BufferPane.CursorCaret.add_to_graph(
+  #     %{
+  #       buffer_uuid: buf.uuid,
+  #       starting_pin: {@line_num_column_width + @margin_left, 0},
+  #       coords: {c.line, c.col},
+  #       height: font.size,
+  #       mode: cursor_mode,
+  #       font: font
+  #     },
+  #     id: :cursor
+  #   )
+  # end
+
+  # def render_line_numbers_background(graph, %{size: %{height: height}}, width) do
+  #   graph
+  #   |> Scenic.Primitives.rect(
+  #     {width, height},
+  #     # translate: {0, y_position - font.ascent},
+  #     fill: {:color_rgba, @semi_transparent_white}
+  #     # id: {:line_number_bg, idx}
+  #   )
+  # end
+
+  # @status_bar_height 40
+  # def render_status_bar(graph, frame, buf) do
+  #   graph
+  #   |> Scenic.Primitives.rect(
+  #     {frame.size.width, @status_bar_height},
+  #     translate: {0, frame.size.height - @status_bar_height},
+  #     fill: :grey,
+  #     id: :status_bar
+  #   )
+  # end
+
+  # # Highlight the active row
+  # def render_active_row_decoration(
+  #       graph,
+  #       frame,
+  #       %Quillex.Structs.BufState{cursors: [c]},
+  #       font,
+  #       _colors
+  #     ) do
+  #   line_height = font.size
+  #   y_position = (c.line - 1) * line_height
+
+  #   graph
+  #   |> Scenic.Primitives.rect(
+  #     {frame.size.width, line_height},
+  #     fill: {:color_rgba, @semi_transparent_white},
+  #     translate: {0, y_position},
+  #     id: :active_row
+  #   )
+  #   |> Scenic.Primitives.rect(
+  #     {frame.size.width - 2, line_height},
+  #     stroke: {1, :white},
+  #     translate: {1, y_position},
+  #     id: :active_row_border
+  #   )
+  # end
+
+  # # Handle re-rendering when state changes
+  # def re_render_scene(scene, %Quillex.Structs.BufState{} = new_state) do
+  #   scene
+  #   |> process_text_changes(new_state)
+  #   |> process_cursor_changes(new_state)
+  #   |> Scenic.Scene.assign(state: new_state)
+  # end
+
+  # # Process text changes efficiently
+  # def process_text_changes(%Scenic.Scene{} = scene, %Quillex.Structs.BufState{} = new_state) do
+  #   old_lines = scene.assigns.state.data || []
+  #   new_lines = new_state.data || []
+  #   max_lines = max(length(old_lines), length(new_lines))
+  #   font = scene.assigns.font
+  #   colors = scene.assigns.colors
+
+  #   updated_graph =
+  #     Enum.reduce(1..max_lines, scene.assigns.graph, fn idx, acc_graph ->
+  #       old_line = Enum.at(old_lines, idx - 1)
+  #       new_line = Enum.at(new_lines, idx - 1)
+  #       y_position = calculate_line_y_position(idx, font)
+
+  #       cond do
+  #         old_line == new_line ->
+  #           acc_graph
+
+  #         old_line != nil and new_line == nil ->
+  #           # Line deleted
+  #           acc_graph
+  #           |> Scenic.Graph.delete({:line_text, idx})
+  #           |> Scenic.Graph.delete({:line_number_bg, idx})
+  #           |> Scenic.Graph.delete({:line_number_text, idx})
+
+  #         old_line == nil and new_line != nil ->
+  #           # Line added
+  #           acc_graph
+  #           |> render_line_num(idx, y_position, font, font.size)
+  #           |> Scenic.Primitives.text(
+  #             new_line,
+  #             font_size: font.size,
+  #             font: font.name,
+  #             fill: colors.text,
+  #             translate: {@line_num_column_width + @margin_left, y_position},
+  #             id: {:line_text, idx}
+  #           )
+
+  #         old_line != new_line ->
+  #           # Line changed
+  #           acc_graph
+  #           |> Scenic.Graph.modify({:line_text, idx}, &Scenic.Primitives.text(&1, new_line))
+  #       end
+  #     end)
+
+  #   scene
+  #   |> Scenic.Scene.assign(graph: updated_graph)
+  #   |> Scenic.Scene.push_graph(updated_graph)
+  # end
+
+  # # Calculate Y position for a line
+  # defp calculate_line_y_position(idx, font) do
+  #   line_height = font.size
+  #   initial_y = font.size - 3
+  #   initial_y + (idx - 1) * line_height
+  # end
+
+  # # Update cursor position and mode
+  # def process_cursor_changes(%Scenic.Scene{} = scene, %Quillex.Structs.BufState{} = new_state) do
+  #   [c] = new_state.cursors
+
+  #   cursor_mode =
+  #     case new_state.mode do
+  #       :edit -> :cursor
+  #       {:vim, :insert} -> :cursor
+  #       {:vim, :normal} -> :block
+  #       _ -> :cursor
+  #     end
+
+  #   cursor_state = Map.put(c, :mode, cursor_mode)
+
+  #   {:ok, [cursor_pid]} = Scenic.Scene.child(scene, :cursor)
+  #   GenServer.cast(cursor_pid, {:state_change, cursor_state})
+
+  #   scene
+  # end
 end
 
 # defmodule Quillex.GUI.Components.BufferPane.Renderizer do

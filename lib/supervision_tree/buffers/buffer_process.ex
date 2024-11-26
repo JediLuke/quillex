@@ -57,7 +57,7 @@ defmodule Quillex.Buffer.Process do
           # :re_routed ->
           #   state_acc
           # {:fwd, Quillex.GUI.Components.Buffer, msgs} ->
-          #   BufferManager.send_to_gui_component(state_acc, {:buffer_request, msgs})
+          #   BufferManager.cast_to_gui_component(state_acc, {:buffer_request, msgs})
           #   state_acc
 
           new_state ->
@@ -78,6 +78,7 @@ defmodule Quillex.Buffer.Process do
     # throw 2 actions, one for the buffer, one for the component?? we'll see
 
     notify_gui(new_state)
+    # IO.puts "NOTIFY GUI"
 
     {:reply, :ok, new_state}
   end
@@ -122,7 +123,7 @@ defmodule Quillex.Buffer.Process do
   #     end
   #   end
   def notify_gui(buf) do
-    Quillex.Buffer.BufferManager.send_to_gui_component(buf, {:state_change, buf})
+    Quillex.Buffer.BufferManager.cast_to_gui_component(buf, {:state_change, buf})
   end
 end
 

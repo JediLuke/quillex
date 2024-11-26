@@ -30,6 +30,7 @@ defmodule Quillex.GUI.Components.TabBar do
       |> assign(graph: graph)
       |> push_graph(graph)
 
+    #TODO this might actually cause problems if we end up with multi9ple BGufferPanes open with different tab bars...
     Process.register(self(), __MODULE__)
 
     {:ok, scene}

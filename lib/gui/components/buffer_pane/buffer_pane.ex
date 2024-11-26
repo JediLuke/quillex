@@ -1,4 +1,3 @@
-# TODO rename to BufrWindow
 defmodule Quillex.GUI.Components.BufferPane do
   use Scenic.Component
   use ScenicWidgets.ScenicEventsDefinitions
@@ -31,88 +30,126 @@ defmodule Quillex.GUI.Components.BufferPane do
 
   #    #TODO place cursor in last line of the TextPad when we pass in some text...
 
-  @no_limits_to_tomorrow "~ The only limit to our realization of tomorrow is our doubts of today ~"
-  # - Frankin D. Roosevelt
+  @no_limits_to_tomorrow "The only limit to our realization of tomorrow is our doubts of today\n\n- Frankin D. Roosevelt"
 
   def validate(
         %{
           frame: %Widgex.Frame{} = _f,
-          buf_ref: %Quillex.Structs.BufState.BufRef{} = _buf_ref,
+          buf_ref: %Quillex.Structs.BufState.BufRef{} = buf_ref,
           font: %Quillex.Structs.BufState.Font{} = _font
         } = data
       ) do
-    {:ok, data}
+
+    state = BufferPane.State.new(data)
+
+    {:ok, state}
   end
 
-  @cauldron %{
-    text: :white,
-    slate: :medium_slate_blue
-  }
-
-  def init(scene, data, _opts) do
+  def init(scene, state, _opts) do
     # TODO this would be a cool place to do something better here...
     # I'm going to keep experimenting with this, I think it's more in-keeping
     # with the Zen of scenic to go and fetch state upon our boot, since that
     # keeps the integrity our gui thread even if the external data sdource if bad,
     # plus I think it's more efficient in terms of data transfer to just get it once rather than pass it around everywhere (maybe?)
-    {:ok, %Quillex.Structs.BufState{} = buf} = GenServer.call(data.buf_ref.pid, :get_state)
+    {:ok, buf} = Quillex.Structs.BufState.BufRef.fetch_buf(state.buf_ref)
 
-    # this dissapears after you type or do something, but I like it! It's magical!
-    buf =
-      if buf.data == [] do
-        buf
-        |> BufferPane.Mutator.insert_text({1, 1}, "#{@no_limits_to_tomorrow}")
-      else
-        buf
-      end
-
-    colors = @cauldron
-
-    graph = BufferPane.Renderizer.go(data.frame, buf, data.font, colors)
+    graph =
+      BufferPane.RenderizerTwo.render(Scenic.Graph.build(), state, buf)
 
     init_scene =
       scene
-      |> assign(frame: data.frame)
       |> assign(graph: graph)
-      |> assign(state: buf)
-      |> assign(font: data.font)
-      |> assign(colors: colors)
+      |> assign(state: state)
+      # |> assign(buf: buf)
       |> push_graph(graph)
 
-    Registry.register(Quillex.BufferRegistry, {data.buf_ref.uuid, __MODULE__}, nil)
+    Registry.register(Quillex.BufferRegistry, {state.buf_ref.uuid, __MODULE__}, nil)
 
     {:ok, init_scene}
   end
 
-  def handle_info({:state_change, new_state}, %{assigns: %{state: old_state}} = scene) do
+  def handle_cast({:user_input, input}, scene) do
+    # the GUI component converts raw user input to actions,
+    # which are then passed back up the component tree for processing
+    case BufferPane.UserInputHandler.handle(scene.assigns.state, input) do
+      :ignore ->
+        {:noreply, scene}
+
+      actions ->
+        cast_parent(scene, {:action, scene.assigns.state.buf_ref, actions})
+        {:noreply, scene}
+    end
+  end
+
+  # def handle_info({:state_change, %BufferPane.State{} = new_state}, scene) do
+  #   # when the Buffer process state changes, we update the GUI component
+  #   # we want to resist re-rendering all the time, instead we modify the graph
+  #   # to reflect the changes in the buffer state. It's a bit more work, but it's
+  #   # worth it for performance reasons
+  #   # IO.inspect(new_state, label: "NEW STATE")
+
+  #   # new_scene = BufferPane.Renderizer.re_render_scene(scene, new_state)
+
+  #   new_graph =
+  #     BufferPane.RenderizerTwo.render(scene.assigns.graph, new_state, scene.assigns.buf)
+
+  #   new_scene =
+  #     scene
+  #     |> assign(graph: new_graph)
+  #     |> assign(state: new_state)
+  #     |> push_graph(new_graph)
+
+  #   # TODO maybe this code below  will work to optimize not calling push_graph if we dont need to? Is this a significant saving?
+  #   # if new_scene.assigns.graph != scene.assigns.graph do
+  #   # new_scene = push_graph(new_scene, new_scene.assigns.graph)
+
+  #   {:noreply, new_scene}
+  # end
+
+  def handle_cast({:state_change, %Quillex.Structs.BufState{} = new_buf}, scene) do
+
+    new_graph =
+      BufferPane.RenderizerTwo.render(Scenic.Graph.build(), scene.assigns.state, new_buf)
+
+    new_scene =
+      scene
+      |> assign(graph: new_graph)
+      |> assign(buf: new_buf)
+      |> push_graph(new_graph)
+
+    # TODO maybe this code below  will work to optimize not calling push_graph if we dont need to? Is this a significant saving?
+    # if new_scene.assigns.graph != scene.assigns.graph do
+    # new_scene = push_graph(new_scene, new_scene.assigns.graph)
+
+    {:noreply, new_scene}
+  end
+
+  def handle_cast({:state_change, changes}, scene) do
     # when the Buffer process state changes, we update the GUI component
     # we want to resist re-rendering all the time, instead we modify the graph
     # to reflect the changes in the buffer state. It's a bit more work, but it's
     # worth it for performance reasons
     # IO.inspect(new_state, label: "NEW STATE")
 
-    new_scene = BufferPane.Renderizer.re_render_scene(scene, new_state)
+    # new_scene = BufferPane.Renderizer.re_render_scene(scene, new_state)
+
+    # graph =
+    #   BufferPane.RenderizerTwo.render(Scenic.Graph.build(), state, buf)
+
+    # new_graph =
+      # BufferPane.RenderizerTwo.render(scene.assigns.graph, scene.assigns.state, new_buf)
+      IO.puts "STATE CHAAAAAA"
+    new_scene =
+      scene
+      # |> assign(graph: new_graph)
+      # |> assign(buf: new_buf)
+      # |> push_graph(new_graph)
 
     # TODO maybe this code below  will work to optimize not calling push_graph if we dont need to? Is this a significant saving?
     # if new_scene.assigns.graph != scene.assigns.graph do
-    new_scene = push_graph(new_scene, new_scene.assigns.graph)
+    # new_scene = push_graph(new_scene, new_scene.assigns.graph)
 
     {:noreply, new_scene}
-  end
-
-  def handle_info({:user_input, input}, scene) do
-    # the GUI component converts raw user input to actions,
-    # which are then passed back up the component tree for processing
-    IO.puts "GOT USER INPUT #{inspect input}"
-    case BufferPane.UserInputHandler.handle(scene.assigns.state, input) do
-      :ignore ->
-        {:noreply, scene}
-
-      actions ->
-        # TODO consider remembering & passing back the %BufRef{} here, though this gets the job done
-        cast_parent(scene, {:action, %{uuid: scene.assigns.state.uuid}, actions})
-        {:noreply, scene}
-    end
   end
 end
 

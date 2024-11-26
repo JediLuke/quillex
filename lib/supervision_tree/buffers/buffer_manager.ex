@@ -64,14 +64,14 @@ defmodule Quillex.Buffer.BufferManager do
 
   # similar to the above only instead of sending to the Buffer process,
   # this sends it to the Buffer GUI component process (the Scenic component)
-  def send_to_gui_component(%{uuid: buf_uuid}, msg) do
+  def cast_to_gui_component(%{uuid: buf_uuid}, msg) do
     Registry.lookup(
       Quillex.BufferRegistry,
       {buf_uuid, Quillex.GUI.Components.BufferPane}
     )
     |> case do
       [{pid, _meta}] ->
-        send(pid, msg)
+        GenServer.cast(pid, msg)
 
       [] ->
         raise "Could not find Buffer process, uuid: #{inspect(buf_uuid)}"

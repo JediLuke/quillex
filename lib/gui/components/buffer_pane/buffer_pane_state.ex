@@ -1,6 +1,52 @@
-# The idea is that the component may actually have different state
-# to the Buffer, e.g. `mode` is really just a GUI centric concept,
-# not a buffer-centric one
+defmodule Quillex.GUI.Components.BufferPane.State do
+
+  defstruct [
+    frame: nil,
+    font: nil,
+    colors: nil,
+    # Where we keep track of how much we've scrolled the buffer around
+    scroll_acc: {0, 0},
+    buf_ref: nil
+  ]
+
+  def new(%{
+    frame: %Widgex.Frame{} = frame,
+    buf_ref: %Quillex.Structs.BufState.BufRef{} = buf_ref
+  }) do
+    %__MODULE__{
+      font: default_font(),
+      frame: frame,
+      colors: default_colors(),
+      buf_ref: buf_ref
+    }
+  end
+
+  def default_font do
+    font_size = 24
+    font_name = :ibm_plex_mono
+
+    {:ok, font_metrics} = TruetypeMetrics.load("./assets/fonts/IBMPlexMono-Regular.ttf")
+
+    Quillex.Structs.BufState.Font.new(%{
+      name: font_name,
+      size: font_size,
+      metrics: font_metrics
+    })
+  end
+
+  @typewriter %{
+    text: :black,
+    slate: :white
+  }
+
+  @cauldron %{
+    text: :white,
+    slate: :medium_slate_blue
+  }
+
+  def default_colors, do: @cauldron
+
+end
 
 #   defstruct [
 #     # affects how we render the cursor

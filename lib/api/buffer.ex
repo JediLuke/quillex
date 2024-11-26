@@ -7,6 +7,10 @@ defmodule Quillex.Buffer do
 
   defdelegate list(), to: Quillex.Buffer.BufferManager, as: :list_buffers
 
+  def switch(n) when is_integer(n) do
+    GenServer.cast(QuillEx.RootScene, {:action, {:activate_buffer, n}})
+  end
+
   # # TODO maybe rename slate or quill one day...
   # alias Quillex.Structs.BufState.Cursor
 

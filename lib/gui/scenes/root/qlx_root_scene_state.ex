@@ -3,36 +3,30 @@ defmodule QuillEx.RootScene.State do
   use StructAccess
 
   defstruct [
-    font: nil,
+    frame: nil,
     tabs: [],
     toolbar: nil,
-    buffers: []
+    buffers: [],
+    active_buf: nil
   ]
 
-  def new(%{buffers: buffers}) when is_list(buffers) do
-    # dont show the tab-bar if we only have one buffer open
-    tabs = if length(buffers) > 1, do: buffers, else: []
-
+  def new(%{frame: %Widgex.Frame{} = frame, buffers: buffers}) when is_list(buffers) do
     %__MODULE__{
-      font: default_font(),
-      tabs: tabs,
+      frame: frame,
       toolbar: %{
         height: 50
       },
-      buffers: buffers
+      buffers: buffers,
+      active_buf: 1
     }
   end
 
-  def default_font do
-    font_size = 24
-    font_name = :ibm_plex_mono
+  def active_buf(%{assigns: %{state: state}}) do
+    active_buf(state)
+  end
 
-    {:ok, font_metrics} = TruetypeMetrics.load("./assets/fonts/IBMPlexMono-Regular.ttf")
-
-    Quillex.Structs.BufState.Font.new(%{
-      name: font_name,
-      size: font_size,
-      metrics: font_metrics
-    })
+  def active_buf(%__MODULE__{} = state) do
+    # we count buffers starting at one, need to offset this cause Elixir uses zero for Enums
+    Enum.at(state.buffers, state.active_buf - 1)
   end
 end

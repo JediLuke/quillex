@@ -3,6 +3,7 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler do
   Handles user input for the FluxBuffer component.
   """
   alias Quillex.GUI.Components.BufferPane.UserInputHandler.VimKeyMappings.{InsertMode, NormalMode}
+  require Logger
 
   # On State
 
@@ -25,15 +26,22 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler do
   # there's no action that gets altered depending on where the cursor is,
   # if ther is it's a higher level state change anyway so handle it within radix state
 
-  def handle(%{mode: :edit} = buf, input) do
-    InsertMode.handle(buf, input)
+  def handle(%{buf_ref: %{mode: :edit}} = buf_ref, input) do
+    IO.puts "INSERTR MODER"
+    InsertMode.handle(buf_ref, input)
   end
 
-  def handle(%{mode: {:vim, :insert}} = buf, input) do
-    InsertMode.handle(buf, input)
+  def handle(%{buf_ref: %{mode: {:vim, :insert}}} = buf_ref, input) do
+    InsertMode.handle(buf_ref, input)
   end
 
-  def handle(%{mode: {:vim, :normal}} = buf, input) do
-    NormalMode.handle(buf, input)
+  def handle(%{buf_ref: %{mode: {:vim, :normal}}} = buf_ref, input) do
+    NormalMode.handle(buf_ref, input)
+  end
+
+  def handle(buf, input) do
+    Logger.error "Unhandled input: #{inspect input}"
+    IO.inspect(buf)
+    :ignore
   end
 end
