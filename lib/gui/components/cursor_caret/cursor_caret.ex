@@ -213,6 +213,18 @@ defmodule Quillex.GUI.Components.BufferPane.CursorCaret do
   end
 end
 
+#   #   def calc_cursor_caret_coords(state, line_height) when line_height >= 0 do
+#   #     line = Enum.at(state.lines, state.cursor.line - 1)
+
+#   #     {x_pos, _line_num} =
+#   #       FontMetrics.position_at(line, state.cursor.col - 1, state.font.size, state.font.metrics)
+
+#   #     {
+#   #       state.margin.left + x_pos,
+#   #       state.margin.top + (state.cursor.line - 1) * line_height
+#   #     }
+#   #   end
+
 # defmodule ScenicWidgets.TextPad.CursorCaret do
 #   use Scenic.Component
 #   require Logger
