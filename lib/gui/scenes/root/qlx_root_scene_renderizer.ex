@@ -1,7 +1,9 @@
 defmodule QuillEx.RootScene.Renderizer do
 
+  # it has to take in a scene here cause we need to cast to the scene's children
   def render(
     %Scenic.Graph{} = graph,
+    %Scenic.Scene{} = scene,
     %QuillEx.RootScene.State{} = state
   ) do
     [
@@ -11,12 +13,13 @@ defmodule QuillEx.RootScene.Renderizer do
 
     # render MenuBar _after_ BufferPane so it (including menu dropdowns) appears on top of the buffer not below it
     graph
-    |> render_text_area(state, text_area_frame)
+    |> render_text_area(scene, state, text_area_frame)
     |> render_menu_bar(menu_bar_frame)
   end
 
   defp render_text_area(
     %Scenic.Graph{} = graph,
+    %Scenic.Scene{} = scene,
     %QuillEx.RootScene.State{} = state,
     %Widgex.Frame{} = frame
   ) do
@@ -24,11 +27,12 @@ defmodule QuillEx.RootScene.Renderizer do
 
     # group these together, and add tab bar
     graph
-    |> render_buffer_pane(state, frame)
+    |> render_buffer_pane(scene, state, frame)
   end
 
   defp render_buffer_pane(
     %Scenic.Graph{} = graph,
+    %Scenic.Scene{} = scene,
     %QuillEx.RootScene.State{} = state,
     %Widgex.Frame{} = frame
   ) do
@@ -49,14 +53,13 @@ defmodule QuillEx.RootScene.Renderizer do
         )
 
       _primitive ->
-
         # these are the only things that could be changed in the BufferPane component by this level, the parent component
         potential_changes = %{
           frame: frame,
           buf_ref: QuillEx.RootScene.State.active_buf(state)
         }
 
-        [pid] = Scenic.Scene.child(:buffer_pane)
+        {:ok, [pid]} = Scenic.Scene.child(scene, :buffer_pane)
         GenServer.cast(pid, {:state_change, potential_changes})
 
         graph

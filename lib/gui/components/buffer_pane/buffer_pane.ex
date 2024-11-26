@@ -54,13 +54,14 @@ defmodule Quillex.GUI.Components.BufferPane do
     {:ok, buf} = Quillex.Structs.BufState.BufRef.fetch_buf(state.buf_ref)
 
     graph =
-      BufferPane.RenderizerTwo.render(Scenic.Graph.build(), state, buf)
+      BufferPane.Renderizer.render(Scenic.Graph.build(), scene, state, buf)
 
     init_scene =
       scene
       |> assign(graph: graph)
       |> assign(state: state)
-      # |> assign(buf: buf)
+      |> assign(buf_ref: state.buf_ref)
+      |> assign(buf: buf)
       |> push_graph(graph)
 
     Registry.register(Quillex.BufferRegistry, {state.buf_ref.uuid, __MODULE__}, nil)
@@ -91,7 +92,7 @@ defmodule Quillex.GUI.Components.BufferPane do
   #   # new_scene = BufferPane.Renderizer.re_render_scene(scene, new_state)
 
   #   new_graph =
-  #     BufferPane.RenderizerTwo.render(scene.assigns.graph, new_state, scene.assigns.buf)
+  #     BufferPane.Renderizer.render(scene.assigns.graph, new_state, scene.assigns.buf)
 
   #   new_scene =
   #     scene
@@ -108,8 +109,10 @@ defmodule Quillex.GUI.Components.BufferPane do
 
   def handle_cast({:state_change, %Quillex.Structs.BufState{} = new_buf}, scene) do
 
+    #TODO check this buf matches the buf_ref in the assigns
+
     new_graph =
-      BufferPane.RenderizerTwo.render(Scenic.Graph.build(), scene.assigns.state, new_buf)
+      BufferPane.Renderizer.render(scene.assigns.graph, scene, scene.assigns.state, new_buf)
 
     new_scene =
       scene
@@ -133,17 +136,22 @@ defmodule Quillex.GUI.Components.BufferPane do
 
     # new_scene = BufferPane.Renderizer.re_render_scene(scene, new_state)
 
-    # graph =
-    #   BufferPane.RenderizerTwo.render(Scenic.Graph.build(), state, buf)
+    IO.puts "WHAT NEW WEIRD STATE CHANGE"
 
-    # new_graph =
-      # BufferPane.RenderizerTwo.render(scene.assigns.graph, scene.assigns.state, new_buf)
-      IO.puts "STATE CHAAAAAA"
+    new_state =
+      scene.assigns.state
+      # TODO this might kill the struct nature of the state, dunno
+      |> Map.put(:frame, changes.frame || scene.assigns.state.frame)
+      |> Map.put(:buf_ref, changes.buf_ref || scene.assigns.buf_ref)
+
+    new_graph =
+      BufferPane.Renderizer.render(scene.assigns.graph, scene, new_state, scene.assigns.buf)
+
     new_scene =
       scene
-      # |> assign(graph: new_graph)
-      # |> assign(buf: new_buf)
-      # |> push_graph(new_graph)
+      |> assign(graph: new_graph)
+      |> assign(state: new_state)
+      |> push_graph(new_graph)
 
     # TODO maybe this code below  will work to optimize not calling push_graph if we dont need to? Is this a significant saving?
     # if new_scene.assigns.graph != scene.assigns.graph do

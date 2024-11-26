@@ -24,7 +24,8 @@ defmodule QuillEx.RootScene do
       buffers: [buf_ref]
     })
 
-    graph = RootScene.Renderizer.render(Scenic.Graph.build(), state)
+    # need to pass in scene so we can cast to children, even though we would never do that during init
+    graph = RootScene.Renderizer.render(Scenic.Graph.build(), scene, state)
 
     scene =
       scene
@@ -105,7 +106,8 @@ defmodule QuillEx.RootScene do
         end
       end)
 
-    new_graph = RootScene.Renderizer.render(scene.assigns.graph, new_state)
+    # need to pass in scene so we can cast to children
+    new_graph = RootScene.Renderizer.render(scene.assigns.graph, scene, new_state)
 
     new_scene =
       scene

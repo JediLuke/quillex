@@ -48,7 +48,7 @@ defmodule Quillex.Structs.BufState do
   #   @valid_modes [:edit] ++ @vim_modes
   def new(args) do
     name = Map.get(args, :name) || Map.get(args, "name") || @unnamed
-    data = Map.get(args, :data) || Map.get(args, "data") || []
+    data = Map.get(args, :data) || Map.get(args, "data") || [""]
     data = if is_list(data), do: data, else: raise("Buffer data must be a list of strings")
     # mode: validate_mode(args[:mode]) || :edit,
     mode = Map.get(args, :mode) || Map.get(args, "mode") || {:vim, :insert}
