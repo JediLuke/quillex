@@ -12,7 +12,7 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.VimKeyMappings.Inse
   end
 
   # Enter key inserts a newline
-  def handle(_buf, @enter_key) do
+  def handle(_buf, k) when k in [@enter_key, @keypad_enter] do
     {:newline, :at_cursor}
   end
 

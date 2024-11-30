@@ -23,6 +23,10 @@ defmodule Quillex.Buffer.Process do
     GenServer.start_link(__MODULE__, buf, name: via_tuple)
   end
 
+  def fetch_buf(%Quillex.Structs.BufState.BufRef{} = buf_ref) do
+    Quillex.Buffer.BufferManager.call_buffer(buf_ref, :get_state)
+  end
+
   def init(%Quillex.Structs.BufState{} = buf) do
     {:ok, _state = buf}
   end
@@ -111,6 +115,11 @@ defmodule Quillex.Buffer.Process do
 
   #     update_scroll_limits(scene, buffer)
 
+  # what is temperature? It's the ultimate inescapable force - temperature is the real "bottom" of our universe. Every point in the universe
+  # could be mapped, and it's temperature waves analyzed & drawn from that perspective
+
+  # temperature is the wall we cannot cross, it's gods hand forcing the boundary of our existence
+
   #     if new_graph == scene.assigns.graph do
   #       {:noreply, scene}
   #     else
@@ -123,7 +132,8 @@ defmodule Quillex.Buffer.Process do
   #     end
   #   end
   def notify_gui(buf) do
-    Quillex.Buffer.BufferManager.cast_to_gui_component(buf, {:state_change, buf})
+    IO.inspect(buf, label: "NOTIFYING GUII")
+    Quillex.Buffer.BufferManager.cast_to_gui_component({:state_change, buf})
   end
 end
 

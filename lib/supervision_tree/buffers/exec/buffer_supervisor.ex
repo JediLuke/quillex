@@ -6,6 +6,7 @@ defmodule Quillex.BufferSupervisor do
   #   # filename also a good id
   #   # TODO check `id` is unique here!
 
+  # start a new buffer from a file
   def start_new_buffer_process(%{filepath: filepath} = args) when is_binary(filepath) do
     # Check if file exists before attempting to read it
     case File.exists?(filepath) do
@@ -45,11 +46,16 @@ defmodule Quillex.BufferSupervisor do
   end
 
   def do_start_buffer(%Quillex.Structs.BufState{} = buf) do
+
     spec = {Quillex.Buffer.Process, buf}
+    {:ok, _buffer_pid} = DynamicSupervisor.start_child(__MODULE__, spec)
 
-    {:ok, buffer_pid} = DynamicSupervisor.start_child(__MODULE__, spec)
+    buf_ref = Quillex.Structs.BufState.BufRef.generate(buf)
 
-    buf_ref = Quillex.Structs.BufState.BufRef.generate(buf, buffer_pid)
+    # broadcast action here - active buffer -> it should be an action eventually so Flamelex can react to it,
+    # but for now we can just send it to RootScene
+
+    GenServer.cast(QuillEx.RootScene, {:action, {:activate_buffer, buf_ref}})
 
     {:ok, buf_ref}
   end

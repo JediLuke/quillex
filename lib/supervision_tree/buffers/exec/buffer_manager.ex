@@ -8,6 +8,10 @@ defmodule Quillex.Buffer.BufferManager do
 
   def new_buffer, do: new_buffer(%{})
 
+  def new_buffer(b) when is_binary(b) do
+    new_buffer(%{name: b})
+  end
+
   def new_buffer(args) do
     # from the users point of view, there is such a thing as a 'new' buffer,
     # but from the system's point of view, it's just opening another buffer & is not special
@@ -58,23 +62,23 @@ defmodule Quillex.Buffer.BufferManager do
         GenServer.call(pid, msg)
 
       [] ->
-        raise "Could not find Buffer process, uuid: #{inspect(buf_uuid)}"
+        raise "Could not find Buffer.Process process, uuid: #{inspect(buf_uuid)}"
     end
   end
 
   # similar to the above only instead of sending to the Buffer process,
   # this sends it to the Buffer GUI component process (the Scenic component)
-  def cast_to_gui_component(%{uuid: buf_uuid}, msg) do
+  def cast_to_gui_component(msg) do
     Registry.lookup(
       Quillex.BufferRegistry,
-      {buf_uuid, Quillex.GUI.Components.BufferPane}
+      Quillex.GUI.Components.BufferPane
     )
     |> case do
       [{pid, _meta}] ->
         GenServer.cast(pid, msg)
 
       [] ->
-        raise "Could not find Buffer process, uuid: #{inspect(buf_uuid)}"
+        raise "Could not find BufferPane GUI component"
     end
   end
 end
