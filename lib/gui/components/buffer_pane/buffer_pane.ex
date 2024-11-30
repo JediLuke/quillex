@@ -51,7 +51,7 @@ defmodule Quillex.GUI.Components.BufferPane do
     # with the Zen of scenic to go and fetch state upon our boot, since that
     # keeps the integrity our gui thread even if the external data sdource if bad,
     # plus I think it's more efficient in terms of data transfer to just get it once rather than pass it around everywhere (maybe?)
-    {:ok, buf} = Quillex.Structs.BufState.BufRef.fetch_buf(state.buf_ref)
+    {:ok, buf} = Quillex.Buffer.Process.fetch_buf(state.buf_ref)
 
     graph =
       BufferPane.Renderizer.render(Scenic.Graph.build(), scene, state, buf)
@@ -64,13 +64,13 @@ defmodule Quillex.GUI.Components.BufferPane do
       |> assign(buf: buf)
       |> push_graph(graph)
 
-    Registry.register(Quillex.BufferRegistry, {state.buf_ref.uuid, __MODULE__}, nil)
+    Registry.register(Quillex.BufferRegistry, __MODULE__, nil)
 
     {:ok, init_scene}
   end
 
   def handle_cast({:user_input, input}, scene) do
-    # the GUI component converts raw user input to actions,
+    # the GUI component converts raw user input to actions, directly on this layer,
     # which are then passed back up the component tree for processing
     case BufferPane.UserInputHandler.handle(scene.assigns.state, input) do
       :ignore ->
@@ -136,21 +136,33 @@ defmodule Quillex.GUI.Components.BufferPane do
 
     # new_scene = BufferPane.Renderizer.re_render_scene(scene, new_state)
 
-    IO.puts "WHAT NEW WEIRD STATE CHANGE"
+    buf_ref = changes.buf_ref || scene.assigns.buf_ref
 
     new_state =
       scene.assigns.state
       # TODO this might kill the struct nature of the state, dunno
       |> Map.put(:frame, changes.frame || scene.assigns.state.frame)
-      |> Map.put(:buf_ref, changes.buf_ref || scene.assigns.buf_ref)
+      |> Map.put(:buf_ref, buf_ref)
+
+    {:ok, new_buf} = Quillex.Buffer.Process.fetch_buf(buf_ref)
 
     new_graph =
-      BufferPane.Renderizer.render(scene.assigns.graph, scene, new_state, scene.assigns.buf)
+      BufferPane.Renderizer.render(scene.assigns.graph, scene, new_state, new_buf)
 
     new_scene =
       scene
       |> assign(graph: new_graph)
       |> assign(state: new_state)
+      |> assign(buf: new_buf)
+      # |> then(fn s ->
+      # #   IO.inspect(s)
+      #   if buf_ref != scene.assigns.buf_ref do
+      #     assign(s, buf: new_buf)
+      #   else
+      #     s
+      #   end
+      #   # s
+      # end)
       |> push_graph(new_graph)
 
     # TODO maybe this code below  will work to optimize not calling push_graph if we dont need to? Is this a significant saving?

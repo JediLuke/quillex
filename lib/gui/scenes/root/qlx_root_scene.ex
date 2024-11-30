@@ -84,38 +84,57 @@ defmodule QuillEx.RootScene do
 
   def handle_input(input, _context, scene) do
     #TODO this... isn't always true - should use UserInputHandler here
-    BufferManager.cast_to_gui_component(QuillEx.RootScene.State.active_buf(scene), {:user_input, input})
+    IO.inspect(input)
+    # BufferManager.cast_to_gui_component(QuillEx.RootScene.State.active_buf(scene), {:user_input, input})
+    BufferManager.cast_to_gui_component({:user_input, input})
     {:noreply, scene}
+  end
+
+  def handle_call(:get_active_buffer, _from, scene) do
+    {:reply, {:ok, scene.assigns.state.active_buf}, scene}
   end
 
   def handle_cast({:action, actions}, scene) when is_list(actions) do
     # TODO use wormhole here
-    new_state =
-      Enum.reduce(actions, scene.assigns.state, fn action, acc_state ->
-        RootScene.Reducer.process(acc_state, action)
-        |> case do
-          :ignore ->
-            acc_state
 
-          :cast_to_children ->
-            Scenic.Scene.cast_children(scene, action)
-            acc_state
+    compute_action =
+      Wormhole.capture(fn ->
+        new_state =
+          Enum.reduce(actions, scene.assigns.state, fn action, acc_state ->
+            RootScene.Reducer.process(acc_state, action)
+            |> case do
+              :ignore ->
+                acc_state
 
-          new_acc_state ->
-            new_acc_state
-        end
+              # :cast_to_children ->
+              #   Scenic.Scene.cast_children(scene, action)
+              #   acc_state
+
+              new_acc_state ->
+                new_acc_state
+            end
+          end)
+
+        # need to pass in scene so we can cast to children
+        new_graph = RootScene.Renderizer.render(scene.assigns.graph, scene, new_state)
+
+        {new_state, new_graph}
       end)
 
-    # need to pass in scene so we can cast to children
-    new_graph = RootScene.Renderizer.render(scene.assigns.graph, scene, new_state)
+    case compute_action do
+      {:ok, {new_state, new_graph}} ->
+        new_scene =
+          scene
+          |> assign(state: new_state)
+          |> assign(graph: new_graph)
+          |> push_graph(new_graph)
 
-    new_scene =
-      scene
-      |> assign(state: new_state)
-      |> assign(graph: new_graph)
-      |> push_graph(new_graph)
+        {:noreply, new_scene}
 
-    {:noreply, new_scene}
+      {:error, whatever} ->
+        Logger.error "Couldn't compute action #{inspect actions}"
+        {:noreply, scene}
+    end
   end
 
   def handle_cast({:action, a}, scene) do

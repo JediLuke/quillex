@@ -43,7 +43,8 @@ defmodule QuillEx.RootScene.Renderizer do
 
         buffer_pane_state = Quillex.GUI.Components.BufferPane.State.new(%{
           frame: frame,
-          buf_ref: QuillEx.RootScene.State.active_buf(state)
+          buf_ref: state.active_buf
+          # buf_ref: QuillEx.RootScene.State.active_buf(state)
         })
 
         graph
@@ -56,7 +57,8 @@ defmodule QuillEx.RootScene.Renderizer do
         # these are the only things that could be changed in the BufferPane component by this level, the parent component
         potential_changes = %{
           frame: frame,
-          buf_ref: QuillEx.RootScene.State.active_buf(state)
+          buf_ref: state.active_buf
+          # buf_ref: QuillEx.RootScene.State.active_buf(state)
         }
 
         {:ok, [pid]} = Scenic.Scene.child(scene, :buffer_pane)
@@ -152,12 +154,18 @@ defmodule QuillEx.RootScene.Renderizer do
           ]},
       {:sub_menu, "About",
           [
-            {"About Quillex", fn -> raise "no" end},
+            {"About Quillex", fire_menu_action(:open_about_quillex)},
             {"website", fn -> raise "no" end},
             {"legal", fn -> raise "no" end},
             {"Donate", fn -> raise "no" end},
           ]},
     ]
+  end
+
+  defp fire_menu_action(a) do
+    # return a _function_ which will get (reduced/applied/called, really it's "eval'd", opposite of apply/construct/generate a function)
+    # evaludated when the user clicks a menu item
+    fn -> GenServer.cast(QuillEx.RootScene, {:action, a}) end
   end
 end
 

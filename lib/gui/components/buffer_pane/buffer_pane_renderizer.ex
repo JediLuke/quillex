@@ -1,85 +1,154 @@
 defmodule Quillex.GUI.Components.BufferPane.Renderizer do
   alias Quillex.GUI.Components.BufferPane
 
+  # this case forces a complete re-render if the frame has changes
+  def render(
+    # graph,
+    #  = scene,
+    # # scene,
+    # %{} = _new_state,
+    # # state,
+    # buf
+
+    # todo we could consider, looking into scene.assigns.graph, and if it's present,
+    # use that, else insject a Scenic.Graph.build()... I dunno, this is working for now,
+    # I feel ilke maybe it's useful to be able to override the base graph? dunno
+    %Scenic.Graph{} = base_graph,
+    %Scenic.Scene{assigns: %{state: %{frame: old_frame}}} = scene,
+    %BufferPane.State{frame: new_frame} = new_state,
+    %Quillex.Structs.BufState{} = new_buf
+  ) when old_frame != new_frame do
+  # when old_frame != new_frame do
+    # re-render from scratch
+
+    IO.puts "NEW FRAME"
+    IO.inspect(old_frame)
+    IO.puts "-----"
+    IO.inspect(new_frame)
+    raise "cant do frame change yet"
+
+    # update state.frame
+    # new_frame_state = %{scene.assigns.state|frame: new_frame}
+
+    # _brand_new_graph =
+      # render(
+      #   Scenic.Graph.build(),
+      #   scene,
+      #   new_frame_state,
+      #   scene.assigns.buf
+      # )
+      # raise "guess not"
+      base_graph
+  end
+
+  # this casew causes a complete re-render if the buffer has changes
+  # def render(
+  #   %Scenic.Graph{} = graph,
+  #   %Scenic.Scene{} = scene,
+  #   %BufferPane.State{buf_ref: %{uuid: old_buf_uuid}} = new_state,
+  #   %Quillex.Structs.BufState{uuid: new_buf_uuid} = new_buf
+  # ) when old_buf_uuid != new_buf_uuid do
+  #   graph
+  #   |> render_background(new_state)
+  #   raise "yeh now we got a problem we changed bufs!@"
+  # end
+
   def render(
     %Scenic.Graph{} = graph,
     %Scenic.Scene{} = scene,
-    %BufferPane.State{} = state,
+    %BufferPane.State{} = new_state,
     %Quillex.Structs.BufState{} = buf
   ) do
     graph
-    |> render_background(state)
-    |> render_text_lines(scene, state, buf)
-    |> render_cursor(scene, state.frame, buf, state.font)
+    |> render_background(new_state)
+    |> render_text_lines(scene, new_state, buf)
+    |> render_cursor(scene, new_state.frame, buf, new_state.font)
     # |> draw_scrollbars(args)
     # |> render_status_bar(frame, buf)
     # |> render_active_row_decoration(frame, buf, font, colors)
   end
 
-  defp render_background(graph, state) do
+  defp render_background(graph, new_state) do
     case Scenic.Graph.get(graph, :background) do
       [] ->
         graph
-        |> Scenic.Primitives.rect(state.frame.size.box,
+        |> Scenic.Primitives.rect(new_state.frame.size.box,
             id: :background,
-            fill: state.colors.slate
+            fill: new_state.colors.slate
         )
 
       _primitive ->
         graph
         |> Scenic.Graph.modify(:background,
-          &Scenic.Primitives.update_opts(&1, fill: state.colors.slate)
+          &Scenic.Primitives.update_opts(&1, fill: new_state.colors.slate)
         )
     end
   end
 
-        # # this dissapears after you type or do something, but I like it! It's magical!
-      # buf =
-      #   if buf.data == [] do
-      #     buf
-      #     |> BufferPane.Mutator.insert_text({1, 1}, "#{@no_limits_to_tomorrow}")
-      #   else
-      #     buf
-      #   end
+  # this dissapears after you type or do something, but I like it! It's magical!
+  # buf =
+  #   if buf.data == [] do
+  #     buf
+  #     |> BufferPane.Mutator.insert_text({1, 1}, "#{@no_limits_to_tomorrow}")
+  #   else
+  #     buf
+  #   end
 
+  # also, add thee damnm tab bar lol
+
+
+
+  # same with changes in frame, just re-render...
 
   # TODO handle when it's the active row (highlight active row)
   defp render_text_lines(graph, scene, state, %Quillex.Structs.BufState{data: new_lines} = buf) do
+
+    IO.inspect(new_lines, label: "ASASAS")
+    IO.inspect(buf)
+
     old_lines = if not is_nil(Map.get(scene.assigns, :buf)), do: scene.assigns.buf.data || [""], else: [""]
-    font = state.font
-    colors = state.colors
-    line_height = font.size
-    #     # TODO why 3? No magic numbers!!
-    #     initial_y = font.size - 3
+    # # TODO why 3? No magic numbers!!
+    #  initial_y = font.size - 3
     # then I "adde4d 4" by making this plus 1, but it's still a magic number
-    initial_y = font.size + 1 # font.size + adds adds a nice little top margin
+    initial_y = state.font.size + 1 # font.size + adds adds a nice little top margin
     max_lines = max(length(old_lines), length(new_lines))
+    line_height = state.font.size
+
+    # max_lines = length(new_lines)
 
     # TODO always render at least the first line number...
     updated_graph =
-      Enum.reduce(1..max_lines, graph, fn idx, acc_graph ->
-        old_line = Enum.at(old_lines, idx - 1, nil)
-        new_line = Enum.at(new_lines, idx - 1, nil)
-        y_position = initial_y + (idx - 1) * line_height
+      graph
+      |> Scenic.Primitives.group(fn graph ->
+        Enum.reduce(1..max_lines, graph, fn idx, acc_graph ->
+          old_line = Enum.at(old_lines, idx - 1, nil)
+          new_line = Enum.at(new_lines, idx - 1, nil)
+          y_position = initial_y + (idx - 1) * line_height
 
-        cond do
-          # Line unchanged, skip rendering
-          old_line == new_line ->
-            acc_graph
+          IO.puts "#{old_line} --> #{new_line}"
 
-          # Line removed, clean up
-          old_line != nil and new_line == nil ->
-            acc_graph
-            |> Scenic.Graph.delete({:line_number_text, idx})
-            |> Scenic.Graph.delete({:line_text, idx})
+          cond do
+            # Line unchanged, skip rendering
+            old_line == new_line ->
+              acc_graph
 
-          # Line added or changed, render
-          true ->
-            acc_graph
-            |> render_line_number(idx, y_position, font)
-            |> render_line_text(new_line || "", idx, y_position, font, colors.text)
-        end
-      end)
+            # Line removed, clean up
+            old_line != nil and new_line == nil ->
+              acc_graph
+              |> Scenic.Graph.delete({:line_number_text, idx})
+              |> Scenic.Graph.delete({:line_text, idx})
+
+            # Line added or changed, render
+            true ->
+              acc_graph
+              |> Scenic.Graph.delete({:line_text, idx})
+              |> render_line_number(idx, y_position, state.font)
+              |> render_line_text(new_line || "", idx, y_position, state.font, state.colors.text)
+          end
+        end)
+        # always render at least the first line number (even if that line of text is blank)
+        |> render_line_number(1, initial_y, state.font)
+      end, id: :full_text_block)
 
     updated_graph
   end
@@ -135,13 +204,13 @@ defmodule Quillex.GUI.Components.BufferPane.Renderizer do
     end
   end
 
-    #   def draw_cursor(graph, %{state: %{mode: :read_only}}) do
+  #   def draw_cursor(graph, %{state: %{mode: :read_only}}) do
   #     # no cursors in read-only mode...
   #     graph
   #   end
 
   defp render_cursor(graph, scene, frame, %Quillex.Structs.BufState{cursors: [cursor]} = buf, font) do
-    cursor_id = {:cursor, buf.uuid}
+    cursor_id = {:cursor, 1}
 
     cursor_mode =
       case buf.mode do
@@ -151,6 +220,7 @@ defmodule Quillex.GUI.Components.BufferPane.Renderizer do
         _ -> :cursor
       end
 
+    # Here when we start with a new bufgfer, it automatically makes a new cursor
     case Scenic.Graph.get(graph, cursor_id) do
       [] ->
         # Add a new cursor primitive if it doesn't exist
@@ -175,8 +245,79 @@ defmodule Quillex.GUI.Components.BufferPane.Renderizer do
         GenServer.cast(pid, {:state_change, cursor})
 
         graph
+
     end
+    # |> clean_up_old_cursors
   end
+
+#   @status_bar_height 40
+# defp render_status_bar(graph, frame, buf) do
+#   case Scenic.Graph.get(graph, :status_bar) do
+#     [] ->
+#       graph
+#       |> Scenic.Primitives.rect(
+#         {frame.size.width, @status_bar_height},
+#         translate: {0, frame.size.height - @status_bar_height},
+#         fill: :grey,
+#         id: :status_bar
+#       )
+
+#     _primitive ->
+#       graph
+#       |> Scenic.Graph.modify(:status_bar, fn existing_primitive ->
+#         Scenic.Primitives.rect(
+#           existing_primitive,
+#           {frame.size.width, @status_bar_height},
+#           translate: {0, frame.size.height - @status_bar_height}
+#         )
+#       end)
+#   end
+# end
+
+
+# @semi_transparent_white {255, 255, 255, Integer.floor_div(255, 3)}
+# defp render_active_row_decoration(graph, frame, %Quillex.Structs.BufState{cursors: [cursor]}, font) do
+#   line_height = font.size
+#   y_position = (cursor.line - 1) * line_height
+
+#   case Scenic.Graph.get(graph, :active_row) do
+#     [] ->
+#       graph
+#       |> Scenic.Primitives.rect(
+#         {frame.size.width, line_height},
+#         fill: {:color_rgba, @semi_transparent_white},
+#         translate: {0, y_position},
+#         id: :active_row
+#       )
+#       |> Scenic.Primitives.rect(
+#         {frame.size.width - 2, line_height},
+#         stroke: {1, :white},
+#         translate: {1, y_position},
+#         id: :active_row_border
+#       )
+
+#     _primitive ->
+#       graph
+#       |> Scenic.Graph.modify(:active_row, fn existing_primitive ->
+#         Scenic.Primitives.rect(
+#           existing_primitive,
+#           {frame.size.width, line_height},
+#           fill: {:color_rgba, @semi_transparent_white},
+#           translate: {0, y_position}
+#         )
+#       end)
+#       |> Scenic.Graph.modify(:active_row_border, fn existing_primitive ->
+#         Scenic.Primitives.rect(
+#           existing_primitive,
+#           {frame.size.width - 2, line_height},
+#           stroke: {1, :white},
+#           translate: {1, y_position}
+#         )
+#       end)
+#   end
+# end
+
+
 end
 
 
