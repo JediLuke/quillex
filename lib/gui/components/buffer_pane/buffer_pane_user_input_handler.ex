@@ -27,7 +27,6 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler do
   # if ther is it's a higher level state change anyway so handle it within radix state
 
   def handle(%{buf_ref: %{mode: :edit}} = buf_ref, input) do
-    IO.puts "INSERTR MODER"
     InsertMode.handle(buf_ref, input)
   end
 
@@ -41,7 +40,7 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler do
 
   def handle(buf, input) do
     Logger.error "Unhandled input: #{inspect input}"
-    IO.inspect(buf)
+    # IO.inspect(buf)
     :ignore
   end
 end

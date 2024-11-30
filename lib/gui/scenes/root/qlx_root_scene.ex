@@ -16,12 +16,21 @@ defmodule QuillEx.RootScene do
 
   def init(%Scenic.Scene{} = scene, _args, _opts) do
 
-    # initialize a new (empty) buffer on startup
-    {:ok, buf_ref} = Quillex.Buffer.BufferManager.new_buffer(%{mode: :edit})
+    # if there aren't any buffers, initialize a new (empty) buffer on startup
+    # checking with BufferManager on startup is cruicial for recovering from GUI crashes
+    # cause we initialize with the correct state again
+    buffers =
+      case Quillex.Buffer.BufferManager.list_buffers() do
+        [] ->
+          {:ok, buf_ref} = Quillex.Buffer.BufferManager.new_buffer(%{mode: :edit})
+          [buf_ref]
+        buffers ->
+          buffers
+      end
 
     state = RootScene.State.new(%{
       frame: Widgex.Frame.new(scene.viewport),
-      buffers: [buf_ref]
+      buffers: buffers
     })
 
     # need to pass in scene so we can cast to children, even though we would never do that during init
@@ -34,6 +43,7 @@ defmodule QuillEx.RootScene do
       |> push_graph(graph)
 
     Process.register(self(), __MODULE__)
+    Quillex.Utils.PubSub.subscribe(topic: :qlx_events)
 
     request_input(scene, [:viewport, :key])
 
@@ -84,7 +94,7 @@ defmodule QuillEx.RootScene do
 
   def handle_input(input, _context, scene) do
     #TODO this... isn't always true - should use UserInputHandler here
-    IO.inspect(input)
+    # IO.inspect(input)
     # BufferManager.cast_to_gui_component(QuillEx.RootScene.State.active_buf(scene), {:user_input, input})
     BufferManager.cast_to_gui_component({:user_input, input})
     {:noreply, scene}
@@ -95,9 +105,7 @@ defmodule QuillEx.RootScene do
   end
 
   def handle_cast({:action, actions}, scene) when is_list(actions) do
-    # TODO use wormhole here
-
-    compute_action =
+    wormhole_capture =
       Wormhole.capture(fn ->
         new_state =
           Enum.reduce(actions, scene.assigns.state, fn action, acc_state ->
@@ -121,7 +129,7 @@ defmodule QuillEx.RootScene do
         {new_state, new_graph}
       end)
 
-    case compute_action do
+    case wormhole_capture do
       {:ok, {new_state, new_graph}} ->
         new_scene =
           scene
@@ -131,8 +139,21 @@ defmodule QuillEx.RootScene do
 
         {:noreply, new_scene}
 
-      {:error, whatever} ->
-        Logger.error "Couldn't compute action #{inspect actions}"
+      {:error, reason} ->
+        # this is a big problem but we still dont want to crash the root scene over it
+        Logger.error "Couldn't compute action #{inspect actions}. #{inspect reason}"
+
+        #TODO recovery idea - there is a possibility that we sometimes have a race condition
+        # and that's why this happens, e.g. we open a buffer via BufferManager, BfrMgr is supposed
+        # to broadcast out changes like "buffer opened" when it's done, but what if between that
+        # happening someone came in here with an action like "open buffer x" which, technically
+        # has been opened, but the msg hasn't got back to the GUI process yet cause, race condition
+
+        # there's 2 ideas to make this more robust
+        # 1- we could have a repetition here, if it failed, send the action back to ourself 50ms
+        # from now, and try again. Then we need to keep track of state so we dont indefinitely keep retrying forever
+        # 2- we could also listen to the pubsub broadcast channel from the API, and make it
+        # wait for acknowldge ment that way
         {:noreply, scene}
     end
   end
@@ -149,5 +170,46 @@ defmodule QuillEx.RootScene do
       ) do
     BufferManager.call_buffer(buf_ref, {:action, actions})
     {:noreply, scene}
+  end
+
+  # if actions come in via PubSub they come in via handle_info, just convert to handle_cast
+  def handle_info({:action, a}, scene) do
+    handle_cast({:action, a}, scene)
+  end
+
+  def handle_info({:new_buffer_opened, %Quillex.Structs.BufState.BufRef{} = buf_ref}, scene) do
+    new_state =
+      scene.assigns.state
+      # to be honest I dont understand how this is already been added here but I guess it has....
+      # its cause when we start a new buffer, we do add it to the state of this process!
+
+      # we _should_ check incase it hasn't been added I guess...
+
+      # do we were adding it in both places sometimes, I had to cancel adding it in the mutator (which was calling new buffer in BNufrMgr)
+      # and instead RootScene has to wait for the callback that it worked...
+
+      # if Enum.any?(state.buffers, & &1.uuid == buf_ref.uuid) do
+      #   Quillex.Utils.PubSub.broadcast(
+      #       topic: :qlx_events,
+      #       msg: {:action, {:activate_buffer, buf_ref}}
+      #     )
+      #   {:reply, {:ok, buf_ref}, state}
+      # else
+      #   raise "Could not find buffer: #{inspect buf_ref}"
+      #   # do_start_new_buffer_process(state, buf_red)
+      # end
+
+      |> RootScene.Mutator.add_buffer(buf_ref)
+      |> RootScene.Mutator.activate_buffer(buf_ref)
+
+    new_graph = RootScene.Renderizer.render(scene.assigns.graph, scene, new_state)
+
+    new_scene =
+      scene
+      |> assign(state: new_state)
+      |> assign(graph: new_graph)
+      |> push_graph(new_graph)
+
+    {:noreply, new_scene}
   end
 end

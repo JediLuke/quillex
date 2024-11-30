@@ -1,14 +1,43 @@
 defmodule Quillex.Buffer do
 
-  defdelegate new(), to: Quillex.Buffer.BufferManager, as: :new_buffer
-  defdelegate new(args), to: Quillex.Buffer.BufferManager, as: :new_buffer
+  def new() do
+    # {:ok, buf_ref} = Quillex.Buffer.BufferManager.new_buffer()
+    # switch(buf_ref)
+  end
+
+  def new(args) do
+    # already this single choice has so much architectural depth...
+    # if we call BufferManager to do it, we're going to the source of truth
+    # then buffermanager has to broadcast out changes, and the RootScene has to respond
+    # an alternative idea is to route everything through the RootScene, via actions
+    # making it the central source of truth - then it is hard to get feedback
+    # via this API, like getting the buf ref back, and then being able
+    # to call switch, or even send a new action in saying 'open this buffer'
+    # for now I'm going to keep using PubSub for events like opening buffers
+    # and the RootScene will simply have to handle them, this will scale well
+    # and be robust but now somehow it feels like I have introduced the possibility of
+    # a race condition, if msgs from BufferManager dont get to RootScene
+    # before I go and try to query RootScene / call switch buffer on it, before
+    # the new buffer msg propagates back from BufferManager to RootScene...
+    {:ok, buf_ref} = Quillex.Buffer.BufferManager.new_buffer(args)
+    # switch(buf_ref)
+  end
 
   defdelegate open(args), to: Quillex.Buffer.BufferManager, as: :open_buffer
 
   defdelegate list(), to: Quillex.Buffer.BufferManager, as: :list_buffers
 
+  def active_buf do
+    {:ok, active_buf} = GenServer.call(QuillEx.RootScene, :get_active_buffer)
+    active_buf
+  end
+
   def switch(n) when is_integer(n) do
     GenServer.cast(QuillEx.RootScene, {:action, {:activate_buffer, n}})
+  end
+
+  def switch(buf_ref) do
+    GenServer.cast(QuillEx.RootScene, {:action, {:activate_buffer, buf_ref}})
   end
 
   # # TODO maybe rename slate or quill one day...

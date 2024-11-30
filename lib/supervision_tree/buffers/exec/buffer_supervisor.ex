@@ -46,16 +46,8 @@ defmodule Quillex.BufferSupervisor do
   end
 
   def do_start_buffer(%Quillex.Structs.BufState{} = buf) do
-
-    spec = {Quillex.Buffer.Process, buf}
-    {:ok, _buffer_pid} = DynamicSupervisor.start_child(__MODULE__, spec)
-
+    {:ok, _pid} = DynamicSupervisor.start_child(__MODULE__, {Quillex.Buffer.Process, buf})
     buf_ref = Quillex.Structs.BufState.BufRef.generate(buf)
-
-    # broadcast action here - active buffer -> it should be an action eventually so Flamelex can react to it,
-    # but for now we can just send it to RootScene
-
-    GenServer.cast(QuillEx.RootScene, {:action, {:activate_buffer, buf_ref}})
 
     {:ok, buf_ref}
   end

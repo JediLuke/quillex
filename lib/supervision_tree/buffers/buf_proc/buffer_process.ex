@@ -131,8 +131,8 @@ defmodule Quillex.Buffer.Process do
   #       {:noreply, new_scene}
   #     end
   #   end
+
   def notify_gui(buf) do
-    IO.inspect(buf, label: "NOTIFYING GUII")
     Quillex.Buffer.BufferManager.cast_to_gui_component({:state_change, buf})
   end
 end

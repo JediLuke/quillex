@@ -1,5 +1,6 @@
 defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.VimKeyMappings.InsertMode do
   use ScenicWidgets.ScenicEventsDefinitions
+  require Logger
 
   # Treat held down keys as repeated presses
   def handle(buf, {:key, {key, @key_held, mods}}) do
@@ -75,7 +76,7 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.VimKeyMappings.Inse
 
   # Unhandled inputs
   def handle(_buf, input) do
-    IO.puts("InsertMode: Unhandled input: #{inspect(input)}")
+    Logger.warn("InsertMode: Unhandled input: #{inspect(input)}")
     :ignore
   end
 end

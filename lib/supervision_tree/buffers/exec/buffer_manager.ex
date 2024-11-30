@@ -30,22 +30,24 @@ defmodule Quillex.Buffer.BufferManager do
     {:ok, %{buffers: []}}
   end
 
-  def handle_call({:open_buffer, args}, _from, state) do
-    # TODO check we're not trying to open the same buffer twice
-    case Quillex.BufferSupervisor.start_new_buffer_process(args) do
-      {:ok, %Quillex.Structs.BufState.BufRef{} = buf_ref} ->
-        new_state = %{state|buffers: state.buffers ++ [buf_ref]}
-        {:reply, {:ok, buf_ref}, new_state}
-
-      {:error, :file_not_found} ->
-        {:reply, {:error, :file_not_found}, state}
-
-      {:error, reason} ->
-        # raise "in practice this can never happen since `start_new_buffer_process` always returns `{:ok, buf_ref}`"
-        Logger.warn("Failed to open buffer: #{inspect(reason)}")
-        {:reply, {:error, reason}, state}
+  def handle_call({:open_buffer, %Quillex.Structs.BufState.BufRef{} = buf_ref}, _from, state) do
+    # check we're not trying to open the same buffer twice
+    if Enum.any?(state.buffers, & &1.uuid == buf_ref.uuid) do
+      Quillex.Utils.PubSub.broadcast(
+          topic: :qlx_events,
+          msg: {:action, {:activate_buffer, buf_ref}}
+        )
+      {:reply, {:ok, buf_ref}, state}
+    else
+      raise "Could not find buffer: #{inspect buf_ref}"
+      # do_start_new_buffer_process(state, buf_red)
     end
   end
+
+  def handle_call({:open_buffer, args}, _from, state) do
+    do_start_new_buffer_process(state, args)
+  end
+
 
   def handle_call(:list_buffers, _from, state) do
     {:reply, state.buffers, state}
@@ -79,6 +81,34 @@ defmodule Quillex.Buffer.BufferManager do
 
       [] ->
         raise "Could not find BufferPane GUI component"
+    end
+  end
+
+  defp do_start_new_buffer_process(state, args) do
+    case Quillex.BufferSupervisor.start_new_buffer_process(args) do
+      {:ok, %Quillex.Structs.BufState.BufRef{} = buf_ref} ->
+
+        # broadcast action here - active buffer -> it should be an action eventually so Flamelex can react to it,
+        # but for now we can just send it to RootScene - do it here once start new buffer process has already returned,
+        # so that we dont get any race condition
+        # GenServer.cast(QuillEx.RootScene, {:action, {:activate_buffer, buf_ref}})
+        # :ok = GenServer.call(QuillEx.RootScene, {:new_buffer, buf_ref})
+        # GenServer.cast(QuillEx.RootScene, {:new_buffer, buf_ref})
+        Quillex.Utils.PubSub.broadcast(
+          topic: :qlx_events,
+          msg: {:new_buffer_opened, buf_ref}
+        )
+
+        new_state = %{state|buffers: state.buffers ++ [buf_ref]}
+        {:reply, {:ok, buf_ref}, new_state}
+
+      {:error, :file_not_found} ->
+        {:reply, {:error, :file_not_found}, state}
+
+      {:error, reason} ->
+        # raise "in practice this can never happen since `start_new_buffer_process` always returns `{:ok, buf_ref}`"
+        Logger.warn("Failed to open buffer: #{inspect(reason)}")
+        {:reply, {:error, reason}, state}
     end
   end
 end

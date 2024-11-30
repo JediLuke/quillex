@@ -1,1 +1,1 @@
-alias QuillEx.API.Buffer
+alias Quillex.Buffer

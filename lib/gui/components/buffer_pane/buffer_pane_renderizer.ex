@@ -103,9 +103,6 @@ defmodule Quillex.GUI.Components.BufferPane.Renderizer do
   # TODO handle when it's the active row (highlight active row)
   defp render_text_lines(graph, scene, state, %Quillex.Structs.BufState{data: new_lines} = buf) do
 
-    IO.inspect(new_lines, label: "ASASAS")
-    IO.inspect(buf)
-
     old_lines = if not is_nil(Map.get(scene.assigns, :buf)), do: scene.assigns.buf.data || [""], else: [""]
     # # TODO why 3? No magic numbers!!
     #  initial_y = font.size - 3
@@ -124,8 +121,6 @@ defmodule Quillex.GUI.Components.BufferPane.Renderizer do
           old_line = Enum.at(old_lines, idx - 1, nil)
           new_line = Enum.at(new_lines, idx - 1, nil)
           y_position = initial_y + (idx - 1) * line_height
-
-          IO.puts "#{old_line} --> #{new_line}"
 
           cond do
             # Line unchanged, skip rendering
@@ -247,7 +242,6 @@ defmodule Quillex.GUI.Components.BufferPane.Renderizer do
         graph
 
     end
-    # |> clean_up_old_cursors
   end
 
 #   @status_bar_height 40

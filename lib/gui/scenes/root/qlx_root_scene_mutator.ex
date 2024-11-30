@@ -1,6 +1,14 @@
 defmodule QuillEx.RootScene.Mutator do
+  require Logger
+
   def add_buffer(%QuillEx.RootScene.State{} = state, buf_ref) do
-    %{state | buffers: state.buffers ++ [buf_ref], active_buf: buf_ref}
+    if Enum.any?(state.buffers, & &1.uuid == buf_ref.uuid) do
+      raise "tried to add a buffer that was already open... #{inspect buf_ref}"
+      # Logger.warn "tried to add a buffer that was already open... #{inspect buf_ref}"
+      state
+    else
+      %{state | buffers: state.buffers ++ [buf_ref]}
+    end
   end
 
   # def set_active_buffer(state, %{uuid: active_buf_uuid}) do
@@ -37,7 +45,9 @@ defmodule QuillEx.RootScene.Mutator do
   def activate_buffer(state, %Quillex.Structs.BufState.BufRef{} = buf_ref) do
     # n = Enum.find_index(state.buffers, & &1.uuid == buf_ref.uuid)
     # # we index buffers starting at one so we have to convert from zero-based indexes here
-    # %{state | active_buf: n + 1}
+    # %{state | active_buf: n + 1}\
+
+    # IO.inspect(state.buffers, label: "BUF BUF BUF")
 
     case Enum.find(state.buffers, &(&1.uuid == buf_ref.uuid)) do
       nil ->

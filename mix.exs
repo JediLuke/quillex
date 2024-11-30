@@ -31,7 +31,8 @@ defmodule QuillEx.MixProject do
       {:elixir_uuid, "~> 1.2"},
       {:font_metrics, "~> 0.5"},
       {:event_bus, "~> 1.7.0"},
-      {:struct_access, "~> 1.1.2"}
+      {:struct_access, "~> 1.1.2"},
+      {:wormhole, "~> 2.3"}
     ]
   end
 end

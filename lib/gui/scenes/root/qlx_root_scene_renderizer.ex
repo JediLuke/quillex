@@ -14,7 +14,7 @@ defmodule QuillEx.RootScene.Renderizer do
     # render MenuBar _after_ BufferPane so it (including menu dropdowns) appears on top of the buffer not below it
     graph
     |> render_text_area(scene, state, text_area_frame)
-    |> render_menu_bar(menu_bar_frame)
+    |> render_menu_bar(scene, state, menu_bar_frame)
   end
 
   defp render_text_area(
@@ -71,21 +71,29 @@ defmodule QuillEx.RootScene.Renderizer do
   # Render the menu bar
   defp render_menu_bar(
     %Scenic.Graph{} = graph,
+    scene,
+    %QuillEx.RootScene.State{} = state,
     %Widgex.Frame{} = frame
   ) do
     case Scenic.Graph.get(graph, :menu_bar) do
       [] ->
         graph
-        |> draw_menu_bar(frame)
+        |> draw_menu_bar(state, frame)
+        # dont update it here, that's the whole point, we cant cast to a component we haven't rendered yet
+        # that is to say, the scene.children doesn't contain the menubar component yet, so we cant cast
+        # to id to update, and theoretically we just drew it so there's nothing to update anyway !
+        # |> update_menu_map(scene, state)
 
       _primitive ->
-        # right now it's impossible to re-draw the menu bar, but we WOULD do this...
-        # GenServer.cast(ScenicWidgets.MenuBar, {:state_change, menu_bar_state})
+
         graph
+        |> update_menu_map(scene, state)
     end
   end
 
-  defp draw_menu_bar(graph, frame) do
+  # since this is shared name for the actual Scenic Component, extract it out to here
+  @qlx_main_menu :qlx_main_menu
+  defp draw_menu_bar(graph, state, frame) do
     graph
     |> Scenic.Primitives.group(
       fn graph ->
@@ -93,19 +101,34 @@ defmodule QuillEx.RootScene.Renderizer do
         |> ScenicWidgets.MenuBar.add_to_graph(
           %{
             frame: frame,
-            menu_map: menu_map()
-          })
+            menu_map: menu_map(state)
+          },
+          id: @qlx_main_menu)
       end,
       id: :menu_bar,
       translate: frame.pin.point
     )
   end
 
-  defp menu_map do
+  defp update_menu_map(graph, scene, %QuillEx.RootScene.State{} = state) do
+    new_menu_map = menu_map(state)
+
+    {:ok, [pid]} = Scenic.Scene.child(scene, @qlx_main_menu)
+    GenServer.cast(pid, {:put_menu_map, new_menu_map})
+
+    # simply return the graph unchanged, but this allows us the chain this function in pipelines
+    graph
+  end
+
+  defp menu_map(state) do
     [
       {:sub_menu, "Buffers",
          [
-           {"new tab", fn -> GenServer.cast(QuillEx.RootScene, {:action, :new_tab}) end},
+           {"new buffer", fn -> GenServer.cast(QuillEx.RootScene, {:action, :new_buffer}) end},
+           {:sub_menu, "open buffers",
+              Enum.map(state.buffers, fn buf ->
+                  {buf.name, fn -> Quillex.Buffer.open(buf) end}
+              end)},
            {"open file", fn -> raise "no" end},
            {"save", fn -> raise "no" end},
            {"save as", fn -> raise "no" end},

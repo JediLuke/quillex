@@ -1,11 +1,17 @@
 defmodule QuillEx.RootScene.Reducer do
   alias QuillEx.RootScene
 
-  def process(%QuillEx.RootScene.State{} = state, :new_tab) do
+  def process(%QuillEx.RootScene.State{} = state, :new_buffer) do
+    # this is why we dont need to wait for a callback when opening a new buffer
+    # via the _actions_, and it's why we should use actions for making a new buffer fvia the API
+
+    # Either that, OR, we _do_ put the callback in the BufferManager, then
+    # we need to _stop_ adding in the state here again
     {:ok, buf_ref} = Quillex.Buffer.BufferManager.new_buffer()
 
-    RootScene.Mutator.add_buffer(state, buf_ref)
-    # |> RootScene.Mutator.set_active_buffer(buf_ref)
+    state
+    # |> RootScene.Mutator.add_buffer(buf_ref)
+    # |> RootScene.Mutator.activate_buffer(buf_ref)
   end
 
   def process(state, {:activate_buffer, n}) when is_integer(n) do
