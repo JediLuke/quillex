@@ -11,7 +11,8 @@ defmodule Quillex.Utils.PubSub do
 
   def broadcast(topic: topic, msg: msg) do
     Registry.dispatch(@registrar_proc, topic, fn entries ->
-      for {pid, _} <- entries, do: send(pid, msg)
+      # != self is supposed to prevent looped messages
+      for {pid, _} <- entries, pid != self(), do: send(pid, msg)
     end)
   end
 end
