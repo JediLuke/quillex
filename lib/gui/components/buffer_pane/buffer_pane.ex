@@ -66,6 +66,8 @@ defmodule Quillex.GUI.Components.BufferPane do
 
     Registry.register(Quillex.BufferRegistry, __MODULE__, nil)
 
+    Quillex.Utils.PubSub.subscribe(topic: {:buffers, state.buf_ref.uuid})
+
     {:ok, init_scene}
   end
 
@@ -77,7 +79,7 @@ defmodule Quillex.GUI.Components.BufferPane do
         {:noreply, scene}
 
       actions ->
-        cast_parent(scene, {:action, scene.assigns.state.buf_ref, actions})
+        cast_parent(scene, {__MODULE__, :action, scene.assigns.state.buf_ref, actions})
         {:noreply, scene}
     end
   end
@@ -135,6 +137,7 @@ defmodule Quillex.GUI.Components.BufferPane do
     # IO.inspect(new_state, label: "NEW STATE")
 
     # new_scene = BufferPane.Renderizer.re_render_scene(scene, new_state)
+    IO.puts "BUF PANE GOT STATE CHANGE #{inspect changes}"
 
     buf_ref = changes.buf_ref || scene.assigns.buf_ref
 
@@ -170,6 +173,13 @@ defmodule Quillex.GUI.Components.BufferPane do
     # new_scene = push_graph(new_scene, new_scene.assigns.graph)
 
     {:noreply, new_scene}
+  end
+
+  # this is the one we get from the broadcast, perhaps we end up combining but for now hook em together
+  def handle_info({:buf_state_changes, %Quillex.Structs.BufState{} = new_buf}, scene) do
+    # IO.puts "BUF CMPNT FOR MSG #{inspect msg}"
+    handle_cast({:state_change, new_buf}, scene)
+    # {:noreply, scene}
   end
 end
 
