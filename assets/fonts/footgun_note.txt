@@ -1,0 +1,6 @@
+Here we have to have fonts available that the same directory structure flamelex would haveto import fonts.
+Obviously I should be importing static assets through some other, more structured way, and I'm pretty
+sure Scenic actually does this - but I am not using it correctly, so I either need to fix this or else
+I can only run flx/qlx from two specific directories on my file system (the `pwd` is in effect an environment
+variable that we have files in reference from) and in both those directories we need to have the same
+directory tree of files as eachother
