@@ -7,6 +7,12 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.VimKeyMappings.Inse
     handle(buf, {:key, {key, @key_pressed, mods}})
   end
 
+  def handle(buf, {:key, {key, @key_released, mods}}) do
+    # handle(buf, {:key, {key, @key_pressed, mods}})
+    :ignore
+  end
+
+
   # Escape, Ctrl-C, and Ctrl-[ exit insert mode
   def handle(_buf, input) when input in [@escape_key, @ctrl_c, @ctrl_open_bracket] do
     {:set_mode, {:vim, :normal}}

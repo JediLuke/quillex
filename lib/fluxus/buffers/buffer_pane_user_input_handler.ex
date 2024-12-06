@@ -39,7 +39,7 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler do
   end
 
   def handle(buf, input) do
-    Logger.error "Unhandled input: #{inspect input}"
+    Logger.error "Unhandled input: #{inspect input}, buf: #{inspect buf}"
     # IO.inspect(buf)
     :ignore
   end

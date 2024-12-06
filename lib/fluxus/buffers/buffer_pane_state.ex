@@ -21,11 +21,17 @@ defmodule Quillex.GUI.Components.BufferPane.State do
     }
   end
 
+  def ibm_plex_mono do
+    #TODO load fonts from somewhere logical
+    TruetypeMetrics.load("./assets/fonts/IBM_Plex_Mono/IBMPlexMono-Regular.ttf")
+  end
+
   def default_font do
     font_size = 24
     font_name = :ibm_plex_mono
 
-    {:ok, font_metrics} = TruetypeMetrics.load("./assets/fonts/IBMPlexMono-Regular.ttf")
+
+    {:ok, font_metrics} = ibm_plex_mono()
 
     Quillex.Structs.BufState.Font.new(%{
       name: font_name,

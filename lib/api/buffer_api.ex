@@ -1,9 +1,6 @@
 defmodule Quillex.Buffer do
 
-  def new() do
-    # {:ok, buf_ref} = Quillex.Buffer.BufferManager.new_buffer()
-    # switch(buf_ref)
-  end
+  def new(), do: new(%{})
 
   def new(args) do
     # already this single choice has so much architectural depth...
