@@ -1,4 +1,5 @@
 defmodule QuillEx.RootScene.Renderizer do
+  require Logger
 
   # it has to take in a scene here cause we need to cast to the scene's children
   def render(
@@ -23,11 +24,33 @@ defmodule QuillEx.RootScene.Renderizer do
     %QuillEx.RootScene.State{} = state,
     %Widgex.Frame{} = frame
   ) do
-    # raise "do this next"
 
-    # group these together, and add tab bar
+    [
+      tab_bar_frame,
+      buffer_pane_frame_when_tab_bar_open
+    ] = Widgex.Frame.v_split(frame, px: state.toolbar.height)
+
+    buffer_pane_frame =
+      if length(state.buffers) <= 1 do
+        frame
+      else
+        buffer_pane_frame_when_tab_bar_open
+      end
+
     graph
-    |> render_buffer_pane(scene, state, frame)
+    |> Scenic.Primitives.group(
+      fn graph ->
+        graph
+        |> render_buffer_pane(scene, state, buffer_pane_frame)
+        |> render_tab_bar(scene, state, tab_bar_frame)
+      end
+    )
+  end
+
+  defp render_tab_bar(graph, scene, state, frame) do
+    #TODO this obviously
+    Logger.error "RENDER TAB BAR !!!"
+    graph
   end
 
   defp render_buffer_pane(

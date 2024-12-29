@@ -94,9 +94,10 @@ defmodule QuillEx.RootScene do
 
   def handle_input(input, _context, scene) do
     #TODO this... isn't always true - should use UserInputHandler here
-    # IO.inspect(input)
-    # BufferManager.cast_to_gui_component(QuillEx.RootScene.State.active_buf(scene), {:user_input, input})
-    BufferManager.cast_to_gui_component({:user_input, input})
+    # fwd to BufferPane for processing...
+    {:ok, [pid]} = Scenic.Scene.child(scene, :buffer_pane)
+    GenServer.cast(pid, {:user_input, input})
+
     {:noreply, scene}
   end
 
@@ -105,31 +106,7 @@ defmodule QuillEx.RootScene do
   end
 
   def handle_cast({:action, actions}, scene) when is_list(actions) do
-    wormhole_capture =
-      Wormhole.capture(fn ->
-        new_state =
-          Enum.reduce(actions, scene.assigns.state, fn action, acc_state ->
-            RootScene.Reducer.process(acc_state, action)
-            |> case do
-              :ignore ->
-                acc_state
-
-              # :cast_to_children ->
-              #   Scenic.Scene.cast_children(scene, action)
-              #   acc_state
-
-              new_acc_state ->
-                new_acc_state
-            end
-          end)
-
-        # need to pass in scene so we can cast to children
-        new_graph = RootScene.Renderizer.render(scene.assigns.graph, scene, new_state)
-
-        {new_state, new_graph}
-      end)
-
-    case wormhole_capture do
+    case process_actions(scene, actions) do
       {:ok, {new_state, new_graph}} ->
         new_scene =
           scene
@@ -140,8 +117,9 @@ defmodule QuillEx.RootScene do
         {:noreply, new_scene}
 
       {:error, reason} ->
-        # this is a big problem but we still dont want to crash the root scene over it
+        # this is a big problem but we still dont want to crash the root scene over it (right ?)
         Logger.error "Couldn't compute action #{inspect actions}. #{inspect reason}"
+        raise "Couldn't compute action #{inspect actions}. #{inspect reason}"
 
         #TODO recovery idea - there is a possibility that we sometimes have a race condition
         # and that's why this happens, e.g. we open a buffer via BufferManager, BfrMgr is supposed
@@ -158,17 +136,68 @@ defmodule QuillEx.RootScene do
     end
   end
 
+  defp process_actions(scene, actions) do
+    # wormhole will wrap this function in an ok/error tuple even if it crashes
+    Wormhole.capture(fn ->
+
+      new_state =
+        Enum.reduce(actions, scene.assigns.state, fn action, acc_state ->
+          RootScene.Reducer.process(acc_state, action)
+          |> case do
+            :ignore ->
+              acc_state
+
+            # :cast_to_children ->
+            #   Scenic.Scene.cast_children(scene, action)
+            #   acc_state
+
+            new_acc_state ->
+              new_acc_state
+          end
+        end)
+
+      # need to pass in scene so we can cast to children
+      new_graph = RootScene.Renderizer.render(scene.assigns.graph, scene, new_state)
+
+      {new_state, new_graph}
+    end)
+  end
+
+  #TODO differentiate between :gui_action
+
   def handle_cast({:action, a}, scene) do
     # wrap singular actions in a list and push through the multi-action pipeline anyway
     handle_cast({:action, [a]}, scene)
   end
 
   # these actions bubble up from the BufferPane component, we simply forward them to the Buffer process
+  # this is where we ought to simply fwd the actions, and await a callback - we're the GUI, we just react
   def handle_cast(
-        {:action, %Quillex.Structs.BufState.BufRef{} = buf_ref, actions},
+        {
+          Quillex.GUI.Components.BufferPane,
+          :action,
+          %Quillex.Structs.BufState.BufRef{} = buf_ref,
+          actions
+        },
         scene
       ) do
-    BufferManager.call_buffer(buf_ref, {:action, actions})
+
+    # Flamelex.Fluxus.action()
+
+    # interact with the Buffer state to apply the actions - thisd is equivalent to Fluxus
+    # {:ok, new_buf} = BufferManager.call_buffer(buf_ref, {:action, actions})
+
+    # # we normally would broadcast changesd from Fluxus, since RootScene _id_ fluxus here, here is where we broadcast from
+
+    # # alternativaly...
+    # # maybe root scene should listen to qlx_events, get that buffer updated, then in there, go fetch thye buffer & then push the updated down...
+    # # that would be more like how flamelex does it
+    # # and it allows us to proapagate changes up from quillex to flamelex in same mechanism
+
+    # # update the GUI
+    # {:ok, [pid]} = Scenic.Scene.child(scene, :buffer_pane)
+    # GenServer.cast(pid, {:state_change, new_buf})
+
     {:noreply, scene}
   end
 

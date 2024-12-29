@@ -256,7 +256,7 @@ end
 
 #   def decorate_graph(%Scenic.Graph{} = graph, %{frame: %__MODULE__{} = frame} = params) do
 #     Logger.debug "#{__MODULE__} framing up... frame: #{inspect frame}, params: #{inspect params}"
-#     Logger.warn "Not rly framing anything yet..."
+#     Logger.warning "Not rly framing anything yet..."
 #     graph
 #   end
 

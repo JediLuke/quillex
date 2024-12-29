@@ -26,7 +26,7 @@ defmodule Quillex.Structs.BufState.BufRef do
     %__MODULE__{
       uuid: buf.uuid,
       name: buf.name,
-      mode: buf.mode
+      mode: {:vim, :insert}
     }
   end
 

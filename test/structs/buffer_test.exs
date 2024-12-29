@@ -18,6 +18,22 @@ defmodule Quillex.Structs.BufStateTest do
   end
 end
 
+# my tests of quillex
+
+# Quillex opens, menubar appears as expected and we have one open, empty buffer
+
+# I type in a few letters & make sure it works
+
+# then I go to menubar, click new buffer, I get sent to a new buffer pane
+
+# at this point use Buffers.list and check I now have 2 open buffers
+
+# I can also use Buffer.active_buf to get the current active buffer
+
+
+
+
+
 # defmodule ScenicWidgets.TextPad.Structs.Buffer2Test do
 #     use ExUnit.Case
 #     alias ScenicWidgets.TextPad.Structs.Buffer

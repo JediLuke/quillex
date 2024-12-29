@@ -17,18 +17,19 @@ defmodule Quillex.Buffer.Process do
   use GenServer
   alias Quillex.GUI.Components.BufferPane
 
+  def fetch_buf(%Quillex.Structs.BufState.BufRef{} = buf_ref) do
+    Quillex.Buffer.BufferManager.call_buffer(buf_ref, :get_state)
+  end
+
   def start_link(%Quillex.Structs.BufState{} = buf) do
     buf_tag = {buf.uuid, __MODULE__}
     via_tuple = {:via, Registry, {Quillex.BufferRegistry, buf_tag}}
     GenServer.start_link(__MODULE__, buf, name: via_tuple)
   end
 
-  def fetch_buf(%Quillex.Structs.BufState.BufRef{} = buf_ref) do
-    Quillex.Buffer.BufferManager.call_buffer(buf_ref, :get_state)
-  end
-
   def init(%Quillex.Structs.BufState{} = buf) do
-    {:ok, _state = buf}
+    Quillex.Utils.PubSub.subscribe(topic: {:buffers, buf.uuid})
+    {:ok, state}
   end
 
   def handle_call(:get_state, _from, state) do
@@ -40,31 +41,18 @@ defmodule Quillex.Buffer.Process do
     new_state =
       actions
       |> Enum.reduce(state, fn action, state_acc ->
-        BufferPane.Reducer.process(state_acc, action)
-        |> case do
+        case BufferPane.Reducer.process(state_acc, action) do
           :ignore ->
             state_acc
 
-          # {:cast_parent, actions} ->
-          #   # in these situations we need to pass the action back up to the parent,
-          #   # this can happen when "exceptions" occur e.g. we get an action
-          #   # to save a file, but we don't have a filename to save it to
-          #   # cast_parent(scene, {:action, actions})
-          #   state_acc
+          %Quillex.Structs.BufState{} = new_state ->
 
-          # the above seems correct until you realise that this is the _buffer_
-          # process, not the GUI component, so we can't just cast_parent because
-          # we aren't in the Scenic process tree - buffers are kind of weird this way
-          # so we need to re-route the action to the GUI component, potentially,
-          # or some other kind of "request" e.g. {:req_save, buf_ref}
+            # broadcast out buffer changes so the GUI (or whoever) can respond
+            Quillex.Utils.PubSub.broadcast(
+              topic: {:buffers, new_state.uuid},
+              msg: {:buf_state_changes, new_state}
+            )
 
-          # :re_routed ->
-          #   state_acc
-          # {:fwd, Quillex.GUI.Components.Buffer, msgs} ->
-          #   BufferManager.cast_to_gui_component(state_acc, {:buffer_request, msgs})
-          #   state_acc
-
-          new_state ->
             new_state
         end
       end)
@@ -81,16 +69,49 @@ defmodule Quillex.Buffer.Process do
     # if something needs to be managed on both levels e.g. the cursor position, maybe
     # throw 2 actions, one for the buffer, one for the component?? we'll see
 
-    notify_gui(new_state)
+    # notify_gui(new_state)
     # IO.puts "NOTIFY GUI"
 
-    {:reply, :ok, new_state}
+    # #TODO broadcast an event saying it updated, then let the GUI come fetch it if it wants...
+
+
+    {:reply, {:ok, new_state}, new_state}
   end
 
   def handle_call({:action, a}, from, state) when is_tuple(a) do
     # convenience API for single actions
     handle_call({:action, [a]}, from, state)
   end
+
+  def handle_info({:user_input, _input}, scene) do
+    # buffer process doesnt respond to user input, only GUI component does, so just ignore this
+    {:noreply, scene}
+  end
+end
+
+# def move_cursor(buffer_name, direction) do
+#   GenServer.cast(via_tuple(buffer_name), {:move_cursor, direction})
+# end
+
+# def handle_cast({:insert_text, text}, state) do
+#   # Update the buffer content and notify subscribers
+#   new_state = %{state | content: state.content <> text}
+#   notify_gui(new_state)
+#   {:noreply, new_state}
+# end
+
+# def handle_cast({:move_cursor, direction}, state) do
+#   # Update the cursor position
+#   new_cursor = calculate_new_cursor(state.cursor, direction)
+#   new_state = %{state | cursor: new_cursor}
+#   notify_gui(new_state)
+#   {:noreply, new_state}
+# end
+
+# defp calculate_new_cursor({line, col}, direction) do
+#   # Implement cursor movement logic
+# end
+
 
   #   # TODO handle_update, in such a way that we just go through init/3 again, but
   #   # without needing to spin up sub-processes.... eliminate all the extra handle_cast logic
@@ -131,31 +152,3 @@ defmodule Quillex.Buffer.Process do
   #       {:noreply, new_scene}
   #     end
   #   end
-
-  def notify_gui(buf) do
-    Quillex.Buffer.BufferManager.cast_to_gui_component({:state_change, buf})
-  end
-end
-
-# def move_cursor(buffer_name, direction) do
-#   GenServer.cast(via_tuple(buffer_name), {:move_cursor, direction})
-# end
-
-# def handle_cast({:insert_text, text}, state) do
-#   # Update the buffer content and notify subscribers
-#   new_state = %{state | content: state.content <> text}
-#   notify_gui(new_state)
-#   {:noreply, new_state}
-# end
-
-# def handle_cast({:move_cursor, direction}, state) do
-#   # Update the cursor position
-#   new_cursor = calculate_new_cursor(state.cursor, direction)
-#   new_state = %{state | cursor: new_cursor}
-#   notify_gui(new_state)
-#   {:noreply, new_state}
-# end
-
-# defp calculate_new_cursor({line, col}, direction) do
-#   # Implement cursor movement logic
-# end

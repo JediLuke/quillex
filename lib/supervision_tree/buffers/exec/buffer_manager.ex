@@ -69,20 +69,20 @@ defmodule Quillex.Buffer.BufferManager do
   end
 
   # similar to the above only instead of sending to the Buffer process,
-  # this sends it to the Buffer GUI component process (the Scenic component)
-  def cast_to_gui_component(msg) do
-    Registry.lookup(
-      Quillex.BufferRegistry,
-      Quillex.GUI.Components.BufferPane
-    )
-    |> case do
-      [{pid, _meta}] ->
-        GenServer.cast(pid, msg)
+  # # this sends it to the Buffer GUI component process (the Scenic component)
+  # def cast_to_gui_component(msg) do
+  #   Registry.lookup(
+  #     Quillex.BufferRegistry,
+  #     Quillex.GUI.Components.BufferPane
+  #   )
+  #   |> case do
+  #     [{pid, _meta}] ->
+  #       GenServer.cast(pid, msg)
 
-      [] ->
-        raise "Could not find BufferPane GUI component"
-    end
-  end
+  #     [] ->
+  #       raise "Could not find BufferPane GUI component"
+  #   end
+  # end
 
   defp do_start_new_buffer_process(state, args) do
     case Quillex.BufferSupervisor.start_new_buffer_process(args) do
@@ -116,6 +116,7 @@ end
 
   # # this encapsulates the logic of sending messages to buffers,
   # # so that we're not just casting direct to specific (potentially stale) pid references
+
   # def cast_to_buffer(%{uuid: buf_uuid}, msg) do
   #   # TODO consider using the process lookup here incase pids have gone stale, but so far, seems to be working...
   #   # TODO maybe this is fine maybe needs to be more robust (do a lookup on name dont use pid)

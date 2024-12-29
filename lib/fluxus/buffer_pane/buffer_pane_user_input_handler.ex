@@ -3,6 +3,7 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler do
   Handles user input for the FluxBuffer component.
   """
   alias Quillex.GUI.Components.BufferPane.UserInputHandler.VimKeyMappings.{InsertMode, NormalMode}
+  alias Quillex.GUI.Components.BufferPane.UserInputHandler.NotepadMap
   require Logger
 
   # On State
@@ -27,15 +28,25 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler do
   # if ther is it's a higher level state change anyway so handle it within radix state
 
   def handle(%{buf_ref: %{mode: :edit}} = buf_ref, input) do
-    InsertMode.handle(buf_ref, input)
+    NotepadMap.handle(buf_ref, input)
   end
 
-  def handle(%{buf_ref: %{mode: {:vim, :insert}}} = buf_ref, input) do
-    InsertMode.handle(buf_ref, input)
+  def handle(%{buf_ref: %{mode: {:vim, :insert}}}, input) do
+    IO.puts "INSERT MODE HANDLING #{inspect input}"
+    InsertMode.handle(input)
+    # case InsertMode.handle(input) do
+    #   # TODO this is a stupid hack just have them return a bloody list !
+    #   :ignore ->
+    #     :ignore
+    #   r1 when is_tuple(r1) ->
+    #     [r1]
+    #   r_list when is_list(r_list) ->
+    #     r_list
+    # end
   end
 
-  def handle(%{buf_ref: %{mode: {:vim, :normal}}} = buf_ref, input) do
-    NormalMode.handle(buf_ref, input)
+  def handle(%{buf_ref: %{mode: {:vim, :normal}}, state: buf_pane_state}, input) do
+    NormalMode.handle(buf_pane_state, input)
   end
 
   def handle(buf, input) do
