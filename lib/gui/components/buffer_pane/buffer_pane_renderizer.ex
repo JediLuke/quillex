@@ -1,86 +1,75 @@
 defmodule Quillex.GUI.Components.BufferPane.Renderizer do
   alias Quillex.GUI.Components.BufferPane
 
-  # this case forces a complete re-render if the frame has changes
-  def render(
-    # graph,
-    #  = scene,
-    # # scene,
-    # %{} = _new_state,
-    # # state,
-    # buf
+  #TODO treat frame as it's own parameter...
 
-    # todo we could consider, looking into scene.assigns.graph, and if it's present,
-    # use that, else insject a Scenic.Graph.build()... I dunno, this is working for now,
-    # I feel ilke maybe it's useful to be able to override the base graph? dunno
-    %Scenic.Graph{} = base_graph,
-    %Scenic.Scene{assigns: %{state: %{frame: old_frame}}} = scene,
-    %BufferPane.State{frame: new_frame} = new_state,
-    %Quillex.Structs.BufState{} = new_buf
-  ) when old_frame != new_frame do
-  # when old_frame != new_frame do
-    # re-render from scratch
-
-    IO.puts "NEW FRAME"
-    IO.inspect(old_frame)
-    IO.puts "-----"
-    IO.inspect(new_frame)
-    raise "cant do frame change yet"
-
-    # update state.frame
-    # new_frame_state = %{scene.assigns.state|frame: new_frame}
-
-    # _brand_new_graph =
-      # render(
-      #   Scenic.Graph.build(),
-      #   scene,
-      #   new_frame_state,
-      #   scene.assigns.buf
-      # )
-      # raise "guess not"
-      base_graph
-  end
-
-  # this casew causes a complete re-render if the buffer has changes
+  # this case forces a complete re-render if the frame has changed
   # def render(
-  #   %Scenic.Graph{} = graph,
-  #   %Scenic.Scene{} = scene,
-  #   %BufferPane.State{buf_ref: %{uuid: old_buf_uuid}} = new_state,
-  #   %Quillex.Structs.BufState{uuid: new_buf_uuid} = new_buf
-  # ) when old_buf_uuid != new_buf_uuid do
-  #   graph
-  #   |> render_background(new_state)
-  #   raise "yeh now we got a problem we changed bufs!@"
+  #   # todo we could consider, looking into scene.assigns.graph, and if it's present,
+  #   # use that, else insject a Scenic.Graph.build()... I dunno, this is working for now,
+  #   # I feel ilke maybe it's useful to be able to override the base graph? dunno
+  #   %Scenic.Graph{} = base_graph,
+  #   %Scenic.Scene{assigns: %{state: %{frame: old_frame}}} = scene,
+  #   %BufferPane.State{frame: new_frame} = new_state,
+  #   %Quillex.Structs.BufState{} = new_buf
+  # ) when old_frame != new_frame do
+
+  #   base_graph
+  #   # delete the old BufferPane primitive to force a re-render from scratch
+  #   |> Scenic.Graph.delete(:buffer_pane)
+  #   |> Scenic.Primitives.group(fn graph ->
+  #     graph
+  #     |> render_background(new_state)
+  #     |> render_text_lines(scene, new_state, new_buf)
+  #     |> render_cursor(scene, new_state.frame, new_buf, new_state.font)
+  #     # |> draw_scrollbars(args)
+  #     # |> render_status_bar(frame, buf)
+  #     # |> render_active_row_decoration(frame, buf, font, colors)
+  #   end, id: :buffer_pane)
   # end
 
   def render(
     %Scenic.Graph{} = graph,
     %Scenic.Scene{} = scene,
-    %BufferPane.State{} = new_state,
+    %Widgex.Frame{} = frame,
+    %BufferPane.State{} = state,
     %Quillex.Structs.BufState{} = buf
   ) do
-    graph
-    |> render_background(new_state)
-    |> render_text_lines(scene, new_state, buf)
-    |> render_cursor(scene, new_state.frame, buf, new_state.font)
-    # |> draw_scrollbars(args)
-    # |> render_status_bar(frame, buf)
-    # |> render_active_row_decoration(frame, buf, font, colors)
+    case Scenic.Graph.get(graph, :buffer_pane) do
+      [] ->
+        graph
+        |> Scenic.Primitives.group(fn graph ->
+          graph
+          |> render_background(scene, frame, state, buf)
+          |> render_text_lines(scene, frame, state, buf)
+          |> render_cursor(scene, frame, state, buf)
+          # |> draw_scrollbars(args)
+          # |> render_status_bar(frame, buf)
+          # |> render_active_row_decoration(frame, buf, font, colors)
+        end,
+        id: {:buffer_pane, buf.uuid})
+
+      _primitive ->
+        graph
+        |> render_background(scene, frame, state, buf)
+        |> render_text_lines(scene, frame, state, buf)
+        |> render_cursor(scene, frame, state, buf)
+    end
   end
 
-  defp render_background(graph, new_state) do
+  defp render_background(graph, _scene, frame, state, _buf) do
     case Scenic.Graph.get(graph, :background) do
       [] ->
         graph
-        |> Scenic.Primitives.rect(new_state.frame.size.box,
+        |> Scenic.Primitives.rect(frame.size.box,
             id: :background,
-            fill: new_state.colors.slate
+            fill: state.colors.slate
         )
 
       _primitive ->
         graph
         |> Scenic.Graph.modify(:background,
-          &Scenic.Primitives.update_opts(&1, fill: new_state.colors.slate)
+          &Scenic.Primitives.update_opts(&1, fill: state.colors.slate)
         )
     end
   end
@@ -96,12 +85,10 @@ defmodule Quillex.GUI.Components.BufferPane.Renderizer do
 
   # also, add thee damnm tab bar lol
 
-
-
   # same with changes in frame, just re-render...
 
   # TODO handle when it's the active row (highlight active row)
-  defp render_text_lines(graph, scene, state, %Quillex.Structs.BufState{data: new_lines} = buf) do
+  defp render_text_lines(graph, scene, frame, state, %Quillex.Structs.BufState{data: new_lines} = buf) do
 
     old_lines = if not is_nil(Map.get(scene.assigns, :buf)), do: scene.assigns.buf.data || [""], else: [""]
     # # TODO why 3? No magic numbers!!
@@ -204,7 +191,7 @@ defmodule Quillex.GUI.Components.BufferPane.Renderizer do
   #     graph
   #   end
 
-  defp render_cursor(graph, scene, frame, %Quillex.Structs.BufState{cursors: [cursor]} = buf, font) do
+  defp render_cursor(graph, scene, frame, state, %Quillex.Structs.BufState{cursors: [cursor]} = buf) do
     cursor_id = {:cursor, 1}
 
     cursor_mode =
@@ -225,22 +212,22 @@ defmodule Quillex.GUI.Components.BufferPane.Renderizer do
             buffer_uuid: buf.uuid,
             starting_pin: {@line_num_column_width + @margin_left, 0},
             coords: {cursor.line, cursor.col},
-            height: font.size,
+            height: state.font.size,
             mode: cursor_mode,
-            font: font
+            font: state.font
           },
           id: cursor_id,
           translate: {0, 4} # we pushed text down 4 spots too
         )
 
       _primitive ->
+        IO.puts "WRL WPRL WPRL BACLWARDS"
         cursor = Map.put(cursor, :mode, cursor_mode)
 
         {:ok, [pid]} = Scenic.Scene.child(scene, cursor_id)
         GenServer.cast(pid, {:state_change, cursor})
 
         graph
-
     end
   end
 

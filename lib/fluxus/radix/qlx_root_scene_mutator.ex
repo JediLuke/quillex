@@ -4,7 +4,7 @@ defmodule QuillEx.RootScene.Mutator do
   def add_buffer(%QuillEx.RootScene.State{} = state, buf_ref) do
     if Enum.any?(state.buffers, & &1.uuid == buf_ref.uuid) do
       raise "tried to add a buffer that was already open... #{inspect buf_ref}"
-      # Logger.warn "tried to add a buffer that was already open... #{inspect buf_ref}"
+      # Logger.warning "tried to add a buffer that was already open... #{inspect buf_ref}"
       state
     else
       %{state | buffers: state.buffers ++ [buf_ref]}

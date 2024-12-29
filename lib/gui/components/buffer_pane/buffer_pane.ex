@@ -34,7 +34,7 @@ defmodule Quillex.GUI.Components.BufferPane do
 
   def validate(
         %{
-          frame: %Widgex.Frame{} = _f,
+          frame: %Widgex.Frame{} = frame,
           buf_ref: %Quillex.Structs.BufState.BufRef{} = buf_ref,
           font: %Quillex.Structs.BufState.Font{} = _font
         } = data
@@ -42,31 +42,30 @@ defmodule Quillex.GUI.Components.BufferPane do
 
     state = BufferPane.State.new(data)
 
-    {:ok, state}
+    {:ok, %{state: state, frame: frame, buf_ref: buf_ref}}
   end
 
-  def init(scene, state, _opts) do
-    # TODO this would be a cool place to do something better here...
-    # I'm going to keep experimenting with this, I think it's more in-keeping
-    # with the Zen of scenic to go and fetch state upon our boot, since that
-    # keeps the integrity our gui thread even if the external data sdource if bad,
+  def init(scene, %{state: buf_pane_state, frame: frame, buf_ref: buf_ref}, _opts) do
+    # I think it's more in-keeping with the Zen of scenic to go and fetch state upon our boot,
+    # since that keeps the integrity our gui thread even if the external data source if bad,
     # plus I think it's more efficient in terms of data transfer to just get it once rather than pass it around everywhere (maybe?)
-    {:ok, buf} = Quillex.Buffer.Process.fetch_buf(state.buf_ref)
+    {:ok, buf} = Quillex.Buffer.Process.fetch_buf(buf_ref)
 
     graph =
-      BufferPane.Renderizer.render(Scenic.Graph.build(), scene, state, buf)
+      BufferPane.Renderizer.render(Scenic.Graph.build(), scene, frame, buf_pane_state, buf)
 
     init_scene =
       scene
       |> assign(graph: graph)
-      |> assign(state: state)
-      |> assign(buf_ref: state.buf_ref)
+      |> assign(state: buf_pane_state)
+      |> assign(frame: frame)
       |> assign(buf: buf)
+      |> assign(buf_ref: buf_ref)
       |> push_graph(graph)
 
     Registry.register(Quillex.BufferRegistry, __MODULE__, nil)
 
-    Quillex.Utils.PubSub.subscribe(topic: {:buffers, state.buf_ref.uuid})
+    Quillex.Utils.PubSub.subscribe(topic: {:buffers, buf.uuid})
 
     {:ok, init_scene}
   end
@@ -74,47 +73,87 @@ defmodule Quillex.GUI.Components.BufferPane do
   def handle_cast({:user_input, input}, scene) do
     # the GUI component converts raw user input to actions, directly on this layer,
     # which are then passed back up the component tree for processing
-    case BufferPane.UserInputHandler.handle(scene.assigns.state, input) do
+    case BufferPane.UserInputHandler.handle(scene.assigns, input) do
       :ignore ->
         {:noreply, scene}
 
-      actions ->
-        cast_parent(scene, {__MODULE__, :action, scene.assigns.state.buf_ref, actions})
+      actions when is_list(actions) ->
+        cast_parent(scene, {__MODULE__, :action, scene.assigns.buf_ref, actions})
         {:noreply, scene}
+
+      {%BufferPane.State{} = new_buf_pane_state, :ignore} ->
+        {:noreply, scene |> assign(state: new_buf_pane_state)}
+
+      {%BufferPane.State{} = new_buf_pane_state, actions} when is_list(actions) ->
+        cast_parent(scene, {__MODULE__, :action, scene.assigns.buf_ref, actions})
+        {:noreply, scene |> assign(state: new_buf_pane_state)}
     end
   end
 
-  # def handle_info({:state_change, %BufferPane.State{} = new_state}, scene) do
-  #   # when the Buffer process state changes, we update the GUI component
-  #   # we want to resist re-rendering all the time, instead we modify the graph
-  #   # to reflect the changes in the buffer state. It's a bit more work, but it's
-  #   # worth it for performance reasons
-  #   # IO.inspect(new_state, label: "NEW STATE")
+  def handle_cast({:frame_change, %Widgex.Frame{} = frame}, %{assigns: %{frame: frame}} = scene) do
+    # frame didn't change (same variable name means we bound to both vars, they are equal) so do nothing
+    IO.puts "#{__MODULE__} ignoring frame change..."
+    {:noreply, scene}
+  end
 
-  #   # new_scene = BufferPane.Renderizer.re_render_scene(scene, new_state)
+  def handle_cast(
+    {:state_change, %Quillex.Structs.BufState.BufRef{uuid: uuid, name: name, mode: mode} = new_buf},
+    %{assigns: %{buf_ref: %{uuid: uuid, name: name, mode: mode}}} = scene
+  ) do
+    # no actual changes were made so we can discard this msg (all variables bind on same name)
+    IO.puts "#{__MODULE__} ignoring buf_ref change..."
+    {:noreply, scene}
+  end
 
-  #   new_graph =
-  #     BufferPane.Renderizer.render(scene.assigns.graph, new_state, scene.assigns.buf)
+  def handle_cast(
+    {:state_change, %Quillex.Structs.BufState.BufRef{uuid: uuid} = new_buf_ref},
+    %{assigns: %{buf_ref: %{uuid: uuid}}} = scene
+  ) do
 
-  #   new_scene =
-  #     scene
-  #     |> assign(graph: new_graph)
-  #     |> assign(state: new_state)
-  #     |> push_graph(new_graph)
-
-  #   # TODO maybe this code below  will work to optimize not calling push_graph if we dont need to? Is this a significant saving?
-  #   # if new_scene.assigns.graph != scene.assigns.graph do
-  #   # new_scene = push_graph(new_scene, new_scene.assigns.graph)
-
-  #   {:noreply, new_scene}
-  # end
-
-  def handle_cast({:state_change, %Quillex.Structs.BufState{} = new_buf}, scene) do
-
-    #TODO check this buf matches the buf_ref in the assigns
+    new_buf =
+      %{scene.assigns.buf|name: new_buf_ref.name, mode: new_buf_ref.mode}
 
     new_graph =
-      BufferPane.Renderizer.render(scene.assigns.graph, scene, scene.assigns.state, new_buf)
+      BufferPane.Renderizer.render(
+        scene.assigns.graph,
+        scene,
+        scene.assigns.frame,
+        scene.assigns.state,
+        new_buf
+      )
+
+    new_scene =
+      scene
+      |> assign(graph: new_graph)
+      |> assign(buf: new_buf)
+      |> assign(buf_ref: new_buf_ref)
+      |> push_graph(new_graph)
+
+    {:noreply, new_scene}
+  end
+
+  def handle_cast(
+    {:state_change, %Quillex.Structs.BufState{} = buf},
+    %{assigns: %{buf: buf}} = scene
+  ) do
+    # no actual changes were made so we can discard this msg (all variables bind on same name)
+    IO.puts "#{__MODULE__} ignoring buf state change..."
+    {:noreply, scene}
+  end
+
+  def handle_cast(
+    {:state_change, %Quillex.Structs.BufState{uuid: uuid} = new_buf},
+    %{assigns: %{buf_ref: %{uuid: uuid}}} = scene
+  ) do
+
+    new_graph =
+      BufferPane.Renderizer.render(
+        scene.assigns.graph,
+        scene,
+        scene.assigns.frame,
+        scene.assigns.state,
+        new_buf
+      )
 
     new_scene =
       scene
@@ -124,62 +163,19 @@ defmodule Quillex.GUI.Components.BufferPane do
 
     # TODO maybe this code below  will work to optimize not calling push_graph if we dont need to? Is this a significant saving?
     # if new_scene.assigns.graph != scene.assigns.graph do
-    # new_scene = push_graph(new_scene, new_scene.assigns.graph)
+    #   new_scene = push_graph(new_scene, new_scene.assigns.graph)
+    # end
 
     {:noreply, new_scene}
   end
 
-  def handle_cast({:state_change, changes}, scene) do
-    # when the Buffer process state changes, we update the GUI component
-    # we want to resist re-rendering all the time, instead we modify the graph
-    # to reflect the changes in the buffer state. It's a bit more work, but it's
-    # worth it for performance reasons
-    # IO.inspect(new_state, label: "NEW STATE")
-
-    # new_scene = BufferPane.Renderizer.re_render_scene(scene, new_state)
-    IO.puts "BUF PANE GOT STATE CHANGE #{inspect changes}"
-
-    buf_ref = changes.buf_ref || scene.assigns.buf_ref
-
-    new_state =
-      scene.assigns.state
-      # TODO this might kill the struct nature of the state, dunno
-      |> Map.put(:frame, changes.frame || scene.assigns.state.frame)
-      |> Map.put(:buf_ref, buf_ref)
-
-    {:ok, new_buf} = Quillex.Buffer.Process.fetch_buf(buf_ref)
-
-    new_graph =
-      BufferPane.Renderizer.render(scene.assigns.graph, scene, new_state, new_buf)
-
-    new_scene =
-      scene
-      |> assign(graph: new_graph)
-      |> assign(state: new_state)
-      |> assign(buf: new_buf)
-      # |> then(fn s ->
-      # #   IO.inspect(s)
-      #   if buf_ref != scene.assigns.buf_ref do
-      #     assign(s, buf: new_buf)
-      #   else
-      #     s
-      #   end
-      #   # s
-      # end)
-      |> push_graph(new_graph)
-
-    # TODO maybe this code below  will work to optimize not calling push_graph if we dont need to? Is this a significant saving?
-    # if new_scene.assigns.graph != scene.assigns.graph do
-    # new_scene = push_graph(new_scene, new_scene.assigns.graph)
-
-    {:noreply, new_scene}
-  end
-
-  # this is the one we get from the broadcast, perhaps we end up combining but for now hook em together
+  # this is the one we get from the broadcast, just route it to the cast handler
   def handle_info({:buf_state_changes, %Quillex.Structs.BufState{} = new_buf}, scene) do
-    # IO.puts "BUF CMPNT FOR MSG #{inspect msg}"
     handle_cast({:state_change, new_buf}, scene)
-    # {:noreply, scene}
+  end
+
+  def handle_info({:user_input, input}, scene) do
+    handle_cast({:user_input, input}, scene)
   end
 end
 

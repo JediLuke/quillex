@@ -269,7 +269,7 @@ end
 
 #   # def validate(%{coords: num} = data) when is_integer(num) and num >= 0 do
 #   def validate(%{coords: _coords, height: _h, margin: margin} = data) do
-#     Logger.warn "Using a validate path in Cursor which should be DEPRECATED"
+#     Logger.warning "Using a validate path in Cursor which should be DEPRECATED"
 #     # vim-insert mode by default
 #     validate(data |> Map.merge(%{mode: :cursor, margin: margin}))
 #   end
