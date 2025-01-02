@@ -43,6 +43,12 @@ defmodule Quillex.GUI.Components.BufferPane.Mutator do
     %{buf | data: updated_data}
   end
 
+  def empty_buffer(buf) do
+    # This is only used by Kommander so we shouldn't need to handle multi-cursor or anything crazy,
+    # but just pointing out, we might need to update this later on to handle such cases
+    %{buf | data: [""], cursors: [Cursor.new(1, 1)]}
+  end
+
   # if cursor is at the end of the line, new line, else split the line, or if it's at beginning of line...
   def insert_new_line(buf, :at_cursor) do
     c = buf.cursors |> hd()

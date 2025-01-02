@@ -29,7 +29,7 @@ defmodule Quillex.Buffer.Process do
 
   def init(%Quillex.Structs.BufState{} = buf) do
     Quillex.Utils.PubSub.subscribe(topic: {:buffers, buf.uuid})
-    {:ok, state}
+    {:ok, buf}
   end
 
   def handle_call(:get_state, _from, state) do

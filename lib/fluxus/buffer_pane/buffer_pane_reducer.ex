@@ -33,6 +33,11 @@ defmodule Quillex.GUI.Components.BufferPane.Reducer do
     |> BufferPane.Mutator.move_cursor(:right, num_chars)
   end
 
+  def process(%Quillex.Structs.BufState{} = buf, :empty_buffer) do
+    buf
+    |> BufferPane.Mutator.empty_buffer()
+  end
+
   def process(%Quillex.Structs.BufState{} = buf, {:delete, :before_cursor}) do
     [cursor] = buf.cursors
 
