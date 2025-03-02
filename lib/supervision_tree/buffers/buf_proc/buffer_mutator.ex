@@ -1,16 +1,51 @@
 defmodule Quillex.GUI.Components.BufferPane.Mutator do
   alias Quillex.Structs.BufState.Cursor
+  require Logger
 
   @valid_modes [:edit, :presentation, {:vim, :normal}, {:vim, :insert}, {:vim, :visual}]
 
+  def set_mode(%{mode: {:vim, :insert}} = buf, {:vim, :normal} = mode) do
+    # when we go from insert to normal mode, mobe the cursor back one position, so that the block is "over" where the previous cursor was
+
+
+
+    Logger.warn "GOING FROM INSERT TO NORMAL"
+    %{buf | mode: mode}
+    |> move_cursor(:left, 1)
+  end
+
   def set_mode(buf, mode) when mode in @valid_modes do
+
+
+    Logger.warn "SETTING MODE FOR BUF #{buf.name}  mode: #{inspect mode}"
+
+
     %{buf | mode: mode}
   end
 
   # TODO lol just make a new one don't update :P clean this up later, no idea how to handle multiple cursors yet
-  def move_cursor(buf, {line, col}) do
-    %{buf | cursors: [Cursor.new(line, col)]}
+  def move_cursor(buf, {_line, _col} = coords) do
+    # TODO no idea how this is gonna work with multiple cursors...
+    c = buf.cursors |> hd()
+
+    new_cursor = c |> Cursor.move(coords)
+    IO.inspect(new_cursor, label: "HERE IS NEW CURSOR")
+
+    %{buf | cursors: [new_cursor]}
+    # %{buf | cursors: [Cursor.new(line, col)]}
   end
+
+  # def move_cursor(buf, :next_word) do
+  #   next_word_coords =
+  #   dbg()
+  #   # %{buf | cursors: [Cursor.new(line, col)]}
+  # end
+
+  # def move_cursor(buf, :prev_word) do
+  #   next_word_coords =
+  #   dbg()
+  #   # %{buf | cursors: [Cursor.new(line, col)]}
+  # end
 
   def move_cursor(buf, direction, x) do
     # TODO no idea how this is gonna work with multiple cursors...

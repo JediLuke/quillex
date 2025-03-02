@@ -15,7 +15,6 @@ defmodule Quillex.Buffer.Process do
 
   """
   use GenServer
-  alias Quillex.GUI.Components.BufferPane
 
   def fetch_buf(%Quillex.Structs.BufState.BufRef{} = buf_ref) do
     Quillex.Buffer.BufferManager.call_buffer(buf_ref, :get_state)
@@ -41,7 +40,7 @@ defmodule Quillex.Buffer.Process do
     new_state =
       actions
       |> Enum.reduce(state, fn action, state_acc ->
-        case BufferPane.Reducer.process(state_acc, action) do
+        case Quillex.Buffer.Process.Reducer.process(state_acc, action) do
           :ignore ->
             state_acc
 

@@ -1,7 +1,8 @@
-defmodule Quillex.GUI.Components.BufferPane.Reducer do
+defmodule Quillex.Buffer.Process.Reducer do
   alias Quillex.GUI.Components.BufferPane
 
   def process(%Quillex.Structs.BufState{} = buf, {:set_mode, m}) do
+    # do we need to change this here in the buffer itself?
     buf
     |> BufferPane.Mutator.set_mode(m)
   end
@@ -43,6 +44,23 @@ defmodule Quillex.GUI.Components.BufferPane.Reducer do
 
     buf
     |> BufferPane.Mutator.delete_char_before_cursor(cursor)
+  end
+
+  def process(buf, {:move_cursor, :next_word}) do
+    new_cursor_coords = Quillex.Structs.BufState.next_word_coords(buf)
+
+    buf
+    |> BufferPane.Mutator.move_cursor(new_cursor_coords)
+  end
+
+  def process(buf, {:move_cursor, :prev_word}) do
+    new_cursor_coords = Quillex.Structs.BufState.prev_word_coords(buf)
+
+    IO.inspect(new_cursor_coords, label: "our new cursor")
+
+    IO.inspect(buf, label: "BUF BUF")
+    buf
+    |> BufferPane.Mutator.move_cursor(new_cursor_coords)
   end
 
   # def process(%{uuid: buf_uuid, source: nil} = buf, {:save, buf_uuid}) do

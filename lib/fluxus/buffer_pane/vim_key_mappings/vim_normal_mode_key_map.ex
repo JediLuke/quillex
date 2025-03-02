@@ -94,18 +94,25 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.VimKeyMappings.Norm
   #   {:move_cursor, :line_end}
   # end
 
-  # # 'w' moves to the next word
-  # def handle(buf, @lowercase_w) do
-  #   handle_movement(buf, :next_word)
-  # end
+  # 'w' moves to the next word
+  def handle(buf_pane_state, @lowercase_w) do
+    #   handle_movement(buf, :next_word)
+    # buf_pane_state = reset_operator_and_count(buf_pane_state)
+    # {buf_pane_state, [{:set_mode, {:vim, :insert}}]}
+    # raise "not yet"
+    # buf_pane_state = reset_operator_and_count(buf_pane_state)
+    {buf_pane_state, [{:move_cursor, :next_word}]}
+  end
 
-  # # 'b' moves to the previous word
-  # def handle(buf, @lowercase_b) do
-  #   handle_movement(buf, :prev_word)
-  # end
+  # 'b' moves to the previous word
+  def handle(buf_pane_state, @lowercase_b) do
+    # buf_pane_state = reset_operator_and_count(buf_pane_state)
+    # {buf_pane_state, [{:move_cursor, :prev_word}]}
+    [{:move_cursor, :prev_word}]
+  end
 
   # # 'e' moves to the end of the word
-  # def handle(buf, @lowercase_e) do
+  # def handle(buf, @lowerc_ase_e) do
   #   handle_movement(buf, :end_of_word)
   # end
 
@@ -162,7 +169,8 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.VimKeyMappings.Norm
   def handle(buf_pane_state, input) do
     buf_pane_state = reset_operator_and_count(buf_pane_state)
     IO.puts("NormalMode: Unhandled input: #{inspect(input)}")
-    {buf_pane_state, :ignore}
+    # {buf_pane_state, :ignore}
+    :ignore
   end
 
   # Helper functions

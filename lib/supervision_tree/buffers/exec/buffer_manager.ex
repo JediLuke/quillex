@@ -26,6 +26,10 @@ defmodule Quillex.Buffer.BufferManager do
     GenServer.call(__MODULE__, :list_buffers)
   end
 
+  def get_live_buffer(%{"uuid" => _buf_uuid} = args) do
+    GenServer.call(__MODULE__, {:get_live_buffer, args})
+  end
+
   def init(_init_arg) do
     {:ok, %{buffers: []}}
   end
@@ -46,6 +50,16 @@ defmodule Quillex.Buffer.BufferManager do
 
   def handle_call({:open_buffer, args}, _from, state) do
     do_start_new_buffer_process(state, args)
+  end
+
+  def handle_call({:get_live_buffer, %{"uuid" => buf_uuid}}, _from, state) do
+    case Enum.filter(state.buffers, & &1.uuid == buf_uuid) do
+      [] ->
+        {:reply, {:error, "buf with uuid: #{inspect buf_uuid} not live"}, state}
+
+      [buf] ->
+        {:reply, {:ok, buf}, state}
+    end
   end
 
 

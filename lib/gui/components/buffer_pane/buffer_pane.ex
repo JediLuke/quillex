@@ -81,12 +81,12 @@ defmodule Quillex.GUI.Components.BufferPane do
         cast_parent(scene, {__MODULE__, :action, scene.assigns.buf_ref, actions})
         {:noreply, scene}
 
-      {%BufferPane.State{} = new_buf_pane_state, :ignore} ->
-        {:noreply, scene |> assign(state: new_buf_pane_state)}
+      # {%BufferPane.State{} = new_buf_pane_state, :ignore} ->
+      #   {:noreply, scene |> assign(state: new_buf_pane_state)}
 
-      {%BufferPane.State{} = new_buf_pane_state, actions} when is_list(actions) ->
-        cast_parent(scene, {__MODULE__, :action, scene.assigns.buf_ref, actions})
-        {:noreply, scene |> assign(state: new_buf_pane_state)}
+      # {%BufferPane.State{} = new_buf_pane_state, actions} when is_list(actions) ->
+      #   cast_parent(scene, {__MODULE__, :action, scene.assigns.buf_ref, actions})
+      #   {:noreply, scene |> assign(state: new_buf_pane_state)}
     end
   end
 

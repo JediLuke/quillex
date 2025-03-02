@@ -221,9 +221,10 @@ defmodule Quillex.GUI.Components.BufferPane.Renderizer do
         )
 
       _primitive ->
-        IO.puts "WRL WPRL WPRL BACLWARDS"
+
         cursor = Map.put(cursor, :mode, cursor_mode)
 
+        #TODO Scenic.Scene.put_child()
         {:ok, [pid]} = Scenic.Scene.child(scene, cursor_id)
         GenServer.cast(pid, {:state_change, cursor})
 

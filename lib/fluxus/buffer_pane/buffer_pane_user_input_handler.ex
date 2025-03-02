@@ -32,17 +32,7 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler do
   end
 
   def handle(%{buf_ref: %{mode: {:vim, :insert}}}, input) do
-    IO.puts "INSERT MODE HANDLING #{inspect input}"
     InsertMode.handle(input)
-    # case InsertMode.handle(input) do
-    #   # TODO this is a stupid hack just have them return a bloody list !
-    #   :ignore ->
-    #     :ignore
-    #   r1 when is_tuple(r1) ->
-    #     [r1]
-    #   r_list when is_list(r_list) ->
-    #     r_list
-    # end
   end
 
   def handle(%{buf_ref: %{mode: {:vim, :normal}}, state: buf_pane_state}, input) do
