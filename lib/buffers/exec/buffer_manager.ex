@@ -30,6 +30,10 @@ defmodule Quillex.Buffer.BufferManager do
     GenServer.call(__MODULE__, {:get_live_buffer, args})
   end
 
+  def get_live_buffer(%Quillex.Structs.BufState.BufRef{} = args) do
+    GenServer.call(__MODULE__, {:get_live_buffer, args})
+  end
+
   def init(_init_arg) do
     {:ok, %{buffers: []}}
   end
@@ -57,11 +61,22 @@ defmodule Quillex.Buffer.BufferManager do
       [] ->
         {:reply, {:error, "buf with uuid: #{inspect buf_uuid} not live"}, state}
 
-      [buf] ->
+      [buf_ref] ->
+        {:ok, buf} = Quillex.Buffer.Process.fetch_buf(buf_ref)
         {:reply, {:ok, buf}, state}
     end
   end
 
+  def handle_call({:get_live_buffer,  %Quillex.Structs.BufState.BufRef{uuid: buf_uuid}}, _from, state) do
+    case Enum.filter(state.buffers, & &1.uuid == buf_uuid) do
+      [] ->
+        {:reply, {:error, "buf with uuid: #{inspect buf_uuid} not live"}, state}
+
+      [buf_ref] ->
+        {:ok, buf} = Quillex.Buffer.Process.fetch_buf(buf_ref)
+        {:reply, {:ok, buf}, state}
+    end
+  end
 
   def handle_call(:list_buffers, _from, state) do
     {:reply, state.buffers, state}

@@ -45,13 +45,6 @@ defmodule Quillex.Buffer.Process do
             state_acc
 
           %Quillex.Structs.BufState{} = new_state ->
-
-            # broadcast out buffer changes so the GUI (or whoever) can respond
-            Quillex.Utils.PubSub.broadcast(
-              topic: {:buffers, new_state.uuid},
-              msg: {:buf_state_changes, new_state}
-            )
-
             new_state
         end
       end)
@@ -68,6 +61,13 @@ defmodule Quillex.Buffer.Process do
     # if something needs to be managed on both levels e.g. the cursor position, maybe
     # throw 2 actions, one for the buffer, one for the component?? we'll see
 
+    # broadcast out buffer changes so the GUI (or whoever) can respond
+    Quillex.Utils.PubSub.broadcast(
+      topic: {:buffers, new_state.uuid},
+      msg: {:buf_state_changes, new_state}
+    )
+
+
     # notify_gui(new_state)
     # IO.puts "NOTIFY GUI"
 
@@ -82,8 +82,15 @@ defmodule Quillex.Buffer.Process do
     handle_call({:action, [a]}, from, state)
   end
 
+  #TODo dont have buffers opening ports!!!
+  def handle_info({_port, :closed}, scene) do
+    IO.puts "dont worry abour it (INCORRECT WORRY ABOUT THIS!!)"
+    {:noreply, scene}
+  end
+
   def handle_info({:user_input, _input}, scene) do
     # buffer process doesnt respond to user input, only GUI component does, so just ignore this
+    IO.puts "BUF GOT USER INPUT VERY WEIRD"
     {:noreply, scene}
   end
 end

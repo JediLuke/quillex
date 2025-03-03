@@ -8,11 +8,13 @@ defmodule Quillex.Buffer.Process.Reducer do
   end
 
   def process(%Quillex.Structs.BufState{} = buf, {:move_cursor, direction, x}) do
-    # {:ok, [cursor_pid]} = Scenic.Scene.child(scene, :cursor)
-    # GenServer.cast(cursor_pid, {:move_cursor, :right, 1})
-
     buf
     |> BufferPane.Mutator.move_cursor(direction, x)
+  end
+
+  def process(%Quillex.Structs.BufState{} = buf, {:move_cursor, :line_end}) do
+    buf
+    |> BufferPane.Mutator.move_cursor(:line_end)
   end
 
   def process(%Quillex.Structs.BufState{} = buf, {:newline, :at_cursor}) do
@@ -25,6 +27,18 @@ defmodule Quillex.Buffer.Process.Reducer do
     # |> Buffer.History.record_action({:newline, :at_cursor})
   end
 
+  # here `below_cursor` implies the cursor is in NORMAL mode, though I dunno if it makes any difference really
+  def process(%Quillex.Structs.BufState{} = buf, {:newline, :below_cursor}) do
+    [c] = buf.cursors
+
+    buf
+    |> BufferPane.Mutator.insert_new_line(:at_cursor)
+    |> BufferPane.Mutator.move_cursor({c.line + 1, 1})
+
+    # |> Buffer.History.record_action({:newline, :at_cursor})
+  end
+
+
   def process(%Quillex.Structs.BufState{} = buf, {:insert, text, :at_cursor}) do
     [c] = buf.cursors
     num_chars = String.length(text)
@@ -32,6 +46,13 @@ defmodule Quillex.Buffer.Process.Reducer do
     buf
     |> BufferPane.Mutator.insert_text({c.line, c.col}, text)
     |> BufferPane.Mutator.move_cursor(:right, num_chars)
+  end
+
+  def process(%Quillex.Structs.BufState{cursors: [c]} = buf, {:insert, :line, clipboard_text, :below_cursor_line}) do
+    # minus one index for zero based index but then plus one cause it's the next line, so they cancel and it's just c.line
+    new_data = List.insert_at(buf.data, c.line, clipboard_text)
+
+    %{ buf | data: new_data}
   end
 
   def process(%Quillex.Structs.BufState{} = buf, :empty_buffer) do
@@ -46,19 +67,41 @@ defmodule Quillex.Buffer.Process.Reducer do
     |> BufferPane.Mutator.delete_char_before_cursor(cursor)
   end
 
+  #TODO keep track that a whole line got yanked so if the user pastes it, it pastes as a line not as inline text
+  # for now I assume that's the default ;)
+  def process(%Quillex.Structs.BufState{cursors: [c]} = buf, {:yank, :line, :under_cursor}) do
+    line_of_text = Enum.at(buf.data, c.line-1)
+    # System.cmd("sh", ["-c", "echo \"#{line_of_text}\" | xclip -selection clipboard"])
+
+    # NOTE chatGPT says that putting this in the background WONT cause zombie process cause when sh exits, it gets reaped, and it _seems_ to work but we should TODO this
+    # System.cmd("sh", [
+    #   "-c",
+    #   "echo \"#{line_of_text}\" | xclip -selection clipboard &"
+    # ])
+    Clipboard.copy(line_of_text)
+
+    buf
+  end
+
+  def process(%Quillex.Structs.BufState{cursors: [c]} = buf, {:paste, :at_cursor}) do
+    # {clipboard_text, 0} = System.cmd("xclip", ["-selection", "clipboard", "-o", "-t", "text/plain"])
+    clipboard_text = Clipboard.paste!()
+
+    buf
+    |> process({:insert, :line, clipboard_text, :below_cursor_line})
+    |> BufferPane.Mutator.move_cursor(:down, 1)
+  end
+
   def process(buf, {:move_cursor, :next_word}) do
-    new_cursor_coords = Quillex.Structs.BufState.next_word_coords(buf)
+    new_cursor_coords = Quillex.Buffer.Utils.next_word_coords(buf)
 
     buf
     |> BufferPane.Mutator.move_cursor(new_cursor_coords)
   end
 
   def process(buf, {:move_cursor, :prev_word}) do
-    new_cursor_coords = Quillex.Structs.BufState.prev_word_coords(buf)
+    new_cursor_coords = Quillex.Buffer.Utils.prev_word_coords(buf)
 
-    IO.inspect(new_cursor_coords, label: "our new cursor")
-
-    IO.inspect(buf, label: "BUF BUF")
     buf
     |> BufferPane.Mutator.move_cursor(new_cursor_coords)
   end

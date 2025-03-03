@@ -4,35 +4,37 @@ defmodule Quillex.GUI.Components.BufferPane.Mutator do
 
   @valid_modes [:edit, :presentation, {:vim, :normal}, {:vim, :insert}, {:vim, :visual}]
 
+  #TODO these are bad hackx....
+  def set_mode(%{mode: m} = buf, m) do
+    buf
+  end
+
   def set_mode(%{mode: {:vim, :insert}} = buf, {:vim, :normal} = mode) do
     # when we go from insert to normal mode, mobe the cursor back one position, so that the block is "over" where the previous cursor was
-
-
-
-    Logger.warn "GOING FROM INSERT TO NORMAL"
+    # UNLESS we're at cursor position 1
     %{buf | mode: mode}
     |> move_cursor(:left, 1)
   end
 
+  def set_mode(%{mode: {:vim, :normal}} = buf, {:vim, :insert} = mode) do
+    # inverse of the above, need to move one column right when we go back to insert mode
+    %{buf | mode: mode}
+    |> move_cursor(:right, 1)
+  end
+
   def set_mode(buf, mode) when mode in @valid_modes do
-
-
     Logger.warn "SETTING MODE FOR BUF #{buf.name}  mode: #{inspect mode}"
-
-
     %{buf | mode: mode}
   end
 
-  # TODO lol just make a new one don't update :P clean this up later, no idea how to handle multiple cursors yet
-  def move_cursor(buf, {_line, _col} = coords) do
-    # TODO no idea how this is gonna work with multiple cursors...
-    c = buf.cursors |> hd()
+  def move_cursor(%{cursors: [c]} = buf, {line, col} = coords) when line >= 1 and col >= 1 do
+    %{buf | cursors: [c |> Cursor.move(coords)]}
+  end
 
-    new_cursor = c |> Cursor.move(coords)
-    IO.inspect(new_cursor, label: "HERE IS NEW CURSOR")
-
-    %{buf | cursors: [new_cursor]}
-    # %{buf | cursors: [Cursor.new(line, col)]}
+  def move_cursor(%{cursors: [c]} = buf, {line, col} = coords) do
+    Logger.warning "CANT MOVE TO #{inspect coords}"
+    # %{buf | cursors: [c |> Cursor.move(coords)]}
+    buf
   end
 
   # def move_cursor(buf, :next_word) do
@@ -60,6 +62,13 @@ defmodule Quillex.GUI.Components.BufferPane.Mutator do
       end
 
     %{buf | cursors: [new_cursor]}
+  end
+
+  def move_cursor(%{cursors: [c]} = buf, :line_end) do
+    current_line = Enum.at(buf.data, c.line - 1)
+    # need extra column cause of zero vs one based indexing, columns start at 1 god damnit!!
+    new_col = String.length(current_line) + 1
+    move_cursor(buf, {c.line, new_col})
   end
 
   def insert_text(%{data: []} = buf, {1, 1}, text) do
