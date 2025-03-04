@@ -2,7 +2,7 @@ defmodule Quillex.GUI.Components.BufferPane do
   use Scenic.Component
   use ScenicWidgets.ScenicEventsDefinitions
   alias Quillex.GUI.Components.BufferPane
-
+  require Logger
   # This creates a text-input interface like Notepad/Gedit.
 
   # As much as possible, this Component is just a "thin" rendering component.
@@ -40,12 +40,16 @@ defmodule Quillex.GUI.Components.BufferPane do
         } = data
       ) do
 
-    state = BufferPane.State.new(data)
+    active? = Map.get(data, :active?, true)
 
-    {:ok, %{state: state, frame: frame, buf_ref: buf_ref}}
+
+    state = BufferPane.State.new(data |> Map.merge(%{active?: active?}))
+    Logger.info "Buffer: #{inspect buf_ref} is state?: #{inspect state}"
+
+    {:ok, %{state: state, frame: frame, buf_ref: buf_ref, active?: active?}}
   end
 
-  def init(scene, %{state: buf_pane_state, frame: frame, buf_ref: buf_ref}, _opts) do
+  def init(scene, %{state: buf_pane_state, frame: frame, buf_ref: buf_ref, active?: active?}, _opts) do
     # I think it's more in-keeping with the Zen of scenic to go and fetch state upon our boot,
     # since that keeps the integrity our gui thread even if the external data source if bad,
     # plus I think it's more efficient in terms of data transfer to just get it once rather than pass it around everywhere (maybe?)
@@ -61,34 +65,41 @@ defmodule Quillex.GUI.Components.BufferPane do
       |> assign(frame: frame)
       |> assign(buf: buf)
       |> assign(buf_ref: buf_ref)
+      |> assign(active?: active?)
       |> push_graph(graph)
 
-    Registry.register(Quillex.BufferRegistry, __MODULE__, nil)
+    # Registry.register(Quillex.BufferRegistry, __MODULE__, nil)
+    Logger.info "REGISTERING BUFFER AS #{buf.uuid}"
 
+    # SHIT ok here we go, we used to register buffer panes according to theri buffer... now we cant !! cause we only make ONE buffer pane & modify it !!
     Quillex.Utils.PubSub.subscribe(topic: {:buffers, buf.uuid})
 
     {:ok, init_scene}
   end
 
-  def handle_cast({:user_input, input}, scene) do
-    # the GUI component converts raw user input to actions, directly on this layer,
-    # which are then passed back up the component tree for processing
-    case BufferPane.UserInputHandler.handle(scene.assigns, input) do
-      :ignore ->
-        {:noreply, scene}
+  # def handle_cast({:user_input, input}, scene) do
+  #   # the GUI component converts raw user input to actions, directly on this layer,
+  #   # which are then passed back up the component tree for processing
+  #   Logger.info "BUF GOT input #{inspect input}"
+  #   case BufferPane.UserInputHandler.handle(scene.assigns, input) do
+  #     :ignore ->
+  #       {:noreply, scene}
 
-      actions when is_list(actions) ->
-        cast_parent(scene, {__MODULE__, :action, scene.assigns.buf_ref, actions})
-        {:noreply, scene}
+  #     actions when is_list(actions) ->
+  #       cast_parent(scene, {__MODULE__, :action, scene.assigns.buf_ref, actions})
+  #       {:noreply, scene}
 
-      # {%BufferPane.State{} = new_buf_pane_state, :ignore} ->
-      #   {:noreply, scene |> assign(state: new_buf_pane_state)}
+  #     actn when is_tuple(actn) ->
+  #       raise "A handler function is ont returning a list. Returned: #{inspect actn}"
 
-      # {%BufferPane.State{} = new_buf_pane_state, actions} when is_list(actions) ->
-      #   cast_parent(scene, {__MODULE__, :action, scene.assigns.buf_ref, actions})
-      #   {:noreply, scene |> assign(state: new_buf_pane_state)}
-    end
-  end
+  #     # {%BufferPane.State{} = new_buf_pane_state, :ignore} ->
+  #     #   {:noreply, scene |> assign(state: new_buf_pane_state)}
+
+  #     # {%BufferPane.State{} = new_buf_pane_state, actions} when is_list(actions) ->
+  #     #   cast_parent(scene, {__MODULE__, :action, scene.assigns.buf_ref, actions})
+  #     #   {:noreply, scene |> assign(state: new_buf_pane_state)}
+  #   end
+  # end
 
   def handle_cast({:frame_change, %Widgex.Frame{} = frame}, %{assigns: %{frame: frame}} = scene) do
     # frame didn't change (same variable name means we bound to both vars, they are equal) so do nothing
@@ -101,7 +112,7 @@ defmodule Quillex.GUI.Components.BufferPane do
     %{assigns: %{buf_ref: %{uuid: uuid, name: name, mode: mode}}} = scene
   ) do
     # no actual changes were made so we can discard this msg (all variables bind on same name)
-    IO.puts "#{__MODULE__} ignoring buf_ref change..."
+    IO.puts "#{__MODULE__} ignoring buf_ref change... #{inspect new_buf}"
     {:noreply, scene}
   end
 
@@ -110,8 +121,39 @@ defmodule Quillex.GUI.Components.BufferPane do
     %{assigns: %{buf_ref: %{uuid: uuid}}} = scene
   ) do
 
+    IO.puts "Expect to get to here for left buffer #{inspect new_buf_ref}"
     new_buf =
       %{scene.assigns.buf|name: new_buf_ref.name, mode: new_buf_ref.mode}
+
+    new_graph =
+      BufferPane.Renderizer.render(
+        scene.assigns.graph,
+        scene,
+        scene.assigns.frame,
+        scene.assigns.state,
+        new_buf
+      )
+
+    new_scene =
+      scene
+      |> assign(graph: new_graph)
+      |> assign(buf: new_buf)
+      |> assign(buf_ref: new_buf_ref)
+      |> push_graph(new_graph)
+
+    {:noreply, new_scene}
+  end
+
+  def handle_cast(
+    {:state_change, %Quillex.Structs.BufState.BufRef{uuid: new_uuid} = new_buf_ref},
+    %{assigns: %{buf_ref: %{uuid: old_uuid}}} = scene
+  ) when old_uuid != new_uuid do
+
+    {:ok, new_buf} =
+      Quillex.Buffer.BufferManager.get_live_buffer(new_buf_ref)
+      # Quillex.Buffer.Process.fetch_buf(new_buf_ref)
+
+    IO.inspect(new_buf)
 
     new_graph =
       BufferPane.Renderizer.render(
@@ -169,8 +211,14 @@ defmodule Quillex.GUI.Components.BufferPane do
     {:noreply, new_scene}
   end
 
+  def handle_cast({:state_change, invalid}, scene) do
+    Logger.info "INVALID STATE CHANGE #{inspect invalid}"
+    {:noreply, scene}
+  end
+
   # this is the one we get from the broadcast, just route it to the cast handler
   def handle_info({:buf_state_changes, %Quillex.Structs.BufState{} = new_buf}, scene) do
+    IO.puts "SHOUYLD STILL GET THIS BUT STATE GHANCE"
     handle_cast({:state_change, new_buf}, scene)
   end
 

@@ -17,7 +17,7 @@ defmodule Quillex.BufferSupervisor do
 
             buf =
               Quillex.Structs.BufState.new(
-                Map.merge(args, %{data: lines, name: filepath, source: %{filepath: filepath}})
+                Map.merge(args, %{data: lines, name: Path.basename(filepath), source: %{filepath: filepath}})
               )
 
             do_start_buffer(buf)

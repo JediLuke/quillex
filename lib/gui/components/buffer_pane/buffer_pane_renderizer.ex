@@ -195,11 +195,17 @@ defmodule Quillex.GUI.Components.BufferPane.Renderizer do
     cursor_id = {:cursor, 1}
 
     cursor_mode =
-      case buf.mode do
-        :edit -> :cursor
-        {:vim, :insert} -> :cursor
-        {:vim, :normal} -> :block
-        _ -> :cursor
+      case state.active? do
+        true ->
+          case buf.mode do
+            :edit -> :cursor
+            {:vim, :insert} -> :cursor
+            {:vim, :normal} -> :block
+            {:kommander, :insert} -> :cursor
+            {:kommander, :normal} -> :block
+          end
+        false ->
+          :hidden
       end
 
     # Here when we start with a new bufgfer, it automatically makes a new cursor

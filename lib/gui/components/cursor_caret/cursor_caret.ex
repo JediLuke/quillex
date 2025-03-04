@@ -8,7 +8,7 @@ defmodule Quillex.GUI.Components.BufferPane.CursorCaret do
   # Blink interval in milliseconds
   @blink_interval 500
   # Supported cursor modes
-  @valid_modes [:cursor, :block]
+  @valid_modes [:cursor, :block, :hidden]
   # The fill color of the cursor
   @color :black
 
@@ -60,7 +60,7 @@ defmodule Quillex.GUI.Components.BufferPane.CursorCaret do
       |> assign(mode: mode)
       |> assign(font: font)
       # Cursor is initially visible
-      |> assign(visible: true)
+      |> assign(visible: (if (mode == :inactive), do: false, else: true))
       |> assign(timer: timer)
       |> assign(char_width: char_width)
       |> push_graph(graph)
@@ -69,7 +69,7 @@ defmodule Quillex.GUI.Components.BufferPane.CursorCaret do
   end
 
   def handle_cast(
-        {:state_change, %{line: line, col: col, mode: mode}},
+        {:state_change, %{line: line, col: col, mode: mode} = s},
         %{
           assigns: %{
             visible: visible,
@@ -96,16 +96,49 @@ defmodule Quillex.GUI.Components.BufferPane.CursorCaret do
         :cursor_rect,
         &Scenic.Primitives.rectangle(&1, {calc_width(mode, font), height})
       )
+      # DONT BLINK when we move a cursor, reset the blink
+      |> Scenic.Graph.modify(
+        :cursor_rect,
+        &Scenic.Primitives.update_opts(&1, hidden: false)
+      )
 
     # Update the scene
     scene =
       scene
       |> assign(graph: graph)
       |> assign(mode: mode)
+      |> assign(visible: (if (mode == :inactive), do: false, else: true))
       |> push_graph(graph)
 
     {:noreply, scene}
   end
+
+
+
+  def handle_info(:blink, %{assigns: %{visible: false, state: %{mode: :hidden}}} = scene) do
+# no need to do anything
+
+        {:noreply, scene}
+  end
+
+  def handle_info(:blink, %{assigns: %{visible: true, state: %{mode: :hidden}}} = scene) do
+    # Update the graph
+    graph =
+      scene.assigns.graph
+      |> Scenic.Graph.modify(
+        :cursor_rect,
+        &Scenic.Primitives.update_opts(&1, hidden: false)
+      )
+
+    # Update the scene
+    scene =
+      scene
+      |> assign(visible: false)
+      |> assign(graph: graph)
+      |> push_graph(graph)
+
+    {:noreply, scene}
+end
 
   # Handle blinking
   def handle_info(:blink, %{assigns: %{visible: visible, graph: graph}} = scene) do
@@ -207,6 +240,8 @@ defmodule Quillex.GUI.Components.BufferPane.CursorCaret do
 
   # Helper function to calculate the width of the cursor based on the mode
   defp calc_width(:cursor, _font), do: @cursor_width
+
+  defp calc_width(:hidden, _font), do: 0
 
   defp calc_width(:block, font) do
     FontMetrics.width("W", font.size, font.metrics)
