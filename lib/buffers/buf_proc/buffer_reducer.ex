@@ -106,6 +106,16 @@ defmodule Quillex.Buffer.Process.Reducer do
     |> BufferPane.Mutator.move_cursor(new_cursor_coords)
   end
 
+  def process(%Quillex.Structs.BufState{name: _unnamed} = buf, {:save_as, file_path}) when is_binary(file_path) do
+
+    text = Enum.join(buf.data, "\n")
+    Memelex.Utils.FileIO.write(file_path, text)
+
+    # if name is unnamed, then change it to file path here
+    # TODO update timestamps last save
+    %{buf | name: Path.basename(file_path), source: %{filepath: file_path}, dirty?: false}
+  end
+
   # def process(%{uuid: buf_uuid, source: nil} = buf, {:save, buf_uuid}) do
   #   # {:cast_parent, {:save, buf_uuid}}
   #   # raise "how did we even get here"
@@ -122,6 +132,12 @@ defmodule Quillex.Buffer.Process.Reducer do
   #   IO.puts("GOT REQ TO SAVE IN BUF CMPNT BUT CANT CAUSE NO FILENAME, FWDing...")
   #   {:fwd, Quillex.GUI.Components.Buffer, {:request_save, %{uuid: buf.uuid}}}
   # end
+
+  def process(%Quillex.Structs.BufState{} = buf, {:set_overlay, :window_manager}) do
+    #TODO the problem here is that we need to bubble it up to flamelex...
+    IO.puts "OVERLAY WINDOW MGR"
+    :ignore
+  end
 
   def process(%Quillex.Structs.BufState{} = buf, action) do
     IO.puts("BUFFER REDUCER GOT ACTION: #{inspect(action)}")

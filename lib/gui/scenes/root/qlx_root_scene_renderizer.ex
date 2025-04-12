@@ -30,20 +30,34 @@ defmodule QuillEx.RootScene.Renderizer do
       buffer_pane_frame_when_tab_bar_open
     ] = Widgex.Frame.v_split(frame, px: state.toolbar.height)
 
-    buffer_pane_frame =
+    [ubuntu_bar_frame, buffer_pane_frame] =
       if length(state.buffers) <= 1 do
         frame
       else
         buffer_pane_frame_when_tab_bar_open
       end
+      |> then(fn current_buffer_pane_frame ->
+        Widgex.Frame.h_split(frame, px: 60)
+      end)
 
     graph
     |> Scenic.Primitives.group(
       fn graph ->
         graph
         |> render_buffer_pane(scene, state, buffer_pane_frame)
-        |> render_tab_bar(scene, state, tab_bar_frame)
+        # |> render_tab_bar(scene, state, tab_bar_frame)
+        |> render_ubuntu_bar(scene, state, ubuntu_bar_frame)
       end
+    )
+  end
+
+  defp render_ubuntu_bar(graph, scene, _state, frame) do
+    #TODO this obviously
+    Logger.error "RENDER UBUNTU BAR !!!"
+    graph
+    |> ScenicWidgets.UbuntuBar.render(
+      ScenicWidgets.UbuntuBar.new(),
+      frame
     )
   end
 
@@ -64,17 +78,25 @@ defmodule QuillEx.RootScene.Renderizer do
     case Scenic.Graph.get(graph, :buffer_pane) do
       [] ->
 
+        ScenicWidgets.UbuntuBar
+
         buffer_pane_state = Quillex.GUI.Components.BufferPane.State.new(%{
           frame: frame,
-          buf_ref: state.active_buf
+          buf_ref: state.active_buf,
+          # font: %Quillex.Structs.BufState.Font{} = _font
           # buf_ref: QuillEx.RootScene.State.active_buf(state)
         })
 
         graph
-        |> Quillex.GUI.Components.BufferPane.add_to_graph(buffer_pane_state,
+        |> Quillex.GUI.Components.BufferPane.add_to_graph(%{
+          frame: frame,
+          buf_ref: state.active_buf,
+          font: buffer_pane_state.font
+        },
           id: :buffer_pane,
-          translate: buffer_pane_state.frame.pin.point
+          translate: frame.pin.point
         )
+
 
       _primitive ->
         # these are the only things that could be changed in the BufferPane component by this level, the parent component

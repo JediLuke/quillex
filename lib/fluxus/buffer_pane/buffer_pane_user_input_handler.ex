@@ -35,8 +35,8 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler do
     InsertMode.handle(input)
   end
 
-  def handle(%{buf_ref: %{mode: {:vim, :normal}}, state: buf_pane_state}, input) do
-    NormalMode.handle(buf_pane_state, input)
+  def handle(%{buf_ref: %{mode: {:vim, :normal}}}, input) do
+    NormalMode.handle(input)
   end
 
   def handle(buf, input) do

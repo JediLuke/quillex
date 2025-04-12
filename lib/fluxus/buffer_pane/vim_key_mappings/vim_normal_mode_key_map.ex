@@ -15,31 +15,31 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.VimKeyMappings.Norm
   # end
 
   # Enter insert mode with 'i'
-  def handle(buf_pane_state, @lowercase_i) do
-    buf_pane_state = reset_operator_and_count(buf_pane_state)
-    {buf_pane_state, [{:set_mode, {:vim, :insert}}]}
+  def handle(@lowercase_i) do
+    # buf_pane_state = reset_operator_and_count(buf_pane_state)
+    [
+      {:move_cursor, :left, 1},
+      {:set_mode, {:vim, :insert}}
+    ]
   end
 
-  # # Enter insert mode after the cursor with 'a'
-  # def handle(buf, @lowercase_a) do
-  #   buf = reset_operator_and_count(buf)
+  # Enter insert mode after the cursor with 'a'
+  def handle(@lowercase_a) do
+    [
+      # {:move_cursor, :right, 1},
+      {:set_mode, {:vim, :insert}}
+    ]
+  end
 
-  #   [
-  #     {:move_cursor, :right, 1},
-  #     {:set_mode, {:vim, :insert}}
-  #   ]
-  # end
-
-  # # Open a new line below and enter insert mode with 'o'
-  # def handle(buf, @lowercase_o) do
-  #   buf = reset_operator_and_count(buf)
-
-  #   [
-  #     {:move_cursor, :line_end},
-  #     {:newline, :below_cursor},
-  #     {:set_mode, {:vim, :insert}}
-  #   ]
-  # end
+  # Open a new line below and enter insert mode with 'o'
+  def handle(@lowercase_o) do
+    [
+      {:move_cursor, :line_end},
+      # ordering matters here because of hacks
+      {:set_mode, {:vim, :insert}},
+      {:newline, :below_cursor}
+    ]
+  end
 
   # # Open a new line above and enter insert mode with 'O'
   # def handle(buf, @uppercase_O) do
@@ -52,20 +52,21 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.VimKeyMappings.Norm
   #   ]
   # end
 
-  # # Cursor movement commands
-  # def handle(buf, input) when input in [@lowercase_h, @lowercase_j, @lowercase_k, @lowercase_l] do
-  #   buf = reset_operator_and_count(buf)
+  # Cursor movement commands
+  def handle(input) when input in [@lowercase_h, @lowercase_j, @lowercase_k, @lowercase_l] do
+    movement =
+      case input do
+        @lowercase_h -> :left
+        @lowercase_j -> :down
+        @lowercase_k -> :up
+        @lowercase_l -> :right
+      end
 
-  #   movement =
-  #     case input do
-  #       @lowercase_h -> :left
-  #       @lowercase_j -> :down
-  #       @lowercase_k -> :up
-  #       @lowercase_l -> :right
-  #     end
+      #TODO we should be able to go like 5h or whatever
+    # {:move_cursor, movement, buf.count || 1}
 
-  #   {:move_cursor, movement, buf.count || 1}
-  # end
+    [{:move_cursor, movement, 1}]
+  end
 
   # # Arrow keys navigation
   # def handle(buf, input) when input in @arrow_keys do
@@ -95,26 +96,52 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.VimKeyMappings.Norm
   # end
 
   # 'w' moves to the next word
-  def handle(buf_pane_state, @lowercase_w) do
-    #   handle_movement(buf, :next_word)
+  def handle(@lowercase_w) do
+    [{:move_cursor, :next_word}]
+  end
+
+
+      #   handle_movement(buf, :next_word)
     # buf_pane_state = reset_operator_and_count(buf_pane_state)
     # {buf_pane_state, [{:set_mode, {:vim, :insert}}]}
     # raise "not yet"
     # buf_pane_state = reset_operator_and_count(buf_pane_state)
-    {buf_pane_state, [{:move_cursor, :next_word}]}
-  end
+
 
   # 'b' moves to the previous word
-  def handle(buf_pane_state, @lowercase_b) do
+  def handle(@lowercase_b) do
     # buf_pane_state = reset_operator_and_count(buf_pane_state)
     # {buf_pane_state, [{:move_cursor, :prev_word}]}
     [{:move_cursor, :prev_word}]
+  end
+
+  def handle(@lowercase_p) do
+    # buf_pane_state = reset_operator_and_count(buf_pane_state)
+    # {buf_pane_state, [{:move_cursor, :prev_word}]}
+    [{:paste, :at_cursor}]
   end
 
   # # 'e' moves to the end of the word
   # def handle(buf, @lowerc_ase_e) do
   #   handle_movement(buf, :end_of_word)
   # end
+
+  def handle(@uppercase_A) do
+    [
+      # ordering matters here because of hacks
+      {:set_mode, {:vim, :insert}},
+      {:move_cursor, :line_end}
+    ]
+  end
+
+  def handle(@uppercase_Y) do
+    [{:yank, :line, :under_cursor}]
+  end
+
+  # CTRL-w
+  def handle({:key, {:key_w, @key_pressed, [:ctrl]}}) do
+    [{:set_overlay, :window_manager}]
+  end
 
   # # 'x' deletes the character under the cursor
   # def handle(buf, @lowercase_x) do
@@ -170,6 +197,11 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.VimKeyMappings.Norm
     buf_pane_state = reset_operator_and_count(buf_pane_state)
     IO.puts("NormalMode: Unhandled input: #{inspect(input)}")
     # {buf_pane_state, :ignore}
+    :ignore
+  end
+
+  def handle(input) do
+    IO.puts("NormalMode: Unhandled input: #{inspect(input)}")
     :ignore
   end
 

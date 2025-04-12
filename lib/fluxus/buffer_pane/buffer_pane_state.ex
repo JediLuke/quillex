@@ -8,7 +8,8 @@ defmodule Quillex.GUI.Components.BufferPane.State do
     # these are for vim normal mode
     operator: nil, # an operator is a key/action/function that affects next keys e.g. y10 yanks 10 lines, the operator is :y
     count: 0,
-    key_history: []
+    key_history: [],
+    active?: true
   ]
 
   #   defstruct [
@@ -48,10 +49,11 @@ defmodule Quillex.GUI.Components.BufferPane.State do
     slate: :medium_slate_blue
   }
 
-  def new(_args) do
+  def new(args) do
     %__MODULE__{
       font: default_font(),
-      colors: default_colors()
+      colors: default_colors(),
+      active?: Map.get(args, :active?, true)
     }
   end
 

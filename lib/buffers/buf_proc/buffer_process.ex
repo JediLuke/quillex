@@ -20,6 +20,10 @@ defmodule Quillex.Buffer.Process do
     Quillex.Buffer.BufferManager.call_buffer(buf_ref, :get_state)
   end
 
+  def save_as(%Quillex.Structs.BufState.BufRef{} = buf_ref, file_path) do
+    Quillex.Buffer.BufferManager.call_buffer(buf_ref, {:action, {:save_as, file_path}})
+  end
+
   def start_link(%Quillex.Structs.BufState{} = buf) do
     buf_tag = {buf.uuid, __MODULE__}
     via_tuple = {:via, Registry, {Quillex.BufferRegistry, buf_tag}}

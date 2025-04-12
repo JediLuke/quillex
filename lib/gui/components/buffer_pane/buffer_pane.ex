@@ -218,7 +218,6 @@ defmodule Quillex.GUI.Components.BufferPane do
 
   # this is the one we get from the broadcast, just route it to the cast handler
   def handle_info({:buf_state_changes, %Quillex.Structs.BufState{} = new_buf}, scene) do
-    IO.puts "SHOUYLD STILL GET THIS BUT STATE GHANCE"
     handle_cast({:state_change, new_buf}, scene)
   end
 

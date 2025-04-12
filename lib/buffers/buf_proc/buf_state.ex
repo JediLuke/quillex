@@ -15,7 +15,7 @@ defmodule Quillex.Structs.BufState do
     data: nil,
     # Buffers can be in various "modes" e.g. {:vim, :normal}, :edit
     mode: :edit,
-    # Description of where this buffer originally came from, e.g. {:file, filepath}
+    # Description of where this buffer originally came from, e.g. %{filepath: file_path}
     source: nil,
     # a list of all the cursors in the buffer (these go into the buffer, not the buffer pane, because cursors are still used even through the API)
     cursors: [],
