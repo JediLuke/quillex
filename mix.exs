@@ -23,10 +23,9 @@ defmodule QuillEx.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:scenic, git: "https://github.com/ScenicFramework/scenic.git", tag: "v0.11.1"},
+      {:scenic, git: "https://github.com/ScenicFramework/scenic.git", tag: "v0.11.1", override: true},
       {:scenic_driver_local, git: "https://github.com/JediLuke/scenic_driver_local", branch: "no_line_wrap"},
-      {:scenic_widget_contrib, git: "https://github.com/JediLuke/scenic-widget-contrib"},
-      # {:scenic_widget_contrib, git: "https://github.com/JediLuke/scenic-widget-contrib", branch: "text_pad_wip"},
+      {:scenic_widget_contrib, git: "https://github.com/JediLuke/scenic-widget-contrib", branch: "text_pad_wip"},
       {:elixir_uuid, "~> 1.2"},
       {:font_metrics, "~> 0.5"},
       {:event_bus, "~> 1.7.0"},
