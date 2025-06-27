@@ -22,6 +22,17 @@ defmodule QuillEx.App do
         ]
       end
 
+    children =
+      children ++
+        # Conditionally start Tidewave server for development
+        if Mix.env() == :dev and Code.ensure_loaded?(Tidewave) and Code.ensure_loaded?(Bandit) do
+          require Logger
+          Logger.info("Starting Tidewave server on port 4000 for development")
+          [{Bandit, plug: Tidewave, port: 4000}]
+        else
+          []
+        end
+
     children = Supervisor.start_link(children, strategy: :one_for_one)
   end
 
