@@ -25,4 +25,8 @@ defmodule QuillEx.RootScene.Reducer do
   def process(_state, {:new_color_schema, _colors}) do
     :cast_to_children
   end
+
+  def process(%QuillEx.RootScene.State{} = state, :toggle_ubuntu_bar) do
+    %{state | show_ubuntu_bar: not state.show_ubuntu_bar}
+  end
 end

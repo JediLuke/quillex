@@ -37,7 +37,11 @@ defmodule QuillEx.RootScene.Renderizer do
         buffer_pane_frame_when_tab_bar_open
       end
       |> then(fn current_buffer_pane_frame ->
-        Widgex.Frame.h_split(frame, px: 60)
+        if state.show_ubuntu_bar do
+          Widgex.Frame.h_split(current_buffer_pane_frame, px: 60)
+        else
+          [nil, current_buffer_pane_frame]
+        end
       end)
 
     graph
@@ -46,19 +50,51 @@ defmodule QuillEx.RootScene.Renderizer do
         graph
         |> render_buffer_pane(scene, state, buffer_pane_frame)
         # |> render_tab_bar(scene, state, tab_bar_frame)
-        |> render_ubuntu_bar(scene, state, ubuntu_bar_frame)
+        |> then(fn graph ->
+          if state.show_ubuntu_bar and ubuntu_bar_frame do
+            render_ubuntu_bar(graph, scene, state, ubuntu_bar_frame)
+          else
+            graph
+          end
+        end)
       end
     )
   end
 
   defp render_ubuntu_bar(graph, scene, _state, frame) do
-    #TODO this obviously
-    Logger.error "RENDER UBUNTU BAR !!!"
-    graph
-    |> ScenicWidgets.UbuntuBar.render(
-      ScenicWidgets.UbuntuBar.new(),
-      frame
-    )
+    # Create UbuntuBar with custom buttons for quillex
+    buttons = [
+      %{id: :new_file, glyph: "📄", tooltip: "New File"},
+      %{id: :open_file, glyph: "📁", tooltip: "Open File"},
+      %{id: :save_file, glyph: "💾", tooltip: "Save File"},
+      %{id: :search, glyph: "🔍", tooltip: "Search"},
+      %{id: :settings, glyph: "⚙️", tooltip: "Settings"}
+    ]
+    
+    ubuntu_bar_data = %{
+      buttons: buttons,
+      button_size: min(50, frame.size.width - 4), # Leave some padding
+      background_color: {45, 45, 45},
+      button_color: {60, 60, 60},
+      button_hover_color: {80, 80, 80},
+      button_active_color: {100, 150, 200},
+      text_color: {220, 220, 220}
+    }
+    
+    case Scenic.Graph.get(graph, :ubuntu_bar) do
+      [] ->
+        graph
+        |> ScenicWidgets.UbuntuBar.add_to_graph(
+          ubuntu_bar_data,
+          id: :ubuntu_bar,
+          frame: frame,
+          translate: frame.pin.point
+        )
+
+      _primitive ->
+        # Component already exists, could send updates if needed
+        graph
+    end
   end
 
   defp render_tab_bar(graph, scene, state, frame) do
@@ -184,6 +220,7 @@ defmodule QuillEx.RootScene.Renderizer do
            {"show line numbers", fn -> raise "no" end},
            {"show right margin", fn -> raise "no" end},
            {"highlight current line", fn -> raise "no" end},
+           {"toggle ubuntu bar", fire_menu_action(:toggle_ubuntu_bar)},
            {:sub_menu, "indentation",
               [
                 {"automatic indentation", fn -> raise "no" end},

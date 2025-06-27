@@ -241,4 +241,35 @@ defmodule QuillEx.RootScene do
 
     {:noreply, new_scene}
   end
+
+  def handle_info({:ubuntu_bar_clicked, button_id, button}, scene) do
+    Logger.info("UbuntuBar button clicked: #{inspect(button_id)} - #{inspect(button)}")
+    
+    # Handle different button actions
+    case button_id do
+      :new_file ->
+        # Create a new buffer
+        handle_cast({:action, :new_buffer}, scene)
+        
+      :open_file ->
+        Logger.info("Open file functionality not implemented yet")
+        {:noreply, scene}
+        
+      :save_file ->
+        Logger.info("Save file functionality not implemented yet")
+        {:noreply, scene}
+        
+      :search ->
+        Logger.info("Search functionality not implemented yet")
+        {:noreply, scene}
+        
+      :settings ->
+        Logger.info("Settings functionality not implemented yet")
+        {:noreply, scene}
+        
+      _other ->
+        Logger.warn("Unknown ubuntu bar button: #{inspect(button_id)}")
+        {:noreply, scene}
+    end
+  end
 end

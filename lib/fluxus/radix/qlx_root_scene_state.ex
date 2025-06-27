@@ -7,7 +7,8 @@ defmodule QuillEx.RootScene.State do
     tabs: [],
     toolbar: nil,
     buffers: [],
-    active_buf: nil
+    active_buf: nil,
+    show_ubuntu_bar: true
   ]
 
   def new(%{frame: %Widgex.Frame{} = frame, buffers: buffers}) when is_list(buffers) do
