@@ -242,7 +242,7 @@ defmodule QuillEx.RootScene do
     {:noreply, new_scene}
   end
 
-  def handle_info({:ubuntu_bar_clicked, button_id, button}, scene) do
+  def handle_info({:ubuntu_bar_button_clicked, button_id, button}, scene) do
     Logger.info("UbuntuBar button clicked: #{inspect(button_id)} - #{inspect(button)}")
     
     # Handle different button actions

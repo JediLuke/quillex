@@ -62,25 +62,23 @@ defmodule QuillEx.RootScene.Renderizer do
   end
 
   defp render_ubuntu_bar(graph, scene, _state, frame) do
-    # Create UbuntuBar with custom buttons for quillex
-    buttons = [
-      %{id: :new_file, glyph: "📄", tooltip: "New File"},
-      %{id: :open_file, glyph: "📁", tooltip: "Open File"},
-      %{id: :save_file, glyph: "💾", tooltip: "Save File"},
-      %{id: :search, glyph: "🔍", tooltip: "Search"},
-      %{id: :settings, glyph: "⚙️", tooltip: "Settings"}
-    ]
-    
+    # Create UbuntuBar with cool ASCII buttons - creative and safe!
+    buttons = ScenicWidgets.UbuntuBar.cool_ascii_buttons()
+
     ubuntu_bar_data = %{
       buttons: buttons,
-      button_size: min(50, frame.size.width - 4), # Leave some padding
-      background_color: {45, 45, 45},
-      button_color: {60, 60, 60},
-      button_hover_color: {80, 80, 80},
-      button_active_color: {100, 150, 200},
-      text_color: {220, 220, 220}
+      button_size: min(48, frame.size.width - 8), # Leave more padding
+      background_color: {40, 40, 40},
+      button_color: {55, 55, 55},
+      button_hover_color: {75, 75, 75},
+      button_active_color: {85, 130, 180},
+      text_color: {240, 240, 240},
+      font_size: 18, # Perfect size for symbols
+      layout: :top, # Start from the top
+      button_spacing: 10 # Nice spacing for symbols
+      # font_family: :ibm_plex_mono # TODO: Add proper font support for symbols
     }
-    
+
     case Scenic.Graph.get(graph, :ubuntu_bar) do
       [] ->
         graph
