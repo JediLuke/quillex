@@ -75,7 +75,8 @@ defmodule QuillEx.RootScene.Renderizer do
       text_color: {240, 240, 240},
       font_size: 18, # Perfect size for symbols
       layout: :top, # Start from the top
-      button_spacing: 10 # Nice spacing for symbols
+      button_spacing: 10, # Nice spacing for symbols
+      remove_top_margin: true # Align with text pane since menubar provides visual separation
       # font_family: :ibm_plex_mono # TODO: Add proper font support for symbols
     }
 
