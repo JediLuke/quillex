@@ -174,15 +174,35 @@ defmodule QuillEx.RootScene.Renderizer do
   # since this is shared name for the actual Scenic Component, extract it out to here
   @qlx_main_menu :qlx_main_menu
   defp draw_menu_bar(graph, state, frame) do
+    # Configure the enhanced MenuBar with modern theme and improved features
+    enhanced_menu_config = %{
+      frame: frame,
+      menu_map: menu_map(state),
+      theme: :modern,  # Use the sleek modern theme
+      interaction_mode: :hover,  # Keep existing hover behavior
+      button_width: {:auto, :min_width, 100},  # Auto-size with 100px minimum
+      text_clipping: :ellipsis,  # Add ellipsis for long menu items
+      dropdown_alignment: :wide_centered,  # Use the "fat" positioning Luke likes
+      consume_events: true,  # Fix the click-through bug
+      colors: %{
+        # Override some modern theme colors for better contrast
+        background: {30, 30, 35},
+        text: {235, 235, 240},
+        button_hover: {55, 55, 65},
+        button_active: {80, 140, 210}
+      },
+      font: %{name: :roboto, size: 16},
+      dropdown_font: %{name: :roboto, size: 14},
+      button_spacing: 4,
+      text_margin: 12
+    }
+
     graph
     |> Scenic.Primitives.group(
       fn graph ->
         graph
-        |> ScenicWidgets.MenuBar.add_to_graph(
-          %{
-            frame: frame,
-            menu_map: menu_map(state)
-          },
+        |> ScenicWidgets.EnhancedMenuBar.add_to_graph(
+          enhanced_menu_config,
           id: @qlx_main_menu)
       end,
       id: :menu_bar,
