@@ -3,99 +3,42 @@ defmodule Quillex.HelloWorldSpex do
   Hello World Spex for Quillex - demonstrating AI-driven testing.
 
   This spex validates that:
-  1. Quillex is running and accessible via scenic_mcp
-  2. Basic text input functionality works
-  3. Visual feedback is available through screenshots
-  4. AI can interact autonomously with the application
+  1. Quillex application starts successfully
+  2. Scenic MCP server is accessible for AI interaction
+  3. Viewport state can be inspected
+
+  This is our foundational spex that ensures the basic infrastructure
+  for AI-driven GUI testing is working correctly.
   """
   use Spex
 
   @tmp_screenshots_dir "test/spex/screenshots/tmp"
 
   setup_all do
-    # Start Quillex with GUI enabled
-    Application.put_env(:quillex, :started_by_flamelex?, false)
-
-    # Ensure the current project's ebin directory is in the code path
-    # This is needed when running through mix spex
-    Mix.Task.run("compile")
-
-    # Ensure all applications are started
-    case Application.ensure_all_started(:quillex) do
-      {:ok, _apps} ->
-        IO.puts("🚀 Quillex started successfully")
-
-        # Wait for MCP server to be ready
-        wait_for_mcp_server()
-
-        # Cleanup when tests are done
-        on_exit(fn ->
-          IO.puts("🛑 Stopping Quillex")
-          Application.stop(:quillex)
-        end)
-
-        {:ok, %{app_name: "quillex", port: 9999}}
-
-      {:error, reason} ->
-        IO.puts("❌ Failed to start Quillex: #{inspect(reason)}")
-        # ExUnit expects :ok, keyword list, or map - not error tuples
-        raise "Failed to start Quillex: #{inspect(reason)}"
-    end
+    # Start Quillex with MCP server (it's a Quillex dependency)
+    Spex.Helpers.start_scenic_app(:quillex)
   end
 
-  setup do
-    # Prepare clean state for each test
-    File.mkdir_p!(@tmp_screenshots_dir)
-    {:ok, %{timestamp: DateTime.utc_now()}}
-  end
-
-  defp wait_for_mcp_server(retries \\ 20) do
-    case :gen_tcp.connect(~c"localhost", 9999, [:binary, {:active, false}]) do
-      {:ok, socket} ->
-        :gen_tcp.close(socket)
-        IO.puts("✅ MCP server is ready")
-        :ok
-      {:error, :econnrefused} when retries > 0 ->
-        Process.sleep(500)
-        wait_for_mcp_server(retries - 1)
-      {:error, reason} ->
-        IO.puts("❌ MCP server failed to start: #{inspect(reason)}")
-        {:error, reason}
-    end
-  end
-
-  spex "Hello World - basic text input",
-    description: "Validates core text input functionality in Quillex",
-    tags: [:smoke_test, :hello_world, :text_input, :ai_driven] do
+  spex "Hello World - application connectivity & basic text input",
+    description: "Validates that Quillex starts and is accessible via Scenic MCP",
+    tags: [:smoke_test, :hello_world, :connectivity, :ai_driven] do
 
     scenario "Application accessibility and connection", context do
       given_ "Quillex is running", context do
-        # Check if the Quillex application has been started (from setup_all)
-        quillex_running? =
-          Application.started_applications()
-          |> Enum.any?(fn {app_name, _, _} -> app_name == :quillex end)
-
-        assert quillex_running?
-        assert context.app_name == "quillex"
-        assert context.port == 9999
+        assert Spex.Helpers.application_running?(:quillex), "Quillex application should be started"
+        assert context.app_name == "quillex", "Context should contain app name"
+        assert context.port == 9999, "Context should contain MCP port"
       end
 
-      then_ "the Scenic MCP server is running", context do
-        # Check if port is accessible (should be from setup_all)
-        case :gen_tcp.connect(~c"localhost", context.port, []) do
-          {:ok, socket} ->
-            :gen_tcp.close(socket)
-            assert true, "MCP server is running on port #{context.port}"
-
-          {:error, :econnrefused} ->
-            assert false, "MCP server is not running on port #{context.port}"
-        end
+      then_ "we can connect to the Scenic MCP server", context do
+        assert Spex.Helpers.can_connect_to_scenic_mcp?(context.port),
+               "Should be able to connect to MCP server on port #{context.port}"
       end
 
       and_ "we can fetch the ViewPort state", context do
         vp_state = ScenicMcp.Probes.viewport_state()
-        assert vp_state.name == :main_viewport
-        assert vp_state.default_scene == QuillEx.RootScene
+        assert vp_state.name == :main_viewport, "Viewport should be named :main_viewport"
+        assert vp_state.default_scene == QuillEx.RootScene, "Default scene should be QuillEx.RootScene"
       end
     end
 
@@ -136,4 +79,5 @@ defmodule Quillex.HelloWorldSpex do
     #   end
     # end
   end
+
 end
