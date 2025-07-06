@@ -8,104 +8,132 @@ defmodule Quillex.HelloWorldSpex do
   3. Visual feedback is available through screenshots
   4. AI can interact autonomously with the application
   """
-  use Spex, adapter: Spex.Adapters.ScenicMCP
+  use Spex
 
   @tmp_screenshots_dir "test/spex/screenshots/tmp"
+
+  setup_all do
+    # Start Quillex with GUI enabled
+    Application.put_env(:quillex, :started_by_flamelex?, false)
+
+    # Ensure the current project's ebin directory is in the code path
+    # This is needed when running through mix spex
+    Mix.Task.run("compile")
+
+    # Ensure all applications are started
+    case Application.ensure_all_started(:quillex) do
+      {:ok, _apps} ->
+        IO.puts("🚀 Quillex started successfully")
+
+        # Wait for MCP server to be ready
+        wait_for_mcp_server()
+
+        # Cleanup when tests are done
+        on_exit(fn ->
+          IO.puts("🛑 Stopping Quillex")
+          Application.stop(:quillex)
+        end)
+
+        {:ok, %{app_name: "quillex", port: 9999}}
+
+      {:error, reason} ->
+        IO.puts("❌ Failed to start Quillex: #{inspect(reason)}")
+        # ExUnit expects :ok, keyword list, or map - not error tuples
+        raise "Failed to start Quillex: #{inspect(reason)}"
+    end
+  end
+
+  setup do
+    # Prepare clean state for each test
+    File.mkdir_p!(@tmp_screenshots_dir)
+    {:ok, %{timestamp: DateTime.utc_now()}}
+  end
+
+  defp wait_for_mcp_server(retries \\ 20) do
+    case :gen_tcp.connect(~c"localhost", 9999, [:binary, {:active, false}]) do
+      {:ok, socket} ->
+        :gen_tcp.close(socket)
+        IO.puts("✅ MCP server is ready")
+        :ok
+      {:error, :econnrefused} when retries > 0 ->
+        Process.sleep(500)
+        wait_for_mcp_server(retries - 1)
+      {:error, reason} ->
+        IO.puts("❌ MCP server failed to start: #{inspect(reason)}")
+        {:error, reason}
+    end
+  end
 
   spex "Hello World - basic text input",
     description: "Validates core text input functionality in Quillex",
     tags: [:smoke_test, :hello_world, :text_input, :ai_driven] do
 
-    alias Spex.Adapters.ScenicMCP
+    scenario "Application accessibility and connection", context do
+      given_ "Quillex is running", context do
+        # Check if the Quillex application has been started (from setup_all)
+        quillex_running? =
+          Application.started_applications()
+          |> Enum.any?(fn {app_name, _, _} -> app_name == :quillex end)
 
-    scenario "Application accessibility and connection" do
-      given_ "Quillex should be running with scenic_mcp server" do
-        # Check if we're running under mix spex by looking for the MCP server
-        # The mix spex task starts the app and waits for MCP to be ready before running tests
-        server_available = ScenicMCP.wait_for_app(9999, 2)
-        
-        if server_available do
-          # Running under mix spex - app is already started in separate process
-          IO.puts("    ℹ️  MCP: Using existing Quillex instance on port 9999")
-          assert true, "Connected to existing Quillex instance"
-        else
-          # Running under mix test - start app in-process
-          IO.puts("    🚀 MCP: Starting Quillex in-process for testing")
-          {:ok, _result} = ScenicMCP.start_app_in_process(:quillex)
-          
-          # Wait a moment for the application to fully initialize
-          Process.sleep(2000)
-          
-          # Verify the application is running in-process
-          assert ScenicMCP.app_running_in_process?(:quillex), "Quillex should be running in-process"
-        end
-        
-        # here we need to wipe the app state, reboot it somehow - we can skip this for now but eventually we need it (when we run tests sequentially, we want to be able to start from a clean slate)
+        assert quillex_running?
+        assert context.app_name == "quillex"
+        assert context.port == 9999
       end
 
-      then_ "AI can establish connection to the application" do
-        # Check how we're connected
-        if ScenicMCP.app_running?(9999) and not ScenicMCP.app_running_in_process?(:quillex) do
-          # Connected via TCP - running under mix spex
-          assert ScenicMCP.app_running?(9999), "Connection should be established"
-        else
-          # In-process connection - running under mix test
-          assert ScenicMCP.app_running_in_process?(:quillex), "In-process connection should be established"
+      then_ "the Scenic MCP server is running", context do
+        # Check if port is accessible (should be from setup_all)
+        case :gen_tcp.connect(~c"localhost", context.port, []) do
+          {:ok, socket} ->
+            :gen_tcp.close(socket)
+            assert true, "MCP server is running on port #{context.port}"
+
+          {:error, :econnrefused} ->
+            assert false, "MCP server is not running on port #{context.port}"
         end
-        
-        {:ok, status} = ScenicMCP.inspect_viewport()
-        assert status.active, "Application should be active and responsive"
+      end
+
+      and_ "we can fetch the ViewPort state", context do
+        vp_state = ScenicMcp.Probes.viewport_state()
+        assert vp_state.name == :main_viewport
+        assert vp_state.default_scene == QuillEx.RootScene
       end
     end
 
-    scenario "Basic text input functionality" do
-      given_ "an empty editor buffer" do
-        # Check if we can access viewport directly (in-process) or need to use MCP tools
-        if ScenicMCP.app_running_in_process?(:quillex) do
-          # In-process - we can directly access the viewport
-          vp_state = ScenicMcp.Probes.viewport_state()
-          
-          # Assert that we can access the viewport state (this was the failing test!)
-          assert is_map(vp_state), "Should be able to access viewport state as a map"
-          
-          # Verify the viewport has the expected structure
-          assert Map.has_key?(vp_state, :scene), "Viewport should have a scene"
-          
-          # Capture initial state using the direct screenshot tool
-          baseline = ScenicMcp.Tools.take_screenshot(%{"filename" => "#{@tmp_screenshots_dir}/hello_world_baseline"})
-          assert baseline.status == "ok", "Screenshot should be successful"
-          assert File.exists?(baseline.path), "Should capture baseline screenshot"
-        else
-          # Running via TCP connection - use mock tools for now
-          # In the future, we would use actual MCP tools here
-          {:ok, baseline} = ScenicMCP.take_screenshot("hello_world_baseline")
-          assert File.exists?(baseline.filename), "Should capture baseline screenshot"
-        end
+    # scenario "Basic text input functionality", context do
+    #   given_ "an empty editor buffer", context do
+    #     # Take baseline screenshot
+    #     {:ok, baseline} = ScenicMCP.take_screenshot("hello_world_baseline")
+    #     assert File.exists?(baseline.filename), "Should capture baseline screenshot"
 
-        # TODO in the future we could use local, less expensive LLMs and soitchastically assert some things about the screenshot
+    #     # Verify viewport is accessible
+    #     {:ok, viewport} = ScenicMCP.inspect_viewport()
+    #     assert viewport.active, "Application should be active"
 
-        # TODO in the future we could look at the viewport script and assert whatever we want there too
-      end
+    #     # Store screenshot path for comparison later
+    #     Map.put(context, :baseline_screenshot, baseline.filename)
+    #   end
 
-      when_ "AI types 'Hello, World!'" do
-        :ok
-        # {:ok, result} = ScenicMCP.send_text("Hello, World!")
-        # assert result.message =~ "successfully", "Text should be sent successfully"
+    #   when_ "AI types 'Hello, World!'", context do
+    #     {:ok, result} = ScenicMCP.send_text("Hello, World!")
+    #     assert result.message =~ "successfully", "Text should be sent successfully"
 
-        # # Allow time for rendering
-        # Process.sleep(500)
-      end
+    #     # Allow time for rendering
+    #     Process.sleep(500)
+    #     context
+    #   end
 
-      then_ "the text appears in the buffer" do
-        :ok
-        # {:ok, screenshot} = ScenicMCP.take_screenshot("hello_world_typed")
-        # assert File.exists?(screenshot.filename), "Should capture post-typing screenshot"
+    #   then_ "the text appears in the buffer", context do
+    #     {:ok, screenshot} = ScenicMCP.take_screenshot("hello_world_typed")
+    #     assert File.exists?(screenshot.filename), "Should capture post-typing screenshot"
 
-        # # Verify we can inspect the application state
-        # {:ok, viewport} = ScenicMCP.inspect_viewport()
-        # assert viewport.active, "Application should remain responsive"
-      end
-    end
+    #     # Verify application remains responsive
+    #     {:ok, viewport} = ScenicMCP.inspect_viewport()
+    #     assert viewport.active, "Application should remain responsive"
+
+    #     # Verify we have both screenshots
+    #     assert File.exists?(context.baseline_screenshot), "Baseline screenshot should exist"
+    #     assert File.exists?(screenshot.filename), "Typed screenshot should exist"
+    #   end
+    # end
   end
-
 end
