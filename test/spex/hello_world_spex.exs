@@ -10,13 +10,13 @@ defmodule Quillex.HelloWorldSpex do
   This is our foundational spex that ensures the basic infrastructure
   for AI-driven GUI testing is working correctly.
   """
-  use Spex
+  use SexySpex
 
   @tmp_screenshots_dir "test/spex/screenshots/tmp"
 
   setup_all do
     # Start Quillex with MCP server (it's a Quillex dependency)
-    Spex.Helpers.start_scenic_app(:quillex)
+    SexySpex.Helpers.start_scenic_app(:quillex)
   end
 
   spex "Hello World - application connectivity & basic text input",
@@ -25,13 +25,13 @@ defmodule Quillex.HelloWorldSpex do
 
     scenario "Application accessibility and connection", context do
       given_ "Quillex is running", context do
-        assert Spex.Helpers.application_running?(:quillex), "Quillex application should be started"
+        assert SexySpex.Helpers.application_running?(:quillex), "Quillex application should be started"
         assert context.app_name == "quillex", "Context should contain app name"
         assert context.port == 9999, "Context should contain MCP port"
       end
 
       then_ "we can connect to the Scenic MCP server", context do
-        assert Spex.Helpers.can_connect_to_scenic_mcp?(context.port),
+        assert SexySpex.Helpers.can_connect_to_scenic_mcp?(context.port),
                "Should be able to connect to MCP server on port #{context.port}"
       end
 
