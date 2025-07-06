@@ -21,6 +21,7 @@
   "scenic_driver_local": {:git, "https://github.com/JediLuke/scenic_driver_local", "43b94d99fe0f692bda810e1be2643925f39904cf", [branch: "flamelex_vsn"]},
   "scenic_mcp": {:git, "https://github.com/scenic-contrib/scenic_mcp_experimental", "7f2329205ad9be3e22017312803e6f0fa1aab713", []},
   "scenic_widget_contrib": {:git, "https://github.com/JediLuke/scenic-widget-contrib", "b210dd168edb007a71925f3efcdb3ec529fb4c9d", [branch: "text_pad_wip"]},
+  "sexy_spex": {:hex, :sexy_spex, "0.1.0", "7150abfc60dd135773663483a7d567568c7e4602800efe2e81148a082db05f86", [:mix], [], "hexpm", "7a4935220b8f269d18591a8f49d615baf9cb05ec0a7174b6d0b56435294203b5"},
   "struct_access": {:hex, :struct_access, "1.1.2", "a42e6ceedd9b9ea090ee94a6da089d56e16f374dbbc010c3eebdf8be17df286f", [:mix], [], "hexpm", "e4c411dcc0226081b95709909551fc92b8feb1a3476108348ea7e3f6c12e586a"},
   "telemetry": {:hex, :telemetry, "1.3.0", "fedebbae410d715cf8e7062c96a1ef32ec22e764197f70cda73d82778d61e7a2", [:rebar3], [], "hexpm", "7015fc8919dbe63764f4b4b87a95b7c0996bd539e0d499be6ec9d7f3875b79e6"},
   "thousand_island": {:hex, :thousand_island, "1.3.14", "ad45ebed2577b5437582bcc79c5eccd1e2a8c326abf6a3464ab6c06e2055a34a", [:mix], [{:telemetry, "~> 0.4 or ~> 1.0", [hex: :telemetry, repo: "hexpm", optional: false]}], "hexpm", "d0d24a929d31cdd1d7903a4fe7f2409afeedff092d277be604966cd6aa4307ef"},
