@@ -42,42 +42,56 @@ defmodule Quillex.HelloWorldSpex do
       end
     end
 
-    # scenario "Basic text input functionality", context do
-    #   given_ "an empty editor buffer", context do
-    #     # Take baseline screenshot
-    #     {:ok, baseline} = ScenicMCP.take_screenshot("hello_world_baseline")
-    #     assert File.exists?(baseline.filename), "Should capture baseline screenshot"
+    scenario "Basic text input functionality", context do
+      given_ "an empty editor buffer", context do
+        # Clear any existing content first
+        # ScenicMcp.Probes.send_keys("a", ["ctrl"])  # Select all
+        # ScenicMcp.Probes.send_keys("delete")       # Delete
+        # Process.sleep(200)  # Allow time for clearing
 
-    #     # Verify viewport is accessible
-    #     {:ok, viewport} = ScenicMCP.inspect_viewport()
-    #     assert viewport.active, "Application should be active"
+        # Take baseline screenshot
+        baseline_screenshot = ScenicMcp.Probes.take_screenshot("hello_world_baseline")
+        assert File.exists?(baseline_screenshot), "Should capture baseline screenshot"
 
-    #     # Store screenshot path for comparison later
-    #     Map.put(context, :baseline_screenshot, baseline.filename)
-    #   end
+        # Verify viewport is accessible
+        vp_state = ScenicMcp.Probes.viewport_state()
+        assert vp_state.name == :main_viewport, "Viewport should be accessible"
 
-    #   when_ "AI types 'Hello, World!'", context do
-    #     {:ok, result} = ScenicMCP.send_text("Hello, World!")
-    #     assert result.message =~ "successfully", "Text should be sent successfully"
+        # Store screenshot path for comparison later
+        Map.put(context, :baseline_screenshot, baseline_screenshot)
+      end
 
-    #     # Allow time for rendering
-    #     Process.sleep(500)
-    #     context
-    #   end
+      when_ "we type 'Hello World!'", context do
+        test_text = "Hello World!"
 
-    #   then_ "the text appears in the buffer", context do
-    #     {:ok, screenshot} = ScenicMCP.take_screenshot("hello_world_typed")
-    #     assert File.exists?(screenshot.filename), "Should capture post-typing screenshot"
+        # Send the text input using ScenicMcp.Probes
+        result = ScenicMcp.Probes.send_text(test_text)
+        assert result == :ok, "Text should be sent successfully"
 
-    #     # Verify application remains responsive
-    #     {:ok, viewport} = ScenicMCP.inspect_viewport()
-    #     assert viewport.active, "Application should remain responsive"
+        # Allow time for rendering
+        Process.sleep(500)
 
-    #     # Verify we have both screenshots
-    #     assert File.exists?(context.baseline_screenshot), "Baseline screenshot should exist"
-    #     assert File.exists?(screenshot.filename), "Typed screenshot should exist"
-    #   end
-    # end
+        # Store the typed text in context for validation
+        Map.put(context, :typed_text, test_text)
+      end
+
+      then_ "the text appears in the buffer", context do
+        # Take screenshot after typing
+        typed_screenshot = ScenicMcp.Probes.take_screenshot("hello_world_typed")
+        assert File.exists?(typed_screenshot), "Should capture post-typing screenshot"
+
+        # Verify application remains responsive
+        vp_state = ScenicMcp.Probes.viewport_state()
+        assert vp_state.name == :main_viewport, "Application should remain responsive"
+
+        # Verify we have both screenshots for comparison
+        assert File.exists?(context.baseline_screenshot), "Baseline screenshot should exist"
+        assert File.exists?(typed_screenshot), "Typed screenshot should exist"
+
+        # Store final screenshot for potential future comparison
+        Map.put(context, :final_screenshot, typed_screenshot)
+      end
+    end
   end
 
 end

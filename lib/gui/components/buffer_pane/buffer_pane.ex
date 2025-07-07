@@ -77,29 +77,30 @@ defmodule Quillex.GUI.Components.BufferPane do
     {:ok, init_scene}
   end
 
-  # def handle_cast({:user_input, input}, scene) do
-  #   # the GUI component converts raw user input to actions, directly on this layer,
-  #   # which are then passed back up the component tree for processing
-  #   Logger.info "BUF GOT input #{inspect input}"
-  #   case BufferPane.UserInputHandler.handle(scene.assigns, input) do
-  #     :ignore ->
-  #       {:noreply, scene}
+  def handle_cast({:user_input, input}, scene) do
+    # the GUI component converts raw user input to actions, directly on this layer,
+    # which are then passed back up the component tree for processing
+    Logger.info "BUF GOT input #{inspect input}"
+    case BufferPane.UserInputHandler.handle(scene.assigns, input) do
+      :ignore ->
+        {:noreply, scene}
 
-  #     actions when is_list(actions) ->
-  #       cast_parent(scene, {__MODULE__, :action, scene.assigns.buf_ref, actions})
-  #       {:noreply, scene}
+      actions when is_list(actions) ->
+        Logger.info("BufferPane: Generated actions #{inspect(actions)}, casting to parent")
+        cast_parent(scene, {__MODULE__, :action, scene.assigns.buf_ref, actions})
+        {:noreply, scene}
 
-  #     actn when is_tuple(actn) ->
-  #       raise "A handler function is ont returning a list. Returned: #{inspect actn}"
+      actn when is_tuple(actn) ->
+        raise "A handler function is ont returning a list. Returned: #{inspect actn}"
 
-  #     # {%BufferPane.State{} = new_buf_pane_state, :ignore} ->
-  #     #   {:noreply, scene |> assign(state: new_buf_pane_state)}
+      # {%BufferPane.State{} = new_buf_pane_state, :ignore} ->
+      #   {:noreply, scene |> assign(state: new_buf_pane_state)}
 
-  #     # {%BufferPane.State{} = new_buf_pane_state, actions} when is_list(actions) ->
-  #     #   cast_parent(scene, {__MODULE__, :action, scene.assigns.buf_ref, actions})
-  #     #   {:noreply, scene |> assign(state: new_buf_pane_state)}
-  #   end
-  # end
+      # {%BufferPane.State{} = new_buf_pane_state, actions} when is_list(actions) ->
+      #   cast_parent(scene, {__MODULE__, :action, scene.assigns.buf_ref, actions})
+      #   {:noreply, scene |> assign(state: new_buf_pane_state)}
+    end
+  end
 
   def handle_cast({:frame_change, %Widgex.Frame{} = frame}, %{assigns: %{frame: frame}} = scene) do
     # frame didn't change (same variable name means we bound to both vars, they are equal) so do nothing

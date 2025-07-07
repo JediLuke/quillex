@@ -44,12 +44,15 @@ defmodule QuillEx.App do
       size: @default_resolution,
       default_scene: {QuillEx.RootScene, []},
       drivers: [
+        # valid options are: [:name, :limit_ms, :layer, :opacity, :debug, :antialias, :calibration, :position, :window, :cursor, :key_map, :on_close]
         [
+          name: :scenic_driver,
           module: Scenic.Driver.Local,
           window: [
             title: @window_title,
             resizeable: true
           ],
+          debug: true,
           on_close: :stop_system
           # limit_ms: 500
         ]

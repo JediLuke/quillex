@@ -106,6 +106,7 @@ defmodule QuillEx.RootScene do
   end
 
   def handle_cast({:action, actions}, scene) when is_list(actions) do
+    Logger.info("RootScene: Received actions: #{inspect(actions)}")
     case process_actions(scene, actions) do
       {:ok, {new_state, new_graph}} ->
         new_scene =
@@ -181,11 +182,14 @@ defmodule QuillEx.RootScene do
         },
         scene
       ) do
+    Logger.info("RootScene: Received BufferPane actions for buf_ref #{inspect(buf_ref)}: #{inspect(actions)}")
 
     # Flamelex.Fluxus.action()
 
     # interact with the Buffer state to apply the actions - thisd is equivalent to Fluxus
-    # {:ok, new_buf} = BufferManager.call_buffer(buf_ref, {:action, actions})
+    Logger.info("RootScene: About to call BufferManager.call_buffer with actions: #{inspect(actions)}")
+    {:ok, new_buf} = Quillex.Buffer.BufferManager.call_buffer(buf_ref, {:action, actions})
+    Logger.info("RootScene: BufferManager returned new buffer state")
 
     # # we normally would broadcast changesd from Fluxus, since RootScene _id_ fluxus here, here is where we broadcast from
 
@@ -195,8 +199,10 @@ defmodule QuillEx.RootScene do
     # # and it allows us to proapagate changes up from quillex to flamelex in same mechanism
 
     # # update the GUI
-    # {:ok, [pid]} = Scenic.Scene.child(scene, :buffer_pane)
-    # GenServer.cast(pid, {:state_change, new_buf})
+    Logger.info("RootScene: About to send state_change to BufferPane")
+    {:ok, [pid]} = Scenic.Scene.child(scene, :buffer_pane)
+    GenServer.cast(pid, {:state_change, new_buf})
+    Logger.info("RootScene: Sent state_change to BufferPane")
 
     {:noreply, scene}
   end
