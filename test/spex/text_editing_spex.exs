@@ -34,7 +34,11 @@ defmodule Quillex.TextEditingSpex do
 
     scenario "Cursor movement with arrow keys", context do
       given_ "text content with cursor at beginning", context do
-        # Clear buffer and add some test text
+        # Clear buffer first (even though it should be empty)
+        ScenicMcp.Probes.send_keys("a", ["ctrl"])
+        Process.sleep(50)
+        
+        # Add test text
         initial_text = "Hello World"
         result = ScenicMcp.Probes.send_text(initial_text)
         assert result == :ok
@@ -45,6 +49,12 @@ defmodule Quillex.TextEditingSpex do
         Process.sleep(50)
 
         # Verify initial state
+        ScriptInspector.debug_script_table()
+        rendered_content = ScriptInspector.get_rendered_text_string()
+        IO.puts("\\nRendered content: '#{rendered_content}'")
+        IO.puts("Expected text: '#{initial_text}'")
+        IO.puts("Contains expected? #{String.contains?(rendered_content, initial_text)}")
+        
         assert ScriptInspector.rendered_text_contains?(initial_text),
                "Should have initial text: #{initial_text}"
 
@@ -82,6 +92,10 @@ defmodule Quillex.TextEditingSpex do
 
     scenario "Backspace character deletion", context do
       given_ "text with cursor positioned mid-word", context do
+        # Clear buffer first
+        ScenicMcp.Probes.send_keys("a", ["ctrl"])
+        Process.sleep(50)
+        
         # Clear and setup test text
         test_text = "Programming"
         ScenicMcp.Probes.send_text(test_text)
@@ -122,6 +136,10 @@ defmodule Quillex.TextEditingSpex do
 
     scenario "Delete key character deletion", context do
       given_ "text with cursor positioned mid-word", context do
+        # Clear buffer first
+        ScenicMcp.Probes.send_keys("a", ["ctrl"])
+        Process.sleep(50)
+        
         test_text = "Deleteing"
         ScenicMcp.Probes.send_text(test_text)
         Process.sleep(100)
@@ -161,6 +179,10 @@ defmodule Quillex.TextEditingSpex do
 
     scenario "Enter key creates new line", context do
       given_ "text content without line breaks", context do
+        # Clear buffer first
+        ScenicMcp.Probes.send_keys("a", ["ctrl"])
+        Process.sleep(50)
+        
         test_text = "First line content"
         ScenicMcp.Probes.send_text(test_text)
         Process.sleep(100)
@@ -201,6 +223,10 @@ defmodule Quillex.TextEditingSpex do
 
     scenario "Home and End key navigation", context do
       given_ "a line of text with cursor in middle", context do
+        # Clear buffer first
+        ScenicMcp.Probes.send_keys("a", ["ctrl"])
+        Process.sleep(50)
+        
         test_text = "Navigate to beginning and end"
         ScenicMcp.Probes.send_text(test_text)
         Process.sleep(100)
@@ -221,7 +247,7 @@ defmodule Quillex.TextEditingSpex do
         Process.sleep(50)
 
         # Type at beginning to verify cursor position
-        prefix = "START: "
+        prefix = "START "
         ScenicMcp.Probes.send_text(prefix)
         Process.sleep(100)
 
@@ -233,7 +259,7 @@ defmodule Quillex.TextEditingSpex do
         Process.sleep(50)
 
         # Type at end to verify cursor position
-        suffix = " :END"
+        suffix = " END"
         ScenicMcp.Probes.send_text(suffix)
         Process.sleep(100)
 
@@ -241,7 +267,7 @@ defmodule Quillex.TextEditingSpex do
       end
 
       then_ "cursor moves to line boundaries correctly", context do
-        # Expected result: "START: Navigate to beginning and end :END"
+        # Expected result: "START Navigate to beginning and end END"
         expected_result = "#{context.prefix}#{context.test_text}#{context.suffix}"
         rendered_content = ScriptInspector.get_rendered_text_string()
 
@@ -255,6 +281,10 @@ defmodule Quillex.TextEditingSpex do
 
     scenario "Text selection with Shift+Arrow keys", context do
       given_ "text content for selection", context do
+        # Clear buffer first
+        ScenicMcp.Probes.send_keys("a", ["ctrl"])
+        Process.sleep(50)
+        
         test_text = "Select this text"
         ScenicMcp.Probes.send_text(test_text)
         Process.sleep(100)
@@ -306,6 +336,10 @@ defmodule Quillex.TextEditingSpex do
 
     scenario "Copy and paste operations", context do
       given_ "text content for copy/paste", context do
+        # Clear buffer first
+        ScenicMcp.Probes.send_keys("a", ["ctrl"])
+        Process.sleep(50)
+        
         test_text = "Copy this phrase"
         ScenicMcp.Probes.send_text(test_text)
         Process.sleep(100)
@@ -354,7 +388,7 @@ defmodule Quillex.TextEditingSpex do
                "Copied text should be pasted. Expected: '#{expected_result}', Got: '#{rendered_content}'"
 
         # Verify "this phrase" appears twice
-        phrase_count = String.split(rendered_content, "this phrase") |> length() - 1
+        phrase_count = rendered_content |> String.split("this phrase") |> length() |> Kernel.-(1)
         assert phrase_count == 2, "The phrase 'this phrase' should appear twice after copy/paste"
 
         after_screenshot = ScenicMcp.Probes.take_screenshot("copy_paste_after")
@@ -364,6 +398,10 @@ defmodule Quillex.TextEditingSpex do
 
     scenario "Cut and paste operations", context do
       given_ "text content for cut/paste", context do
+        # Clear buffer first
+        ScenicMcp.Probes.send_keys("a", ["ctrl"])
+        Process.sleep(50)
+        
         test_text = "Cut this word out"
         ScenicMcp.Probes.send_text(test_text)
         Process.sleep(100)
@@ -412,7 +450,7 @@ defmodule Quillex.TextEditingSpex do
                "Cut text should be moved to new location. Expected: '#{expected_result}', Got: '#{rendered_content}'"
 
         # Verify "this" appears only once (was cut from original location)
-        this_count = String.split(rendered_content, "this") |> length() - 1
+        this_count = rendered_content |> String.split("this") |> length() |> Kernel.-(1)
         assert this_count == 1, "The word 'this' should appear only once after cut/paste"
 
         after_screenshot = ScenicMcp.Probes.take_screenshot("cut_paste_after")
@@ -422,6 +460,10 @@ defmodule Quillex.TextEditingSpex do
 
     scenario "Vertical cursor movement with up/down arrows", context do
       given_ "three lines of text with different lengths", context do
+        # Clear buffer first
+        ScenicMcp.Probes.send_keys("a", ["ctrl"])
+        Process.sleep(50)
+        
         text_lines = ["First line with some text", "Second", "Third line is longer"]
         
         for {line, index} <- Enum.with_index(text_lines) do
@@ -477,6 +519,10 @@ defmodule Quillex.TextEditingSpex do
 
     scenario "Select All functionality", context do
       given_ "multi-line text content", context do
+        # Clear buffer first
+        ScenicMcp.Probes.send_keys("a", ["ctrl"])
+        Process.sleep(50)
+        
         text_lines = ["First line of content", "Second line of content", "Third line of content"]
         
         for {line, index} <- Enum.with_index(text_lines) do
