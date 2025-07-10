@@ -41,8 +41,30 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.NotepadMap do
     {:insert, "\t", :at_cursor}
   end
 
+  # Shift+Arrow keys for text selection (must come before regular arrow keys)
+  def handle(_buf, {:key, {:key_right, 1, [:shift]}} = input) do
+    Logger.warn("DEBUG: Matched Shift+Right: #{inspect(input)}")
+    {:select_text, :right, 1}
+  end
+
+  def handle(_buf, {:key, {:key_left, 1, [:shift]}} = input) do
+    Logger.warn("DEBUG: Matched Shift+Left: #{inspect(input)}")
+    {:select_text, :left, 1}
+  end
+
+  def handle(_buf, {:key, {:key_up, 1, [:shift]}} = input) do
+    Logger.warn("DEBUG: Matched Shift+Up: #{inspect(input)}")
+    {:select_text, :up, 1}
+  end
+
+  def handle(_buf, {:key, {:key_down, 1, [:shift]}} = input) do
+    Logger.warn("DEBUG: Matched Shift+Down: #{inspect(input)}")
+    {:select_text, :down, 1}
+  end
+
   # Arrow keys move cursor
   def handle(_buf, input) when input in @arrow_keys do
+    Logger.warn("DEBUG: Regular arrow key: #{inspect(input)}")
     case input do
       @left_arrow -> {:move_cursor, :left, 1}
       @up_arrow -> {:move_cursor, :up, 1}

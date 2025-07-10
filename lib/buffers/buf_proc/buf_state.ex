@@ -19,6 +19,8 @@ defmodule Quillex.Structs.BufState do
     source: nil,
     # a list of all the cursors in the buffer (these go into the buffer, not the buffer pane, because cursors are still used even through the API)
     cursors: [],
+    # text selection state - tracks start and end of selection
+    selection: nil,  # %{start: {line, col}, end: {line, col}} or nil for no selection
     # track all the modifications as we do them, for undo/redo purposes
     history: [],
     # a flag which lets us know if it's a read-only buffer, read-only buffers can't be modified
@@ -66,6 +68,7 @@ defmodule Quillex.Structs.BufState do
       mode: mode,
       source: source,
       cursors: cursors,
+      selection: nil,
       history: [],
       read_only?: read_only?,
       dirty?: false,

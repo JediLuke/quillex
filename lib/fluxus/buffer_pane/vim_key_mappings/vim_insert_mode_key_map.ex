@@ -55,6 +55,48 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.VimKeyMappings.Inse
     [{:insert, "\t", :at_cursor}]
   end
 
+  # Shift+Arrow keys for text selection (must come before regular arrow keys)
+  # Support both atom and string formats for modifiers
+  def handle({:key, {:key_right, 1, [:shift]}} = input) do
+    Logger.warn("DEBUG: VIM InsertMode - Matched Shift+Right (atoms): #{inspect(input)}")
+    [{:select_text, :right, 1}]
+  end
+
+  def handle({:key, {:key_right, 1, ["shift"]}} = input) do
+    Logger.warn("DEBUG: VIM InsertMode - Matched Shift+Right (strings): #{inspect(input)}")
+    [{:select_text, :right, 1}]
+  end
+
+  def handle({:key, {:key_left, 1, [:shift]}} = input) do
+    Logger.warn("DEBUG: VIM InsertMode - Matched Shift+Left (atoms): #{inspect(input)}")
+    [{:select_text, :left, 1}]
+  end
+
+  def handle({:key, {:key_left, 1, ["shift"]}} = input) do
+    Logger.warn("DEBUG: VIM InsertMode - Matched Shift+Left (strings): #{inspect(input)}")
+    [{:select_text, :left, 1}]
+  end
+
+  def handle({:key, {:key_up, 1, [:shift]}} = input) do
+    Logger.warn("DEBUG: VIM InsertMode - Matched Shift+Up (atoms): #{inspect(input)}")
+    [{:select_text, :up, 1}]
+  end
+
+  def handle({:key, {:key_up, 1, ["shift"]}} = input) do
+    Logger.warn("DEBUG: VIM InsertMode - Matched Shift+Up (strings): #{inspect(input)}")
+    [{:select_text, :up, 1}]
+  end
+
+  def handle({:key, {:key_down, 1, [:shift]}} = input) do
+    Logger.warn("DEBUG: VIM InsertMode - Matched Shift+Down (atoms): #{inspect(input)}")
+    [{:select_text, :down, 1}]
+  end
+
+  def handle({:key, {:key_down, 1, ["shift"]}} = input) do
+    Logger.warn("DEBUG: VIM InsertMode - Matched Shift+Down (strings): #{inspect(input)}")
+    [{:select_text, :down, 1}]
+  end
+
   # Arrow keys move cursor
   def handle(input) when input in @arrow_keys do
     case input do

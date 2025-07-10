@@ -198,4 +198,117 @@ defmodule Quillex.GUI.Components.BufferPane.Mutator do
         buf
     end
   end
+
+  # Text selection functionality
+  def select_text(%{cursors: [c], selection: nil} = buf, direction, count) do
+    # Start a new selection at current cursor position
+    selection_start = {c.line, c.col}
+    
+    # Move cursor to extend selection
+    buf_with_moved_cursor = move_cursor(buf, direction, count)
+    [new_cursor] = buf_with_moved_cursor.cursors
+    selection_end = {new_cursor.line, new_cursor.col}
+    
+    # Set selection state
+    %{buf_with_moved_cursor | selection: %{start: selection_start, end: selection_end}}
+  end
+
+  def select_text(%{cursors: [c], selection: %{start: start_pos}} = buf, direction, count) do
+    # Extend existing selection by moving cursor
+    buf_with_moved_cursor = move_cursor(buf, direction, count)
+    [new_cursor] = buf_with_moved_cursor.cursors
+    selection_end = {new_cursor.line, new_cursor.col}
+    
+    # Update selection end position
+    %{buf_with_moved_cursor | selection: %{start: start_pos, end: selection_end}}
+  end
+
+  # Clear selection when moving cursor normally (without selection)
+  def move_cursor(%{selection: selection} = buf, direction, count) when selection != nil do
+    # TODO no idea how this is gonna work with multiple cursors...
+    c = buf.cursors |> hd()
+
+    new_cursor =
+      case direction do
+        :up -> c |> Cursor.move_up(count)
+        :down -> c |> Cursor.move_down(count)
+        :left -> c |> Cursor.move_left(count)
+        :right -> c |> Cursor.move_right(count)
+      end
+
+    %{buf | cursors: [new_cursor], selection: nil}
+  end
+
+  # Delete selected text and return buffer with cursor at selection start
+  def delete_selected_text(%{selection: nil} = buf), do: buf
+  
+  def delete_selected_text(%{selection: %{start: start_pos, end: end_pos}} = buf) do
+    # Normalize selection - ensure start is before end
+    {start_line, start_col} = start_pos
+    {end_line, end_col} = end_pos
+    
+    {{del_start_line, del_start_col}, {del_end_line, del_end_col}} = 
+      if start_line < end_line or (start_line == end_line and start_col <= end_col) do
+        {start_pos, end_pos}
+      else
+        {end_pos, start_pos}
+      end
+    
+    # Handle selection within same line vs. across multiple lines
+    cond do
+      del_start_line == del_end_line ->
+        # Selection within same line
+        delete_text_within_line(buf, del_start_line, del_start_col, del_end_col)
+        
+      true ->
+        # Selection across multiple lines
+        delete_text_across_lines(buf, {del_start_line, del_start_col}, {del_end_line, del_end_col})
+    end
+    |> Map.put(:selection, nil)  # Clear selection after deletion
+    |> Map.put(:cursors, [Cursor.new(del_start_line, del_start_col)])  # Position cursor at start
+  end
+
+  defp delete_text_within_line(buf, line, start_col, end_col) do
+    current_line = Enum.at(buf.data, line - 1)
+    {left_text, right_text} = String.split_at(current_line, start_col - 1)
+    {_deleted_text, remaining_text} = String.split_at(right_text, end_col - start_col)
+    updated_line = left_text <> remaining_text
+    updated_data = List.replace_at(buf.data, line - 1, updated_line)
+    %{buf | data: updated_data, dirty?: true}
+  end
+
+  defp delete_text_across_lines(buf, {start_line, start_col}, {end_line, end_col}) do
+    # Get text before selection on start line
+    start_line_text = Enum.at(buf.data, start_line - 1)
+    {left_text, _} = String.split_at(start_line_text, start_col - 1)
+    
+    # Get text after selection on end line  
+    end_line_text = Enum.at(buf.data, end_line - 1)
+    {_, right_text} = String.split_at(end_line_text, end_col - 1)
+    
+    # Combine the remaining text
+    combined_line = left_text <> right_text
+    
+    # Remove lines between start and end, and replace start line with combined text
+    updated_data = 
+      buf.data
+      |> Enum.with_index()
+      |> Enum.reduce([], fn {line, idx}, acc ->
+        cond do
+          idx + 1 < start_line or idx + 1 > end_line -> acc ++ [line]
+          idx + 1 == start_line -> acc ++ [combined_line]
+          true -> acc  # Skip lines between start and end
+        end
+      end)
+    
+    %{buf | data: updated_data, dirty?: true}
+  end
+
+  # Override insert_text to handle selection replacement
+  def insert_text(%{selection: %{}} = buf, _cursor_pos, text) do
+    # Delete selected text first, then insert at the resulting cursor position
+    buf_after_deletion = delete_selected_text(buf)
+    [cursor] = buf_after_deletion.cursors
+    insert_text(buf_after_deletion, {cursor.line, cursor.col}, text)
+  end
 end

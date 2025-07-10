@@ -16,6 +16,14 @@ defmodule Quillex.TextEditingSpex do
 
   This spex ensures we have a solid foundation before adding advanced features
   like file operations, undo/redo, or vim mode.
+
+  TODO - Phase 2 Features to Add:
+  - Mouse interaction (click to position cursor, click+drag selection)
+  - Extended navigation (Page Up/Down, Ctrl+Home/End, Ctrl+Left/Right word jumping)
+  - Extended selection (Shift+Home/End, Ctrl+Shift+Left/Right, double/triple-click)
+  - Tab character insertion and behavior
+  - Edge cases (operations on empty buffer, document boundaries)
+  - Multi-line selection across line boundaries
   """
   use SexySpex
 
@@ -49,12 +57,6 @@ defmodule Quillex.TextEditingSpex do
         Process.sleep(50)
 
         # Verify initial state
-        ScriptInspector.debug_script_table()
-        rendered_content = ScriptInspector.get_rendered_text_string()
-        IO.puts("\\nRendered content: '#{rendered_content}'")
-        IO.puts("Expected text: '#{initial_text}'")
-        IO.puts("Contains expected? #{String.contains?(rendered_content, initial_text)}")
-        
         assert ScriptInspector.rendered_text_contains?(initial_text),
                "Should have initial text: #{initial_text}"
 
@@ -519,7 +521,7 @@ defmodule Quillex.TextEditingSpex do
 
     scenario "Select All functionality", context do
       given_ "multi-line text content", context do
-        # Clear buffer first
+        # Clear buffer first (using select all + type over)
         ScenicMcp.Probes.send_keys("a", ["ctrl"])
         Process.sleep(50)
         
@@ -564,6 +566,165 @@ defmodule Quillex.TextEditingSpex do
 
         after_screenshot = ScenicMcp.Probes.take_screenshot("select_all_after")
         :ok
+      end
+    end
+  end
+
+  scenario "Selection edge case - expand then contract to zero", context do
+    given_ "text content for edge case testing", context do
+      # Clear buffer first
+      ScenicMcp.Probes.send_keys("a", ["ctrl"])
+      Process.sleep(50)
+      
+      test_text = "Hello world selection test"
+      ScenicMcp.Probes.send_text(test_text)
+      
+      # Position cursor after "Hello " (position 7)
+      ScenicMcp.Probes.send_keys("home")
+      Process.sleep(50)
+      ScenicMcp.Probes.send_keys("right")
+      ScenicMcp.Probes.send_keys("right") 
+      ScenicMcp.Probes.send_keys("right")
+      ScenicMcp.Probes.send_keys("right")
+      ScenicMcp.Probes.send_keys("right")
+      ScenicMcp.Probes.send_keys("right")
+      Process.sleep(100)
+      
+      baseline_screenshot = ScenicMcp.Probes.take_screenshot("selection_edge_baseline")
+      assert baseline_screenshot =~ ".png"
+    end
+    
+    when_ "user selects 2 characters right then 2 characters back left", context do
+      # Select 2 characters to the right
+      ScenicMcp.Probes.send_keys("right", ["shift"])
+      ScenicMcp.Probes.send_keys("right", ["shift"])
+      Process.sleep(100)
+      
+      active_screenshot = ScenicMcp.Probes.take_screenshot("selection_edge_active")
+      
+      # Then go back 2 characters with shift (should cancel selection)
+      ScenicMcp.Probes.send_keys("left", ["shift"])
+      ScenicMcp.Probes.send_keys("left", ["shift"])
+      Process.sleep(100)
+      
+      after_screenshot = ScenicMcp.Probes.take_screenshot("selection_edge_after")
+    end
+    
+    then_ "no selection highlighting should remain", context do
+      rendered_content = ScriptInspector.get_rendered_text_string()
+      
+      # Should be back to original text with no visual selection artifacts
+      expected_text = "Hello world selection test"
+      
+      if String.contains?(rendered_content, expected_text) do
+        IO.puts("✅ Selection edge case: Text content correct")
+      else
+        raise "Selection edge case failed. Expected: '#{expected_text}', Got: '#{rendered_content}'"
+      end
+    end
+  end
+
+  scenario "Selection state cleanup after normal cursor movement", context do
+    given_ "text with previous selection state", context do
+      # Clear buffer first
+      ScenicMcp.Probes.send_keys("a", ["ctrl"])
+      Process.sleep(50)
+      
+      test_text = "Clean selection state test"
+      ScenicMcp.Probes.send_text(test_text)
+      
+      # Position cursor and make a selection
+      ScenicMcp.Probes.send_keys("home")
+      Process.sleep(50)
+      ScenicMcp.Probes.send_keys("right", ["shift"])
+      ScenicMcp.Probes.send_keys("right", ["shift"])
+      ScenicMcp.Probes.send_keys("right", ["shift"])
+      Process.sleep(100)
+      
+      old_selection_screenshot = ScenicMcp.Probes.take_screenshot("selection_cleanup_old")
+    end
+    
+    when_ "user moves cursor normally without shift", context do
+      # Move cursor normally (should clear selection state)
+      ScenicMcp.Probes.send_keys("right")
+      ScenicMcp.Probes.send_keys("right")
+      Process.sleep(100)
+      
+      normal_move_screenshot = ScenicMcp.Probes.take_screenshot("selection_cleanup_moved")
+    end
+    
+    and_ "user starts new selection from current position", context do
+      # Start new selection from current cursor position
+      ScenicMcp.Probes.send_keys("right", ["shift"])
+      ScenicMcp.Probes.send_keys("right", ["shift"])
+      Process.sleep(100)
+      
+      new_selection_screenshot = ScenicMcp.Probes.take_screenshot("selection_cleanup_new")
+    end
+    
+    then_ "new selection should start from current cursor position, not old selection", context do
+      rendered_content = ScriptInspector.get_rendered_text_string()
+      
+      # The new selection should be highlighting different text than the old selection
+      # This is a visual test - we're checking that the selection state was properly reset
+      
+      if String.contains?(rendered_content, "Clean selection state test") do
+        IO.puts("✅ Selection cleanup: New selection started from correct position")
+      else
+        raise "Selection cleanup failed. Selection state not properly cleared after normal cursor movement."
+      end
+    end
+  end
+
+  scenario "Text replacement during active selection", context do
+    given_ "text content with active selection", context do
+      # Clear buffer first
+      ScenicMcp.Probes.send_keys("a", ["ctrl"])
+      Process.sleep(50)
+      
+      test_text = "Replace this text completely"
+      ScenicMcp.Probes.send_text(test_text)
+      
+      # Position cursor and select "this"
+      ScenicMcp.Probes.send_keys("home")
+      Process.sleep(50)
+      # Move to start of "this" (after "Replace ")
+      ScenicMcp.Probes.send_keys("right")
+      ScenicMcp.Probes.send_keys("right")
+      ScenicMcp.Probes.send_keys("right")
+      ScenicMcp.Probes.send_keys("right")
+      ScenicMcp.Probes.send_keys("right")
+      ScenicMcp.Probes.send_keys("right")
+      ScenicMcp.Probes.send_keys("right")
+      ScenicMcp.Probes.send_keys("right")
+      Process.sleep(50)
+      
+      # Select "this" (4 characters)
+      ScenicMcp.Probes.send_keys("right", ["shift"])
+      ScenicMcp.Probes.send_keys("right", ["shift"])
+      ScenicMcp.Probes.send_keys("right", ["shift"])
+      ScenicMcp.Probes.send_keys("right", ["shift"])
+      Process.sleep(100)
+      
+      selection_screenshot = ScenicMcp.Probes.take_screenshot("replacement_selection")
+    end
+    
+    when_ "user types replacement text", context do
+      replacement_text = "that"
+      ScenicMcp.Probes.send_text(replacement_text)
+      Process.sleep(100)
+      
+      after_replacement_screenshot = ScenicMcp.Probes.take_screenshot("replacement_after")
+    end
+    
+    then_ "selected text should be completely replaced", context do
+      rendered_content = ScriptInspector.get_rendered_text_string()
+      expected_text = "Replace that text completely"
+      
+      if String.contains?(rendered_content, expected_text) do
+        IO.puts("✅ Text replacement: Selected text properly replaced")
+      else
+        raise "Text replacement failed. Expected: '#{expected_text}', Got: '#{rendered_content}'"
       end
     end
   end

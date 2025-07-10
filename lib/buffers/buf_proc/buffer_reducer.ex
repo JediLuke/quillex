@@ -22,6 +22,11 @@ defmodule Quillex.Buffer.Process.Reducer do
     |> BufferPane.Mutator.move_cursor(:line_start)
   end
 
+  def process(%Quillex.Structs.BufState{} = buf, {:select_text, direction, count}) do
+    buf
+    |> BufferPane.Mutator.select_text(direction, count)
+  end
+
   def process(%Quillex.Structs.BufState{} = buf, {:newline, :at_cursor}) do
     [c] = buf.cursors
 

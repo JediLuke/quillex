@@ -41,6 +41,7 @@ defmodule Quillex.GUI.Components.BufferPane.Renderizer do
         |> Scenic.Primitives.group(fn graph ->
           graph
           |> render_background(scene, frame, state, buf)
+          |> render_selection_highlighting(scene, frame, state, buf)
           |> render_text_lines(scene, frame, state, buf)
           |> render_cursor(scene, frame, state, buf)
           # |> draw_scrollbars(args)
@@ -52,6 +53,7 @@ defmodule Quillex.GUI.Components.BufferPane.Renderizer do
       _primitive ->
         graph
         |> render_background(scene, frame, state, buf)
+        |> render_selection_highlighting(scene, frame, state, buf)
         |> render_text_lines(scene, frame, state, buf)
         |> render_cursor(scene, frame, state, buf)
     end
@@ -137,6 +139,7 @@ defmodule Quillex.GUI.Components.BufferPane.Renderizer do
 
   @line_num_column_width 40 # how wide the left-hand 'line numbers' column is
   @semi_transparent_white {255, 255, 255, Integer.floor_div(255, 3)}
+  @selection_color {100, 150, 255, 100} # semi-transparent blue for text selection
   defp render_line_number(graph, idx, y_position, font) do
     case Scenic.Graph.get(graph, {:line_number_text, idx}) do
       [] ->
@@ -159,6 +162,109 @@ defmodule Quillex.GUI.Components.BufferPane.Renderizer do
   end
 
   @margin_left 5
+
+  # Render text selection highlighting - no selection case
+  defp render_selection_highlighting(graph, _scene, _frame, _state, %{selection: nil}) do
+    # Remove any existing selection highlights
+    clean_selection_highlights(graph)
+  end
+
+  # Helper function to remove all selection highlights
+  defp clean_selection_highlights(graph) do
+    # Find and remove all selection highlight primitives
+    Enum.reduce(1..100, graph, fn line_num, acc_graph ->
+      case Scenic.Graph.get(acc_graph, {:selection_highlight, line_num}) do
+        [] -> acc_graph
+        _primitive -> Scenic.Graph.delete(acc_graph, {:selection_highlight, line_num})
+      end
+    end)
+  end
+
+  # Render text selection highlighting - with active selection
+  defp render_selection_highlighting(graph, _scene, frame, state, %{selection: %{start: {start_line, start_col}, end: {end_line, end_col}}} = buf) do
+    # Normalize selection - ensure start comes before end
+    {{sel_start_line, sel_start_col}, {sel_end_line, sel_end_col}} = 
+      if start_line < end_line or (start_line == end_line and start_col <= end_col) do
+        {{start_line, start_col}, {end_line, end_col}}
+      else
+        {{end_line, end_col}, {start_line, start_col}}
+      end
+
+    # If selection has contracted to zero (start == end), clean highlights instead
+    if sel_start_line == sel_end_line and sel_start_col == sel_end_col do
+      clean_selection_highlights(graph)
+    else
+      render_selection_rectangles(graph, {sel_start_line, sel_start_col}, {sel_end_line, sel_end_col}, state, buf)
+    end
+  end
+
+  # Extracted selection rectangle rendering logic
+  defp render_selection_rectangles(graph, {sel_start_line, sel_start_col}, {sel_end_line, sel_end_col}, state, buf) do
+    initial_y = state.font.size + 1
+    line_height = state.font.size
+    text_start_x = @line_num_column_width + @margin_left
+
+    # Render selection rectangles for each line in the selection
+    Enum.reduce(sel_start_line..sel_end_line, graph, fn line_num, acc_graph ->
+      y_position = initial_y + (line_num - 1) * line_height
+      line_text = Enum.at(buf.data, line_num - 1, "")
+      
+      # Calculate selection bounds for this line
+      {start_col_on_line, end_col_on_line} = 
+        cond do
+          line_num == sel_start_line and line_num == sel_end_line ->
+            # Selection within same line
+            {sel_start_col, sel_end_col}
+          line_num == sel_start_line ->
+            # First line of multi-line selection
+            {sel_start_col, String.length(line_text) + 1}
+          line_num == sel_end_line ->
+            # Last line of multi-line selection  
+            {1, sel_end_col}
+          true ->
+            # Middle line of multi-line selection
+            {1, String.length(line_text) + 1}
+        end
+
+      # Calculate pixel coordinates for selection rectangle
+      start_x_offset = if start_col_on_line > 1 do
+        text_before_selection = String.slice(line_text, 0, start_col_on_line - 1)
+        FontMetrics.width(text_before_selection, state.font.size, state.font.metrics)
+      else
+        0
+      end
+      
+      selected_text = String.slice(line_text, start_col_on_line - 1, end_col_on_line - start_col_on_line)
+      selection_width = if String.length(selected_text) > 0 do
+        FontMetrics.width(selected_text, state.font.size, state.font.metrics)
+      else
+        # Minimum width for cursor-like selection
+        5
+      end
+
+      # Add selection rectangle to graph
+      case Scenic.Graph.get(acc_graph, {:selection_highlight, line_num}) do
+        [] ->
+          acc_graph
+          |> Scenic.Primitives.rect(
+            {selection_width, line_height},
+            fill: {:color_rgba, @selection_color},
+            translate: {text_start_x + start_x_offset, y_position - line_height + 1},
+            id: {:selection_highlight, line_num}
+          )
+        _primitive ->
+          acc_graph
+          |> Scenic.Graph.modify({:selection_highlight, line_num}, fn primitive ->
+            Scenic.Primitives.rect(
+              primitive,
+              {selection_width, line_height},
+              fill: {:color_rgba, @selection_color},
+              translate: {text_start_x + start_x_offset, y_position - line_height + 1}
+            )
+          end)
+      end
+    end)
+  end
   defp render_line_text(graph, line, idx, y_position, font, color) do
 
     # TODO this is what scenic does https://github.com/boydm/scenic/blob/master/lib/scenic/component/input/text_field.ex#L198
