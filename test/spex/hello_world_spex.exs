@@ -5,12 +5,14 @@ defmodule Quillex.HelloWorldSpex do
   This spex validates that:
   1. Quillex application starts successfully
   2. Scenic MCP server is accessible for AI interaction
-  3. Viewport state can be inspected
+  3. Text input actually renders to the screen (true end-to-end testing)
 
   This is our foundational spex that ensures the basic infrastructure
   for AI-driven GUI testing is working correctly.
   """
   use SexySpex
+
+  alias Quillex.TestHelpers.ScriptInspector
 
   @tmp_screenshots_dir "test/spex/screenshots/tmp"
 
@@ -47,14 +49,20 @@ defmodule Quillex.HelloWorldSpex do
 
     scenario "Basic text input functionality", context do
       given_ "an empty editor buffer", context do
-        # Clear any existing content first
+        # Clear any existing content first (proper state reset)
         # ScenicMcp.Probes.send_keys("a", ["ctrl"])  # Select all
         # ScenicMcp.Probes.send_keys("delete")       # Delete
         # Process.sleep(200)  # Allow time for clearing
 
+        # TRUE END-TO-END VALIDATION: Check what's actually rendered
+        # DEBUG: Let's see what's actually in the script table
+        ScriptInspector.debug_script_table()
+
+        assert ScriptInspector.rendered_text_empty?(),
+               "Rendered output should be empty initially"
+
         # Take baseline screenshot
         baseline_screenshot = ScenicMcp.Probes.take_screenshot("hello_world_baseline")
-        # assert File.exists?(baseline_screenshot), "Should capture baseline screenshot"
 
         # Verify viewport is accessible
         vp_state = ScenicMcp.Probes.viewport_state()
@@ -65,15 +73,13 @@ defmodule Quillex.HelloWorldSpex do
       end
 
       when_ "we type 'Hello World!'", context do
-        #TODO check conte
-
         test_text = "Hello World!"
 
         # Send the text input using ScenicMcp.Probes
-        result = ScenicMcp.Probes.send_text("Hello World!")
+        result = ScenicMcp.Probes.send_text(test_text)
         assert result == :ok, "Text should be sent successfully"
 
-        # Allow time for rendering
+        # Allow time for rendering and buffer updates
         Process.sleep(100)
 
         # Store the typed text in context for validation
@@ -81,23 +87,40 @@ defmodule Quillex.HelloWorldSpex do
       end
 
       then_ "the text appears in the buffer", context do
+        expected_text = context.typed_text
 
-        IO.inspect(context, label: "HIHIHIHIHIHIHIHIHIH")
+        # TRUE BLACK-BOX VALIDATION: Check what's actually rendered to the screen
+        # DEBUG: Let's see what the script table looks like after typing
+        IO.puts("\n=== AFTER TYPING DEBUG ===")
+        ScriptInspector.debug_script_table()
 
-        # Take screenshot after typing
+        # Get the actual rendered content for debugging
+        rendered_content = ScriptInspector.get_rendered_text_string()
+        IO.puts("\nRendered content: '#{rendered_content}'")
+        IO.puts("Expected text: '#{expected_text}'")
+        IO.puts("Contains expected? #{String.contains?(rendered_content, expected_text)}")
+
+        assert ScriptInspector.rendered_text_contains?(expected_text),
+               "Rendered output should contain the typed text: '#{expected_text}'"
+
+        assert String.contains?(rendered_content, expected_text),
+               "Rendered content '#{rendered_content}' should contain '#{expected_text}'"
+
+        # Verify rendered output is no longer empty
+        refute ScriptInspector.rendered_text_empty?(),
+               "Rendered output should no longer be empty"
+
+        # Take screenshot after typing (for visual evidence)
         typed_screenshot = ScenicMcp.Probes.take_screenshot("hello_world_typed")
-        # assert File.exists?(typed_screenshot), "Should capture post-typing screenshot"
 
         # Verify application remains responsive
         vp_state = ScenicMcp.Probes.viewport_state()
         assert vp_state.name == :main_viewport, "Application should remain responsive"
 
-        # Verify we have both screenshots for comparison
-        # assert File.exists?(context.baseline_screenshot), "Baseline screenshot should exist"
-        # assert File.exists?(typed_screenshot), "Typed screenshot should exist"
+        # Verify script table contains rendering data
+        script_data = ScenicMcp.Probes.script_table()
+        assert length(script_data) > 0, "Script table should contain rendering data"
 
-        # Store final screenshot for potential future comparison
-        # Since this is the final step, we can just return :ok
         :ok
       end
     end
