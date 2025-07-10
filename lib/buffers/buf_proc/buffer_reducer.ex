@@ -17,6 +17,11 @@ defmodule Quillex.Buffer.Process.Reducer do
     |> BufferPane.Mutator.move_cursor(:line_end)
   end
 
+  def process(%Quillex.Structs.BufState{} = buf, {:move_cursor, :line_start}) do
+    buf
+    |> BufferPane.Mutator.move_cursor(:line_start)
+  end
+
   def process(%Quillex.Structs.BufState{} = buf, {:newline, :at_cursor}) do
     [c] = buf.cursors
 
@@ -65,6 +70,13 @@ defmodule Quillex.Buffer.Process.Reducer do
 
     buf
     |> BufferPane.Mutator.delete_char_before_cursor(cursor)
+  end
+
+  def process(%Quillex.Structs.BufState{} = buf, {:delete, :at_cursor}) do
+    [cursor] = buf.cursors
+
+    buf
+    |> BufferPane.Mutator.delete_char_after_cursor(cursor)
   end
 
   #TODO keep track that a whole line got yanked so if the user pastes it, it pastes as a line not as inline text

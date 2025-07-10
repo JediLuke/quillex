@@ -71,6 +71,11 @@ defmodule Quillex.GUI.Components.BufferPane.Mutator do
     move_cursor(buf, {c.line, new_col})
   end
 
+  def move_cursor(%{cursors: [c]} = buf, :line_start) do
+    # Move cursor to beginning of current line (column 1)
+    move_cursor(buf, {c.line, 1})
+  end
+
   def insert_text(%{data: []} = buf, {1, 1}, text) do
     %{buf | data: [text]}
   end
@@ -155,6 +160,41 @@ defmodule Quillex.GUI.Components.BufferPane.Mutator do
       # Cursor is at the very beginning of the buffer
       true ->
         # Cannot delete before the start of the buffer
+        buf
+    end
+  end
+
+  def delete_char_after_cursor(buf, %Quillex.Structs.BufState.Cursor{} = cursor) do
+    line_index = cursor.line - 1
+    col_index = cursor.col - 1
+
+    current_line = Enum.at(buf.data, line_index)
+    
+    cond do
+      # Cursor is not at the end of the line
+      col_index < String.length(current_line) ->
+        {left_text, right_text} = String.split_at(current_line, col_index)
+        {_deleted_char, remaining_text} = String.split_at(right_text, 1)
+        updated_line = left_text <> remaining_text
+        updated_data = List.replace_at(buf.data, line_index, updated_line)
+        %{buf | data: updated_data, dirty?: true}
+
+      # Cursor is at the end of a line that's not the last line
+      col_index == String.length(current_line) and line_index < length(buf.data) - 1 ->
+        next_line_index = line_index + 1
+        next_line = Enum.at(buf.data, next_line_index)
+        updated_line = current_line <> next_line
+
+        updated_data =
+          buf.data
+          |> List.delete_at(next_line_index)
+          |> List.replace_at(line_index, updated_line)
+
+        %{buf | data: updated_data, dirty?: true}
+
+      # Cursor is at the very end of the buffer
+      true ->
+        # Cannot delete after the end of the buffer
         buf
     end
   end

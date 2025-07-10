@@ -31,6 +31,11 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.NotepadMap do
     {:request_save, %{uuid: buf.uuid}}
   end
 
+  # ctrl-a selects all (clears buffer for now)
+  def handle(_buf, @ctrl_a) do
+    :empty_buffer
+  end
+
   # Tab key inserts a tab character
   def handle(_buf, @tab_key) do
     {:insert, "\t", :at_cursor}

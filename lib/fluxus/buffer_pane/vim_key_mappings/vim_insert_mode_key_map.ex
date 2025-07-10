@@ -75,9 +75,17 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.VimKeyMappings.Inse
     [{:move_cursor, :line_end}]
   end
 
+  # ctrl-a selects all (clears buffer for now)
+  def handle(@ctrl_a) do
+    [:empty_buffer]
+  end
+
   # Valid text input characters (letters, numbers, punctuation, space, etc.)
   def handle(input) when input in @valid_text_input_characters do
-    [{:insert, key2string(input), :at_cursor}]
+    char = key2string(input)
+    action = [{:insert, char, :at_cursor}]
+    Logger.info("InsertMode: Converting input #{inspect(input)} to char '#{char}', generating action: #{inspect(action)}")
+    action
   end
 
   # Unhandled inputs
