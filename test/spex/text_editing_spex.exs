@@ -45,7 +45,7 @@ defmodule Quillex.TextEditingSpex do
         # Clear buffer first (even though it should be empty)
         ScenicMcp.Probes.send_keys("a", ["ctrl"])
         Process.sleep(50)
-        
+
         # Add test text
         initial_text = "Hello World"
         result = ScenicMcp.Probes.send_text(initial_text)
@@ -97,7 +97,7 @@ defmodule Quillex.TextEditingSpex do
         # Clear buffer first
         ScenicMcp.Probes.send_keys("a", ["ctrl"])
         Process.sleep(50)
-        
+
         # Clear and setup test text
         test_text = "Programming"
         ScenicMcp.Probes.send_text(test_text)
@@ -141,7 +141,7 @@ defmodule Quillex.TextEditingSpex do
         # Clear buffer first
         ScenicMcp.Probes.send_keys("a", ["ctrl"])
         Process.sleep(50)
-        
+
         test_text = "Deleteing"
         ScenicMcp.Probes.send_text(test_text)
         Process.sleep(100)
@@ -184,7 +184,7 @@ defmodule Quillex.TextEditingSpex do
         # Clear buffer first
         ScenicMcp.Probes.send_keys("a", ["ctrl"])
         Process.sleep(50)
-        
+
         test_text = "First line content"
         ScenicMcp.Probes.send_text(test_text)
         Process.sleep(100)
@@ -228,7 +228,7 @@ defmodule Quillex.TextEditingSpex do
         # Clear buffer first
         ScenicMcp.Probes.send_keys("a", ["ctrl"])
         Process.sleep(50)
-        
+
         test_text = "Navigate to beginning and end"
         ScenicMcp.Probes.send_text(test_text)
         Process.sleep(100)
@@ -286,7 +286,7 @@ defmodule Quillex.TextEditingSpex do
         # Clear buffer first
         ScenicMcp.Probes.send_keys("a", ["ctrl"])
         Process.sleep(50)
-        
+
         test_text = "Select this text"
         ScenicMcp.Probes.send_text(test_text)
         Process.sleep(100)
@@ -341,7 +341,7 @@ defmodule Quillex.TextEditingSpex do
         # Clear buffer first
         ScenicMcp.Probes.send_keys("a", ["ctrl"])
         Process.sleep(50)
-        
+
         test_text = "Copy this phrase"
         ScenicMcp.Probes.send_text(test_text)
         Process.sleep(100)
@@ -403,7 +403,7 @@ defmodule Quillex.TextEditingSpex do
         # Clear buffer first
         ScenicMcp.Probes.send_keys("a", ["ctrl"])
         Process.sleep(50)
-        
+
         test_text = "Cut this word out"
         ScenicMcp.Probes.send_text(test_text)
         Process.sleep(100)
@@ -465,9 +465,9 @@ defmodule Quillex.TextEditingSpex do
         # Clear buffer first
         ScenicMcp.Probes.send_keys("a", ["ctrl"])
         Process.sleep(50)
-        
+
         text_lines = ["First line with some text", "Second", "Third line is longer"]
-        
+
         for {line, index} <- Enum.with_index(text_lines) do
           ScenicMcp.Probes.send_text(line)
           if index < length(text_lines) - 1 do
@@ -524,9 +524,9 @@ defmodule Quillex.TextEditingSpex do
         # Clear buffer first (using select all + type over)
         ScenicMcp.Probes.send_keys("a", ["ctrl"])
         Process.sleep(50)
-        
+
         text_lines = ["First line of content", "Second line of content", "Third line of content"]
-        
+
         for {line, index} <- Enum.with_index(text_lines) do
           ScenicMcp.Probes.send_text(line)
           if index < length(text_lines) - 1 do
@@ -575,47 +575,47 @@ defmodule Quillex.TextEditingSpex do
       # Clear buffer first
       ScenicMcp.Probes.send_keys("a", ["ctrl"])
       Process.sleep(50)
-      
+
       test_text = "Hello world selection test"
       ScenicMcp.Probes.send_text(test_text)
-      
+
       # Position cursor after "Hello " (position 7)
       ScenicMcp.Probes.send_keys("home")
       Process.sleep(50)
       ScenicMcp.Probes.send_keys("right")
-      ScenicMcp.Probes.send_keys("right") 
+      ScenicMcp.Probes.send_keys("right")
       ScenicMcp.Probes.send_keys("right")
       ScenicMcp.Probes.send_keys("right")
       ScenicMcp.Probes.send_keys("right")
       ScenicMcp.Probes.send_keys("right")
       Process.sleep(100)
-      
+
       baseline_screenshot = ScenicMcp.Probes.take_screenshot("selection_edge_baseline")
       assert baseline_screenshot =~ ".png"
     end
-    
+
     when_ "user selects 2 characters right then 2 characters back left", context do
       # Select 2 characters to the right
       ScenicMcp.Probes.send_keys("right", ["shift"])
       ScenicMcp.Probes.send_keys("right", ["shift"])
       Process.sleep(100)
-      
+
       active_screenshot = ScenicMcp.Probes.take_screenshot("selection_edge_active")
-      
+
       # Then go back 2 characters with shift (should cancel selection)
       ScenicMcp.Probes.send_keys("left", ["shift"])
       ScenicMcp.Probes.send_keys("left", ["shift"])
       Process.sleep(100)
-      
+
       after_screenshot = ScenicMcp.Probes.take_screenshot("selection_edge_after")
     end
-    
+
     then_ "no selection highlighting should remain", context do
       rendered_content = ScriptInspector.get_rendered_text_string()
-      
+
       # Should be back to original text with no visual selection artifacts
       expected_text = "Hello world selection test"
-      
+
       if String.contains?(rendered_content, expected_text) do
         IO.puts("✅ Selection edge case: Text content correct")
       else
@@ -629,10 +629,10 @@ defmodule Quillex.TextEditingSpex do
       # Clear buffer first
       ScenicMcp.Probes.send_keys("a", ["ctrl"])
       Process.sleep(50)
-      
+
       test_text = "Clean selection state test"
       ScenicMcp.Probes.send_text(test_text)
-      
+
       # Position cursor and make a selection
       ScenicMcp.Probes.send_keys("home")
       Process.sleep(50)
@@ -640,34 +640,34 @@ defmodule Quillex.TextEditingSpex do
       ScenicMcp.Probes.send_keys("right", ["shift"])
       ScenicMcp.Probes.send_keys("right", ["shift"])
       Process.sleep(100)
-      
+
       old_selection_screenshot = ScenicMcp.Probes.take_screenshot("selection_cleanup_old")
     end
-    
+
     when_ "user moves cursor normally without shift", context do
       # Move cursor normally (should clear selection state)
       ScenicMcp.Probes.send_keys("right")
       ScenicMcp.Probes.send_keys("right")
       Process.sleep(100)
-      
+
       normal_move_screenshot = ScenicMcp.Probes.take_screenshot("selection_cleanup_moved")
     end
-    
+
     and_ "user starts new selection from current position", context do
       # Start new selection from current cursor position
       ScenicMcp.Probes.send_keys("right", ["shift"])
       ScenicMcp.Probes.send_keys("right", ["shift"])
       Process.sleep(100)
-      
+
       new_selection_screenshot = ScenicMcp.Probes.take_screenshot("selection_cleanup_new")
     end
-    
+
     then_ "new selection should start from current cursor position, not old selection", context do
       rendered_content = ScriptInspector.get_rendered_text_string()
-      
+
       # The new selection should be highlighting different text than the old selection
       # This is a visual test - we're checking that the selection state was properly reset
-      
+
       if String.contains?(rendered_content, "Clean selection state test") do
         IO.puts("✅ Selection cleanup: New selection started from correct position")
       else
@@ -681,10 +681,10 @@ defmodule Quillex.TextEditingSpex do
       # Clear buffer first
       ScenicMcp.Probes.send_keys("a", ["ctrl"])
       Process.sleep(50)
-      
+
       test_text = "Replace this text completely"
       ScenicMcp.Probes.send_text(test_text)
-      
+
       # Position cursor and select "this"
       ScenicMcp.Probes.send_keys("home")
       Process.sleep(50)
@@ -698,29 +698,29 @@ defmodule Quillex.TextEditingSpex do
       ScenicMcp.Probes.send_keys("right")
       ScenicMcp.Probes.send_keys("right")
       Process.sleep(50)
-      
+
       # Select "this" (4 characters)
       ScenicMcp.Probes.send_keys("right", ["shift"])
       ScenicMcp.Probes.send_keys("right", ["shift"])
       ScenicMcp.Probes.send_keys("right", ["shift"])
       ScenicMcp.Probes.send_keys("right", ["shift"])
       Process.sleep(100)
-      
+
       selection_screenshot = ScenicMcp.Probes.take_screenshot("replacement_selection")
     end
-    
+
     when_ "user types replacement text", context do
       replacement_text = "that"
       ScenicMcp.Probes.send_text(replacement_text)
       Process.sleep(100)
-      
+
       after_replacement_screenshot = ScenicMcp.Probes.take_screenshot("replacement_after")
     end
-    
+
     then_ "selected text should be completely replaced", context do
       rendered_content = ScriptInspector.get_rendered_text_string()
       expected_text = "Replace that text completely"
-      
+
       if String.contains?(rendered_content, expected_text) do
         IO.puts("✅ Text replacement: Selected text properly replaced")
       else
@@ -728,38 +728,4 @@ defmodule Quillex.TextEditingSpex do
       end
     end
   end
-
-  # Test completion summary
-  IO.puts("""
-
-  📝 TEXT EDITING SPEX COMPLETE!
-
-  ✅ Core Text Editor Functionality Validated:
-  - Character input and display ✅
-  - Cursor positioning and movement (arrows, home, end) ✅
-  - Horizontal cursor movement with text insertion ✅
-  - Vertical cursor movement (up/down arrows) ✅
-  - Backspace and Delete character deletion ✅
-  - Multi-line text creation (Enter key) ✅
-  - Text selection with Shift+Arrow keys ✅
-  - Copy and paste operations ✅
-  - Cut and paste operations ✅
-  - Select All functionality (Ctrl+A) ✅
-
-  📸 Visual Evidence Generated:
-  - cursor_movement_baseline.png, cursor_movement_after.png
-  - backspace_baseline.png, backspace_after.png
-  - delete_baseline.png, delete_after.png
-  - newline_baseline.png, newline_after.png
-  - home_end_baseline.png, home_end_after.png
-  - selection_baseline.png, selection_active.png, selection_after.png
-  - copy_paste_baseline.png, copy_paste_after.png
-  - cut_paste_baseline.png, cut_paste_after.png
-  - vertical_movement_baseline.png, vertical_movement_after.png
-  - select_all_baseline.png, select_all_after.png
-
-  🎯 Quillex Core Text Editing: NOTEPAD.EXE FEATURE COMPLETE! 🚀
-
-  Ready for next phase: File operations, undo/redo, or vim mode.
-  """)
 end
