@@ -64,11 +64,25 @@ defmodule Quillex.GUI.Components.BufferPane.Mutator do
     %{buf | cursors: [new_cursor]}
   end
 
+  def move_cursor(%{cursors: [c], selection: selection} = buf, :line_end) when selection != nil do
+    current_line = Enum.at(buf.data, c.line - 1)
+    # need extra column cause of zero vs one based indexing, columns start at 1 god damnit!!
+    new_col = String.length(current_line) + 1
+    new_cursor = c |> Cursor.move({c.line, new_col})
+    %{buf | cursors: [new_cursor], selection: nil}
+  end
+
   def move_cursor(%{cursors: [c]} = buf, :line_end) do
     current_line = Enum.at(buf.data, c.line - 1)
     # need extra column cause of zero vs one based indexing, columns start at 1 god damnit!!
     new_col = String.length(current_line) + 1
     move_cursor(buf, {c.line, new_col})
+  end
+
+  def move_cursor(%{cursors: [c], selection: selection} = buf, :line_start) when selection != nil do
+    # Move cursor to beginning of current line (column 1) and clear selection
+    new_cursor = c |> Cursor.move({c.line, 1})
+    %{buf | cursors: [new_cursor], selection: nil}
   end
 
   def move_cursor(%{cursors: [c]} = buf, :line_start) do

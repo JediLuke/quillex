@@ -40,8 +40,9 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler do
   end
 
   def handle(buf, input) do
-    Logger.error "Unhandled input: #{inspect input}, buf: #{inspect buf}"
-    # IO.inspect(buf)
-    :ignore
+    Logger.error("❌ UserInputHandler: UNHANDLED - input: #{inspect(input)}")
+    Logger.error("❌ UserInputHandler: UNHANDLED - buf_ref: #{inspect(Map.get(buf, :buf_ref, :no_buf_ref))}")
+    Logger.error("❌ UserInputHandler: UNHANDLED - buf mode: #{inspect(Map.get(buf, :buf_ref, %{}) |> Map.get(:mode, :no_mode))}")
+    [:ignore]
   end
 end

@@ -72,6 +72,10 @@ defmodule Quillex.Buffer.Process.Reducer do
     |> BufferPane.Mutator.select_text(direction, count)
   end
 
+  def process(%Quillex.Structs.BufState{} = buf, :clear_selection) do
+    %{buf | selection: nil}
+  end
+
   def process(%Quillex.Structs.BufState{} = buf, {:newline, :at_cursor}) do
     [c] = buf.cursors
 
@@ -164,6 +168,8 @@ defmodule Quillex.Buffer.Process.Reducer do
 
   def process(%Quillex.Structs.BufState{selection: selection} = buf, {:copy, :selection}) do
     selected_text = extract_selected_text(buf, selection)
+    IO.puts("DEBUG COPY: Copying text: '#{selected_text}'")
+    IO.puts("DEBUG COPY: Selection: #{inspect(selection)}")
     Clipboard.copy(selected_text)
     buf
   end
@@ -183,6 +189,7 @@ defmodule Quillex.Buffer.Process.Reducer do
   # Regular paste at cursor position (for both line and inline text)
   def process(%Quillex.Structs.BufState{} = buf, {:paste, :at_cursor}) do
     clipboard_text = Clipboard.paste!()
+    IO.puts("DEBUG PASTE: Pasting text: '#{clipboard_text}'")
     
     # Handle selection replacement if there's a selection
     if buf.selection != nil do
