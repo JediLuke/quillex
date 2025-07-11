@@ -42,7 +42,7 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
       given_ "empty buffer ready for input", context do
         ScenicMcp.Probes.send_keys("a", ["ctrl"])  # Clear any existing content
         Process.sleep(50)
-        
+
         baseline_screenshot = ScenicMcp.Probes.take_screenshot("basic_input_baseline")
         {:ok, Map.put(context, :baseline_screenshot, baseline_screenshot)}
       end
@@ -52,17 +52,17 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
         test_string = "Hello World! 123"
         ScenicMcp.Probes.send_text(test_string)
         Process.sleep(100)
-        
+
         input_screenshot = ScenicMcp.Probes.take_screenshot("basic_input_typed")
         {:ok, Map.merge(context, %{test_string: test_string, input_screenshot: input_screenshot})}
       end
 
       then_ "all characters should be displayed correctly", context do
         rendered_content = ScriptInspector.get_rendered_text_string()
-        
+
         assert ScriptInspector.rendered_text_contains?(context.test_string),
                "All typed characters should appear. Expected: '#{context.test_string}', Got: '#{rendered_content}'"
-        
+
         :ok
       end
     end
@@ -76,15 +76,15 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
     #   given_ "text content with cursor positioning", context do
     #     ScenicMcp.Probes.send_keys("a", ["ctrl"])
     #     Process.sleep(50)
-    #     
+    #
     #     test_text = "Line1\nLine2\nLine3"
     #     ScenicMcp.Probes.send_text(test_text)
     #     Process.sleep(100)
-    #     
+    #
     #     # Position cursor at beginning
     #     ScenicMcp.Probes.send_keys("home", ["ctrl"])  # Ctrl+Home to document start
     #     Process.sleep(50)
-    #     
+    #
     #     setup_screenshot = ScenicMcp.Probes.take_screenshot("cursor_movement_setup")
     #     {:ok, Map.merge(context, %{test_text: test_text, setup_screenshot: setup_screenshot})}
     #   end
@@ -96,30 +96,30 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
     #       {:left, 2},     # Move left 2 positions
     #       {:up, 1}        # Move up 1 line
     #     ]
-    #     
+    #
     #     for {direction, count} <- movements do
     #       for _i <- 1..count do
     #         ScenicMcp.Probes.send_keys(Atom.to_string(direction), [])
     #         Process.sleep(20)
     #       end
     #     end
-    #     
+    #
     #     # Insert marker to verify cursor position
     #     ScenicMcp.Probes.send_text("CURSOR")
     #     Process.sleep(100)
-    #     
+    #
     #     movement_screenshot = ScenicMcp.Probes.take_screenshot("cursor_movement_result")
     #     {:ok, Map.put(context, :movement_screenshot, movement_screenshot)}
     #   end
 
     #   then_ "cursor should be positioned correctly", context do
     #     rendered_content = ScriptInspector.get_rendered_text_string()
-    #     
+    #
     #     # Based on movements: start->right 3->down 1->left 2->up 1, should be at position 1 of line 1
     #     # So "CURSOR" should be inserted at position 1 of first line: "LCURSORine1"
     #     assert ScriptInspector.rendered_text_contains?("LCURSORine1"),
     #            "Cursor should be positioned correctly after arrow movements. Got: '#{rendered_content}'"
-    #     
+    #
     #     :ok
     #   end
     # end
@@ -128,16 +128,16 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
       given_ "text with varying line lengths", context do
         ScenicMcp.Probes.send_keys("a", ["ctrl"])
         Process.sleep(50)
-        
+
         test_text = "Short\nMedium length line\nVery long line with lots of text"
         ScenicMcp.Probes.send_text(test_text)
         Process.sleep(100)
-        
+
         # Position cursor somewhere in the middle
         ScenicMcp.Probes.send_keys("home", ["ctrl"])
         for _i <- 1..20, do: ScenicMcp.Probes.send_keys("right", [])
         Process.sleep(50)
-        
+
         setup_screenshot = ScenicMcp.Probes.take_screenshot("home_end_setup")
         {:ok, Map.merge(context, %{test_text: test_text, setup_screenshot: setup_screenshot})}
       end
@@ -147,23 +147,23 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
         ScenicMcp.Probes.send_keys("home", [])
         ScenicMcp.Probes.send_text("START")
         Process.sleep(50)
-        
+
         # Test End key
         ScenicMcp.Probes.send_keys("end", [])
         ScenicMcp.Probes.send_text("END")
         Process.sleep(100)
-        
+
         home_end_screenshot = ScenicMcp.Probes.take_screenshot("home_end_result")
         {:ok, Map.put(context, :home_end_screenshot, home_end_screenshot)}
       end
 
       then_ "cursor should move to line boundaries correctly", context do
         rendered_content = ScriptInspector.get_rendered_text_string()
-        
+
         # Should have "START" at beginning of line and "END" at end
         assert ScriptInspector.rendered_text_contains?("STARTMedium length lineEND"),
                "Home/End should move to line boundaries. Got: '#{rendered_content}'"
-        
+
         :ok
       end
     end
@@ -176,16 +176,16 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
       given_ "text content for deletion testing", context do
         ScenicMcp.Probes.send_keys("a", ["ctrl"])
         Process.sleep(50)
-        
+
         test_text = "Delete|Test|Text"
         ScenicMcp.Probes.send_text(test_text)
         Process.sleep(100)
-        
+
         # Position cursor after first "|"
         ScenicMcp.Probes.send_keys("home", [])
         for _i <- 1..7, do: ScenicMcp.Probes.send_keys("right", [])  # After "Delete|"
         Process.sleep(50)
-        
+
         setup_screenshot = ScenicMcp.Probes.take_screenshot("delete_setup")
         {:ok, Map.merge(context, %{test_text: test_text, setup_screenshot: setup_screenshot})}
       end
@@ -194,22 +194,22 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
         # Backspace to delete "|"
         ScenicMcp.Probes.send_keys("backspace", [])
         Process.sleep(50)
-        
+
         # Delete to remove "T" from "Test"
         ScenicMcp.Probes.send_keys("delete", [])
         Process.sleep(50)
-        
+
         deletion_screenshot = ScenicMcp.Probes.take_screenshot("delete_result")
         {:ok, Map.put(context, :deletion_screenshot, deletion_screenshot)}
       end
 
       then_ "characters should be deleted correctly", context do
         rendered_content = ScriptInspector.get_rendered_text_string()
-        
+
         # Should result in "Deleteest|Text" (removed "|" before cursor and "T" after cursor)
         assert ScriptInspector.rendered_text_contains?("Deleteest|Text"),
                "Backspace and Delete should work correctly. Expected: 'Deleteest|Text', Got: '#{rendered_content}'"
-        
+
         :ok
       end
     end
@@ -222,16 +222,16 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
       given_ "single line of text", context do
         ScenicMcp.Probes.send_keys("a", ["ctrl"])
         Process.sleep(50)
-        
+
         test_text = "Split this line here"
         ScenicMcp.Probes.send_text(test_text)
         Process.sleep(100)
-        
+
         # Position cursor after "line "
         ScenicMcp.Probes.send_keys("home", [])
         for _i <- 1..15, do: ScenicMcp.Probes.send_keys("right", [])  # After "Split this line "
         Process.sleep(50)
-        
+
         setup_screenshot = ScenicMcp.Probes.take_screenshot("line_creation_setup")
         {:ok, Map.merge(context, %{test_text: test_text, setup_screenshot: setup_screenshot})}
       end
@@ -239,19 +239,19 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
       when_ "user presses Enter key", context do
         ScenicMcp.Probes.send_keys("enter", [])
         Process.sleep(100)
-        
+
         enter_screenshot = ScenicMcp.Probes.take_screenshot("line_creation_result")
         {:ok, Map.put(context, :enter_screenshot, enter_screenshot)}
       end
 
       then_ "line should be split correctly", context do
         rendered_content = ScriptInspector.get_rendered_text_string()
-        
+
         # Should split into "Split this line " + newline + "here"
         assert ScriptInspector.rendered_text_contains?("Split this line ") and
                ScriptInspector.rendered_text_contains?("here"),
                "Enter should split line correctly. Got: '#{rendered_content}'"
-        
+
         :ok
       end
     end
@@ -264,16 +264,16 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
       given_ "text content for selection", context do
         ScenicMcp.Probes.send_keys("a", ["ctrl"])
         Process.sleep(50)
-        
+
         test_text = "Select some text here"
         ScenicMcp.Probes.send_text(test_text)
         Process.sleep(100)
-        
+
         # Position cursor after "Select "
         ScenicMcp.Probes.send_keys("home", [])
         for _i <- 1..7, do: ScenicMcp.Probes.send_keys("right", [])
         Process.sleep(50)
-        
+
         setup_screenshot = ScenicMcp.Probes.take_screenshot("selection_setup")
         {:ok, Map.merge(context, %{test_text: test_text, setup_screenshot: setup_screenshot})}
       end
@@ -284,7 +284,7 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
           ScenicMcp.Probes.send_keys("right", ["shift"])
           Process.sleep(25)
         end
-        
+
         selection_screenshot = ScenicMcp.Probes.take_screenshot("selection_active")
         {:ok, Map.put(context, :selection_screenshot, selection_screenshot)}
       end
@@ -293,19 +293,19 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
         replacement = "NEW"
         ScenicMcp.Probes.send_text(replacement)
         Process.sleep(100)
-        
+
         replacement_screenshot = ScenicMcp.Probes.take_screenshot("selection_replaced")
         {:ok, Map.merge(context, %{replacement: replacement, replacement_screenshot: replacement_screenshot})}
       end
 
       then_ "selected text should be replaced", context do
         rendered_content = ScriptInspector.get_rendered_text_string()
-        
+
         # Should result in "Select NEW text here"
         expected_result = "Select NEW text here"
         assert ScriptInspector.rendered_text_contains?(expected_result),
                "Selected text should be replaced. Expected: '#{expected_result}', Got: '#{rendered_content}'"
-        
+
         :ok
       end
     end
@@ -314,10 +314,10 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
       given_ "multi-line text content", context do
         ScenicMcp.Probes.send_keys("a", ["ctrl"])
         Process.sleep(50)
-        
+
         test_lines = ["First line", "Second line", "Third line"]
         text_content = Enum.join(test_lines, "\n")
-        
+
         for {line, index} <- Enum.with_index(test_lines) do
           ScenicMcp.Probes.send_text(line)
           if index < length(test_lines) - 1 do
@@ -325,7 +325,7 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
           end
           Process.sleep(50)
         end
-        
+
         setup_screenshot = ScenicMcp.Probes.take_screenshot("select_all_setup")
         {:ok, Map.merge(context, %{test_lines: test_lines, text_content: text_content, setup_screenshot: setup_screenshot})}
       end
@@ -333,7 +333,7 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
       when_ "user presses Ctrl+A", context do
         ScenicMcp.Probes.send_keys("a", ["ctrl"])
         Process.sleep(100)
-        
+
         select_all_screenshot = ScenicMcp.Probes.take_screenshot("select_all_active")
         {:ok, Map.put(context, :select_all_screenshot, select_all_screenshot)}
       end
@@ -342,24 +342,24 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
         replacement = "All replaced"
         ScenicMcp.Probes.send_text(replacement)
         Process.sleep(100)
-        
+
         replaced_screenshot = ScenicMcp.Probes.take_screenshot("select_all_replaced")
         {:ok, Map.merge(context, %{replacement: replacement, replaced_screenshot: replaced_screenshot})}
       end
 
       then_ "all content should be replaced", context do
         rendered_content = ScriptInspector.get_rendered_text_string()
-        
+
         # Should only contain the replacement text
         assert ScriptInspector.rendered_text_contains?(context.replacement),
                "Replacement text should be present. Expected: '#{context.replacement}'"
-        
+
         # Original content should be gone
         for line <- context.test_lines do
           refute ScriptInspector.rendered_text_contains?(line),
                  "Original line should be replaced: '#{line}'"
         end
-        
+
         :ok
       end
     end
@@ -372,11 +372,11 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
       given_ "text content for copy/paste testing", context do
         ScenicMcp.Probes.send_keys("a", ["ctrl"])
         Process.sleep(50)
-        
+
         test_text = "Copy this phrase"
         ScenicMcp.Probes.send_text(test_text)
         Process.sleep(100)
-        
+
         setup_screenshot = ScenicMcp.Probes.take_screenshot("copy_paste_setup")
         {:ok, Map.merge(context, %{test_text: test_text, setup_screenshot: setup_screenshot})}
       end
@@ -387,22 +387,22 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
         for _i <- 1..5, do: ScenicMcp.Probes.send_keys("right", [])  # After "Copy "
         for _i <- 1..11, do: ScenicMcp.Probes.send_keys("right", ["shift"])  # Select "this phrase"
         Process.sleep(100)
-        
+
         selection_screenshot = ScenicMcp.Probes.take_screenshot("copy_paste_selected")
-        
+
         # Step 2: Copy
         ScenicMcp.Probes.send_keys("c", ["ctrl"])
         Process.sleep(200)
-        
+
         # Step 3: Move cursor (should clear selection but preserve text)
         ScenicMcp.Probes.send_keys("end", [])
         ScenicMcp.Probes.send_text(" and ")
         Process.sleep(100)
-        
+
         # Step 4: Paste
         ScenicMcp.Probes.send_keys("v", ["ctrl"])
         Process.sleep(200)
-        
+
         final_screenshot = ScenicMcp.Probes.take_screenshot("copy_paste_final")
         {:ok, Map.merge(context, %{
           selection_screenshot: selection_screenshot,
@@ -412,15 +412,15 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
 
       then_ "copied text should appear in new location", context do
         rendered_content = ScriptInspector.get_rendered_text_string()
-        
+
         expected_result = "Copy this phrase and this phrase"
         assert ScriptInspector.rendered_text_contains?(expected_result),
                "Copy/paste should work correctly. Expected: '#{expected_result}', Got: '#{rendered_content}'"
-        
+
         # Verify phrase appears twice
         phrase_count = String.split(rendered_content, "this phrase") |> length() |> Kernel.-(1)
         assert phrase_count == 2, "The phrase should appear twice after copy/paste"
-        
+
         :ok
       end
     end
@@ -429,11 +429,11 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
       given_ "text content for cut/paste testing", context do
         ScenicMcp.Probes.send_keys("a", ["ctrl"])
         Process.sleep(50)
-        
+
         test_text = "Cut this word out"
         ScenicMcp.Probes.send_text(test_text)
         Process.sleep(100)
-        
+
         setup_screenshot = ScenicMcp.Probes.take_screenshot("cut_paste_setup")
         {:ok, Map.merge(context, %{test_text: test_text, setup_screenshot: setup_screenshot})}
       end
@@ -444,32 +444,32 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
         for _i <- 1..4, do: ScenicMcp.Probes.send_keys("right", [])  # After "Cut "
         for _i <- 1..5, do: ScenicMcp.Probes.send_keys("right", ["shift"])  # Select "this "
         Process.sleep(100)
-        
+
         # Step 2: Cut
         ScenicMcp.Probes.send_keys("x", ["ctrl"])
         Process.sleep(200)
-        
+
         # Step 3: Move to end and paste
         ScenicMcp.Probes.send_keys("end", [])
         ScenicMcp.Probes.send_text(" moved: ")
         ScenicMcp.Probes.send_keys("v", ["ctrl"])
         Process.sleep(200)
-        
+
         final_screenshot = ScenicMcp.Probes.take_screenshot("cut_paste_final")
         {:ok, Map.put(context, :final_screenshot, final_screenshot)}
       end
 
       then_ "cut text should be moved to new location", context do
         rendered_content = ScriptInspector.get_rendered_text_string()
-        
+
         expected_result = "Cut word out moved: this "
         assert ScriptInspector.rendered_text_contains?(expected_result),
                "Cut/paste should move text correctly. Expected: '#{expected_result}', Got: '#{rendered_content}'"
-        
+
         # Verify "this" appears only once (was moved, not copied)
         this_count = String.split(rendered_content, "this") |> length() |> Kernel.-(1)
         assert this_count == 1, "The word 'this' should appear only once after cut/paste"
-        
+
         :ok
       end
     end
@@ -482,17 +482,17 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
       given_ "text with active selection", context do
         ScenicMcp.Probes.send_keys("a", ["ctrl"])
         Process.sleep(50)
-        
+
         test_text = "Cancel this selection"
         ScenicMcp.Probes.send_text(test_text)
         Process.sleep(100)
-        
+
         # Select "this"
         ScenicMcp.Probes.send_keys("home", [])
         for _i <- 1..7, do: ScenicMcp.Probes.send_keys("right", [])  # After "Cancel "
         for _i <- 1..4, do: ScenicMcp.Probes.send_keys("right", ["shift"])  # Select "this"
         Process.sleep(100)
-        
+
         selection_screenshot = ScenicMcp.Probes.take_screenshot("escape_selection")
         {:ok, Map.merge(context, %{test_text: test_text, selection_screenshot: selection_screenshot})}
       end
@@ -500,23 +500,23 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
       when_ "user presses Escape key", context do
         ScenicMcp.Probes.send_keys("escape", [])
         Process.sleep(100)
-        
+
         # Now typing should insert normally, not replace selection
         ScenicMcp.Probes.send_text(" INSERTED")
         Process.sleep(100)
-        
+
         escape_screenshot = ScenicMcp.Probes.take_screenshot("escape_result")
         {:ok, Map.put(context, :escape_screenshot, escape_screenshot)}
       end
 
       then_ "selection should be cancelled without deleting text", context do
         rendered_content = ScriptInspector.get_rendered_text_string()
-        
+
         # Should insert at cursor position, not replace selection
         expected_result = "Cancel this INSERTED selection"
         assert ScriptInspector.rendered_text_contains?(expected_result),
                "Escape should cancel selection and allow normal insertion. Expected: '#{expected_result}', Got: '#{rendered_content}'"
-        
+
         :ok
       end
     end
@@ -525,17 +525,17 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
       given_ "text with active selection", context do
         ScenicMcp.Probes.send_keys("a", ["ctrl"])
         Process.sleep(50)
-        
+
         test_text = "Move cursor clears selection"
         ScenicMcp.Probes.send_text(test_text)
         Process.sleep(100)
-        
+
         # Select "cursor"
         ScenicMcp.Probes.send_keys("home", [])
         for _i <- 1..5, do: ScenicMcp.Probes.send_keys("right", [])  # After "Move "
         for _i <- 1..6, do: ScenicMcp.Probes.send_keys("right", ["shift"])  # Select "cursor"
         Process.sleep(100)
-        
+
         selection_screenshot = ScenicMcp.Probes.take_screenshot("movement_selection")
         {:ok, Map.merge(context, %{test_text: test_text, selection_screenshot: selection_screenshot})}
       end
@@ -544,24 +544,24 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
         # Move cursor without shift (should clear selection)
         ScenicMcp.Probes.send_keys("right", [])
         Process.sleep(100)
-        
+
         # Now typing should insert normally
         ScenicMcp.Probes.send_text(" INSERTED")
         Process.sleep(100)
-        
+
         movement_screenshot = ScenicMcp.Probes.take_screenshot("movement_result")
         {:ok, Map.put(context, :movement_screenshot, movement_screenshot)}
       end
 
       then_ "selection should be cleared and text preserved", context do
         rendered_content = ScriptInspector.get_rendered_text_string()
-        
+
         # Should preserve original text and insert at cursor
-        assert ScriptInspector.rendered_text_contains?("Move cursor") and 
+        assert ScriptInspector.rendered_text_contains?("Move cursor") and
                ScriptInspector.rendered_text_contains?("INSERTED") and
                ScriptInspector.rendered_text_contains?("clears selection"),
                "Cursor movement should clear selection and preserve text. Got: '#{rendered_content}'"
-        
+
         :ok
       end
     end
@@ -574,7 +574,7 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
       given_ "multi-line text content", context do
         ScenicMcp.Probes.send_keys("a", ["ctrl"])
         Process.sleep(50)
-        
+
         lines = ["First line text", "Second line text", "Third line text"]
         for {line, index} <- Enum.with_index(lines) do
           ScenicMcp.Probes.send_text(line)
@@ -583,12 +583,12 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
           end
           Process.sleep(50)
         end
-        
+
         # Position cursor at start of second line
         ScenicMcp.Probes.send_keys("home", ["ctrl"])
         ScenicMcp.Probes.send_keys("down", [])
         Process.sleep(50)
-        
+
         setup_screenshot = ScenicMcp.Probes.take_screenshot("multiline_setup")
         {:ok, Map.merge(context, %{lines: lines, setup_screenshot: setup_screenshot})}
       end
@@ -599,7 +599,7 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
         ScenicMcp.Probes.send_keys("down", ["shift"])  # Extend to next line
         for _i <- 1..5, do: ScenicMcp.Probes.send_keys("right", ["shift"])  # Select "Third"
         Process.sleep(100)
-        
+
         multiline_screenshot = ScenicMcp.Probes.take_screenshot("multiline_selected")
         {:ok, Map.put(context, :multiline_screenshot, multiline_screenshot)}
       end
@@ -608,20 +608,20 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
         replacement = "REPLACED"
         ScenicMcp.Probes.send_text(replacement)
         Process.sleep(100)
-        
+
         replaced_screenshot = ScenicMcp.Probes.take_screenshot("multiline_replaced")
         {:ok, Map.merge(context, %{replacement: replacement, replaced_screenshot: replaced_screenshot})}
       end
 
       then_ "multi-line selection should be replaced correctly", context do
         rendered_content = ScriptInspector.get_rendered_text_string()
-        
+
         # Should have "First line text\nREPLACED line text"
         assert ScriptInspector.rendered_text_contains?("First line text") and
                ScriptInspector.rendered_text_contains?("REPLACED") and
                ScriptInspector.rendered_text_contains?(" line text"),
                "Multi-line selection should be replaced correctly. Got: '#{rendered_content}'"
-        
+
         :ok
       end
     end
@@ -634,11 +634,11 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
       given_ "minimal text content", context do
         ScenicMcp.Probes.send_keys("a", ["ctrl"])
         Process.sleep(50)
-        
+
         test_text = "A"
         ScenicMcp.Probes.send_text(test_text)
         Process.sleep(100)
-        
+
         setup_screenshot = ScenicMcp.Probes.take_screenshot("boundaries_setup")
         {:ok, Map.merge(context, %{test_text: test_text, setup_screenshot: setup_screenshot})}
       end
@@ -649,29 +649,29 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
         ScenicMcp.Probes.send_keys("backspace", [])  # Should not crash or delete anything
         ScenicMcp.Probes.send_keys("left", [])  # Should not move cursor beyond start
         Process.sleep(50)
-        
-        # Test end of document  
+
+        # Test end of document
         ScenicMcp.Probes.send_keys("end", [])
         ScenicMcp.Probes.send_keys("delete", [])  # Should not crash or delete anything
         ScenicMcp.Probes.send_keys("right", [])  # Should not move cursor beyond end
         Process.sleep(50)
-        
+
         # Insert text to verify cursor position
         ScenicMcp.Probes.send_text("END")
         Process.sleep(100)
-        
+
         boundaries_screenshot = ScenicMcp.Probes.take_screenshot("boundaries_result")
         {:ok, Map.put(context, :boundaries_screenshot, boundaries_screenshot)}
       end
 
       then_ "operations should handle boundaries gracefully", context do
         rendered_content = ScriptInspector.get_rendered_text_string()
-        
+
         # Should have original text plus "END" at the end
         expected_result = "AEND"
         assert ScriptInspector.rendered_text_contains?(expected_result),
                "Boundary operations should work safely. Expected: '#{expected_result}', Got: '#{rendered_content}'"
-        
+
         :ok
       end
     end
@@ -680,7 +680,7 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
       given_ "completely empty document", context do
         ScenicMcp.Probes.send_keys("a", ["ctrl"])
         Process.sleep(50)
-        
+
         empty_screenshot = ScenicMcp.Probes.take_screenshot("empty_baseline")
         {:ok, Map.put(context, :empty_screenshot, empty_screenshot)}
       end
@@ -701,27 +701,27 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
           {"x", ["ctrl"]},  # Cut with no selection
           {"v", ["ctrl"]}   # Paste (might paste clipboard content)
         ]
-        
+
         for {key, mods} <- operations do
           ScenicMcp.Probes.send_keys(key, mods)
           Process.sleep(20)
         end
-        
+
         # Finally add some text to verify everything works
         ScenicMcp.Probes.send_text("WORKS")
         Process.sleep(100)
-        
+
         operations_screenshot = ScenicMcp.Probes.take_screenshot("empty_operations")
         {:ok, Map.put(context, :operations_screenshot, operations_screenshot)}
       end
 
       then_ "all operations should complete without errors", context do
         rendered_content = ScriptInspector.get_rendered_text_string()
-        
+
         # Should at least contain the test text we added
         assert ScriptInspector.rendered_text_contains?("WORKS"),
                "Empty document operations should complete safely. Got: '#{rendered_content}'"
-        
+
         :ok
       end
     end
@@ -734,7 +734,7 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
       given_ "empty buffer for rapid input testing", context do
         ScenicMcp.Probes.send_keys("a", ["ctrl"])
         Process.sleep(50)
-        
+
         rapid_screenshot = ScenicMcp.Probes.take_screenshot("rapid_baseline")
         {:ok, Map.put(context, :rapid_screenshot, rapid_screenshot)}
       end
@@ -743,72 +743,37 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
         # Rapid typing
         ScenicMcp.Probes.send_text("Rapid")
         ScenicMcp.Probes.send_keys("home", [])
-        
+
         # Rapid selection and replacement
         for _i <- 1..5, do: ScenicMcp.Probes.send_keys("right", ["shift"])
         ScenicMcp.Probes.send_text("FAST")
-        
+
         # Rapid copy-paste sequence
         ScenicMcp.Probes.send_keys("a", ["ctrl"])
         ScenicMcp.Probes.send_keys("c", ["ctrl"])
         ScenicMcp.Probes.send_keys("end", [])
         ScenicMcp.Probes.send_text(" ")
         ScenicMcp.Probes.send_keys("v", ["ctrl"])
-        
+
         Process.sleep(200)  # Allow time for all operations to complete
-        
+
         rapid_result_screenshot = ScenicMcp.Probes.take_screenshot("rapid_result")
         {:ok, Map.put(context, :rapid_result_screenshot, rapid_result_screenshot)}
       end
 
       then_ "all rapid operations should complete correctly", context do
         rendered_content = ScriptInspector.get_rendered_text_string()
-        
+
         # Should result in "FAST FAST" (replaced "Rapid" with "FAST", then copied and pasted)
         expected_result = "FAST FAST"
         assert ScriptInspector.rendered_text_contains?(expected_result),
                "Rapid operations should complete correctly. Expected: '#{expected_result}', Got: '#{rendered_content}'"
-        
+
         :ok
       end
     end
 
   end  # Close the spex block
 
-  # =============================================================================
-  # COMPLETION SUMMARY
-  # =============================================================================
 
-  IO.puts("""
-
-  🎯 COMPREHENSIVE TEXT EDITING SPEX COMPLETE!
-
-  📊 SCENARIOS (15 total):
-  1. ✅ Basic character input and display
-  2. 🔧 Arrow key cursor movement (SKIPPED - key release events)
-  3. 🔧 Home and End key navigation (FAILING - multi-line text merging)
-  4. 🔧 Backspace and Delete operations (PENDING)
-  5. 🔧 Enter key line creation (PENDING)
-  6. 🔧 Shift+Arrow text selection (PENDING)
-  7. 🔧 Select All functionality (PENDING)
-  8. 🔧 Copy and paste workflow (PENDING)
-  9. 🔧 Cut and paste workflow (PENDING)
-  10. 🔧 Escape key cancels selection (PENDING)
-  11. 🔧 Selection clearing on cursor movement (PENDING)
-  12. 🔧 Multi-line text selection (PENDING)
-  13. 🔧 Operations at document boundaries (PENDING)
-  14. 🔧 Empty document operations (PENDING)
-  15. 🔧 Rapid sequential operations (PENDING)
-
-  ✅ CURRENT PROGRESS: 1/15 scenarios passing
-
-  🔄 NEXT FIXES NEEDED:
-  1. Fix Home/End key navigation in multi-line text
-  2. Resolve arrow key release event interference
-  3. Test and fix remaining scenarios one by one
-
-  🚀 SUCCESS CRITERIA:
-  When ALL 15 scenarios pass, Quillex will have COMPLETE basic text editor
-  functionality equivalent to notepad.exe or gedit!
-  """)
 end
