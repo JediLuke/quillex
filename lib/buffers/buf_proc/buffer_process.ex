@@ -15,6 +15,7 @@ defmodule Quillex.Buffer.Process do
 
   """
   use GenServer
+  require Logger
 
   def fetch_buf(%Quillex.Structs.BufState.BufRef{} = buf_ref) do
     Quillex.Buffer.BufferManager.call_buffer(buf_ref, :get_state)

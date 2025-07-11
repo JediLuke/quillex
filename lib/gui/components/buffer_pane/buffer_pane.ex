@@ -175,14 +175,8 @@ defmodule Quillex.GUI.Components.BufferPane do
     {:noreply, new_scene}
   end
 
-  def handle_cast(
-    {:state_change, %Quillex.Structs.BufState{} = buf},
-    %{assigns: %{buf: buf}} = scene
-  ) do
-    # no actual changes were made so we can discard this msg (all variables bind on same name)
-    IO.puts "#{__MODULE__} ignoring buf state change..."
-    {:noreply, scene}
-  end
+  # REMOVED: This pattern matching was incorrectly ignoring valid state changes
+  # The real state change handler below should handle ALL buffer updates
 
   def handle_cast(
     {:state_change, %Quillex.Structs.BufState{uuid: uuid} = new_buf},

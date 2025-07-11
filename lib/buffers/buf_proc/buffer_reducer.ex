@@ -1,4 +1,5 @@
 defmodule Quillex.Buffer.Process.Reducer do
+  require Logger
   alias Quillex.GUI.Components.BufferPane
 
   # Helper function to extract selected text from buffer
@@ -53,18 +54,15 @@ defmodule Quillex.Buffer.Process.Reducer do
   end
 
   def process(%Quillex.Structs.BufState{} = buf, {:move_cursor, direction, x}) do
-    buf
-    |> BufferPane.Mutator.move_cursor(direction, x)
+    buf |> BufferPane.Mutator.move_cursor(direction, x)
   end
 
   def process(%Quillex.Structs.BufState{} = buf, {:move_cursor, :line_end}) do
-    buf
-    |> BufferPane.Mutator.move_cursor(:line_end)
+    buf |> BufferPane.Mutator.move_cursor(:line_end)
   end
 
   def process(%Quillex.Structs.BufState{} = buf, {:move_cursor, :line_start}) do
-    buf
-    |> BufferPane.Mutator.move_cursor(:line_start)
+    buf |> BufferPane.Mutator.move_cursor(:line_start)
   end
 
   def process(%Quillex.Structs.BufState{} = buf, {:select_text, direction, count}) do
@@ -132,16 +130,20 @@ defmodule Quillex.Buffer.Process.Reducer do
 
   def process(%Quillex.Structs.BufState{} = buf, {:delete, :before_cursor}) do
     [cursor] = buf.cursors
-
-    buf
-    |> BufferPane.Mutator.delete_char_before_cursor(cursor)
+    Logger.info("🔄 BUFFER REDUCER: Deleting before cursor from #{inspect(cursor)}")
+    result_buf = buf |> BufferPane.Mutator.delete_char_before_cursor(cursor)
+    [new_cursor] = result_buf.cursors
+    Logger.info("🔄 BUFFER REDUCER: After delete before cursor: #{inspect(new_cursor)}")
+    result_buf
   end
 
   def process(%Quillex.Structs.BufState{} = buf, {:delete, :at_cursor}) do
     [cursor] = buf.cursors
-
-    buf
-    |> BufferPane.Mutator.delete_char_after_cursor(cursor)
+    Logger.info("🔄 BUFFER REDUCER: Deleting at cursor from #{inspect(cursor)}")
+    result_buf = buf |> BufferPane.Mutator.delete_char_after_cursor(cursor)
+    [new_cursor] = result_buf.cursors
+    Logger.info("🔄 BUFFER REDUCER: After delete at cursor: #{inspect(new_cursor)}")
+    result_buf
   end
 
   #TODO keep track that a whole line got yanked so if the user pastes it, it pastes as a line not as inline text
@@ -168,8 +170,6 @@ defmodule Quillex.Buffer.Process.Reducer do
 
   def process(%Quillex.Structs.BufState{selection: selection} = buf, {:copy, :selection}) do
     selected_text = extract_selected_text(buf, selection)
-    IO.puts("DEBUG COPY: Copying text: '#{selected_text}'")
-    IO.puts("DEBUG COPY: Selection: #{inspect(selection)}")
     Clipboard.copy(selected_text)
     buf
   end
@@ -189,7 +189,6 @@ defmodule Quillex.Buffer.Process.Reducer do
   # Regular paste at cursor position (for both line and inline text)
   def process(%Quillex.Structs.BufState{} = buf, {:paste, :at_cursor}) do
     clipboard_text = Clipboard.paste!()
-    IO.puts("DEBUG PASTE: Pasting text: '#{clipboard_text}'")
     
     # Handle selection replacement if there's a selection
     if buf.selection != nil do
@@ -267,6 +266,7 @@ defmodule Quillex.Buffer.Process.Reducer do
   end
 
   def process(%Quillex.Structs.BufState{} = buf, action) do
+    Logger.error("❌ BUFFER REDUCER CATCH-ALL: #{inspect(action)}")
     IO.puts("BUFFER REDUCER GOT ACTION: #{inspect(action)}")
     :ignore
   end

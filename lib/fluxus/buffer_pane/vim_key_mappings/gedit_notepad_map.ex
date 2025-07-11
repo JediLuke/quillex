@@ -42,15 +42,44 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.NotepadMap do
     [:ignore]
   end
 
+  # Ignore backspace and delete key release events to prevent double-processing
+  def handle(_buf, {:key, {:key_backspace, 0, []}}) do
+    [:ignore]
+  end
+
+  def handle(_buf, {:key, {:key_delete, 0, []}}) do
+    [:ignore]
+  end
+
+  # Ignore enter key release events to prevent double-processing
+  def handle(_buf, {:key, {:key_enter, 0, []}}) do
+    [:ignore]
+  end
+
+  # Ignore shift+arrow key release events with string modifiers
+  def handle(_buf, {:key, {:key_right, 0, ["shift"]}}) do
+    [:ignore]
+  end
+
+  def handle(_buf, {:key, {:key_left, 0, ["shift"]}}) do
+    [:ignore]
+  end
+
+  def handle(_buf, {:key, {:key_up, 0, ["shift"]}}) do
+    [:ignore]
+  end
+
+  def handle(_buf, {:key, {:key_down, 0, ["shift"]}}) do
+    [:ignore]
+  end
+
   # Escape key cancels text selection
-  def handle(_buf, @escape_key = input) do
-    Logger.warn("🚫 NotepadMap: ESCAPE - Cancel selection: #{inspect(input)}")
+  def handle(_buf, @escape_key) do
     [{:clear_selection}]
   end
 
   # Alternative Escape key pattern (release state)
-  def handle(_buf, {:key, {:key_escape, 0, []}} = input) do
-    Logger.warn("🚫 NotepadMap: ESCAPE (alt pattern) - Cancel selection: #{inspect(input)}")
+  def handle(_buf, {:key, {:key_escape, 0, []}}) do
     [{:clear_selection}]
   end
 
@@ -60,12 +89,12 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.NotepadMap do
   end
 
   # Backspace and Ctrl-H delete character before cursor
-  def handle(_buf, input) when input in [@backspace_key, @ctrl_h] do
+  def handle(buf, input) when input in [@backspace_key, @ctrl_h] do
     [{:delete, :before_cursor}]
   end
 
   # Delete key deletes character after cursor
-  def handle(_buf, @delete_key) do
+  def handle(buf, @delete_key) do
     [{:delete, :at_cursor}]
   end
 
@@ -82,39 +111,63 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.NotepadMap do
   end
 
   # ctrl-c copies selected text to clipboard
-  def handle(_buf, @ctrl_c = input) do
-    Logger.warn("📋 NotepadMap: COPY command detected: #{inspect(input)}")
+  def handle(_buf, @ctrl_c) do
     [{:copy, :selection}]
   end
 
   # Alternative Ctrl+C pattern for different platforms
-  def handle(_buf, {:key, {:key_c, 1, [:ctrl]}} = input) do
-    Logger.warn("📋 NotepadMap: COPY command detected (alt pattern): #{inspect(input)}")
+  def handle(_buf, {:key, {:key_c, 1, [:ctrl]}}) do
     [{:copy, :selection}]
   end
 
+  # Handle Ctrl+C release events (string modifiers to match ScenicMcp)
+  def handle(_buf, {:key, {:key_c, 0, ["ctrl"]}}) do
+    [:ignore]  # Action already handled on press
+  end
+
   # ctrl-v pastes from clipboard
-  def handle(_buf, @ctrl_v = input) do
-    Logger.warn("📋 NotepadMap: PASTE command detected: #{inspect(input)}")
+  def handle(_buf, @ctrl_v) do
     [{:paste, :at_cursor}]
   end
 
   # Alternative Ctrl+V pattern for different platforms
-  def handle(_buf, {:key, {:key_v, 1, [:ctrl]}} = input) do
-    Logger.warn("📋 NotepadMap: PASTE command detected (alt pattern): #{inspect(input)}")
+  def handle(_buf, {:key, {:key_v, 1, [:ctrl]}}) do
     [{:paste, :at_cursor}]
   end
 
+  # Handle Ctrl+V release events (string modifiers to match ScenicMcp)
+  def handle(_buf, {:key, {:key_v, 0, ["ctrl"]}}) do
+    [:ignore]  # Action already handled on press
+  end
+
   # ctrl-x cuts selected text to clipboard
-  def handle(_buf, @ctrl_x = input) do
-    Logger.warn("📋 NotepadMap: CUT command detected: #{inspect(input)}")
+  def handle(_buf, @ctrl_x) do
     [{:cut, :selection}]
   end
 
   # Alternative Ctrl+X pattern for different platforms
-  def handle(_buf, {:key, {:key_x, 1, [:ctrl]}} = input) do
-    Logger.warn("📋 NotepadMap: CUT command detected (alt pattern): #{inspect(input)}")
+  def handle(_buf, {:key, {:key_x, 1, [:ctrl]}}) do
     [{:cut, :selection}]
+  end
+
+  # Handle Ctrl+X release events (string modifiers to match ScenicMcp)
+  def handle(_buf, {:key, {:key_x, 0, ["ctrl"]}}) do
+    [:ignore]  # Action already handled on press
+  end
+
+  # Handle Ctrl+A release events (string modifiers to match press event)
+  def handle(_buf, {:key, {:key_a, 0, ["ctrl"]}}) do
+    [:ignore]  # Action already handled on press
+  end
+
+  # Handle Ctrl+S release events (string modifiers to match press event)
+  def handle(_buf, {:key, {:key_s, 0, ["ctrl"]}}) do
+    [:ignore]  # Action already handled on press
+  end
+
+  # Handle Ctrl+H release events (string modifiers)
+  def handle(_buf, {:key, {:key_h, 0, ["ctrl"]}}) do
+    [:ignore]  # Action already handled on press
   end
 
   # Tab key inserts a tab character
@@ -124,43 +177,35 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.NotepadMap do
 
   # Shift+Arrow keys for text selection (must come before regular arrow keys)
   # Support both atom and string formats for modifiers
-  def handle(_buf, {:key, {:key_right, 1, [:shift]}} = input) do
-    Logger.warn("✂️ NotepadMap - SELECT RIGHT (atoms): #{inspect(input)}")
+  def handle(_buf, {:key, {:key_right, 1, [:shift]}}) do
     [{:select_text, :right, 1}]
   end
 
-  def handle(_buf, {:key, {:key_right, 1, ["shift"]}} = input) do
-    Logger.warn("✂️ NotepadMap - SELECT RIGHT (strings): #{inspect(input)}")
+  def handle(_buf, {:key, {:key_right, 1, ["shift"]}}) do
     [{:select_text, :right, 1}]
   end
 
-  def handle(_buf, {:key, {:key_left, 1, [:shift]}} = input) do
-    Logger.warn("✂️ NotepadMap - SELECT LEFT (atoms): #{inspect(input)}")
+  def handle(_buf, {:key, {:key_left, 1, [:shift]}}) do
     [{:select_text, :left, 1}]
   end
 
-  def handle(_buf, {:key, {:key_left, 1, ["shift"]}} = input) do
-    Logger.warn("✂️ NotepadMap - SELECT LEFT (strings): #{inspect(input)}")
+  def handle(_buf, {:key, {:key_left, 1, ["shift"]}}) do
     [{:select_text, :left, 1}]
   end
 
-  def handle(_buf, {:key, {:key_up, 1, [:shift]}} = input) do
-    Logger.warn("✂️ NotepadMap - SELECT UP (atoms): #{inspect(input)}")
+  def handle(_buf, {:key, {:key_up, 1, [:shift]}}) do
     [{:select_text, :up, 1}]
   end
 
-  def handle(_buf, {:key, {:key_up, 1, ["shift"]}} = input) do
-    Logger.warn("✂️ NotepadMap - SELECT UP (strings): #{inspect(input)}")
+  def handle(_buf, {:key, {:key_up, 1, ["shift"]}}) do
     [{:select_text, :up, 1}]
   end
 
-  def handle(_buf, {:key, {:key_down, 1, [:shift]}} = input) do
-    Logger.warn("✂️ NotepadMap - SELECT DOWN (atoms): #{inspect(input)}")
+  def handle(_buf, {:key, {:key_down, 1, [:shift]}}) do
     [{:select_text, :down, 1}]
   end
 
-  def handle(_buf, {:key, {:key_down, 1, ["shift"]}} = input) do
-    Logger.warn("✂️ NotepadMap - SELECT DOWN (strings): #{inspect(input)}")
+  def handle(_buf, {:key, {:key_down, 1, ["shift"]}}) do
     [{:select_text, :down, 1}]
   end
 
@@ -171,15 +216,12 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.NotepadMap do
       @up_arrow -> {:move_cursor, :up, 1}
       @right_arrow -> {:move_cursor, :right, 1}
       @down_arrow -> {:move_cursor, :down, 1}
-      _ -> 
-        Logger.error("❌ ARROW KEY NOT MATCHED: #{inspect(input)}")
-        nil
+      _ -> nil
     end
     
     if movement_action do
       # If there's an active selection, clear it before moving cursor
       if buf.selection != nil do
-        Logger.warn("🔄 NotepadMap: Clearing selection before cursor movement: #{inspect(input)}")
         [:clear_selection, movement_action]
       else
         [movement_action]
@@ -192,7 +234,6 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.NotepadMap do
   # Home key moves cursor to the beginning of the line (and clear selection if active)
   def handle(buf, @home_key) do
     if buf.selection != nil do
-      Logger.warn("🔄 NotepadMap: Clearing selection before Home key movement")
       [:clear_selection, {:move_cursor, :line_start}]
     else
       [{:move_cursor, :line_start}]
@@ -202,7 +243,6 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.NotepadMap do
   # End key moves cursor to the end of the line (and clear selection if active)
   def handle(buf, @end_key) do
     if buf.selection != nil do
-      Logger.warn("🔄 NotepadMap: Clearing selection before End key movement")
       [:clear_selection, {:move_cursor, :line_end}]
     else
       [{:move_cursor, :line_end}]
@@ -215,23 +255,23 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.NotepadMap do
     [{:insert, text, :at_cursor}]
   end
 
-  # Log ALL inputs to help debug
+  # Handle unrecognized inputs
   def handle(_buf, input) do
-    Logger.warn("🔍 NotepadMap: Unhandled input: #{inspect(input)}")
+    Logger.error("❌ NotepadMap: UNHANDLED input: #{inspect(input)}")
     
-    # Add specific detection for common patterns we might be missing
+    # Only log truly problematic inputs (missing important key combinations)
     case input do
       {:key, {:key_c, _state, mods}} ->
         if :ctrl in mods or "ctrl" in mods do
-          Logger.error("❌ MISSED CTRL+C: #{inspect(input)} - CHECK PATTERNS!")
+          Logger.error("❌ MISSED CTRL+C: #{inspect(input)}")
         end
       {:key, {:key_v, _state, mods}} ->
         if :ctrl in mods or "ctrl" in mods do
-          Logger.error("❌ MISSED CTRL+V: #{inspect(input)} - CHECK PATTERNS!")
+          Logger.error("❌ MISSED CTRL+V: #{inspect(input)}")
         end
       {:key, {:key_x, _state, mods}} ->
         if :ctrl in mods or "ctrl" in mods do
-          Logger.error("❌ MISSED CTRL+X: #{inspect(input)} - CHECK PATTERNS!")
+          Logger.error("❌ MISSED CTRL+X: #{inspect(input)}")
         end
       _ ->
         :ok
