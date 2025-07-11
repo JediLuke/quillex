@@ -27,8 +27,8 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler do
   # there's no action that gets altered depending on where the cursor is,
   # if ther is it's a higher level state change anyway so handle it within radix state
 
-  def handle(%{buf_ref: %{mode: :edit}} = buf_ref, input) do
-    NotepadMap.handle(buf_ref, input)
+  def handle(%{buf_ref: %{mode: :edit}, buf: buf}, input) do
+    NotepadMap.handle(buf, input)
   end
 
   def handle(%{buf_ref: %{mode: {:vim, :insert}}}, input) do

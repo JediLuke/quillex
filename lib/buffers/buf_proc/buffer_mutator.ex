@@ -304,11 +304,4 @@ defmodule Quillex.GUI.Components.BufferPane.Mutator do
     %{buf | data: updated_data, dirty?: true}
   end
 
-  # Override insert_text to handle selection replacement
-  def insert_text(%{selection: %{}} = buf, _cursor_pos, text) do
-    # Delete selected text first, then insert at the resulting cursor position
-    buf_after_deletion = delete_selected_text(buf)
-    [cursor] = buf_after_deletion.cursors
-    insert_text(buf_after_deletion, {cursor.line, cursor.col}, text)
-  end
 end

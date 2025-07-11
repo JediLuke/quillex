@@ -1,6 +1,51 @@
 defmodule Quillex.Buffer.Process.Reducer do
   alias Quillex.GUI.Components.BufferPane
 
+  # Helper function to extract selected text from buffer
+  defp extract_selected_text(buf, %{start: start_pos, end: end_pos}) do
+    # Normalize selection - ensure start is before end
+    {start_line, start_col} = start_pos
+    {end_line, end_col} = end_pos
+    
+    {{sel_start_line, sel_start_col}, {sel_end_line, sel_end_col}} = 
+      if start_line < end_line or (start_line == end_line and start_col <= end_col) do
+        {start_pos, end_pos}
+      else
+        {end_pos, start_pos}
+      end
+    
+    # Extract text from selection
+    cond do
+      sel_start_line == sel_end_line ->
+        # Selection within same line
+        current_line = Enum.at(buf.data, sel_start_line - 1)
+        String.slice(current_line, sel_start_col - 1, sel_end_col - sel_start_col)
+        
+      true ->
+        # Selection across multiple lines
+        lines = buf.data
+        
+        # Get partial first line
+        first_line = Enum.at(lines, sel_start_line - 1)
+        first_part = String.slice(first_line, sel_start_col - 1, String.length(first_line))
+        
+        # Get full middle lines
+        middle_lines = if sel_end_line - sel_start_line > 1 do
+          Enum.slice(lines, sel_start_line, sel_end_line - sel_start_line - 1)
+        else
+          []
+        end
+        
+        # Get partial last line
+        last_line = Enum.at(lines, sel_end_line - 1)
+        last_part = String.slice(last_line, 0, sel_end_col - 1)
+        
+        # Combine all parts with newlines
+        ([first_part] ++ middle_lines ++ [last_part])
+        |> Enum.join("\n")
+    end
+  end
+
   def process(%Quillex.Structs.BufState{} = buf, {:set_mode, m}) do
     # do we need to change this here in the buffer itself?
     buf
@@ -53,9 +98,20 @@ defmodule Quillex.Buffer.Process.Reducer do
     [c] = buf.cursors
     num_chars = String.length(text)
 
-    buf
-    |> BufferPane.Mutator.insert_text({c.line, c.col}, text)
-    |> BufferPane.Mutator.move_cursor(:right, num_chars)
+    # Handle selection replacement - delete selection first, then insert normally
+    if buf.selection != nil do
+      # Delete the selected text and clear selection
+      buf_after_deletion = BufferPane.Mutator.delete_selected_text(buf)
+      [cursor] = buf_after_deletion.cursors
+      # Insert the new text at the cursor position (where selection started)
+      buf_after_insert = BufferPane.Mutator.insert_text(buf_after_deletion, {cursor.line, cursor.col}, text)
+      # Move cursor to end of inserted text
+      BufferPane.Mutator.move_cursor(buf_after_insert, :right, num_chars)
+    else
+      # No selection - normal insertion and cursor movement
+      buf_after_insert = BufferPane.Mutator.insert_text(buf, {c.line, c.col}, text)
+      BufferPane.Mutator.move_cursor(buf_after_insert, :right, num_chars)
+    end
   end
 
   def process(%Quillex.Structs.BufState{cursors: [c]} = buf, {:insert, :line, clipboard_text, :below_cursor_line}) do
@@ -100,8 +156,55 @@ defmodule Quillex.Buffer.Process.Reducer do
     buf
   end
 
-  def process(%Quillex.Structs.BufState{cursors: [c]} = buf, {:paste, :at_cursor}) do
-    # {clipboard_text, 0} = System.cmd("xclip", ["-selection", "clipboard", "-o", "-t", "text/plain"])
+  # Selection-based copy (copy selected text to clipboard)
+  def process(%Quillex.Structs.BufState{selection: nil} = buf, {:copy, :selection}) do
+    # No selection, do nothing
+    buf
+  end
+
+  def process(%Quillex.Structs.BufState{selection: selection} = buf, {:copy, :selection}) do
+    selected_text = extract_selected_text(buf, selection)
+    Clipboard.copy(selected_text)
+    buf
+  end
+
+  # Selection-based cut (copy selected text to clipboard and delete it)
+  def process(%Quillex.Structs.BufState{selection: nil} = buf, {:cut, :selection}) do
+    # No selection, do nothing
+    buf
+  end
+
+  def process(%Quillex.Structs.BufState{selection: selection} = buf, {:cut, :selection}) do
+    selected_text = extract_selected_text(buf, selection)
+    Clipboard.copy(selected_text)
+    BufferPane.Mutator.delete_selected_text(buf)
+  end
+
+  # Regular paste at cursor position (for both line and inline text)
+  def process(%Quillex.Structs.BufState{} = buf, {:paste, :at_cursor}) do
+    clipboard_text = Clipboard.paste!()
+    
+    # Handle selection replacement if there's a selection
+    if buf.selection != nil do
+      # Delete selection first, then insert clipboard text
+      buf_after_deletion = BufferPane.Mutator.delete_selected_text(buf)
+      [cursor] = buf_after_deletion.cursors
+      buf_after_insert = BufferPane.Mutator.insert_text(buf_after_deletion, {cursor.line, cursor.col}, clipboard_text)
+      # Move cursor to end of pasted text
+      num_chars = String.length(clipboard_text)
+      BufferPane.Mutator.move_cursor(buf_after_insert, :right, num_chars)
+    else
+      # No selection - regular paste
+      [c] = buf.cursors
+      buf_after_insert = BufferPane.Mutator.insert_text(buf, {c.line, c.col}, clipboard_text)
+      # Move cursor to end of pasted text
+      num_chars = String.length(clipboard_text)
+      BufferPane.Mutator.move_cursor(buf_after_insert, :right, num_chars)
+    end
+  end
+
+  # Legacy line-based paste (keep for vim compatibility)
+  def process(%Quillex.Structs.BufState{cursors: [c]} = buf, {:paste, :line, :at_cursor}) do
     clipboard_text = Clipboard.paste!()
 
     buf

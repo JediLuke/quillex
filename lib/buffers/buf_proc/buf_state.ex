@@ -54,7 +54,8 @@ defmodule Quillex.Structs.BufState do
     data = Map.get(args, :data) || Map.get(args, "data") || [""]
     data = if is_list(data), do: data, else: raise("Buffer data must be a list of strings")
     # mode: validate_mode(args[:mode]) || :edit,
-    mode = Map.get(args, :mode) || Map.get(args, "mode") || {:vim, :insert}
+    mode = Map.get(args, :mode) || Map.get(args, "mode") || :edit
+    IO.puts("DEBUG: Creating buffer with mode: #{inspect(mode)}")
     source = Map.get(args, :source) || Map.get(args, "source") || nil
     cursors = Map.get(args, :cursors) || Map.get(args, "cursors") || [Cursor.new()]
     # scroll_acc = Map.get(args, :scroll_acc) || Map.get(args, "scroll_acc") || {0, 0}
