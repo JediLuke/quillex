@@ -6,9 +6,9 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.NotepadMap do
   require Logger
 
   # Define missing ctrl key combinations
-  @ctrl_c {:key, {:key_c, @key_pressed, ["ctrl"]}}
-  @ctrl_v {:key, {:key_v, @key_pressed, ["ctrl"]}}
-  @ctrl_x {:key, {:key_x, @key_pressed, ["ctrl"]}}
+  @ctrl_c {:key, {:key_c, @key_pressed, [:ctrl]}}
+  @ctrl_v {:key, {:key_v, @key_pressed, [:ctrl]}}
+  @ctrl_x {:key, {:key_x, @key_pressed, [:ctrl]}}
 
   # Treat held down keys as repeated presses
   def handle(buf, {:key, {key, @key_held, mods}}) do
@@ -20,12 +20,12 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.NotepadMap do
   def handle(buf, {:key, {:key_end, 0, []}}) do
     handle(buf, @end_key)
   end
-  
+
   # Mac-style End key (Cmd+Right)
   def handle(buf, {:key, {:key_right, 1, ["cmd"]}}) do
     handle(buf, @end_key)
   end
-  
+
   def handle(buf, {:key, {:key_right, 1, [:cmd]}}) do
     handle(buf, @end_key)
   end
@@ -33,12 +33,12 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.NotepadMap do
   def handle(buf, {:key, {:key_home, 0, []}}) do
     handle(buf, @home_key)
   end
-  
+
   # Mac-style Home key (Cmd+Left)
   def handle(buf, {:key, {:key_left, 1, ["cmd"]}}) do
     handle(buf, @home_key)
   end
-  
+
   def handle(buf, {:key, {:key_left, 1, [:cmd]}}) do
     handle(buf, @home_key)
   end
@@ -139,7 +139,7 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.NotepadMap do
   end
 
   # Handle Ctrl+C release events (string modifiers to match ScenicMcp)
-  def handle(_buf, {:key, {:key_c, 0, ["ctrl"]}}) do
+  def handle(_buf, {:key, {:key_c, 0, [:ctrl]}}) do
     [:ignore]  # Action already handled on press
   end
 
@@ -154,7 +154,7 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.NotepadMap do
   end
 
   # Handle Ctrl+V release events (string modifiers to match ScenicMcp)
-  def handle(_buf, {:key, {:key_v, 0, ["ctrl"]}}) do
+  def handle(_buf, {:key, {:key_v, 0, [:ctrl]}}) do
     [:ignore]  # Action already handled on press
   end
 
@@ -169,22 +169,22 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.NotepadMap do
   end
 
   # Handle Ctrl+X release events (string modifiers to match ScenicMcp)
-  def handle(_buf, {:key, {:key_x, 0, ["ctrl"]}}) do
+  def handle(_buf, {:key, {:key_x, 0, [:ctrl]}}) do
     [:ignore]  # Action already handled on press
   end
 
   # Handle Ctrl+A release events (string modifiers to match press event)
-  def handle(_buf, {:key, {:key_a, 0, ["ctrl"]}}) do
+  def handle(_buf, {:key, {:key_a, 0, [:ctrl]}}) do
     [:ignore]  # Action already handled on press
   end
 
   # Handle Ctrl+S release events (string modifiers to match press event)
-  def handle(_buf, {:key, {:key_s, 0, ["ctrl"]}}) do
+  def handle(_buf, {:key, {:key_s, 0, [:ctrl]}}) do
     [:ignore]  # Action already handled on press
   end
 
   # Handle Ctrl+H release events (string modifiers)
-  def handle(_buf, {:key, {:key_h, 0, ["ctrl"]}}) do
+  def handle(_buf, {:key, {:key_h, 0, [:ctrl]}}) do
     [:ignore]  # Action already handled on press
   end
 
@@ -236,7 +236,7 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.NotepadMap do
       @down_arrow -> {:move_cursor, :down, 1}
       _ -> nil
     end
-    
+
     if movement_action do
       # If there's an active selection, clear it before moving cursor
       if buf.selection != nil do
@@ -293,7 +293,7 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.NotepadMap do
         # Don't log every unhandled input in production
         :ok
     end
-    
+
     [:ignore]
   end
 end

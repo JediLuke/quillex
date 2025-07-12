@@ -138,7 +138,7 @@
 
 #     # Clear any existing content
 #     IO.puts("🧹 Clearing editor content...")
-#     select_all_result = simulate_mcp_call("send_keys", %{key: "a", modifiers: ["ctrl"]})
+#     select_all_result = simulate_mcp_call("send_keys", %{key: "a", modifiers: [:ctrl]})
 #     delete_result = simulate_mcp_call("send_keys", %{key: "delete"})
 
 #     assert select_all_result.success and delete_result.success, "Should clear content"

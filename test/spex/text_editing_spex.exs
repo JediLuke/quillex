@@ -43,7 +43,7 @@ defmodule Quillex.TextEditingSpex do
     scenario "Cursor movement with arrow keys", context do
       given_ "text content with cursor at beginning", context do
         # Clear buffer first (even though it should be empty)
-        ScenicMcp.Probes.send_keys("a", ["ctrl"])
+        ScenicMcp.Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
 
         # Add test text
@@ -95,7 +95,7 @@ defmodule Quillex.TextEditingSpex do
     scenario "Backspace character deletion", context do
       given_ "text with cursor positioned mid-word", context do
         # Clear buffer first
-        ScenicMcp.Probes.send_keys("a", ["ctrl"])
+        ScenicMcp.Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
 
         # Clear and setup test text
@@ -139,7 +139,7 @@ defmodule Quillex.TextEditingSpex do
     scenario "Delete key character deletion", context do
       given_ "text with cursor positioned mid-word", context do
         # Clear buffer first
-        ScenicMcp.Probes.send_keys("a", ["ctrl"])
+        ScenicMcp.Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
 
         test_text = "Deleteing"
@@ -182,7 +182,7 @@ defmodule Quillex.TextEditingSpex do
     scenario "Enter key creates new line", context do
       given_ "text content without line breaks", context do
         # Clear buffer first
-        ScenicMcp.Probes.send_keys("a", ["ctrl"])
+        ScenicMcp.Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
 
         test_text = "First line content"
@@ -226,7 +226,7 @@ defmodule Quillex.TextEditingSpex do
     scenario "Home and End key navigation", context do
       given_ "a line of text with cursor in middle", context do
         # Clear buffer first
-        ScenicMcp.Probes.send_keys("a", ["ctrl"])
+        ScenicMcp.Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
 
         test_text = "Navigate to beginning and end"
@@ -284,7 +284,7 @@ defmodule Quillex.TextEditingSpex do
     scenario "Text selection with Shift+Arrow keys", context do
       given_ "text content for selection", context do
         # Clear buffer first
-        ScenicMcp.Probes.send_keys("a", ["ctrl"])
+        ScenicMcp.Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
 
         test_text = "Select this text"
@@ -339,7 +339,7 @@ defmodule Quillex.TextEditingSpex do
     scenario "Copy and paste operations", context do
       given_ "text content for copy/paste", context do
         # Clear buffer first
-        ScenicMcp.Probes.send_keys("a", ["ctrl"])
+        ScenicMcp.Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
 
         test_text = "Copy this phrase"
@@ -364,7 +364,7 @@ defmodule Quillex.TextEditingSpex do
       end
 
       when_ "user copies selected text", context do
-        ScenicMcp.Probes.send_keys("c", ["ctrl"])  # Ctrl+C to copy
+        ScenicMcp.Probes.send_keys("c", [:ctrl])  # Ctrl+C to copy
         Process.sleep(100)
 
         # Move to end and add some space
@@ -376,7 +376,7 @@ defmodule Quillex.TextEditingSpex do
       end
 
       and_ "user pastes the copied text", context do
-        ScenicMcp.Probes.send_keys("v", ["ctrl"])  # Ctrl+V to paste
+        ScenicMcp.Probes.send_keys("v", [:ctrl])  # Ctrl+V to paste
         Process.sleep(100)
         :ok
       end
@@ -401,7 +401,7 @@ defmodule Quillex.TextEditingSpex do
     scenario "Cut and paste operations", context do
       given_ "text content for cut/paste", context do
         # Clear buffer first
-        ScenicMcp.Probes.send_keys("a", ["ctrl"])
+        ScenicMcp.Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
 
         test_text = "Cut this word out"
@@ -426,7 +426,7 @@ defmodule Quillex.TextEditingSpex do
       end
 
       when_ "user cuts selected text", context do
-        ScenicMcp.Probes.send_keys("x", ["ctrl"])  # Ctrl+X to cut
+        ScenicMcp.Probes.send_keys("x", [:ctrl])  # Ctrl+X to cut
         Process.sleep(100)
 
         # Move to end
@@ -438,7 +438,7 @@ defmodule Quillex.TextEditingSpex do
       end
 
       and_ "user pastes the cut text", context do
-        ScenicMcp.Probes.send_keys("v", ["ctrl"])  # Ctrl+V to paste
+        ScenicMcp.Probes.send_keys("v", [:ctrl])  # Ctrl+V to paste
         Process.sleep(100)
         :ok
       end
@@ -463,7 +463,7 @@ defmodule Quillex.TextEditingSpex do
     scenario "Vertical cursor movement with up/down arrows", context do
       given_ "three lines of text with different lengths", context do
         # Clear buffer first
-        ScenicMcp.Probes.send_keys("a", ["ctrl"])
+        ScenicMcp.Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
 
         text_lines = ["First line with some text", "Second", "Third line is longer"]
@@ -522,7 +522,7 @@ defmodule Quillex.TextEditingSpex do
     scenario "Select All functionality", context do
       given_ "multi-line text content", context do
         # Clear buffer first (using select all + type over)
-        ScenicMcp.Probes.send_keys("a", ["ctrl"])
+        ScenicMcp.Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
 
         text_lines = ["First line of content", "Second line of content", "Third line of content"]
@@ -540,7 +540,7 @@ defmodule Quillex.TextEditingSpex do
       end
 
       when_ "user presses Ctrl+A to select all", context do
-        ScenicMcp.Probes.send_keys("a", ["ctrl"])
+        ScenicMcp.Probes.send_keys("a", [:ctrl])
         Process.sleep(100)
         :ok
       end
@@ -577,7 +577,7 @@ defmodule Quillex.TextEditingSpex do
     scenario "Selection edge case - expand then contract to zero", context do
     given_ "text content for edge case testing", context do
       # Clear buffer first
-      ScenicMcp.Probes.send_keys("a", ["ctrl"])
+      ScenicMcp.Probes.send_keys("a", [:ctrl])
       Process.sleep(50)
 
       test_text = "Hello world selection test"
@@ -634,7 +634,7 @@ defmodule Quillex.TextEditingSpex do
   scenario "Selection state cleanup after normal cursor movement", context do
     given_ "text with previous selection state", context do
       # Clear buffer first
-      ScenicMcp.Probes.send_keys("a", ["ctrl"])
+      ScenicMcp.Probes.send_keys("a", [:ctrl])
       Process.sleep(50)
 
       test_text = "Clean selection state test"
@@ -690,7 +690,7 @@ defmodule Quillex.TextEditingSpex do
   scenario "Text replacement during active selection", context do
     given_ "text content with active selection", context do
       # Clear buffer first
-      ScenicMcp.Probes.send_keys("a", ["ctrl"])
+      ScenicMcp.Probes.send_keys("a", [:ctrl])
       Process.sleep(50)
 
       test_text = "Replace this text completely"

@@ -50,7 +50,7 @@ defmodule Quillex.HelloWorldSpex do
     scenario "Basic text input functionality", context do
       given_ "an empty editor buffer", context do
         # Clear any existing content first (proper state reset)
-        # ScenicMcp.Probes.send_keys("a", ["ctrl"])  # Select all
+        # ScenicMcp.Probes.send_keys("a", [:ctrl])  # Select all
         # ScenicMcp.Probes.send_keys("delete")       # Delete
         # Process.sleep(200)  # Allow time for clearing
 

@@ -158,7 +158,7 @@
 #     IO.puts("\n🎯 Phase 5: Advanced Operations Testing")
 
 #     # Test select all + delete (content management)
-#     {:ok, _} = execute_mcp_tool(:send_keys, %{key: "a", modifiers: ["ctrl"]})
+#     {:ok, _} = execute_mcp_tool(:send_keys, %{key: "a", modifiers: [:ctrl]})
 #     {:ok, _} = execute_mcp_tool(:send_keys, %{key: "delete"})
 
 #     # Add structured content for further testing
@@ -297,7 +297,7 @@
 #     assert app_running?(), "App must be running for iteration test"
 
 #     # Clear workspace
-#     {:ok, _} = execute_mcp_tool(:send_keys, %{key: "a", modifiers: ["ctrl"]})
+#     {:ok, _} = execute_mcp_tool(:send_keys, %{key: "a", modifiers: [:ctrl]})
 #     {:ok, _} = execute_mcp_tool(:send_keys, %{key: "delete"})
 
 #     # Test specific feature: multi-line editing

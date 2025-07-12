@@ -167,7 +167,7 @@
 #       %{
 #         name: "Advanced Operations",
 #         action: fn ->
-#           ClaudeBridge.send_key("a", ["ctrl"])  # Select all
+#           ClaudeBridge.send_key("a", [:ctrl])  # Select all
 #           ClaudeBridge.send_key("delete")       # Clear
 #           ClaudeBridge.send_text("AI-Generated Content:\n\n• Test 1 ✅\n• Test 2 ✅\n• Test 3 ✅")
 #         end,
@@ -310,7 +310,7 @@
 #     IO.puts("🤖 AI: Testing edge case - rapid input sequence")
 
 #     # Clear workspace
-#     {:ok, _} = ClaudeBridge.send_key("a", ["ctrl"])
+#     {:ok, _} = ClaudeBridge.send_key("a", [:ctrl])
 #     {:ok, _} = ClaudeBridge.send_key("delete")
 
 #     # Simulate rapid input that might reveal issues
