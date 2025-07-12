@@ -53,19 +53,37 @@ defmodule Quillex.GUI.Components.BufferPane.Mutator do
     # TODO no idea how this is gonna work with multiple cursors...
     c = buf.cursors |> hd()
 
-    new_cursor =
-      case direction do
-        :up -> c |> Cursor.move_up(x)
-        :down -> c |> Cursor.move_down(x)
-        :left -> c |> Cursor.move_left(x)
-        :right -> c |> Cursor.move_right(x)
-      end
+    new_cursor = move_cursor_with_bounds(buf, c, direction, x)
 
     %{buf | cursors: [new_cursor]}
   end
 
+  # Helper function to move cursor with boundary checking
+  defp move_cursor_with_bounds(buf, cursor, direction, count) do
+    case direction do
+      :up -> 
+        new_line = max(1, cursor.line - count)
+        %{cursor | line: new_line}
+      
+      :down -> 
+        max_line = length(buf.data)
+        new_line = min(max_line, cursor.line + count)
+        %{cursor | line: new_line}
+      
+      :left -> 
+        new_col = max(1, cursor.col - count)
+        %{cursor | col: new_col}
+      
+      :right -> 
+        current_line = Enum.at(buf.data, cursor.line - 1) || ""
+        max_col = String.length(current_line) + 1
+        new_col = min(max_col, cursor.col + count)
+        %{cursor | col: new_col}
+    end
+  end
+
   def move_cursor(%{cursors: [c], selection: selection} = buf, :line_end) when selection != nil do
-    current_line = Enum.at(buf.data, c.line - 1)
+    current_line = Enum.at(buf.data, c.line - 1) || ""
     # need extra column cause of zero vs one based indexing, columns start at 1 god damnit!!
     new_col = String.length(current_line) + 1
     new_cursor = c |> Cursor.move({c.line, new_col})
@@ -73,7 +91,7 @@ defmodule Quillex.GUI.Components.BufferPane.Mutator do
   end
 
   def move_cursor(%{cursors: [c]} = buf, :line_end) do
-    current_line = Enum.at(buf.data, c.line - 1)
+    current_line = Enum.at(buf.data, c.line - 1) || ""
     # need extra column cause of zero vs one based indexing, columns start at 1 god damnit!!
     new_col = String.length(current_line) + 1
     move_cursor(buf, {c.line, new_col})
@@ -101,7 +119,8 @@ defmodule Quillex.GUI.Components.BufferPane.Mutator do
 
   def insert_text(buf, {line, col}, text) do
     # updated_line = String.insert_at(Enum.at(buf.data, line - 1), col - 1, text)
-    {left_text, right_text} = String.split_at(Enum.at(buf.data, line - 1), col - 1)
+    current_line = Enum.at(buf.data, line - 1) || ""
+    {left_text, right_text} = String.split_at(current_line, col - 1)
     updated_line = left_text <> text <> right_text
     updated_data = List.replace_at(buf.data, line - 1, updated_line)
     %{buf | data: updated_data}
@@ -243,13 +262,7 @@ defmodule Quillex.GUI.Components.BufferPane.Mutator do
     # TODO no idea how this is gonna work with multiple cursors...
     c = buf.cursors |> hd()
 
-    new_cursor =
-      case direction do
-        :up -> c |> Cursor.move_up(count)
-        :down -> c |> Cursor.move_down(count)
-        :left -> c |> Cursor.move_left(count)
-        :right -> c |> Cursor.move_right(count)
-      end
+    new_cursor = move_cursor_with_bounds(buf, c, direction, count)
 
     %{buf | cursors: [new_cursor], selection: nil}
   end
@@ -284,7 +297,7 @@ defmodule Quillex.GUI.Components.BufferPane.Mutator do
   end
 
   defp delete_text_within_line(buf, line, start_col, end_col) do
-    current_line = Enum.at(buf.data, line - 1)
+    current_line = Enum.at(buf.data, line - 1) || ""
     {left_text, right_text} = String.split_at(current_line, start_col - 1)
     {_deleted_text, remaining_text} = String.split_at(right_text, end_col - start_col)
     updated_line = left_text <> remaining_text
@@ -294,11 +307,11 @@ defmodule Quillex.GUI.Components.BufferPane.Mutator do
 
   defp delete_text_across_lines(buf, {start_line, start_col}, {end_line, end_col}) do
     # Get text before selection on start line
-    start_line_text = Enum.at(buf.data, start_line - 1)
+    start_line_text = Enum.at(buf.data, start_line - 1) || ""
     {left_text, _} = String.split_at(start_line_text, start_col - 1)
     
     # Get text after selection on end line  
-    end_line_text = Enum.at(buf.data, end_line - 1)
+    end_line_text = Enum.at(buf.data, end_line - 1) || ""
     {_, right_text} = String.split_at(end_line_text, end_col - 1)
     
     # Combine the remaining text

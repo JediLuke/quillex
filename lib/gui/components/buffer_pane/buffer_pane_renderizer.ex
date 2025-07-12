@@ -234,7 +234,8 @@ defmodule Quillex.GUI.Components.BufferPane.Renderizer do
         0
       end
       
-      selected_text = String.slice(line_text, start_col_on_line - 1, end_col_on_line - start_col_on_line)
+      selection_length = max(0, end_col_on_line - start_col_on_line)
+      selected_text = String.slice(line_text, start_col_on_line - 1, selection_length)
       selection_width = if String.length(selected_text) > 0 do
         FontMetrics.width(selected_text, state.font.size, state.font.metrics)
       else

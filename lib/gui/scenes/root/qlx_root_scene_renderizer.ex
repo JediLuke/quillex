@@ -7,15 +7,9 @@ defmodule QuillEx.RootScene.Renderizer do
     %Scenic.Scene{} = scene,
     %QuillEx.RootScene.State{} = state
   ) do
-    [
-      menu_bar_frame,
-      text_area_frame
-    ] = Widgex.Frame.v_split(state.frame, px: state.toolbar.height)
-
-    # render MenuBar _after_ BufferPane so it (including menu dropdowns) appears on top of the buffer not below it
+    # Simplified: just render the text area without menu bar for now
     graph
-    |> render_text_area(scene, state, text_area_frame)
-    |> render_menu_bar(scene, state, menu_bar_frame)
+    |> render_text_area(scene, state, state.frame)
   end
 
   defp render_text_area(
@@ -24,41 +18,9 @@ defmodule QuillEx.RootScene.Renderizer do
     %QuillEx.RootScene.State{} = state,
     %Widgex.Frame{} = frame
   ) do
-
-    [
-      tab_bar_frame,
-      buffer_pane_frame_when_tab_bar_open
-    ] = Widgex.Frame.v_split(frame, px: state.toolbar.height)
-
-    [ubuntu_bar_frame, buffer_pane_frame] =
-      if length(state.buffers) <= 1 do
-        frame
-      else
-        buffer_pane_frame_when_tab_bar_open
-      end
-      |> then(fn current_buffer_pane_frame ->
-        if state.show_ubuntu_bar do
-          Widgex.Frame.h_split(current_buffer_pane_frame, px: 60)
-        else
-          [nil, current_buffer_pane_frame]
-        end
-      end)
-
+    # Simplified: just render the buffer pane using the full frame
     graph
-    |> Scenic.Primitives.group(
-      fn graph ->
-        graph
-        |> render_buffer_pane(scene, state, buffer_pane_frame)
-        # |> render_tab_bar(scene, state, tab_bar_frame)
-        |> then(fn graph ->
-          if state.show_ubuntu_bar and ubuntu_bar_frame do
-            render_ubuntu_bar(graph, scene, state, ubuntu_bar_frame)
-          else
-            graph
-          end
-        end)
-      end
-    )
+    |> render_buffer_pane(scene, state, frame)
   end
 
   defp render_ubuntu_bar(graph, scene, _state, frame) do
