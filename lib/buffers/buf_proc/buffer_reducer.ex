@@ -74,6 +74,10 @@ defmodule Quillex.Buffer.Process.Reducer do
     %{buf | selection: nil}
   end
 
+  def process(%Quillex.Structs.BufState{} = buf, :select_all) do
+    BufferPane.Mutator.select_all(buf)
+  end
+
   def process(%Quillex.Structs.BufState{} = buf, {:newline, :at_cursor}) do
     [c] = buf.cursors
 

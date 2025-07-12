@@ -123,9 +123,9 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.NotepadMap do
     [{:request_save, %{uuid: buf.uuid}}]
   end
 
-  # ctrl-a selects all (clears buffer for now)
+  # ctrl-a selects all text
   def handle(_buf, @ctrl_a) do
-    [:empty_buffer]
+    [:select_all]
   end
 
   # ctrl-c copies selected text to clipboard

@@ -752,6 +752,7 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
         # Rapid copy-paste sequence
         ScenicMcp.Probes.send_keys("a", ["ctrl"])
         ScenicMcp.Probes.send_keys("c", ["ctrl"])
+        Process.sleep(50)  # Allow copy to complete before clearing selection
         ScenicMcp.Probes.send_keys("end", [])
         ScenicMcp.Probes.send_text(" ")
         ScenicMcp.Probes.send_keys("v", ["ctrl"])

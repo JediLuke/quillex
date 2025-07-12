@@ -257,6 +257,23 @@ defmodule Quillex.GUI.Components.BufferPane.Mutator do
     %{buf_with_moved_cursor | selection: %{start: start_pos, end: selection_end}}
   end
 
+  # Select all text in the buffer
+  def select_all(%{data: []} = buf), do: buf  # Empty buffer, nothing to select
+
+  def select_all(%{data: [""]} = buf), do: buf  # Single empty line, nothing to select
+
+  def select_all(%{data: data} = buf) when length(data) > 0 do
+    # Select from beginning of first line to end of last line
+    start_pos = {1, 1}
+    last_line_index = length(data)
+    last_line = List.last(data) || ""
+    end_pos = {last_line_index, String.length(last_line) + 1}
+    
+    # Set cursor to end of selection and create selection
+    end_cursor = Cursor.new(last_line_index, String.length(last_line) + 1)
+    %{buf | cursors: [end_cursor], selection: %{start: start_pos, end: end_pos}}
+  end
+
   # Clear selection when moving cursor normally (without selection)
   def move_cursor(%{selection: selection} = buf, direction, count) when selection != nil do
     # TODO no idea how this is gonna work with multiple cursors...
