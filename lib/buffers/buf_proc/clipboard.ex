@@ -159,7 +159,13 @@ defmodule Clipboard do
         end
 
         send(port, {self(), :close})
-        :ok
+        
+        # Wait for the port to actually close before returning
+        receive do
+          {^port, :closed} -> :ok
+        after
+          5000 -> {:error, "Clipboard operation timed out"}
+        end
     end
   end
 

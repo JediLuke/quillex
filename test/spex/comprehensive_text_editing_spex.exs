@@ -749,15 +749,15 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
         for _i <- 1..5, do: ScenicMcp.Probes.send_keys("right", ["shift"])
         ScenicMcp.Probes.send_text("FAST")
 
-        # Rapid copy-paste sequence
+        # Rapid copy-paste sequence  
         ScenicMcp.Probes.send_keys("a", ["ctrl"])
         ScenicMcp.Probes.send_keys("c", ["ctrl"])
-        Process.sleep(50)  # Allow copy to complete before clearing selection
+        Process.sleep(25)  # Allow MCP->Elixir copy command to complete
         ScenicMcp.Probes.send_keys("end", [])
         ScenicMcp.Probes.send_text(" ")
         ScenicMcp.Probes.send_keys("v", ["ctrl"])
 
-        Process.sleep(200)  # Allow time for all operations to complete
+        Process.sleep(50)  # Allow MCP communication to catch up with rapid sequence
 
         rapid_result_screenshot = ScenicMcp.Probes.take_screenshot("rapid_result")
         {:ok, Map.put(context, :rapid_result_screenshot, rapid_result_screenshot)}
