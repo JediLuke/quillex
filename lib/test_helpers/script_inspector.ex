@@ -1,7 +1,7 @@
 defmodule Quillex.TestHelpers.ScriptInspector do
   @moduledoc """
   Helper functions for inspecting the Scenic script table to extract rendered content.
-  
+
   These functions provide true end-to-end testing by examining what actually gets
   rendered to the screen, rather than just checking internal buffer state.
   """
@@ -17,7 +17,7 @@ defmodule Quillex.TestHelpers.ScriptInspector do
           script_entries
           |> Enum.flat_map(&extract_text_from_script_entry/1)
           |> Enum.uniq()
-        
+
         _ -> []
       end
     rescue
@@ -44,9 +44,9 @@ defmodule Quillex.TestHelpers.ScriptInspector do
   """
   def rendered_text_empty? do
     user_content = extract_user_content()
-    
-    user_content == [] or 
-    Enum.all?(user_content, fn text -> 
+
+    user_content == [] or
+    Enum.all?(user_content, fn text ->
       String.trim(text) == ""
     end)
   end
@@ -71,25 +71,25 @@ defmodule Quillex.TestHelpers.ScriptInspector do
       # Scenic script identifiers
       "_main_", "_root_"
     ]
-    
+
     # Check for exact matches with GUI patterns
     exact_match = text in gui_patterns
-    
+
     # Check for font hashes (long alphanumeric strings)
     font_hash = String.length(text) > 20 and String.match?(text, ~r/^[A-Za-z0-9_-]+$/)
-    
+
     # Check for script IDs (UUIDs or similar)
     script_id = String.contains?(text, "-") and String.length(text) > 10
-    
+
     # Check for underscore-prefixed identifiers (Scenic internal names)
     internal_id = String.starts_with?(text, "_") and String.ends_with?(text, "_")
-    
+
     # Check for single character strings (likely not user content)
     single_char = String.length(text) == 1
-    
+
     exact_match or font_hash or script_id or internal_id or single_char
   end
-  
+
   defp is_gui_element?(_), do: false
 
   @doc """
@@ -110,7 +110,7 @@ defmodule Quillex.TestHelpers.ScriptInspector do
       else
         script_data
       end
-      
+
       operations
       |> Enum.flat_map(&extract_text_from_script_operation/1)
     rescue
@@ -119,7 +119,7 @@ defmodule Quillex.TestHelpers.ScriptInspector do
         []
     end
   end
-  
+
   defp extract_text_from_script_entry({{_id, script_data}, _pid}) when is_list(script_data) do
     try do
       script_data
@@ -130,7 +130,7 @@ defmodule Quillex.TestHelpers.ScriptInspector do
         []
     end
   end
-  
+
   defp extract_text_from_script_entry({_id, script_data}) when is_list(script_data) do
     try do
       script_data
@@ -141,7 +141,7 @@ defmodule Quillex.TestHelpers.ScriptInspector do
         []
     end
   end
-  
+
   defp extract_text_from_script_entry(entry) do
     # Don't spam logs - only show occasionally for debugging
     if :rand.uniform(10) == 1 do
@@ -157,37 +157,37 @@ defmodule Quillex.TestHelpers.ScriptInspector do
         # Look for draw_text operations - this is where the actual text content is
         {:draw_text, text, _spacing} when is_binary(text) ->
           [text]
-        
+
         # Handle draw_text without spacing parameter
         {:draw_text, text} when is_binary(text) ->
           [text]
-        
+
         # Look for other possible text operation formats
         {:text, text} when is_binary(text) ->
           [text]
-        
+
         # Handle nested operations (scripts can contain other operations)
         {_op, args} when is_list(args) ->
           args |> Enum.flat_map(&extract_text_from_script_operation/1)
-        
+
         # Handle tuples that might contain text - but be more careful
         tuple when is_tuple(tuple) and tuple_size(tuple) <= 10 ->
-          tuple 
-          |> Tuple.to_list() 
+          tuple
+          |> Tuple.to_list()
           |> Enum.flat_map(&extract_text_from_script_operation/1)
-        
+
         # Handle lists of operations
         list when is_list(list) and length(list) <= 1000 ->
           list |> Enum.flat_map(&extract_text_from_script_operation/1)
-        
+
         # If it's a string, include it (though this might be rare)
         text when is_binary(text) ->
           [text]
-        
+
         # Ignore everything else but log it for debugging
         other ->
           # Only log the first few times to avoid spam
-          if :rand.uniform(100) == 1 do
+          if :rand.uniform(1000) == 1 do
             IO.puts("Ignoring operation: #{inspect(other, limit: 5)}")
           end
           []
@@ -205,10 +205,10 @@ defmodule Quillex.TestHelpers.ScriptInspector do
   """
   def debug_script_table do
     script_table = ScenicMcp.Probes.script_table()
-    
+
     IO.puts("\n=== SCRIPT TABLE DEBUG ===")
     IO.puts("Number of entries: #{length(script_table)}")
-    
+
     script_table
     |> Enum.with_index()
     |> Enum.each(fn {entry, index} ->
@@ -216,31 +216,31 @@ defmodule Quillex.TestHelpers.ScriptInspector do
         {id, script, _pid} ->
           IO.puts("\n--- Entry #{index} (ID: #{inspect(id)}) ---")
           IO.inspect(script, limit: 50, pretty: true)
-        
+
         {{id, script}, _pid} ->
           IO.puts("\n--- Entry #{index} (ID: #{inspect(id)}) ---")
           IO.inspect(script, limit: 50, pretty: true)
-        
+
         {id, script} ->
           IO.puts("\n--- Entry #{index} (ID: #{inspect(id)}) ---")
           IO.inspect(script, limit: 50, pretty: true)
-        
+
         other ->
           IO.puts("\n--- Entry #{index} (Unknown format) ---")
           IO.inspect(other, limit: 10, pretty: true)
       end
     end)
-    
+
     IO.puts("\n=== EXTRACTED TEXT ===")
     extracted_text = extract_rendered_text()
     IO.inspect(extracted_text, label: "All rendered text")
-    
+
     user_content = extract_user_content()
     IO.inspect(user_content, label: "User content (filtered)")
-    
+
     gui_elements = extracted_text -- user_content
     IO.inspect(gui_elements, label: "GUI elements (filtered out)")
-    
+
     script_table
   end
 end

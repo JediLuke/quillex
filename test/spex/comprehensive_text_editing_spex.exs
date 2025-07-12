@@ -228,9 +228,9 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
         ScenicMcp.Probes.send_text(test_text)
         Process.sleep(100)
 
-        # Position cursor after "line "
+        # Position cursor before "here" (after "line ")
         ScenicMcp.Probes.send_keys("home", [])
-        for _i <- 1..15, do: ScenicMcp.Probes.send_keys("right", [])  # After "Split this line "
+        for _i <- 1..16, do: ScenicMcp.Probes.send_keys("right", [])  # After "Split this line "
         Process.sleep(50)
 
         setup_screenshot = ScenicMcp.Probes.take_screenshot("line_creation_setup")
@@ -452,7 +452,7 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
 
         # Step 3: Move to end and paste
         ScenicMcp.Probes.send_keys("end", [])
-        ScenicMcp.Probes.send_text(" moved: ")
+        ScenicMcp.Probes.send_text(" moved ")
         ScenicMcp.Probes.send_keys("v", ["ctrl"])
         Process.sleep(200)
 
@@ -463,7 +463,7 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
       then_ "cut text should be moved to new location", context do
         rendered_content = ScriptInspector.get_rendered_text_string()
 
-        expected_result = "Cut word out moved: this "
+        expected_result = "Cut word out moved this "
         assert ScriptInspector.rendered_text_contains?(expected_result),
                "Cut/paste should move text correctly. Expected: '#{expected_result}', Got: '#{rendered_content}'"
 

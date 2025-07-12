@@ -44,7 +44,6 @@ defmodule Quillex.GUI.Components.BufferPane do
 
 
     state = BufferPane.State.new(data |> Map.merge(%{active?: active?}))
-    Logger.info "Buffer: #{inspect buf_ref} is state?: #{inspect state}"
 
     {:ok, %{state: state, frame: frame, buf_ref: buf_ref, active?: active?}}
   end
@@ -69,7 +68,7 @@ defmodule Quillex.GUI.Components.BufferPane do
       |> push_graph(graph)
 
     # Registry.register(Quillex.BufferRegistry, __MODULE__, nil)
-    Logger.info "REGISTERING BUFFER AS #{buf.uuid}"
+    # Registering buffer component
 
     # SHIT ok here we go, we used to register buffer panes according to theri buffer... now we cant !! cause we only make ONE buffer pane & modify it !!
     Quillex.Utils.PubSub.subscribe(topic: {:buffers, buf.uuid})
@@ -80,13 +79,17 @@ defmodule Quillex.GUI.Components.BufferPane do
   def handle_cast({:user_input, input}, scene) do
     # the GUI component converts raw user input to actions, directly on this layer,
     # which are then passed back up the component tree for processing
-    Logger.info "BUF GOT input #{inspect input}"
+    # Processing user input
     case BufferPane.UserInputHandler.handle(scene.assigns, input) do
       :ignore ->
         {:noreply, scene}
+      
+      [:ignore] ->
+        # Special case for single ignore in list - don't propagate
+        {:noreply, scene}
 
       actions when is_list(actions) ->
-        Logger.info("BufferPane: Generated actions #{inspect(actions)}, casting to parent")
+        # Sending actions to parent scene
         cast_parent(scene, {__MODULE__, :action, scene.assigns.buf_ref, actions})
         {:noreply, scene}
 
@@ -104,7 +107,7 @@ defmodule Quillex.GUI.Components.BufferPane do
 
   def handle_cast({:frame_change, %Widgex.Frame{} = frame}, %{assigns: %{frame: frame}} = scene) do
     # frame didn't change (same variable name means we bound to both vars, they are equal) so do nothing
-    IO.puts "#{__MODULE__} ignoring frame change..."
+    # Ignoring frame change for buffer component
     {:noreply, scene}
   end
 
@@ -113,7 +116,7 @@ defmodule Quillex.GUI.Components.BufferPane do
     %{assigns: %{buf_ref: %{uuid: uuid, name: name, mode: mode}}} = scene
   ) do
     # no actual changes were made so we can discard this msg (all variables bind on same name)
-    IO.puts "#{__MODULE__} ignoring buf_ref change... #{inspect new_buf}"
+    # Ignoring buf_ref change
     {:noreply, scene}
   end
 
@@ -122,7 +125,7 @@ defmodule Quillex.GUI.Components.BufferPane do
     %{assigns: %{buf_ref: %{uuid: uuid}}} = scene
   ) do
 
-    IO.puts "Expect to get to here for left buffer #{inspect new_buf_ref}"
+    # Processing buffer update
     new_buf =
       %{scene.assigns.buf|name: new_buf_ref.name, mode: new_buf_ref.mode}
 
@@ -207,7 +210,7 @@ defmodule Quillex.GUI.Components.BufferPane do
   end
 
   def handle_cast({:state_change, invalid}, scene) do
-    Logger.info "INVALID STATE CHANGE #{inspect invalid}"
+    Logger.warning("Invalid state change: #{inspect(invalid)}")
     {:noreply, scene}
   end
 

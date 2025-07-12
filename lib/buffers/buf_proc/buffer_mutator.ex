@@ -87,7 +87,8 @@ defmodule Quillex.GUI.Components.BufferPane.Mutator do
 
   def move_cursor(%{cursors: [c]} = buf, :line_start) do
     # Move cursor to beginning of current line (column 1)
-    move_cursor(buf, {c.line, 1})
+    new_cursor = c |> Cursor.move({c.line, 1})
+    %{buf | cursors: [new_cursor]}
   end
 
   def insert_text(%{data: []} = buf, {1, 1}, text) do

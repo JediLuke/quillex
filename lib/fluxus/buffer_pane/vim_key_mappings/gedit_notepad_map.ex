@@ -20,8 +20,26 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.NotepadMap do
   def handle(buf, {:key, {:key_end, 0, []}}) do
     handle(buf, @end_key)
   end
+  
+  # Mac-style End key (Cmd+Right)
+  def handle(buf, {:key, {:key_right, 1, ["cmd"]}}) do
+    handle(buf, @end_key)
+  end
+  
+  def handle(buf, {:key, {:key_right, 1, [:cmd]}}) do
+    handle(buf, @end_key)
+  end
 
   def handle(buf, {:key, {:key_home, 0, []}}) do
+    handle(buf, @home_key)
+  end
+  
+  # Mac-style Home key (Cmd+Left)
+  def handle(buf, {:key, {:key_left, 1, ["cmd"]}}) do
+    handle(buf, @home_key)
+  end
+  
+  def handle(buf, {:key, {:key_left, 1, [:cmd]}}) do
     handle(buf, @home_key)
   end
 
@@ -75,12 +93,12 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.NotepadMap do
 
   # Escape key cancels text selection
   def handle(_buf, @escape_key) do
-    [{:clear_selection}]
+    [:clear_selection]
   end
 
   # Alternative Escape key pattern (release state)
   def handle(_buf, {:key, {:key_escape, 0, []}}) do
-    [{:clear_selection}]
+    [:clear_selection]
   end
 
   # Enter key inserts a newline
@@ -257,23 +275,22 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.NotepadMap do
 
   # Handle unrecognized inputs
   def handle(_buf, input) do
-    Logger.error("❌ NotepadMap: UNHANDLED input: #{inspect(input)}")
-    
     # Only log truly problematic inputs (missing important key combinations)
     case input do
       {:key, {:key_c, _state, mods}} ->
         if :ctrl in mods or "ctrl" in mods do
-          Logger.error("❌ MISSED CTRL+C: #{inspect(input)}")
+          Logger.error("Missing Ctrl+C handler: #{inspect(input)}")
         end
       {:key, {:key_v, _state, mods}} ->
         if :ctrl in mods or "ctrl" in mods do
-          Logger.error("❌ MISSED CTRL+V: #{inspect(input)}")
+          Logger.error("Missing Ctrl+V handler: #{inspect(input)}")
         end
       {:key, {:key_x, _state, mods}} ->
         if :ctrl in mods or "ctrl" in mods do
-          Logger.error("❌ MISSED CTRL+X: #{inspect(input)}")
+          Logger.error("Missing Ctrl+X handler: #{inspect(input)}")
         end
       _ ->
+        # Don't log every unhandled input in production
         :ok
     end
     

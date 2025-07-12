@@ -106,7 +106,7 @@ defmodule QuillEx.RootScene do
   end
 
   def handle_cast({:action, actions}, scene) when is_list(actions) do
-    Logger.info("RootScene: Received actions: #{inspect(actions)}")
+    # Processing actions from RadixReducer
     case process_actions(scene, actions) do
       {:ok, {new_state, new_graph}} ->
         new_scene =
@@ -182,14 +182,14 @@ defmodule QuillEx.RootScene do
         },
         scene
       ) do
-    Logger.info("RootScene: Received BufferPane actions for buf_ref #{inspect(buf_ref)}: #{inspect(actions)}")
+    # Processing BufferPane actions
 
     # Flamelex.Fluxus.action()
 
     # interact with the Buffer state to apply the actions - thisd is equivalent to Fluxus
-    Logger.info("RootScene: About to call BufferManager.call_buffer with actions: #{inspect(actions)}")
+    # Applying actions to buffer
     {:ok, new_buf} = Quillex.Buffer.BufferManager.call_buffer(buf_ref, {:action, actions})
-    Logger.info("RootScene: BufferManager returned new buffer state")
+    # Buffer state updated
 
     # # we normally would broadcast changesd from Fluxus, since RootScene _id_ fluxus here, here is where we broadcast from
 
@@ -199,10 +199,10 @@ defmodule QuillEx.RootScene do
     # # and it allows us to proapagate changes up from quillex to flamelex in same mechanism
 
     # # update the GUI
-    Logger.info("RootScene: About to send state_change to BufferPane")
+    # Updating GUI with new buffer state
     {:ok, [pid]} = Scenic.Scene.child(scene, :buffer_pane)
     GenServer.cast(pid, {:state_change, new_buf})
-    Logger.info("RootScene: Sent state_change to BufferPane")
+    # GUI update complete
 
     {:noreply, scene}
   end
@@ -249,7 +249,7 @@ defmodule QuillEx.RootScene do
   end
 
   def handle_info({:ubuntu_bar_button_clicked, button_id, button}, scene) do
-    Logger.info("UbuntuBar button clicked: #{inspect(button_id)} - #{inspect(button)}")
+    # UbuntuBar button clicked: #{button_id}"
     
     # Handle different button actions
     case button_id do
@@ -258,19 +258,19 @@ defmodule QuillEx.RootScene do
         handle_cast({:action, :new_buffer}, scene)
         
       :open_file ->
-        Logger.info("Open file functionality not implemented yet")
+        # Open file functionality not implemented yet
         {:noreply, scene}
         
       :save_file ->
-        Logger.info("Save file functionality not implemented yet")
+        # Save file functionality not implemented yet
         {:noreply, scene}
         
       :search ->
-        Logger.info("Search functionality not implemented yet")
+        # Search functionality not implemented yet
         {:noreply, scene}
         
       :settings ->
-        Logger.info("Settings functionality not implemented yet")
+        # Settings functionality not implemented yet
         {:noreply, scene}
         
       _other ->

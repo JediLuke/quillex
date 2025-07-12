@@ -89,13 +89,13 @@ defmodule Quillex.Buffer.Process do
 
   #TODo dont have buffers opening ports!!!
   def handle_info({_port, :closed}, scene) do
-    IO.puts "dont worry abour it (INCORRECT WORRY ABOUT THIS!!)"
+    # Debug: Need to handle this case properly
     {:noreply, scene}
   end
 
   def handle_info({:user_input, _input}, scene) do
     # buffer process doesnt respond to user input, only GUI component does, so just ignore this
-    IO.puts "BUF GOT USER INPUT VERY WEIRD"
+    # Note: Direct user input to buffer (unusual flow)
     {:noreply, scene}
   end
 end

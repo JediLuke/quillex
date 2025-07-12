@@ -570,7 +570,11 @@ defmodule Quillex.TextEditingSpex do
     end
   end
 
-  scenario "Selection edge case - expand then contract to zero", context do
+  spex "Text Selection Edge Cases",
+    description: "Advanced text selection scenarios and edge cases",
+    tags: [:edge_cases, :selection, :text_manipulation] do
+
+    scenario "Selection edge case - expand then contract to zero", context do
     given_ "text content for edge case testing", context do
       # Clear buffer first
       ScenicMcp.Probes.send_keys("a", ["ctrl"])
@@ -592,6 +596,7 @@ defmodule Quillex.TextEditingSpex do
 
       baseline_screenshot = ScenicMcp.Probes.take_screenshot("selection_edge_baseline")
       assert baseline_screenshot =~ ".png"
+      {:ok, Map.put(context, :baseline_screenshot, baseline_screenshot)}
     end
 
     when_ "user selects 2 characters right then 2 characters back left", context do
@@ -608,6 +613,7 @@ defmodule Quillex.TextEditingSpex do
       Process.sleep(100)
 
       after_screenshot = ScenicMcp.Probes.take_screenshot("selection_edge_after")
+      {:ok, Map.put(context, :after_screenshot, after_screenshot)}
     end
 
     then_ "no selection highlighting should remain", context do
@@ -618,6 +624,7 @@ defmodule Quillex.TextEditingSpex do
 
       if String.contains?(rendered_content, expected_text) do
         IO.puts("✅ Selection edge case: Text content correct")
+        :ok
       else
         raise "Selection edge case failed. Expected: '#{expected_text}', Got: '#{rendered_content}'"
       end
@@ -642,6 +649,7 @@ defmodule Quillex.TextEditingSpex do
       Process.sleep(100)
 
       old_selection_screenshot = ScenicMcp.Probes.take_screenshot("selection_cleanup_old")
+      {:ok, Map.put(context, :old_selection_screenshot, old_selection_screenshot)}
     end
 
     when_ "user moves cursor normally without shift", context do
@@ -651,6 +659,7 @@ defmodule Quillex.TextEditingSpex do
       Process.sleep(100)
 
       normal_move_screenshot = ScenicMcp.Probes.take_screenshot("selection_cleanup_moved")
+      {:ok, Map.put(context, :normal_move_screenshot, normal_move_screenshot)}
     end
 
     and_ "user starts new selection from current position", context do
@@ -660,6 +669,7 @@ defmodule Quillex.TextEditingSpex do
       Process.sleep(100)
 
       new_selection_screenshot = ScenicMcp.Probes.take_screenshot("selection_cleanup_new")
+      {:ok, Map.put(context, :new_selection_screenshot, new_selection_screenshot)}
     end
 
     then_ "new selection should start from current cursor position, not old selection", context do
@@ -670,6 +680,7 @@ defmodule Quillex.TextEditingSpex do
 
       if String.contains?(rendered_content, "Clean selection state test") do
         IO.puts("✅ Selection cleanup: New selection started from correct position")
+        :ok
       else
         raise "Selection cleanup failed. Selection state not properly cleared after normal cursor movement."
       end
@@ -707,6 +718,7 @@ defmodule Quillex.TextEditingSpex do
       Process.sleep(100)
 
       selection_screenshot = ScenicMcp.Probes.take_screenshot("replacement_selection")
+      {:ok, Map.put(context, :selection_screenshot, selection_screenshot)}
     end
 
     when_ "user types replacement text", context do
@@ -715,6 +727,7 @@ defmodule Quillex.TextEditingSpex do
       Process.sleep(100)
 
       after_replacement_screenshot = ScenicMcp.Probes.take_screenshot("replacement_after")
+      {:ok, Map.put(context, :after_replacement_screenshot, after_replacement_screenshot)}
     end
 
     then_ "selected text should be completely replaced", context do
@@ -723,9 +736,12 @@ defmodule Quillex.TextEditingSpex do
 
       if String.contains?(rendered_content, expected_text) do
         IO.puts("✅ Text replacement: Selected text properly replaced")
+        :ok
       else
         raise "Text replacement failed. Expected: '#{expected_text}', Got: '#{rendered_content}'"
       end
     end
+  end
+
   end
 end

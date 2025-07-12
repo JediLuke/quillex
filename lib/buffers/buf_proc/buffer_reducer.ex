@@ -130,19 +130,13 @@ defmodule Quillex.Buffer.Process.Reducer do
 
   def process(%Quillex.Structs.BufState{} = buf, {:delete, :before_cursor}) do
     [cursor] = buf.cursors
-    Logger.info("🔄 BUFFER REDUCER: Deleting before cursor from #{inspect(cursor)}")
     result_buf = buf |> BufferPane.Mutator.delete_char_before_cursor(cursor)
-    [new_cursor] = result_buf.cursors
-    Logger.info("🔄 BUFFER REDUCER: After delete before cursor: #{inspect(new_cursor)}")
     result_buf
   end
 
   def process(%Quillex.Structs.BufState{} = buf, {:delete, :at_cursor}) do
     [cursor] = buf.cursors
-    Logger.info("🔄 BUFFER REDUCER: Deleting at cursor from #{inspect(cursor)}")
     result_buf = buf |> BufferPane.Mutator.delete_char_after_cursor(cursor)
-    [new_cursor] = result_buf.cursors
-    Logger.info("🔄 BUFFER REDUCER: After delete at cursor: #{inspect(new_cursor)}")
     result_buf
   end
 
@@ -261,13 +255,16 @@ defmodule Quillex.Buffer.Process.Reducer do
 
   def process(%Quillex.Structs.BufState{} = buf, {:set_overlay, :window_manager}) do
     #TODO the problem here is that we need to bubble it up to flamelex...
-    IO.puts "OVERLAY WINDOW MGR"
+    :ignore
+  end
+
+  # Special case for :ignore - it's meant to be ignored, so don't log a warning
+  def process(%Quillex.Structs.BufState{} = buf, :ignore) do
     :ignore
   end
 
   def process(%Quillex.Structs.BufState{} = buf, action) do
-    Logger.error("❌ BUFFER REDUCER CATCH-ALL: #{inspect(action)}")
-    IO.puts("BUFFER REDUCER GOT ACTION: #{inspect(action)}")
+    Logger.warning("Unhandled buffer action: #{inspect(action)}")
     :ignore
   end
 end

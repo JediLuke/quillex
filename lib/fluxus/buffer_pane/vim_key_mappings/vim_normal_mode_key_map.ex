@@ -195,13 +195,13 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.VimKeyMappings.Norm
   # Unhandled inputs
   def handle(buf_pane_state, input) do
     buf_pane_state = reset_operator_and_count(buf_pane_state)
-    IO.puts("NormalMode: Unhandled input: #{inspect(input)}")
+    Logger.warning("NormalMode: Unhandled input: #{inspect(input)}")
     # {buf_pane_state, :ignore}
     :ignore
   end
 
   def handle(input) do
-    IO.puts("NormalMode: Unhandled input: #{inspect(input)}")
+    Logger.warning("NormalMode: Unhandled input: #{inspect(input)}")
     :ignore
   end
 
