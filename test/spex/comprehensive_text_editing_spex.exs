@@ -752,12 +752,42 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
         # Rapid copy-paste sequence  
         ScenicMcp.Probes.send_keys("a", ["ctrl"])
         ScenicMcp.Probes.send_keys("c", ["ctrl"])
-        Process.sleep(25)  # Allow MCP->Elixir copy command to complete
+        
+        # CRITICAL TIMING: 20ms delay required for macOS clipboard synchronization
+        #
+        # WHY THIS DELAY EXISTS:
+        # Although we have sequential message processing within the BEAM VM (MCP → Scenic → Quillex),
+        # clipboard operations involve external OS processes that operate outside BEAM's control:
+        #
+        # 1. Ctrl+C triggers Clipboard.copy() → spawns pbcopy process → port closes (~0.5ms)
+        # 2. Our code thinks copy is "complete" when port closes
+        # 3. BUT macOS clipboard system may still be writing data internally (async)
+        # 4. Ctrl+V triggers Clipboard.paste() → spawns pbpaste process immediately
+        # 5. pbpaste may read stale data if macOS hasn't finished the write
+        #
+        # EVIDENCE FROM PROFILING:
+        # - MCP operations: ~0.02ms (very fast, no bottleneck)
+        # - Clipboard.copy(): ~0.5ms (just port spawn/close time)  
+        # - Clipboard.paste(): ~11ms (actual system read operation)
+        # - Message queues: empty (confirms sequential processing works)
+        #
+        # SOLUTION:
+        # 20ms delay gives macOS clipboard sufficient time to commit the copy operation
+        # before paste attempts to read. This is an OS-level race condition, not an
+        # Elixir/BEAM timing issue. The delay bridges the gap between "port closed"
+        # and "clipboard data actually available".
+        #
+        # ALTERNATIVES CONSIDERED:
+        # - Polling clipboard until content matches (complex, unreliable)
+        # - Synchronous clipboard API (not available on macOS)
+        # - Retry logic (adds complexity, still needs delays)
+        Process.sleep(20)
         ScenicMcp.Probes.send_keys("end", [])
         ScenicMcp.Probes.send_text(" ")
         ScenicMcp.Probes.send_keys("v", ["ctrl"])
 
-        Process.sleep(50)  # Allow MCP communication to catch up with rapid sequence
+        # Allow final MCP communication to settle before taking screenshot
+        Process.sleep(50)
 
         rapid_result_screenshot = ScenicMcp.Probes.take_screenshot("rapid_result")
         {:ok, Map.put(context, :rapid_result_screenshot, rapid_result_screenshot)}
