@@ -48,6 +48,8 @@ defmodule Quillex.GUI.Components.BufferPane.Renderizer do
             |> render_text_lines(scene, frame, state, buf)
             |> render_cursor(scene, frame, state, buf)
           end, id: :scrollable_content)
+          # Add a hidden text element with the full buffer content for semantic queries
+          |> add_semantic_buffer_content(buf)
           # |> draw_scrollbars(args)
           # |> render_status_bar(frame, buf)
           # |> render_active_row_decoration(frame, buf, font, colors)
@@ -455,6 +457,26 @@ defmodule Quillex.GUI.Components.BufferPane.Renderizer do
 # end
 
 
+  # Add a hidden text primitive with semantic information for the buffer content
+  defp add_semantic_buffer_content(graph, %Quillex.Structs.BufState{} = buf) do
+    # Join all buffer lines into a single string
+    buffer_content = Enum.join(buf.data || [], "\n")
+    
+    # Add a hidden text element with semantic annotation
+    graph
+    |> Scenic.Primitives.text(
+      buffer_content,
+      id: {:semantic_buffer_content, buf.uuid},
+      # Hide the element visually but keep it in the graph for semantic queries
+      hidden: true,
+      semantic: %{
+        type: :text_buffer,
+        buffer_id: buf.uuid,
+        editable: true,
+        role: :textbox
+      }
+    )
+  end
 end
 
 
