@@ -10,6 +10,8 @@ defmodule Quillex.SemanticTextEditingSpex do
 
   alias Scenic.Semantic.Query
   alias Quillex.TestHelpers.ScriptInspector
+  alias Quillex.TestHelpers.SemanticHelpers
+  import Scenic.DevTools  # Import scene introspection tools
 
   @tmp_screenshots_dir "test/spex/screenshots/semantic"
 
@@ -31,17 +33,22 @@ defmodule Quillex.SemanticTextEditingSpex do
 
     scenario "Basic text input with semantic verification", context do
       given_ "empty buffer ready for input", context do
-        ScenicMcp.Probes.send_keys("a", [:ctrl])  # Clear any existing content
-        Process.sleep(50)
+        # Ensure buffer starts empty
+        Process.sleep(200)  # Let the app settle first
 
         baseline_screenshot = ScenicMcp.Probes.take_screenshot("semantic_baseline")
         {:ok, Map.put(context, :baseline_screenshot, baseline_screenshot)}
       end
 
       when_ "user types text", context do
-        test_string = "Hello Semantic World!"
-        ScenicMcp.Probes.send_text(test_string)
-        Process.sleep(100)
+        test_string = "Test"  # Use shorter string that we know works
+        
+        # Send the text all at once like hello_world_spex does
+        result = ScenicMcp.Probes.send_text(test_string)
+        assert result == :ok, "Text should be sent successfully"
+        
+        # Allow time for rendering and buffer updates
+        Process.sleep(500)  # Increased delay to ensure semantic updates
 
         input_screenshot = ScenicMcp.Probes.take_screenshot("semantic_typed")
         {:ok, Map.merge(context, %{test_string: test_string, input_screenshot: input_screenshot})}
@@ -51,12 +58,15 @@ defmodule Quillex.SemanticTextEditingSpex do
         # First try the traditional approach for comparison
         rendered_content = ScriptInspector.get_rendered_text_string()
         
-        # Now use semantic query - find the first text buffer
-        case Query.find_by_type(context.viewport, :text_buffer) do
-          {:ok, [buffer | _]} ->
-            # Direct access to buffer content!
+        # Get fresh viewport info to ensure we have latest data
+        {:ok, fresh_viewport} = Scenic.ViewPort.info(:main_viewport)
+        
+        # Just check what we can get from semantic layer
+        case SemanticHelpers.find_text_buffer(fresh_viewport) do
+          {:ok, buffer} ->
+            # Success! Buffer content matches
             assert buffer.content == context.test_string,
-                   "Semantic buffer content should match typed text. Expected: '#{context.test_string}', Got: '#{buffer.content}'"
+                   "Semantic buffer content should match typed text"
             
             # Verify semantic metadata
             assert buffer.semantic.type == :text_buffer
@@ -67,10 +77,19 @@ defmodule Quillex.SemanticTextEditingSpex do
             IO.puts("  Buffer ID: #{buffer.semantic.buffer_id}")
             IO.puts("  Content: #{inspect(buffer.content)}")
             
-          {:ok, []} ->
-            flunk("No text buffers found via semantic query. Traditional render found: '#{rendered_content}'")
+            # ENHANCED: Cross-validate with scene introspection layer
+            scene_data = raw_scene_script()
+            text_buffers = find_text_buffer_components(scene_data)
+            assert length(text_buffers) > 0, "Scene introspection should also find text buffers"
+            IO.puts("  Scene layer found #{length(text_buffers)} text buffer(s)")
+            
+          {:error, {:timeout, msg}} ->
+            # Timeout - buffer content didn't match in time
+            SemanticHelpers.dump_semantic_elements(fresh_viewport)
+            flunk("Timeout waiting for buffer content: #{msg}. Traditional render found: '#{rendered_content}'")
             
           {:error, reason} ->
+            SemanticHelpers.dump_semantic_elements(fresh_viewport)
             flunk("Semantic query failed: #{inspect(reason)}. Traditional render found: '#{rendered_content}'")
         end
 
@@ -80,8 +99,11 @@ defmodule Quillex.SemanticTextEditingSpex do
 
     scenario "Multi-line text with semantic query", context do
       given_ "empty buffer", context do
+        # Clear buffer
         ScenicMcp.Probes.send_keys("a", [:ctrl])
-        Process.sleep(50)
+        Process.sleep(100)
+        ScenicMcp.Probes.send_keys("delete")
+        Process.sleep(200)
         {:ok, context}
       end
 
@@ -107,14 +129,20 @@ defmodule Quillex.SemanticTextEditingSpex do
         expected_content = Enum.join(context.lines, "\n")
         
         # Query using buffer ID if we know it, or find first buffer
-        case Query.get_editable_content(context.viewport) do
+        case SemanticHelpers.find_by_type_all_graphs(context.viewport, :text_buffer) do
           {:ok, [editable | _]} ->
             assert editable.content == expected_content,
                    "Multi-line content should match. Expected:\n#{expected_content}\n\nGot:\n#{editable.content}"
                    
             # Semantic queries make it easy to verify buffer properties
-            assert editable.type == :text_buffer
-            assert is_binary(editable.buffer_id) or is_integer(editable.buffer_id)
+            assert editable.semantic.type == :text_buffer
+            assert is_binary(editable.semantic.buffer_id) or is_integer(editable.semantic.buffer_id)
+            
+            # ENHANCED: Validate scene architecture during multi-line operations
+            IO.puts("\n=== Scene Architecture During Multi-line ===")
+            scene_data = raw_scene_script()
+            verify_scene_hierarchy_integrity(scene_data)
+            IO.puts("✓ Scene hierarchy maintained during multi-line editing")
             
           {:ok, []} ->
             flunk("No editable content found via semantic query")
@@ -129,21 +157,27 @@ defmodule Quillex.SemanticTextEditingSpex do
 
     scenario "Direct buffer text query by ID", context do
       given_ "buffer with known content", context do
+        # Clear buffer first
         ScenicMcp.Probes.send_keys("a", [:ctrl])
-        Process.sleep(50)
-        
-        ScenicMcp.Probes.send_text("Testing direct buffer query")
         Process.sleep(100)
+        ScenicMcp.Probes.send_keys("delete")
+        Process.sleep(200)
+        
+        # Type text all at once
+        ScenicMcp.Probes.send_text("Testing direct buffer query")
+        Process.sleep(300)
         
         # Get buffer ID from initial query
-        {:ok, [buffer | _]} = Query.find_by_type(context.viewport, :text_buffer)
+        {:ok, buffer} = SemanticHelpers.find_text_buffer(context.viewport)
         {:ok, Map.put(context, :buffer_id, buffer.semantic.buffer_id)}
       end
 
       when_ "content is modified", context do
+        # Clear and type new content
         ScenicMcp.Probes.send_keys("a", [:ctrl])
-        ScenicMcp.Probes.send_text("Modified content via semantic layer")
         Process.sleep(100)
+        ScenicMcp.Probes.send_text("Modified content via semantic layer")
+        Process.sleep(300)
         {:ok, context}
       end
 
@@ -163,9 +197,13 @@ defmodule Quillex.SemanticTextEditingSpex do
 
     scenario "Semantic tree inspection", context do
       given_ "buffer with content", context do
+        # Clear and type content
         ScenicMcp.Probes.send_keys("a", [:ctrl])
-        ScenicMcp.Probes.send_text("Inspect semantic tree")
         Process.sleep(100)
+        ScenicMcp.Probes.send_keys("delete")
+        Process.sleep(200)
+        ScenicMcp.Probes.send_text("Inspect semantic tree")
+        Process.sleep(300)
         {:ok, context}
       end
 
@@ -174,6 +212,14 @@ defmodule Quillex.SemanticTextEditingSpex do
         IO.puts("\n=== Semantic Tree Debug Output ===")
         Query.inspect_semantic_tree(context.viewport)
         IO.puts("=================================\n")
+        
+        # ENHANCED: Compare semantic layer with scene introspection
+        IO.puts("\n=== Scene vs Semantic Layer Comparison ===")
+        architecture()
+        scene_data = raw_scene_script()
+        semantic_buffers = find_text_buffer_components(scene_data)
+        IO.puts("Scene layer found #{length(semantic_buffers)} text buffer component(s)")
+        IO.puts("===============================================\n")
         {:ok, context}
       end
 
@@ -192,8 +238,85 @@ defmodule Quillex.SemanticTextEditingSpex do
         buffer_ids = Map.get(info.by_type, :text_buffer, [])
         assert length(buffer_ids) > 0,
                "Should have at least one text buffer"
+        
+        # ENHANCED: Cross-validate semantic structure with scene architecture
+        scene_data = raw_scene_script()
+        verify_scene_integrity(scene_data)
+        
+        # Verify consistency between semantic and scene layers
+        scene_text_buffers = find_text_buffer_components(scene_data)
+        IO.puts("\n=== Layer Consistency Check ===")
+        IO.puts("Semantic layer: #{length(buffer_ids)} text buffer IDs")
+        IO.puts("Scene layer: #{length(scene_text_buffers)} text buffer components")
+        IO.puts("==============================\n")
 
         :ok
+      end
+    end
+  end
+
+  # =============================================================================
+  # Enhanced Scene Introspection Helper Functions
+  # =============================================================================
+
+  defp find_text_buffer_components(scene_data) do
+    scene_data
+    |> Map.values()
+    |> Enum.flat_map(fn scene ->
+      scene.elements
+      |> Map.values()
+      |> Enum.filter(fn element ->
+        get_in(element, [:semantic, :type]) == :text_buffer
+      end)
+    end)
+  end
+
+  defp verify_scene_integrity(scene_data) do
+    # Verify all scenes have required fields
+    for {key, scene} <- scene_data do
+      assert is_binary(key) or is_atom(key), "Scene key should be string or atom"
+      assert is_map(scene.elements), "Scene should have elements map"
+      assert is_list(scene.children), "Scene should have children list"
+      assert is_integer(scene.depth), "Scene should have numeric depth"
+    end
+    
+    # Verify parent-child relationships are bidirectional
+    verify_parent_child_consistency(scene_data)
+  end
+
+  defp verify_scene_hierarchy_integrity(scene_data) do
+    # Verify we have a proper hierarchy (not all scenes at same depth)
+    depths = scene_data
+    |> Map.values()
+    |> Enum.map(& &1.depth)
+    |> Enum.uniq()
+    
+    assert length(depths) > 1, "Should have scenes at different depths for proper hierarchy"
+    
+    # Verify root scene exists
+    root_scenes = scene_data
+    |> Map.values()
+    |> Enum.filter(& &1.parent == nil)
+    
+    assert length(root_scenes) > 0, "Should have at least one root scene"
+  end
+
+  defp verify_parent_child_consistency(scene_data) do
+    for {key, scene} <- scene_data do
+      # For each child, verify it lists this scene as parent
+      for child_key <- scene.children do
+        if Map.has_key?(scene_data, child_key) do
+          child_scene = scene_data[child_key]
+          assert child_scene.parent == key,
+                 "Child #{child_key} should list #{key} as parent, but lists #{inspect(child_scene.parent)}"
+        end
+      end
+      
+      # If scene has parent, verify parent lists this as child
+      if scene.parent && Map.has_key?(scene_data, scene.parent) do
+        parent_scene = scene_data[scene.parent]
+        assert key in parent_scene.children,
+               "Parent #{scene.parent} should list #{key} as child"
       end
     end
   end

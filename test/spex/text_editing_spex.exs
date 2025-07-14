@@ -28,6 +28,7 @@ defmodule Quillex.TextEditingSpex do
   use SexySpex
 
   alias Quillex.TestHelpers.ScriptInspector
+  import Scenic.DevTools  # Import scene introspection tools
 
   @tmp_screenshots_dir "test/spex/screenshots/tmp"
 
@@ -60,8 +61,17 @@ defmodule Quillex.TextEditingSpex do
         assert ScriptInspector.rendered_text_contains?(initial_text),
                "Should have initial text: #{initial_text}"
 
+        # ENHANCED: Validate scene structure before cursor operations
+        scene_data = raw_scene_script()
+        initial_scene_count = map_size(scene_data)
+        assert initial_scene_count > 0, "Should have scene structure established"
+
         baseline_screenshot = ScenicMcp.Probes.take_screenshot("cursor_movement_baseline")
-        {:ok, Map.merge(context, %{initial_text: initial_text, baseline_screenshot: baseline_screenshot})}
+        {:ok, Map.merge(context, %{
+          initial_text: initial_text, 
+          baseline_screenshot: baseline_screenshot,
+          initial_scene_count: initial_scene_count
+        })}
       end
 
       when_ "user presses right arrow 5 times", context do
@@ -88,6 +98,12 @@ defmodule Quillex.TextEditingSpex do
                "Text should be inserted at cursor position. Expected: '#{expected_result}', Got: '#{rendered_content}'"
 
         after_screenshot = ScenicMcp.Probes.take_screenshot("cursor_movement_after")
+        
+        # ENHANCED: Verify scene structure remains stable after cursor movement
+        final_scene_data = raw_scene_script()
+        assert map_size(final_scene_data) == context.initial_scene_count,
+               "Scene count should remain stable during cursor movement"
+        
         :ok
       end
     end
@@ -111,7 +127,14 @@ defmodule Quillex.TextEditingSpex do
         end
 
         baseline_screenshot = ScenicMcp.Probes.take_screenshot("backspace_baseline")
-        {:ok, Map.merge(context, %{test_text: test_text, baseline_screenshot: baseline_screenshot})}
+        
+        # ENHANCED: Capture scene architecture before deletion operation
+        initial_scene_data = raw_scene_script()
+        {:ok, Map.merge(context, %{
+          test_text: test_text, 
+          baseline_screenshot: baseline_screenshot,
+          initial_scene_data: initial_scene_data
+        })}
       end
 
       when_ "user presses backspace", context do
@@ -132,6 +155,11 @@ defmodule Quillex.TextEditingSpex do
                "Original text should no longer be present"
 
         after_screenshot = ScenicMcp.Probes.take_screenshot("backspace_after")
+        
+        # ENHANCED: Verify scene integrity after character deletion
+        final_scene_data = raw_scene_script()
+        verify_scene_stability(context.initial_scene_data, final_scene_data)
+        
         :ok
       end
     end
@@ -392,6 +420,13 @@ defmodule Quillex.TextEditingSpex do
         # Verify "this phrase" appears twice
         phrase_count = rendered_content |> String.split("this phrase") |> length() |> Kernel.-(1)
         assert phrase_count == 2, "The phrase 'this phrase' should appear twice after copy/paste"
+        
+        # ENHANCED: Validate clipboard operations maintain scene architecture
+        IO.puts("\n=== Post-Clipboard Scene Analysis ===")
+        scene_data = raw_scene_script()
+        verify_scene_integrity(scene_data)
+        text_buffers = find_text_buffer_components(scene_data)
+        assert length(text_buffers) > 0, "Text buffer components should remain after clipboard operations"
 
         after_screenshot = ScenicMcp.Probes.take_screenshot("copy_paste_after")
         :ok
@@ -513,6 +548,12 @@ defmodule Quillex.TextEditingSpex do
 
         assert ScriptInspector.rendered_text_contains?("Third line is longer"),
                "Third line should still be present"
+        
+        # ENHANCED: Verify multi-line operations preserve scene hierarchy
+        IO.puts("\n=== Multi-line Scene Validation ===")
+        scene_data = raw_scene_script()
+        verify_scene_hierarchy_integrity(scene_data)
+        IO.puts("✓ Multi-line scene hierarchy validated")
 
         after_screenshot = ScenicMcp.Probes.take_screenshot("vertical_movement_after")
         :ok
@@ -743,5 +784,93 @@ defmodule Quillex.TextEditingSpex do
     end
   end
 
+  end
+
+  # =============================================================================
+  # Enhanced Scene Introspection Helper Functions
+  # =============================================================================
+
+  defp find_text_buffer_components(scene_data) do
+    scene_data
+    |> Map.values()
+    |> Enum.flat_map(fn scene ->
+      scene.elements
+      |> Map.values()
+      |> Enum.filter(fn element ->
+        get_in(element, [:semantic, :type]) == :text_buffer
+      end)
+    end)
+  end
+
+  defp verify_scene_stability(initial_scene_data, final_scene_data) do
+    # Verify scene count remains stable
+    assert map_size(initial_scene_data) == map_size(final_scene_data),
+           "Scene count should remain stable during text operations"
+    
+    # Verify parent-child relationships remain consistent
+    verify_parent_child_consistency(final_scene_data)
+    
+    # Verify depth structure is maintained
+    initial_max_depth = extract_max_depth(initial_scene_data)
+    final_max_depth = extract_max_depth(final_scene_data)
+    assert initial_max_depth == final_max_depth,
+           "Scene depth structure should remain stable"
+  end
+
+  defp verify_scene_integrity(scene_data) do
+    # Verify all scenes have required fields
+    for {key, scene} <- scene_data do
+      assert is_binary(key) or is_atom(key), "Scene key should be string or atom"
+      assert is_map(scene.elements), "Scene should have elements map"
+      assert is_list(scene.children), "Scene should have children list"
+      assert is_integer(scene.depth), "Scene should have numeric depth"
+    end
+    
+    # Verify parent-child relationships are bidirectional
+    verify_parent_child_consistency(scene_data)
+  end
+
+  defp verify_scene_hierarchy_integrity(scene_data) do
+    # Verify we have a proper hierarchy (not all scenes at same depth)
+    depths = scene_data
+    |> Map.values()
+    |> Enum.map(& &1.depth)
+    |> Enum.uniq()
+    
+    assert length(depths) > 1, "Should have scenes at different depths for proper hierarchy"
+    
+    # Verify root scene exists
+    root_scenes = scene_data
+    |> Map.values()
+    |> Enum.filter(& &1.parent == nil)
+    
+    assert length(root_scenes) > 0, "Should have at least one root scene"
+  end
+
+  defp verify_parent_child_consistency(scene_data) do
+    for {key, scene} <- scene_data do
+      # For each child, verify it lists this scene as parent
+      for child_key <- scene.children do
+        if Map.has_key?(scene_data, child_key) do
+          child_scene = scene_data[child_key]
+          assert child_scene.parent == key,
+                 "Child #{child_key} should list #{key} as parent, but lists #{inspect(child_scene.parent)}"
+        end
+      end
+      
+      # If scene has parent, verify parent lists this as child
+      if scene.parent && Map.has_key?(scene_data, scene.parent) do
+        parent_scene = scene_data[scene.parent]
+        assert key in parent_scene.children,
+               "Parent #{scene.parent} should list #{key} as child"
+      end
+    end
+  end
+
+  defp extract_max_depth(scene_data) do
+    scene_data
+    |> Map.values()
+    |> Enum.map(& &1.depth)
+    |> Enum.max(fn -> 0 end)
   end
 end

@@ -13,6 +13,7 @@ defmodule Quillex.HelloWorldSpex do
   use SexySpex
 
   alias Quillex.TestHelpers.ScriptInspector
+  import Scenic.DevTools
 
   @tmp_screenshots_dir "test/spex/screenshots/tmp"
 
@@ -54,9 +55,15 @@ defmodule Quillex.HelloWorldSpex do
         # ScenicMcp.Probes.send_keys("delete")       # Delete
         # Process.sleep(200)  # Allow time for clearing
 
+        # ENHANCED: Wait for scene hierarchy to be ready
+        {:ok, scene_data} = wait_for_scene_hierarchy(:main_viewport, timeout: 5000)
+        IO.puts("\n📊 Scene initialized with #{map_size(scene_data)} scenes")
+
         # TRUE END-TO-END VALIDATION: Check what's actually rendered
         # DEBUG: Let's see what's actually in the script table
-        ScriptInspector.debug_script_table()
+        if System.get_env("DEBUG_SPEX") do
+          ScriptInspector.debug_script_table()
+        end
 
         assert ScriptInspector.rendered_text_empty?(),
                "Rendered output should be empty initially"
@@ -91,8 +98,10 @@ defmodule Quillex.HelloWorldSpex do
 
         # TRUE BLACK-BOX VALIDATION: Check what's actually rendered to the screen
         # DEBUG: Let's see what the script table looks like after typing
-        IO.puts("\n=== AFTER TYPING DEBUG ===")
-        ScriptInspector.debug_script_table()
+        if System.get_env("DEBUG_SPEX") do
+          IO.puts("\n=== AFTER TYPING DEBUG ===")
+          ScriptInspector.debug_script_table()
+        end
 
         # Get the actual rendered content for debugging
         rendered_content = ScriptInspector.get_rendered_text_string()
