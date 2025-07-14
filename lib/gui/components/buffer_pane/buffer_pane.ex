@@ -54,8 +54,17 @@ defmodule Quillex.GUI.Components.BufferPane do
     # plus I think it's more efficient in terms of data transfer to just get it once rather than pass it around everywhere (maybe?)
     {:ok, buf} = Quillex.Buffer.Process.fetch_buf(buf_ref)
 
-    graph =
-      BufferPane.Renderizer.render(Scenic.Graph.build(), scene, frame, buf_pane_state, buf)
+    # Setup scrolling for buffer content
+    scene = scene
+    |> Widgex.Scrollable.setup(%{
+      content_size_fn: fn -> calculate_buffer_content_size(buf, buf_pane_state) end,
+      viewport_size: {frame.size.width, frame.size.height},
+      overflow_y: :auto,  # Show vertical scrollbar when needed
+      overflow_x: :auto   # Show horizontal scrollbar for long lines
+    })
+
+    graph = BufferPane.Renderizer.render(Scenic.Graph.build(), scene, frame, buf_pane_state, buf)
+    |> Widgex.Scrollable.apply_scroll(scene)  # Apply initial scroll state
 
     init_scene =
       scene
@@ -74,6 +83,26 @@ defmodule Quillex.GUI.Components.BufferPane do
     Quillex.Utils.PubSub.subscribe(topic: {:buffers, buf.uuid})
 
     {:ok, init_scene}
+  end
+
+  # Handle input with scrolling support
+  def handle_input(input, _id, scene) do
+    case Widgex.Scrollable.handle_input(input, scene) do
+      {:handled, new_scene} -> 
+        # Scrolling was handled, re-render with scroll applied
+        graph = BufferPane.Renderizer.render(
+          new_scene.assigns.graph, 
+          new_scene, 
+          new_scene.assigns.frame, 
+          new_scene.assigns.state, 
+          new_scene.assigns.buf
+        )
+        |> Widgex.Scrollable.apply_scroll(new_scene)
+        {:noreply, push_graph(new_scene, graph)}
+      {:continue, scene} ->
+        # Handle normal buffer input
+        handle_cast({:user_input, input}, scene)
+    end
   end
 
   def handle_cast({:user_input, input}, scene) do
@@ -221,6 +250,24 @@ defmodule Quillex.GUI.Components.BufferPane do
 
   def handle_info({:user_input, input}, scene) do
     handle_cast({:user_input, input}, scene)
+  end
+
+  # Helper function to calculate content size for scrolling
+  defp calculate_buffer_content_size(buf, state) do
+    # Calculate total content dimensions based on buffer data
+    line_count = length(buf.data)
+    max_line_width = buf.data
+    |> Enum.map(&String.length/1)
+    |> Enum.max(fn -> 0 end)
+    
+    # Use font metrics from state
+    line_height = state.font.size
+    char_width = state.font.size * 0.6  # Approximate character width
+    
+    content_width = max_line_width * char_width + 100  # Add some padding
+    content_height = line_count * line_height
+    
+    {trunc(content_width), trunc(content_height)}
   end
 end
 
