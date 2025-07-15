@@ -8,22 +8,22 @@ defmodule Quillex.TestHelpers.ScriptInspector do
 
   @doc """
   Extract all text content from the script table that is currently being rendered.
-  Returns a list of text strings found in the rendering scripts.
+  Returns a list of text strings found in the rendering scripts, sorted by visual position.
   """
   def extract_rendered_text do
-    try do
-      case ScenicMcp.Probes.script_table() do
-        script_entries when is_list(script_entries) ->
-          script_entries
-          |> Enum.flat_map(&extract_text_from_script_entry/1)
-          |> Enum.uniq()
+    case ScenicMcp.Probes.script_table() do
+      script_entries when is_list(script_entries) ->
+        # Extract text with position information
+        text_with_positions = script_entries
+        |> Enum.flat_map(&extract_text_with_position_from_entry/1)
+        
+        # Sort by Y position (vertical), then X position (horizontal)
+        text_with_positions
+        |> Enum.sort_by(fn {_text, {x, y}} -> {y, x} end)
+        |> Enum.map(fn {text, _pos} -> text end)
+        |> Enum.uniq()
 
-        _ -> []
-      end
-    rescue
-      error ->
-        IO.puts("Error extracting rendered text: #{inspect(error)}")
-        []
+      _ -> []
     end
   end
 
@@ -79,7 +79,12 @@ defmodule Quillex.TestHelpers.ScriptInspector do
     font_hash = String.length(text) > 20 and String.match?(text, ~r/^[A-Za-z0-9_-]+$/)
 
     # Check for script IDs (UUIDs or similar)
-    script_id = String.contains?(text, "-") and String.length(text) > 10
+    # More specific pattern: must have multiple segments separated by hyphens
+    # and look like a UUID or hash (all alphanumeric except hyphens)
+    script_id = String.contains?(text, "-") and 
+                String.length(text) > 10 and
+                String.match?(text, ~r/^[A-Za-z0-9_-]+$/) and
+                length(String.split(text, "-")) >= 3
 
     # Check for underscore-prefixed identifiers (Scenic internal names)
     internal_id = String.starts_with?(text, "_") and String.ends_with?(text, "_")
@@ -197,6 +202,52 @@ defmodule Quillex.TestHelpers.ScriptInspector do
         IO.puts("Error parsing operation #{inspect(operation, limit: 5)}: #{inspect(error)}")
         []
     end
+  end
+
+  # Private helper to extract text with position from a single script table entry
+  defp extract_text_with_position_from_entry({_id, script_data, _pid}) when is_list(script_data) do
+    extract_text_with_position_from_operations(script_data)
+  end
+
+  defp extract_text_with_position_from_entry({{_id, script_data}, _pid}) when is_list(script_data) do
+    extract_text_with_position_from_operations(script_data)
+  end
+
+  defp extract_text_with_position_from_entry({_id, script_data}) when is_list(script_data) do
+    extract_text_with_position_from_operations(script_data)
+  end
+
+  defp extract_text_with_position_from_entry(_entry) do
+    []
+  end
+
+  # Extract text with position from a list of operations
+  defp extract_text_with_position_from_operations(operations) do
+    # Track current transform position as we process operations
+    {texts, _} = operations
+    |> Enum.reduce({[], {0, 0}}, fn op, {acc, current_pos} ->
+      case op do
+        # Update position when we see a translate operation
+        {:translate, {x, y}} ->
+          {acc, {x, y}}
+          
+        # Extract text at current position
+        {:draw_text, text, _spacing} when is_binary(text) ->
+          {[{text, current_pos} | acc], current_pos}
+          
+        {:draw_text, text} when is_binary(text) ->
+          {[{text, current_pos} | acc], current_pos}
+          
+        {:text, text} when is_binary(text) ->
+          {[{text, current_pos} | acc], current_pos}
+          
+        # Skip other operations
+        _ ->
+          {acc, current_pos}
+      end
+    end)
+    
+    Enum.reverse(texts)
   end
 
   @doc """
