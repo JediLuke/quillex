@@ -105,33 +105,45 @@ defmodule Quillex.GUI.Components.BufferPane do
     end
   end
 
-  def handle_cast({:user_input, input}, scene) do
+  def handle_call({:user_input, input}, _from, scene) do
     # the GUI component converts raw user input to actions, directly on this layer,
     # which are then passed back up the component tree for processing
     # Processing user input
     case BufferPane.UserInputHandler.handle(scene.assigns, input) do
       :ignore ->
-        {:noreply, scene}
+        {:reply, :ok, scene}
       
       [:ignore] ->
         # Special case for single ignore in list - don't propagate
-        {:noreply, scene}
+        {:reply, :ok, scene}
 
       actions when is_list(actions) ->
-        # Sending actions to parent scene
-        cast_parent(scene, {__MODULE__, :action, scene.assigns.buf_ref, actions})
-        {:noreply, scene}
+        # Sending actions to parent scene (revert to async to test)
+        Scenic.Scene.cast_parent(scene, {__MODULE__, :action, scene.assigns.buf_ref, actions})
+        {:reply, :ok, scene}
 
       actn when is_tuple(actn) ->
         raise "A handler function is ont returning a list. Returned: #{inspect actn}"
 
       # {%BufferPane.State{} = new_buf_pane_state, :ignore} ->
-      #   {:noreply, scene |> assign(state: new_buf_pane_state)}
+      #   {:reply, :ok, scene |> assign(state: new_buf_pane_state)}
 
       # {%BufferPane.State{} = new_buf_pane_state, actions} when is_list(actions) ->
       #   cast_parent(scene, {__MODULE__, :action, scene.assigns.buf_ref, actions})
-      #   {:noreply, scene |> assign(state: new_buf_pane_state)}
+      #   {:reply, :ok, scene |> assign(state: new_buf_pane_state)}
     end
+  end
+
+  # Keep the old handle_cast for backward compatibility, but delegate to handle_call
+  def handle_cast({:user_input, input}, scene) do
+    {:reply, :ok, new_scene} = handle_call({:user_input, input}, nil, scene)
+    {:noreply, new_scene}
+  end
+
+  # Synchronous state change handling
+  def handle_call({:state_change, new_buf}, _from, scene) do
+    {:noreply, new_scene} = handle_cast({:state_change, new_buf}, scene)
+    {:reply, :ok, new_scene}
   end
 
   def handle_cast({:frame_change, %Widgex.Frame{} = frame}, %{assigns: %{frame: frame}} = scene) do

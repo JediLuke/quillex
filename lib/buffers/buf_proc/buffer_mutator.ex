@@ -49,6 +49,49 @@ defmodule Quillex.GUI.Components.BufferPane.Mutator do
   #   # %{buf | cursors: [Cursor.new(line, col)]}
   # end
 
+  # Handle cursor movement when there's an active selection
+  # This must come before the general move_cursor/3 clause for pattern matching to work correctly
+  def move_cursor(%{selection: selection} = buf, direction, count) when selection != nil do
+    # TODO no idea how this is gonna work with multiple cursors...
+    c = buf.cursors |> hd()
+    
+    # When there's a selection, position cursor at the appropriate end of selection
+    # based on the direction of movement
+    {start_line, start_col} = selection.start
+    {end_line, end_col} = selection.end
+    
+    # Normalize selection - determine which end is actually the start/end
+    {{sel_start_line, sel_start_col}, {sel_end_line, sel_end_col}} = 
+      if start_line < end_line or (start_line == end_line and start_col <= end_col) do
+        {selection.start, selection.end}
+      else
+        {selection.end, selection.start}
+      end
+    
+    # Position cursor at the appropriate end of selection based on direction
+    positioned_cursor = case direction do
+      :left -> 
+        # When moving left, start from the beginning of selection
+        %{c | line: sel_start_line, col: sel_start_col}
+      :right -> 
+        # When moving right, start from the end of selection
+        %{c | line: sel_end_line, col: sel_end_col}
+      :up -> 
+        # When moving up, start from the beginning of selection
+        %{c | line: sel_start_line, col: sel_start_col}
+      :down -> 
+        # When moving down, start from the end of selection
+        %{c | line: sel_end_line, col: sel_end_col}
+      _ ->
+        # For other directions, default to current cursor position
+        c
+    end
+
+    new_cursor = move_cursor_with_bounds(buf, positioned_cursor, direction, count)
+
+    %{buf | cursors: [new_cursor], selection: nil}
+  end
+
   def move_cursor(buf, direction, x) do
     # TODO no idea how this is gonna work with multiple cursors...
     c = buf.cursors |> hd()
@@ -247,14 +290,78 @@ defmodule Quillex.GUI.Components.BufferPane.Mutator do
     %{buf_with_moved_cursor | selection: %{start: selection_start, end: selection_end}}
   end
 
-  def select_text(%{cursors: [c], selection: %{start: start_pos}} = buf, direction, count) do
-    # Extend existing selection by moving cursor
-    buf_with_moved_cursor = move_cursor(buf, direction, count)
-    [new_cursor] = buf_with_moved_cursor.cursors
-    selection_end = {new_cursor.line, new_cursor.col}
+  def select_text(%{cursors: [c], selection: %{start: start_pos, end: end_pos}} = buf, direction, count) do
+    # Handle extending existing selection with proper contraction logic
+    current_cursor_pos = {c.line, c.col}
     
-    # Update selection end position
-    %{buf_with_moved_cursor | selection: %{start: start_pos, end: selection_end}}
+    # Calculate where cursor would move to
+    temp_buf = %{buf | selection: nil}  # Temporarily clear selection for movement calculation
+    buf_with_moved_cursor = move_cursor(temp_buf, direction, count)
+    [new_cursor] = buf_with_moved_cursor.cursors
+    new_cursor_pos = {new_cursor.line, new_cursor.col}
+    
+    # Determine if this movement contracts, cancels, or extends the selection
+    cond do
+      # Case 1: Cursor returns exactly to start position - cancel selection
+      new_cursor_pos == start_pos ->
+        %{buf_with_moved_cursor | selection: nil}
+      
+      # Case 2: Check if this is contracting the selection
+      is_contracting_selection?(start_pos, end_pos, current_cursor_pos, new_cursor_pos) ->
+        # Contract the selection by updating the end position
+        %{buf_with_moved_cursor | selection: %{start: start_pos, end: new_cursor_pos}}
+      
+      # Case 3: Normal extension (including reversal past start)
+      true ->
+        # For normal extension or reversal, just update the end position
+        %{buf_with_moved_cursor | selection: %{start: start_pos, end: new_cursor_pos}}
+    end
+  end
+
+  # Helper function to determine if cursor movement is contracting a selection
+  defp is_contracting_selection?(start_pos, end_pos, current_pos, new_pos) do
+    # Normalize the selection to determine actual start and end
+    {actual_start, actual_end} = normalize_selection(start_pos, end_pos)
+    
+    # Check if current cursor is at the selection end and moving toward start
+    cond do
+      # If cursor is at the end of selection and moving toward start
+      current_pos == actual_end ->
+        is_position_between?(new_pos, actual_start, actual_end)
+      
+      # If cursor is at the start of selection and moving toward end  
+      current_pos == actual_start ->
+        is_position_between?(new_pos, actual_start, actual_end)
+      
+      # Otherwise, not contracting
+      true -> false
+    end
+  end
+
+  # Helper to normalize selection positions (ensure start comes before end)
+  defp normalize_selection({start_line, start_col}, {end_line, end_col}) do
+    if start_line < end_line or (start_line == end_line and start_col <= end_col) do
+      {{start_line, start_col}, {end_line, end_col}}
+    else
+      {{end_line, end_col}, {start_line, start_col}}
+    end
+  end
+
+  # Helper to check if position is between start and end (exclusive of endpoints)
+  defp is_position_between?({line, col}, {start_line, start_col}, {end_line, end_col}) do
+    cond do
+      # Position is before start
+      line < start_line or (line == start_line and col < start_col) -> false
+      
+      # Position is after end
+      line > end_line or (line == end_line and col > end_col) -> false
+      
+      # Position is exactly at start or end
+      {line, col} == {start_line, start_col} or {line, col} == {end_line, end_col} -> false
+      
+      # Position is between start and end
+      true -> true
+    end
   end
 
   # Select all text in the buffer
@@ -272,16 +379,6 @@ defmodule Quillex.GUI.Components.BufferPane.Mutator do
     # Set cursor to end of selection and create selection
     end_cursor = Cursor.new(last_line_index, String.length(last_line) + 1)
     %{buf | cursors: [end_cursor], selection: %{start: start_pos, end: end_pos}}
-  end
-
-  # Clear selection when moving cursor normally (without selection)
-  def move_cursor(%{selection: selection} = buf, direction, count) when selection != nil do
-    # TODO no idea how this is gonna work with multiple cursors...
-    c = buf.cursors |> hd()
-
-    new_cursor = move_cursor_with_bounds(buf, c, direction, count)
-
-    %{buf | cursors: [new_cursor], selection: nil}
   end
 
   # Delete selected text and return buffer with cursor at selection start

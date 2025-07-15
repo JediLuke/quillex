@@ -133,9 +133,14 @@ defmodule Quillex.Buffer.Process.Reducer do
   end
 
   def process(%Quillex.Structs.BufState{} = buf, {:delete, :before_cursor}) do
-    [cursor] = buf.cursors
-    result_buf = buf |> BufferPane.Mutator.delete_char_before_cursor(cursor)
-    result_buf
+    # If there's a selection, delete the selection instead of just one character
+    if buf.selection != nil do
+      BufferPane.Mutator.delete_selected_text(buf)
+    else
+      [cursor] = buf.cursors
+      result_buf = buf |> BufferPane.Mutator.delete_char_before_cursor(cursor)
+      result_buf
+    end
   end
 
   def process(%Quillex.Structs.BufState{} = buf, {:delete, :at_cursor}) do
