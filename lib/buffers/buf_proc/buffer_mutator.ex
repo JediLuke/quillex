@@ -134,12 +134,20 @@ defmodule Quillex.GUI.Components.BufferPane.Mutator do
     case direction do
       :up -> 
         new_line = max(1, cursor.line - count)
-        %{cursor | line: new_line}
+        # Adjust column to fit within the bounds of the new line
+        new_line_text = Enum.at(buf.data, new_line - 1) || ""
+        max_col = String.length(new_line_text) + 1
+        adjusted_col = min(cursor.col, max_col)
+        %{cursor | line: new_line, col: adjusted_col}
       
       :down -> 
         max_line = length(buf.data)
         new_line = min(max_line, cursor.line + count)
-        %{cursor | line: new_line}
+        # Adjust column to fit within the bounds of the new line
+        new_line_text = Enum.at(buf.data, new_line - 1) || ""
+        max_col = String.length(new_line_text) + 1
+        adjusted_col = min(cursor.col, max_col)
+        %{cursor | line: new_line, col: adjusted_col}
       
       :left -> 
         new_col = max(1, cursor.col - count)

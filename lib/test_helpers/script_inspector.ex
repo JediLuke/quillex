@@ -75,8 +75,12 @@ defmodule Quillex.TestHelpers.ScriptInspector do
     # Check for exact matches with GUI patterns
     exact_match = text in gui_patterns
 
-    # Check for font hashes (long alphanumeric strings)
-    font_hash = String.length(text) > 20 and String.match?(text, ~r/^[A-Za-z0-9_-]+$/)
+    # Check for font hashes (long alphanumeric strings that look like hashes)
+    # Font hashes typically have mixed case, numbers, and underscores/hyphens
+    font_hash = String.length(text) > 30 and 
+                String.match?(text, ~r/^[A-Za-z0-9_-]+$/) and
+                (String.contains?(text, "_") or String.contains?(text, "-") or
+                 String.match?(text, ~r/[0-9]/))  # Must have numbers or special chars to be a hash
 
     # Check for script IDs (UUIDs or similar)
     # More specific pattern: must have multiple segments separated by hyphens
@@ -89,10 +93,10 @@ defmodule Quillex.TestHelpers.ScriptInspector do
     # Check for underscore-prefixed identifiers (Scenic internal names)
     internal_id = String.starts_with?(text, "_") and String.ends_with?(text, "_")
 
-    # Check for single character strings (likely not user content)
-    single_char = String.length(text) == 1
-
-    exact_match or font_hash or script_id or internal_id or single_char
+    # Don't filter out all single characters - only those in gui_patterns
+    # This allows legitimate single-character user input like 'A', 'B', etc.
+    
+    exact_match or font_hash or script_id or internal_id
   end
 
   defp is_gui_element?(_), do: false

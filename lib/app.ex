@@ -25,7 +25,7 @@ defmodule QuillEx.App do
     children =
       children ++
         # Conditionally start Tidewave server for development
-        if Mix.env() == :dev and Code.ensure_loaded?(Tidewave) and Code.ensure_loaded?(Bandit) do
+        if Application.get_env(:quillex, :env) == :dev and Code.ensure_loaded?(Tidewave) and Code.ensure_loaded?(Bandit) do
           require Logger
           Logger.info("Starting Tidewave server on port 4000 for development")
           [{Bandit, plug: Tidewave, port: 4000}]
@@ -33,15 +33,21 @@ defmodule QuillEx.App do
           []
         end
 
-    children = Supervisor.start_link(children, strategy: :one_for_one)
+    Supervisor.start_link(children, strategy: :one_for_one)
   end
 
   @window_title "Quillex"
   @default_resolution {1680, 1005}
   def scenic_config() do
+    # Use test window size if available (wider to prevent text wrapping)
+    window_size = case Mix.env() do
+      :test -> {2000, 1200}  # Force wider window in test environment
+      _ -> Application.get_env(:quillex, :test_window_size, @default_resolution)
+    end
+    
     [
       name: :main_viewport,
-      size: @default_resolution,
+      size: window_size,
       default_scene: {QuillEx.RootScene, []},
       drivers: [
         # valid options are: [:name, :limit_ms, :layer, :opacity, :debug, :antialias, :calibration, :position, :window, :cursor, :key_map, :on_close]
@@ -53,7 +59,7 @@ defmodule QuillEx.App do
             resizeable: true
           ],
           debug: true,
-          on_close: :stop_system
+          on_close: :stop_viewport
           # limit_ms: 500
         ]
       ]
