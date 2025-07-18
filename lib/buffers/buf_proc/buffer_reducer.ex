@@ -99,22 +99,27 @@ defmodule Quillex.Buffer.Process.Reducer do
 
   def process(%Quillex.Structs.BufState{} = buf, {:insert, text, :at_cursor}) do
     [c] = buf.cursors
-    num_chars = String.length(text)
-
 
     # Handle selection replacement - delete selection first, then insert normally
     if buf.selection != nil do
       # Delete the selected text and clear selection
       buf_after_deletion = BufferPane.Mutator.delete_selected_text(buf)
       [cursor] = buf_after_deletion.cursors
-      # Insert the new text at the cursor position (where selection started)
-      buf_after_insert = BufferPane.Mutator.insert_text(buf_after_deletion, {cursor.line, cursor.col}, text)
-      # Move cursor to end of inserted text
-      BufferPane.Mutator.move_cursor(buf_after_insert, :right, num_chars)
+      
+      # Use multi-line insert function which returns {buffer, final_cursor_pos}
+      {buf_after_insert, {final_line, final_col}} = 
+        BufferPane.Mutator.insert_multi_line_text(buf_after_deletion, {cursor.line, cursor.col}, text)
+      
+      # Move cursor to the final position
+      BufferPane.Mutator.move_cursor(buf_after_insert, {final_line, final_col})
     else
       # No selection - normal insertion and cursor movement
-      buf_after_insert = BufferPane.Mutator.insert_text(buf, {c.line, c.col}, text)
-      BufferPane.Mutator.move_cursor(buf_after_insert, :right, num_chars)
+      # Use multi-line insert function which returns {buffer, final_cursor_pos}
+      {buf_after_insert, {final_line, final_col}} = 
+        BufferPane.Mutator.insert_multi_line_text(buf, {c.line, c.col}, text)
+      
+      # Move cursor to the final position
+      BufferPane.Mutator.move_cursor(buf_after_insert, {final_line, final_col})
     end
   end
 
@@ -201,17 +206,23 @@ defmodule Quillex.Buffer.Process.Reducer do
       # Delete selection first, then insert clipboard text
       buf_after_deletion = BufferPane.Mutator.delete_selected_text(buf)
       [cursor] = buf_after_deletion.cursors
-      buf_after_insert = BufferPane.Mutator.insert_text(buf_after_deletion, {cursor.line, cursor.col}, clipboard_text)
-      # Move cursor to end of pasted text
-      num_chars = String.length(clipboard_text)
-      BufferPane.Mutator.move_cursor(buf_after_insert, :right, num_chars)
+      
+      # Use multi-line insert function which returns {buffer, final_cursor_pos}
+      {buf_after_insert, {final_line, final_col}} = 
+        BufferPane.Mutator.insert_multi_line_text(buf_after_deletion, {cursor.line, cursor.col}, clipboard_text)
+      
+      # Move cursor to the final position
+      BufferPane.Mutator.move_cursor(buf_after_insert, {final_line, final_col})
     else
       # No selection - regular paste
       [c] = buf.cursors
-      buf_after_insert = BufferPane.Mutator.insert_text(buf, {c.line, c.col}, clipboard_text)
-      # Move cursor to end of pasted text
-      num_chars = String.length(clipboard_text)
-      BufferPane.Mutator.move_cursor(buf_after_insert, :right, num_chars)
+      
+      # Use multi-line insert function which returns {buffer, final_cursor_pos}
+      {buf_after_insert, {final_line, final_col}} = 
+        BufferPane.Mutator.insert_multi_line_text(buf, {c.line, c.col}, clipboard_text)
+      
+      # Move cursor to the final position
+      BufferPane.Mutator.move_cursor(buf_after_insert, {final_line, final_col})
     end
   end
 

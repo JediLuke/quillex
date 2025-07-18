@@ -171,6 +171,65 @@ defmodule Quillex.GUI.Components.BufferPane.Mutator do
     %{buf | data: updated_data}
   end
 
+  @doc """
+  Insert multi-line text at the specified position.
+  Returns the buffer with text inserted and the final cursor position.
+  """
+  def insert_multi_line_text(%{data: []} = buf, {1, 1}, text) do
+    lines = String.split(text, "\n")
+    updated_buf = %{buf | data: lines, dirty?: true}
+    final_line = length(lines)
+    final_col = String.length(List.last(lines)) + 1
+    {updated_buf, {final_line, final_col}}
+  end
+
+  def insert_multi_line_text(%{data: [""]} = buf, {1, 1}, text) do
+    lines = String.split(text, "\n")
+    updated_buf = %{buf | data: lines, dirty?: true}
+    final_line = length(lines)
+    final_col = String.length(List.last(lines)) + 1
+    {updated_buf, {final_line, final_col}}
+  end
+
+  def insert_multi_line_text(buf, {line, col}, text) do
+    lines = String.split(text, "\n")
+    
+    case lines do
+      # Single line - use regular insert_text
+      [single_line] ->
+        updated_buf = insert_text(buf, {line, col}, single_line)
+        final_col = col + String.length(single_line)
+        {updated_buf, {line, final_col}}
+      
+      # Multiple lines
+      [first_line | rest] ->
+        # Get the current line content
+        current_line = Enum.at(buf.data, line - 1) || ""
+        {left_text, right_text} = String.split_at(current_line, col - 1)
+        
+        # First line: left_text + first_line
+        first_updated = left_text <> first_line
+        
+        # Last line: last_line + right_text
+        {middle_lines, [last_line]} = Enum.split(rest, -1)
+        last_updated = last_line <> right_text
+        
+        # Build the new data structure
+        {before_lines, after_lines} = Enum.split(buf.data, line - 1)
+        [_current | remaining_after] = after_lines
+        
+        # Combine all parts
+        new_data = before_lines ++ [first_updated] ++ middle_lines ++ [last_updated] ++ remaining_after
+        
+        # Calculate final cursor position
+        final_line = line + length(lines) - 1
+        final_col = String.length(last_line) + 1
+        
+        updated_buf = %{buf | data: new_data, dirty?: true}
+        {updated_buf, {final_line, final_col}}
+    end
+  end
+
   def empty_buffer(buf) do
     # This is only used by Kommander so we shouldn't need to handle multi-cursor or anything crazy,
     # but just pointing out, we might need to update this later on to handle such cases
