@@ -39,11 +39,6 @@ defmodule Quillex.GUI.Components.BufferPane.State do
   #     }
   #   ]
 
-  @typewriter %{
-    text: :black,
-    slate: :white
-  }
-
   @cauldron %{
     text: :white,
     slate: :medium_slate_blue
@@ -125,7 +120,7 @@ defmodule Quillex.GUI.Components.BufferPane.State do
   Ensures the cursor is visible within the viewport bounds.
   Auto-scrolls if the cursor is outside the visible area.
   """
-  def ensure_cursor_visible(state, cursor, viewport_width, viewport_height) do
+  def ensure_cursor_visible(state, cursor, _viewport_width, viewport_height) do
     {scroll_x, scroll_y} = state.scroll_acc
     line_height = state.font.size
     

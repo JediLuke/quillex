@@ -124,11 +124,6 @@ defmodule Quillex.Buffer.Utils do
       col
     end
   end
-
-  defp while_can_move_left?(col), do: col > 1
-
-
-
 end
 
 

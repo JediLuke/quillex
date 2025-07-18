@@ -134,16 +134,16 @@ defmodule Quillex.GUI.Components.BufferPane do
     end
   end
 
-  # Keep the old handle_cast for backward compatibility, but delegate to handle_call
-  def handle_cast({:user_input, input}, scene) do
-    {:reply, :ok, new_scene} = handle_call({:user_input, input}, nil, scene)
-    {:noreply, new_scene}
-  end
-
   # Synchronous state change handling
   def handle_call({:state_change, new_buf}, _from, scene) do
     {:noreply, new_scene} = handle_cast({:state_change, new_buf}, scene)
     {:reply, :ok, new_scene}
+  end
+
+  # Keep the old handle_cast for backward compatibility, but delegate to handle_call
+  def handle_cast({:user_input, input}, scene) do
+    {:reply, :ok, new_scene} = handle_call({:user_input, input}, nil, scene)
+    {:noreply, new_scene}
   end
 
   def handle_cast({:frame_change, %Widgex.Frame{} = frame}, %{assigns: %{frame: frame}} = scene) do

@@ -3,11 +3,8 @@ defmodule Quillex.Buffer.Process.Reducer do
   alias Quillex.GUI.Components.BufferPane
 
   # Helper function to extract selected text from buffer
-  defp extract_selected_text(buf, %{start: start_pos, end: end_pos}) do
+  defp extract_selected_text(buf, %{start: {start_line, start_col} = start_pos, end: {end_line, end_col} = end_pos}) do
     # Normalize selection - ensure start is before end
-    {start_line, start_col} = start_pos
-    {end_line, end_col} = end_pos
-    
     {{sel_start_line, sel_start_col}, {sel_end_line, sel_end_col}} = 
       if start_line < end_line or (start_line == end_line and start_col <= end_col) do
         {start_pos, end_pos}
@@ -104,6 +101,7 @@ defmodule Quillex.Buffer.Process.Reducer do
     [c] = buf.cursors
     num_chars = String.length(text)
 
+
     # Handle selection replacement - delete selection first, then insert normally
     if buf.selection != nil do
       # Delete the selected text and clear selection
@@ -144,9 +142,14 @@ defmodule Quillex.Buffer.Process.Reducer do
   end
 
   def process(%Quillex.Structs.BufState{} = buf, {:delete, :at_cursor}) do
-    [cursor] = buf.cursors
-    result_buf = buf |> BufferPane.Mutator.delete_char_after_cursor(cursor)
-    result_buf
+    # If there's a selection, delete the selection instead of just one character
+    if buf.selection != nil do
+      BufferPane.Mutator.delete_selected_text(buf)
+    else
+      [cursor] = buf.cursors
+      result_buf = buf |> BufferPane.Mutator.delete_char_after_cursor(cursor)
+      result_buf
+    end
   end
 
   #TODO keep track that a whole line got yanked so if the user pastes it, it pastes as a line not as inline text
@@ -213,7 +216,7 @@ defmodule Quillex.Buffer.Process.Reducer do
   end
 
   # Legacy line-based paste (keep for vim compatibility)
-  def process(%Quillex.Structs.BufState{cursors: [c]} = buf, {:paste, :line, :at_cursor}) do
+  def process(%Quillex.Structs.BufState{cursors: [_c]} = buf, {:paste, :line, :at_cursor}) do
     clipboard_text = Clipboard.paste!()
 
     buf
@@ -238,7 +241,7 @@ defmodule Quillex.Buffer.Process.Reducer do
   def process(%Quillex.Structs.BufState{name: _unnamed} = buf, {:save_as, file_path}) when is_binary(file_path) do
 
     text = Enum.join(buf.data, "\n")
-    Memelex.Utils.FileIO.write(file_path, text)
+    File.write!(file_path, text)
 
     # if name is unnamed, then change it to file path here
     # TODO update timestamps last save
@@ -262,17 +265,17 @@ defmodule Quillex.Buffer.Process.Reducer do
   #   {:fwd, Quillex.GUI.Components.Buffer, {:request_save, %{uuid: buf.uuid}}}
   # end
 
-  def process(%Quillex.Structs.BufState{} = buf, {:set_overlay, :window_manager}) do
+  def process(%Quillex.Structs.BufState{} = _buf, {:set_overlay, :window_manager}) do
     #TODO the problem here is that we need to bubble it up to flamelex...
     :ignore
   end
 
   # Special case for :ignore - it's meant to be ignored, so don't log a warning
-  def process(%Quillex.Structs.BufState{} = buf, :ignore) do
+  def process(%Quillex.Structs.BufState{} = _buf, :ignore) do
     :ignore
   end
 
-  def process(%Quillex.Structs.BufState{} = buf, action) do
+  def process(%Quillex.Structs.BufState{} = _buf, action) do
     Logger.warning("Unhandled buffer action: #{inspect(action)}")
     :ignore
   end

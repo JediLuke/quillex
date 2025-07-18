@@ -1,14 +1,17 @@
 defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.VimKeyMappings.InsertMode do
   use ScenicWidgets.ScenicEventsDefinitions
-  alias Quillex.Structs.BufState.BufRef
   require Logger
+
+  # Define missing ctrl key combinations
+  @ctrl_c {:key, {:key_c, @key_pressed, [:ctrl]}}
+  @ctrl_open_bracket {:key, {:key_open_bracket, @key_pressed, [:ctrl]}}
 
   # Treat held down keys as repeated presses
   def handle({:key, {key, @key_held, mods}}) do
     handle({:key, {key, @key_pressed, mods}})
   end
 
-  def handle({:key, {key, @key_released, mods}}) do
+  def handle({:key, {_key, @key_released, _mods}}) do
     # handle(buf, {:key, {key, @key_pressed, mods}})
     :ignore
   end
@@ -58,42 +61,42 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.VimKeyMappings.Inse
   # Shift+Arrow keys for text selection (must come before regular arrow keys)
   # Support both atom and string formats for modifiers
   def handle({:key, {:key_right, 1, [:shift]}} = input) do
-    Logger.warn("DEBUG: VIM InsertMode - Matched Shift+Right (atoms): #{inspect(input)}")
+    Logger.warning("DEBUG: VIM InsertMode - Matched Shift+Right (atoms): #{inspect(input)}")
     [{:select_text, :right, 1}]
   end
 
   def handle({:key, {:key_right, 1, ["shift"]}} = input) do
-    Logger.warn("DEBUG: VIM InsertMode - Matched Shift+Right (strings): #{inspect(input)}")
+    Logger.warning("DEBUG: VIM InsertMode - Matched Shift+Right (strings): #{inspect(input)}")
     [{:select_text, :right, 1}]
   end
 
   def handle({:key, {:key_left, 1, [:shift]}} = input) do
-    Logger.warn("DEBUG: VIM InsertMode - Matched Shift+Left (atoms): #{inspect(input)}")
+    Logger.warning("DEBUG: VIM InsertMode - Matched Shift+Left (atoms): #{inspect(input)}")
     [{:select_text, :left, 1}]
   end
 
   def handle({:key, {:key_left, 1, ["shift"]}} = input) do
-    Logger.warn("DEBUG: VIM InsertMode - Matched Shift+Left (strings): #{inspect(input)}")
+    Logger.warning("DEBUG: VIM InsertMode - Matched Shift+Left (strings): #{inspect(input)}")
     [{:select_text, :left, 1}]
   end
 
   def handle({:key, {:key_up, 1, [:shift]}} = input) do
-    Logger.warn("DEBUG: VIM InsertMode - Matched Shift+Up (atoms): #{inspect(input)}")
+    Logger.warning("DEBUG: VIM InsertMode - Matched Shift+Up (atoms): #{inspect(input)}")
     [{:select_text, :up, 1}]
   end
 
   def handle({:key, {:key_up, 1, ["shift"]}} = input) do
-    Logger.warn("DEBUG: VIM InsertMode - Matched Shift+Up (strings): #{inspect(input)}")
+    Logger.warning("DEBUG: VIM InsertMode - Matched Shift+Up (strings): #{inspect(input)}")
     [{:select_text, :up, 1}]
   end
 
   def handle({:key, {:key_down, 1, [:shift]}} = input) do
-    Logger.warn("DEBUG: VIM InsertMode - Matched Shift+Down (atoms): #{inspect(input)}")
+    Logger.warning("DEBUG: VIM InsertMode - Matched Shift+Down (atoms): #{inspect(input)}")
     [{:select_text, :down, 1}]
   end
 
   def handle({:key, {:key_down, 1, ["shift"]}} = input) do
-    Logger.warn("DEBUG: VIM InsertMode - Matched Shift+Down (strings): #{inspect(input)}")
+    Logger.warning("DEBUG: VIM InsertMode - Matched Shift+Down (strings): #{inspect(input)}")
     [{:select_text, :down, 1}]
   end
 
@@ -132,7 +135,7 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.VimKeyMappings.Inse
 
   # Unhandled inputs
   def handle(input) do
-    Logger.warn("InsertMode: Unhandled input: #{inspect(input)}")
+    Logger.warning("InsertMode: Unhandled input: #{inspect(input)}")
     :ignore
   end
 end

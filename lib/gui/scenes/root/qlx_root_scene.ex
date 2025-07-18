@@ -96,6 +96,7 @@ defmodule QuillEx.RootScene do
     #TODO this... isn't always true - should use UserInputHandler here
     # fwd to BufferPane for processing...
     {:ok, [pid]} = Scenic.Scene.child(scene, :buffer_pane)
+    # Revert to async cast for input processing to avoid callback cycles
     GenServer.cast(pid, {:user_input, input})
 
     {:noreply, scene}
@@ -103,6 +104,41 @@ defmodule QuillEx.RootScene do
 
   def handle_call(:get_active_buffer, _from, scene) do
     {:reply, {:ok, scene.assigns.state.active_buf}, scene}
+  end
+
+  # Synchronous action processing for BufferPane actions
+  def handle_call({Quillex.GUI.Components.BufferPane, :action, buf_ref, actions}, _from, scene) do
+    # Processing BufferPane actions synchronously (same logic as handle_cast)
+    {:ok, new_buf} = Quillex.Buffer.BufferManager.call_buffer(buf_ref, {:action, actions})
+    
+    # Update the GUI with new buffer state synchronously
+    {:ok, [pid]} = Scenic.Scene.child(scene, :buffer_pane)
+    GenServer.call(pid, {:state_change, new_buf})
+    
+    {:reply, :ok, scene}
+  end
+
+  def handle_call({:action, actions}, _from, scene) when is_list(actions) do
+    # Processing actions from RadixReducer (synchronous version)
+    case process_actions(scene, actions) do
+      {:ok, {new_state, new_graph}} ->
+        new_scene =
+          scene
+          |> assign(state: new_state)
+          |> assign(graph: new_graph)
+          |> push_graph(new_graph)
+
+        {:reply, :ok, new_scene}
+
+      {:error, reason} ->
+        Logger.error "Couldn't compute action #{inspect actions}. #{inspect reason}"
+        {:reply, {:error, reason}, scene}
+    end
+  end
+
+  def handle_call({:action, a}, _from, scene) do
+    # wrap singular actions in a list and push through the multi-action pipeline anyway
+    handle_call({:action, [a]}, nil, scene)
   end
 
   def handle_cast({:action, actions}, scene) when is_list(actions) do
@@ -135,33 +171,6 @@ defmodule QuillEx.RootScene do
         # wait for acknowldge ment that way
         {:noreply, scene}
     end
-  end
-
-  defp process_actions(scene, actions) do
-    # wormhole will wrap this function in an ok/error tuple even if it crashes
-    Wormhole.capture(fn ->
-
-      new_state =
-        Enum.reduce(actions, scene.assigns.state, fn action, acc_state ->
-          RootScene.Reducer.process(acc_state, action)
-          |> case do
-            :ignore ->
-              acc_state
-
-            # :cast_to_children ->
-            #   Scenic.Scene.cast_children(scene, action)
-            #   acc_state
-
-            new_acc_state ->
-              new_acc_state
-          end
-        end)
-
-      # need to pass in scene so we can cast to children
-      new_graph = RootScene.Renderizer.render(scene.assigns.graph, scene, new_state)
-
-      {new_state, new_graph}
-    end)
   end
 
   #TODO differentiate between :gui_action
@@ -205,6 +214,33 @@ defmodule QuillEx.RootScene do
     # GUI update complete
 
     {:noreply, scene}
+  end
+
+  defp process_actions(scene, actions) do
+    # wormhole will wrap this function in an ok/error tuple even if it crashes
+    Wormhole.capture(fn ->
+
+      new_state =
+        Enum.reduce(actions, scene.assigns.state, fn action, acc_state ->
+          RootScene.Reducer.process(acc_state, action)
+          |> case do
+            :ignore ->
+              acc_state
+
+            # :cast_to_children ->
+            #   Scenic.Scene.cast_children(scene, action)
+            #   acc_state
+
+            new_acc_state ->
+              new_acc_state
+          end
+        end)
+
+      # need to pass in scene so we can cast to children
+      new_graph = RootScene.Renderizer.render(scene.assigns.graph, scene, new_state)
+
+      {new_state, new_graph}
+    end)
   end
 
   # if actions come in via PubSub they come in via handle_info, just convert to handle_cast
@@ -274,7 +310,7 @@ defmodule QuillEx.RootScene do
         {:noreply, scene}
         
       _other ->
-        Logger.warn("Unknown ubuntu bar button: #{inspect(button_id)}")
+        Logger.warning("Unknown ubuntu bar button: #{inspect(button_id)}")
         {:noreply, scene}
     end
   end

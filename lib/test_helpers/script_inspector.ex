@@ -97,112 +97,14 @@ defmodule Quillex.TestHelpers.ScriptInspector do
 
   defp is_gui_element?(_), do: false
 
-  @doc """
-  Get all rendered user content as a single concatenated string.
-  This filters out GUI elements and only returns actual user content.
-  """
-  def get_rendered_text_string do
-    extract_user_content()
-    |> Enum.join("\n")
-  end
 
-  # Private helper to extract text from a single script table entry
-  defp extract_text_from_script_entry({_id, script_data, _pid}) when is_list(script_data) do
-    try do
-      # Handle both regular lists and keyword lists
-      operations = if Keyword.keyword?(script_data) do
-        Enum.map(script_data, fn {key, value} -> {key, value} end)
-      else
-        script_data
-      end
-
-      operations
-      |> Enum.flat_map(&extract_text_from_script_operation/1)
-    rescue
-      error ->
-        IO.puts("Error parsing script entry: #{inspect(error)}")
-        []
-    end
-  end
-
-  defp extract_text_from_script_entry({{_id, script_data}, _pid}) when is_list(script_data) do
-    try do
-      script_data
-      |> Enum.flat_map(&extract_text_from_script_operation/1)
-    rescue
-      error ->
-        IO.puts("Error parsing script entry: #{inspect(error)}")
-        []
-    end
-  end
-
-  defp extract_text_from_script_entry({_id, script_data}) when is_list(script_data) do
-    try do
-      script_data
-      |> Enum.flat_map(&extract_text_from_script_operation/1)
-    rescue
-      error ->
-        IO.puts("Error parsing script entry: #{inspect(error)}")
-        []
-    end
-  end
-
-  defp extract_text_from_script_entry(entry) do
-    # Don't spam logs - only show occasionally for debugging
-    if :rand.uniform(10) == 1 do
-      IO.puts("Unexpected script entry format: #{inspect(entry, limit: 5)}")
-    end
-    []
-  end
-
-  # Private helper to extract text from individual script operations
-  defp extract_text_from_script_operation(operation) do
-    try do
-      case operation do
-        # Look for draw_text operations - this is where the actual text content is
-        {:draw_text, text, _spacing} when is_binary(text) ->
-          [text]
-
-        # Handle draw_text without spacing parameter
-        {:draw_text, text} when is_binary(text) ->
-          [text]
-
-        # Look for other possible text operation formats
-        {:text, text} when is_binary(text) ->
-          [text]
-
-        # Handle nested operations (scripts can contain other operations)
-        {_op, args} when is_list(args) ->
-          args |> Enum.flat_map(&extract_text_from_script_operation/1)
-
-        # Handle tuples that might contain text - but be more careful
-        tuple when is_tuple(tuple) and tuple_size(tuple) <= 10 ->
-          tuple
-          |> Tuple.to_list()
-          |> Enum.flat_map(&extract_text_from_script_operation/1)
-
-        # Handle lists of operations
-        list when is_list(list) and length(list) <= 1000 ->
-          list |> Enum.flat_map(&extract_text_from_script_operation/1)
-
-        # If it's a string, include it (though this might be rare)
-        text when is_binary(text) ->
-          [text]
-
-        # Ignore everything else but log it for debugging
-        other ->
-          # Only log the first few times to avoid spam
-          if :rand.uniform(1000) == 1 do
-            IO.puts("Ignoring operation: #{inspect(other, limit: 5)}")
-          end
-          []
-      end
-    rescue
-      error ->
-        IO.puts("Error parsing operation #{inspect(operation, limit: 5)}: #{inspect(error)}")
-        []
-    end
-  end
+  # These functions are no longer used - we now use position-based extraction
+  # Keeping them commented for reference if needed later
+  
+  # # Private helper to extract text from a single script table entry
+  # defp extract_text_from_script_entry({_id, script_data, _pid}) when is_list(script_data) do
+  #   ...removed for brevity...
+  # end
 
   # Private helper to extract text with position from a single script table entry
   defp extract_text_with_position_from_entry({_id, script_data, _pid}) when is_list(script_data) do
@@ -293,5 +195,25 @@ defmodule Quillex.TestHelpers.ScriptInspector do
     IO.inspect(gui_elements, label: "GUI elements (filtered out)")
 
     script_table
+  end
+
+  @doc """
+  Get all rendered text as a single string, joining lines with newlines.
+  This maintains the visual layout of the text as it appears on screen.
+  Filters out GUI elements and line numbers.
+  """
+  def get_rendered_text_string do
+    extract_user_content()
+    |> Enum.join("\n")
+  end
+
+  @doc """
+  Get all rendered text as a single string, joining lines with spaces.
+  Useful when you want to search for text that might wrap across lines.
+  Filters out GUI elements and line numbers.
+  """
+  def get_rendered_text_flat do
+    extract_user_content()
+    |> Enum.join(" ")
   end
 end

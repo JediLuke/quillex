@@ -7,7 +7,7 @@ defmodule QuillEx.RootScene.Reducer do
 
     # Either that, OR, we _do_ put the callback in the BufferManager, then
     # we need to _stop_ adding in the state here again
-    {:ok, buf_ref} = Quillex.Buffer.BufferManager.new_buffer()
+    {:ok, _buf_ref} = Quillex.Buffer.BufferManager.new_buffer()
 
     state
     # |> RootScene.Mutator.add_buffer(buf_ref)

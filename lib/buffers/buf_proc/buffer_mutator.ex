@@ -23,7 +23,7 @@ defmodule Quillex.GUI.Components.BufferPane.Mutator do
   end
 
   def set_mode(buf, mode) when mode in @valid_modes do
-    Logger.warn "SETTING MODE FOR BUF #{buf.name}  mode: #{inspect mode}"
+    Logger.warning "SETTING MODE FOR BUF #{buf.name}  mode: #{inspect mode}"
     %{buf | mode: mode}
   end
 
@@ -31,10 +31,37 @@ defmodule Quillex.GUI.Components.BufferPane.Mutator do
     %{buf | cursors: [c |> Cursor.move(coords)]}
   end
 
-  def move_cursor(%{cursors: [c]} = buf, {line, col} = coords) do
+  def move_cursor(%{cursors: [_c]} = buf, {_line, _col} = coords) do
     Logger.warning "CANT MOVE TO #{inspect coords}"
     # %{buf | cursors: [c |> Cursor.move(coords)]}
     buf
+  end
+
+  def move_cursor(%{cursors: [c]} = buf, :line_end) do
+    current_line = Enum.at(buf.data, c.line - 1) || ""
+    # need extra column cause of zero vs one based indexing, columns start at 1 god damnit!!
+    new_col = String.length(current_line) + 1
+    move_cursor(buf, {c.line, new_col})
+  end
+
+  def move_cursor(%{cursors: [c], selection: _selection} = buf, :line_end) when buf.selection != nil do
+    current_line = Enum.at(buf.data, c.line - 1) || ""
+    # need extra column cause of zero vs one based indexing, columns start at 1 god damnit!!
+    new_col = String.length(current_line) + 1
+    new_cursor = c |> Cursor.move({c.line, new_col})
+    %{buf | cursors: [new_cursor], selection: nil}
+  end
+
+  def move_cursor(%{cursors: [c]} = buf, :line_start) do
+    # Move cursor to beginning of current line (column 1)
+    new_cursor = c |> Cursor.move({c.line, 1})
+    %{buf | cursors: [new_cursor]}
+  end
+
+  def move_cursor(%{cursors: [c], selection: _selection} = buf, :line_start) when buf.selection != nil do
+    # Move cursor to beginning of current line (column 1) and clear selection
+    new_cursor = c |> Cursor.move({c.line, 1})
+    %{buf | cursors: [new_cursor], selection: nil}
   end
 
   # def move_cursor(buf, :next_word) do
@@ -52,6 +79,7 @@ defmodule Quillex.GUI.Components.BufferPane.Mutator do
   # Handle cursor movement when there's an active selection
   # This must come before the general move_cursor/3 clause for pattern matching to work correctly
   def move_cursor(%{selection: selection} = buf, direction, count) when selection != nil do
+    
     # TODO no idea how this is gonna work with multiple cursors...
     c = buf.cursors |> hd()
     
@@ -125,32 +153,6 @@ defmodule Quillex.GUI.Components.BufferPane.Mutator do
     end
   end
 
-  def move_cursor(%{cursors: [c], selection: selection} = buf, :line_end) when selection != nil do
-    current_line = Enum.at(buf.data, c.line - 1) || ""
-    # need extra column cause of zero vs one based indexing, columns start at 1 god damnit!!
-    new_col = String.length(current_line) + 1
-    new_cursor = c |> Cursor.move({c.line, new_col})
-    %{buf | cursors: [new_cursor], selection: nil}
-  end
-
-  def move_cursor(%{cursors: [c]} = buf, :line_end) do
-    current_line = Enum.at(buf.data, c.line - 1) || ""
-    # need extra column cause of zero vs one based indexing, columns start at 1 god damnit!!
-    new_col = String.length(current_line) + 1
-    move_cursor(buf, {c.line, new_col})
-  end
-
-  def move_cursor(%{cursors: [c], selection: selection} = buf, :line_start) when selection != nil do
-    # Move cursor to beginning of current line (column 1) and clear selection
-    new_cursor = c |> Cursor.move({c.line, 1})
-    %{buf | cursors: [new_cursor], selection: nil}
-  end
-
-  def move_cursor(%{cursors: [c]} = buf, :line_start) do
-    # Move cursor to beginning of current line (column 1)
-    new_cursor = c |> Cursor.move({c.line, 1})
-    %{buf | cursors: [new_cursor]}
-  end
 
   def insert_text(%{data: []} = buf, {1, 1}, text) do
     %{buf | data: [text]}
@@ -281,6 +283,7 @@ defmodule Quillex.GUI.Components.BufferPane.Mutator do
     # Start a new selection at current cursor position
     selection_start = {c.line, c.col}
     
+    
     # Move cursor to extend selection
     buf_with_moved_cursor = move_cursor(buf, direction, count)
     [new_cursor] = buf_with_moved_cursor.cursors
@@ -294,27 +297,27 @@ defmodule Quillex.GUI.Components.BufferPane.Mutator do
     # Handle extending existing selection with proper contraction logic
     current_cursor_pos = {c.line, c.col}
     
-    # Calculate where cursor would move to
-    temp_buf = %{buf | selection: nil}  # Temporarily clear selection for movement calculation
-    buf_with_moved_cursor = move_cursor(temp_buf, direction, count)
-    [new_cursor] = buf_with_moved_cursor.cursors
+    
+    # Calculate where cursor would move to WITHOUT using move_cursor which clears selection
+    # Use move_cursor_with_bounds directly to avoid selection clearing
+    new_cursor = move_cursor_with_bounds(buf, c, direction, count)
     new_cursor_pos = {new_cursor.line, new_cursor.col}
     
     # Determine if this movement contracts, cancels, or extends the selection
     cond do
       # Case 1: Cursor returns exactly to start position - cancel selection
       new_cursor_pos == start_pos ->
-        %{buf_with_moved_cursor | selection: nil}
+        %{buf | cursors: [new_cursor], selection: nil}
       
       # Case 2: Check if this is contracting the selection
       is_contracting_selection?(start_pos, end_pos, current_cursor_pos, new_cursor_pos) ->
         # Contract the selection by updating the end position
-        %{buf_with_moved_cursor | selection: %{start: start_pos, end: new_cursor_pos}}
+        %{buf | cursors: [new_cursor], selection: %{start: start_pos, end: new_cursor_pos}}
       
       # Case 3: Normal extension (including reversal past start)
       true ->
         # For normal extension or reversal, just update the end position
-        %{buf_with_moved_cursor | selection: %{start: start_pos, end: new_cursor_pos}}
+        %{buf | cursors: [new_cursor], selection: %{start: start_pos, end: new_cursor_pos}}
     end
   end
 
@@ -339,11 +342,11 @@ defmodule Quillex.GUI.Components.BufferPane.Mutator do
   end
 
   # Helper to normalize selection positions (ensure start comes before end)
-  defp normalize_selection({start_line, start_col}, {end_line, end_col}) do
+  defp normalize_selection({start_line, start_col} = start_pos, {end_line, end_col} = end_pos) do
     if start_line < end_line or (start_line == end_line and start_col <= end_col) do
-      {{start_line, start_col}, {end_line, end_col}}
+      {start_pos, end_pos}
     else
-      {{end_line, end_col}, {start_line, start_col}}
+      {end_pos, start_pos}
     end
   end
 
@@ -386,15 +389,8 @@ defmodule Quillex.GUI.Components.BufferPane.Mutator do
   
   def delete_selected_text(%{selection: %{start: start_pos, end: end_pos}} = buf) do
     # Normalize selection - ensure start is before end
-    {start_line, start_col} = start_pos
-    {end_line, end_col} = end_pos
-    
     {{del_start_line, del_start_col}, {del_end_line, del_end_col}} = 
-      if start_line < end_line or (start_line == end_line and start_col <= end_col) do
-        {start_pos, end_pos}
-      else
-        {end_pos, start_pos}
-      end
+      normalize_selection(start_pos, end_pos)
     
     # Handle selection within same line vs. across multiple lines
     cond do

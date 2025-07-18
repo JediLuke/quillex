@@ -16,7 +16,7 @@ defmodule Quillex.Buffer do
     # a race condition, if msgs from BufferManager dont get to RootScene
     # before I go and try to query RootScene / call switch buffer on it, before
     # the new buffer msg propagates back from BufferManager to RootScene...
-    {:ok, buf_ref} = Quillex.Buffer.BufferManager.new_buffer(args)
+    {:ok, _buf_ref} = Quillex.Buffer.BufferManager.new_buffer(args)
     # switch(buf_ref)
   end
 

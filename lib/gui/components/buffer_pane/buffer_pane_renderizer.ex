@@ -199,17 +199,6 @@ defmodule Quillex.GUI.Components.BufferPane.Renderizer do
     clean_selection_highlights(graph)
   end
 
-  # Helper function to remove all selection highlights
-  defp clean_selection_highlights(graph) do
-    # Find and remove all selection highlight primitives
-    Enum.reduce(1..100, graph, fn line_num, acc_graph ->
-      case Scenic.Graph.get(acc_graph, {:selection_highlight, line_num}) do
-        [] -> acc_graph
-        _primitive -> Scenic.Graph.delete(acc_graph, {:selection_highlight, line_num})
-      end
-    end)
-  end
-
   # Render text selection highlighting - with active selection
   defp render_selection_highlighting(graph, _scene, frame, state, %{selection: %{start: {start_line, start_col}, end: {end_line, end_col}}} = buf) do
     # Normalize selection - ensure start comes before end
@@ -296,6 +285,18 @@ defmodule Quillex.GUI.Components.BufferPane.Renderizer do
       end
     end)
   end
+
+  # Helper function to remove all selection highlights
+  defp clean_selection_highlights(graph) do
+    # Find and remove all selection highlight primitives
+    Enum.reduce(1..100, graph, fn line_num, acc_graph ->
+      case Scenic.Graph.get(acc_graph, {:selection_highlight, line_num}) do
+        [] -> acc_graph
+        _primitive -> Scenic.Graph.delete(acc_graph, {:selection_highlight, line_num})
+      end
+    end)
+  end
+
   defp render_line_text(graph, line, idx, y_position, font, color, scroll_x \\ 0) do
 
     # TODO this is what scenic does https://github.com/boydm/scenic/blob/master/lib/scenic/component/input/text_field.ex#L198
