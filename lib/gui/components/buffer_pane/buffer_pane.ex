@@ -63,8 +63,10 @@ defmodule Quillex.GUI.Components.BufferPane do
       overflow_x: :auto   # Show horizontal scrollbar for long lines
     })
 
-    graph = BufferPane.Renderizer.render(Scenic.Graph.build(), scene, frame, buf_pane_state, buf)
-    |> Widgex.Scrollable.apply_scroll(scene)  # Apply initial scroll state
+    graph =
+      Scenic.Graph.build()
+      |> BufferPane.Renderizer.render(scene, frame, buf_pane_state, buf)
+      |> Widgex.Scrollable.apply_scroll(scene)  # Apply initial scroll state
 
     init_scene =
       scene
@@ -88,13 +90,13 @@ defmodule Quillex.GUI.Components.BufferPane do
   # Handle input with scrolling support
   def handle_input(input, _id, scene) do
     case Widgex.Scrollable.handle_input(input, scene) do
-      {:handled, new_scene} -> 
+      {:handled, new_scene} ->
         # Scrolling was handled, re-render with scroll applied
         graph = BufferPane.Renderizer.render(
-          new_scene.assigns.graph, 
-          new_scene, 
-          new_scene.assigns.frame, 
-          new_scene.assigns.state, 
+          new_scene.assigns.graph,
+          new_scene,
+          new_scene.assigns.frame,
+          new_scene.assigns.state,
           new_scene.assigns.buf
         )
         |> Widgex.Scrollable.apply_scroll(new_scene)
@@ -112,7 +114,7 @@ defmodule Quillex.GUI.Components.BufferPane do
     case BufferPane.UserInputHandler.handle(scene.assigns, input) do
       :ignore ->
         {:reply, :ok, scene}
-      
+
       [:ignore] ->
         # Special case for single ignore in list - don't propagate
         {:reply, :ok, scene}
@@ -271,14 +273,14 @@ defmodule Quillex.GUI.Components.BufferPane do
     max_line_width = buf.data
     |> Enum.map(&String.length/1)
     |> Enum.max(fn -> 0 end)
-    
+
     # Use font metrics from state
     line_height = state.font.size
     char_width = state.font.size * 0.6  # Approximate character width
-    
+
     content_width = max_line_width * char_width + 100  # Add some padding
     content_height = line_count * line_height
-    
+
     {trunc(content_width), trunc(content_height)}
   end
 end
