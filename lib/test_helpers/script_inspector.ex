@@ -11,12 +11,12 @@ defmodule Quillex.TestHelpers.ScriptInspector do
   Returns a list of text strings found in the rendering scripts, sorted by visual position.
   """
   def extract_rendered_text do
-    case ScenicMcp.Probes.script_table() do
+    case get_script_table() do
       script_entries when is_list(script_entries) ->
         # Extract text with position information
         text_with_positions = script_entries
         |> Enum.flat_map(&extract_text_with_position_from_entry/1)
-        
+
         # Sort by Y position (vertical), then X position (horizontal)
         text_with_positions
         |> Enum.sort_by(fn {_text, {x, y}} -> {y, x} end)
@@ -24,6 +24,16 @@ defmodule Quillex.TestHelpers.ScriptInspector do
         |> Enum.uniq()
 
       _ -> []
+    end
+  end
+
+  # Helper function to get script table using the new ScenicMcp.Tools API
+  defp get_script_table do
+    case ScenicMcp.Tools.viewport_state() do
+      {:ok, %{script_table: script_table}} when script_table != nil ->
+        :ets.tab2list(script_table)
+      _ ->
+        []
     end
   end
 
@@ -161,7 +171,7 @@ defmodule Quillex.TestHelpers.ScriptInspector do
   Useful for understanding what's in the script table during development.
   """
   def debug_script_table do
-    script_table = ScenicMcp.Probes.script_table()
+    script_table = get_script_table()
 
     IO.puts("\n=== SCRIPT TABLE DEBUG ===")
     IO.puts("Number of entries: #{length(script_table)}")
