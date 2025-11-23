@@ -22,7 +22,11 @@ defmodule QuillEx.RootScene do
     buffers =
       case Quillex.Buffer.BufferManager.list_buffers() do
         [] ->
-          {:ok, buf_ref} = Quillex.Buffer.BufferManager.new_buffer(%{mode: :edit})
+          # Use notepad :edit mode for spex tests (default_buffer_mode can be set in config)
+          # Otherwise use vim normal mode
+          mode = Application.get_env(:quillex, :default_buffer_mode, {:vim, :normal})
+          Logger.info("Creating initial buffer with mode: #{inspect(mode)}")
+          {:ok, buf_ref} = Quillex.Buffer.BufferManager.new_buffer(%{mode: mode})
           [buf_ref]
         buffers ->
           buffers

@@ -40,7 +40,8 @@ defmodule Quillex.ComprehensiveTextEditingSpex do
 
     scenario "Basic character input and display", context do
       given_ "empty buffer ready for input", context do
-        ScenicMcp.Probes.send_keys("a", [:ctrl])  # Clear any existing content
+        # Enter insert mode (buffer starts in vim normal mode)
+        ScenicMcp.Probes.send_keys("i", [])
         Process.sleep(50)
 
         baseline_screenshot = ScenicMcp.Probes.take_screenshot("basic_input_baseline")
