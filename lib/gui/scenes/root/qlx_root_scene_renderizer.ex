@@ -7,15 +7,9 @@ defmodule QuillEx.RootScene.Renderizer do
     %Scenic.Scene{} = scene,
     %QuillEx.RootScene.State{} = state
   ) do
-    [
-      menu_bar_frame,
-      text_area_frame
-    ] = Widgex.Frame.v_split(state.frame, px: state.toolbar.height)
-
-    # render MenuBar _after_ BufferPane so it (including menu dropdowns) appears on top of the buffer not below it
+    # Simplified: just render the text area without menu bar for now
     graph
-    |> render_text_area(scene, state, text_area_frame)
-    |> render_menu_bar(scene, state, menu_bar_frame)
+    |> render_text_area(scene, state, state.frame)
   end
 
   defp render_text_area(
@@ -24,63 +18,30 @@ defmodule QuillEx.RootScene.Renderizer do
     %QuillEx.RootScene.State{} = state,
     %Widgex.Frame{} = frame
   ) do
-
-    [
-      tab_bar_frame,
-      buffer_pane_frame_when_tab_bar_open
-    ] = Widgex.Frame.v_split(frame, px: state.toolbar.height)
-
-    [ubuntu_bar_frame, buffer_pane_frame] =
-      if length(state.buffers) <= 1 do
-        frame
-      else
-        buffer_pane_frame_when_tab_bar_open
-      end
-      |> then(fn current_buffer_pane_frame ->
-        if state.show_ubuntu_bar do
-          Widgex.Frame.h_split(current_buffer_pane_frame, px: 60)
-        else
-          [nil, current_buffer_pane_frame]
-        end
-      end)
-
+    # Simplified: just render the buffer pane using the full frame
     graph
-    |> Scenic.Primitives.group(
-      fn graph ->
-        graph
-        |> render_buffer_pane(scene, state, buffer_pane_frame)
-        # |> render_tab_bar(scene, state, tab_bar_frame)
-        |> then(fn graph ->
-          if state.show_ubuntu_bar and ubuntu_bar_frame do
-            render_ubuntu_bar(graph, scene, state, ubuntu_bar_frame)
-          else
-            graph
-          end
-        end)
-      end
-    )
+    |> render_buffer_pane(scene, state, frame)
   end
 
   defp render_ubuntu_bar(graph, scene, _state, frame) do
-    # Create UbuntuBar with custom buttons for quillex
-    buttons = [
-      %{id: :new_file, glyph: "📄", tooltip: "New File"},
-      %{id: :open_file, glyph: "📁", tooltip: "Open File"},
-      %{id: :save_file, glyph: "💾", tooltip: "Save File"},
-      %{id: :search, glyph: "🔍", tooltip: "Search"},
-      %{id: :settings, glyph: "⚙️", tooltip: "Settings"}
-    ]
-    
+    # Create UbuntuBar with cool ASCII buttons - creative and safe!
+    buttons = ScenicWidgets.UbuntuBar.cool_ascii_buttons()
+
     ubuntu_bar_data = %{
       buttons: buttons,
-      button_size: min(50, frame.size.width - 4), # Leave some padding
-      background_color: {45, 45, 45},
-      button_color: {60, 60, 60},
-      button_hover_color: {80, 80, 80},
-      button_active_color: {100, 150, 200},
-      text_color: {220, 220, 220}
+      button_size: min(48, frame.size.width - 8), # Leave more padding
+      background_color: {40, 40, 40},
+      button_color: {55, 55, 55},
+      button_hover_color: {75, 75, 75},
+      button_active_color: {85, 130, 180},
+      text_color: {240, 240, 240},
+      font_size: 18, # Perfect size for symbols
+      layout: :top, # Start from the top
+      button_spacing: 10, # Nice spacing for symbols
+      remove_top_margin: true # Align with text pane since menubar provides visual separation
+      # font_family: :ibm_plex_mono # TODO: Add proper font support for symbols
     }
-    
+
     case Scenic.Graph.get(graph, :ubuntu_bar) do
       [] ->
         graph
@@ -175,15 +136,35 @@ defmodule QuillEx.RootScene.Renderizer do
   # since this is shared name for the actual Scenic Component, extract it out to here
   @qlx_main_menu :qlx_main_menu
   defp draw_menu_bar(graph, state, frame) do
+    # Configure the enhanced MenuBar with modern theme and improved features
+    enhanced_menu_config = %{
+      frame: frame,
+      menu_map: menu_map(state),
+      theme: :modern,  # Use the sleek modern theme
+      interaction_mode: :hover,  # Keep existing hover behavior
+      button_width: {:auto, :min_width, 100},  # Auto-size with 100px minimum
+      text_clipping: :ellipsis,  # Add ellipsis for long menu items
+      dropdown_alignment: :wide_centered,  # Use the "fat" positioning Luke likes
+      consume_events: true,  # Fix the click-through bug
+      colors: %{
+        # Override some modern theme colors for better contrast
+        background: {30, 30, 35},
+        text: {235, 235, 240},
+        button_hover: {55, 55, 65},
+        button_active: {80, 140, 210}
+      },
+      font: %{name: :roboto, size: 16},
+      dropdown_font: %{name: :roboto, size: 14},
+      button_spacing: 4,
+      text_margin: 12
+    }
+
     graph
     |> Scenic.Primitives.group(
       fn graph ->
         graph
-        |> ScenicWidgets.MenuBar.add_to_graph(
-          %{
-            frame: frame,
-            menu_map: menu_map(state)
-          },
+        |> ScenicWidgets.EnhancedMenuBar.add_to_graph(
+          enhanced_menu_config,
           id: @qlx_main_menu)
       end,
       id: :menu_bar,

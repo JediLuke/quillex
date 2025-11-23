@@ -136,7 +136,7 @@ defmodule Quillex.Buffer.BufferManager do
 
       {:error, reason} ->
         # raise "in practice this can never happen since `start_new_buffer_process` always returns `{:ok, buf_ref}`"
-        Logger.warn("Failed to open buffer: #{inspect(reason)}")
+        Logger.warning("Failed to open buffer: #{inspect(reason)}")
         {:reply, {:error, reason}, state}
     end
   end

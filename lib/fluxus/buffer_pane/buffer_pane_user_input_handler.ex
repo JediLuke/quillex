@@ -27,8 +27,15 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler do
   # there's no action that gets altered depending on where the cursor is,
   # if ther is it's a higher level state change anyway so handle it within radix state
 
-  def handle(%{buf_ref: %{mode: :edit}} = buf_ref, input) do
-    NotepadMap.handle(buf_ref, input)
+  def handle(%{buf_ref: %{mode: :edit} = buf_ref, buf: buf}, input) do
+    NotepadMap.handle(buf, input)
+  end
+
+  # Handle :edit mode when only buf_ref is provided (common case from Flamelex)
+  def handle(%{buf_ref: %{mode: :edit} = buf_ref}, input) do
+    # Fetch the full buffer state from BufferManager
+    {:ok, buf} = Quillex.Buffer.BufferManager.call_buffer(buf_ref, :get_state)
+    NotepadMap.handle(buf, input)
   end
 
   def handle(%{buf_ref: %{mode: {:vim, :insert}}}, input) do
@@ -40,8 +47,7 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler do
   end
 
   def handle(buf, input) do
-    Logger.error "Unhandled input: #{inspect input}, buf: #{inspect buf}"
-    # IO.inspect(buf)
-    :ignore
+    Logger.warning("Unhandled input - mode: #{inspect(Map.get(buf, :buf_ref, %{}) |> Map.get(:mode, :no_mode))}, input: #{inspect(input)}")
+    [:ignore]
   end
 end

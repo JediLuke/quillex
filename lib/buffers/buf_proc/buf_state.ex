@@ -1,6 +1,5 @@
 defmodule Quillex.Structs.BufState do
   alias Quillex.Structs.BufState.Cursor
-  alias Quillex.Buffer.Utils
 
   @unnamed "unnamed"
 
@@ -14,11 +13,13 @@ defmodule Quillex.Structs.BufState do
     # where the actual contents of the buffer is kept
     data: nil,
     # Buffers can be in various "modes" e.g. {:vim, :normal}, :edit
-    mode: :edit,
+    mode: {:vim, :normal},
     # Description of where this buffer originally came from, e.g. %{filepath: file_path}
     source: nil,
     # a list of all the cursors in the buffer (these go into the buffer, not the buffer pane, because cursors are still used even through the API)
     cursors: [],
+    # text selection state - tracks start and end of selection
+    selection: nil,  # %{start: {line, col}, end: {line, col}} or nil for no selection
     # track all the modifications as we do them, for undo/redo purposes
     history: [],
     # a flag which lets us know if it's a read-only buffer, read-only buffers can't be modified
@@ -51,8 +52,9 @@ defmodule Quillex.Structs.BufState do
     name = Map.get(args, :name) || Map.get(args, "name") || @unnamed
     data = Map.get(args, :data) || Map.get(args, "data") || [""]
     data = if is_list(data), do: data, else: raise("Buffer data must be a list of strings")
-    # mode: validate_mode(args[:mode]) || :edit,
-    mode = Map.get(args, :mode) || Map.get(args, "mode") || {:vim, :insert}
+    # mode: validate_mode(args[:mode]) || {:vim, :normal},
+    mode = Map.get(args, :mode) || Map.get(args, "mode") || {:vim, :normal}
+    # Creating buffer with mode: #{inspect(mode)}
     source = Map.get(args, :source) || Map.get(args, "source") || nil
     cursors = Map.get(args, :cursors) || Map.get(args, "cursors") || [Cursor.new()]
     # scroll_acc = Map.get(args, :scroll_acc) || Map.get(args, "scroll_acc") || {0, 0}
@@ -66,6 +68,7 @@ defmodule Quillex.Structs.BufState do
       mode: mode,
       source: source,
       cursors: cursors,
+      selection: nil,
       history: [],
       read_only?: read_only?,
       dirty?: false,

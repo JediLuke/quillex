@@ -113,6 +113,10 @@ defmodule Quillex.GUI.Components.BufferPane.CursorCaret do
     {:noreply, scene}
   end
 
+  def handle_cast({:move_cursor, direction, _x}, scene) do
+    move_cursor(scene, direction)
+  end
+
 
 
   def handle_info(:blink, %{assigns: %{visible: false, state: %{mode: :hidden}}} = scene) do
@@ -178,10 +182,6 @@ end
   #   # needs to get routed through the parent component
   #   {:noreply, scene}
   # end
-
-  def handle_cast({:move_cursor, direction, _x}, scene) do
-    move_cursor(scene, direction)
-  end
 
   # # Handle input events
   # def handle_input({:key, {:key_left, 1, _}}, _context, scene) do

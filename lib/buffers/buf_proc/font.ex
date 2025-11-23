@@ -7,7 +7,6 @@ defmodule Quillex.Structs.BufState.Font do
   # the default line-height is 1.2
   # https://hexdocs.pm/scenic/0.11.0-beta.0/Scenic.Primitive.Style.LineHeight.html
   # https://github.com/memononen/nanovg/blob/master/src/nanovg.h#L583
-  @default_line_height_multipler 1.2
 
   defstruct name: nil,
             size: nil,

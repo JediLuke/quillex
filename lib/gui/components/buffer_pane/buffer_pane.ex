@@ -44,7 +44,6 @@ defmodule Quillex.GUI.Components.BufferPane do
 
 
     state = BufferPane.State.new(data |> Map.merge(%{active?: active?}))
-    Logger.info "Buffer: #{inspect buf_ref} is state?: #{inspect state}"
 
     {:ok, %{state: state, frame: frame, buf_ref: buf_ref, active?: active?}}
   end
@@ -55,8 +54,19 @@ defmodule Quillex.GUI.Components.BufferPane do
     # plus I think it's more efficient in terms of data transfer to just get it once rather than pass it around everywhere (maybe?)
     {:ok, buf} = Quillex.Buffer.Process.fetch_buf(buf_ref)
 
+    # Setup scrolling for buffer content
+    scene = scene
+    |> Widgex.Scrollable.setup(%{
+      content_size_fn: fn -> calculate_buffer_content_size(buf, buf_pane_state) end,
+      viewport_size: {frame.size.width, frame.size.height},
+      overflow_y: :auto,  # Show vertical scrollbar when needed
+      overflow_x: :auto   # Show horizontal scrollbar for long lines
+    })
+
     graph =
-      BufferPane.Renderizer.render(Scenic.Graph.build(), scene, frame, buf_pane_state, buf)
+      Scenic.Graph.build()
+      |> BufferPane.Renderizer.render(scene, frame, buf_pane_state, buf)
+      |> Widgex.Scrollable.apply_scroll(scene)  # Apply initial scroll state
 
     init_scene =
       scene
@@ -69,7 +79,7 @@ defmodule Quillex.GUI.Components.BufferPane do
       |> push_graph(graph)
 
     # Registry.register(Quillex.BufferRegistry, __MODULE__, nil)
-    Logger.info "REGISTERING BUFFER AS #{buf.uuid}"
+    # Registering buffer component
 
     # SHIT ok here we go, we used to register buffer panes according to theri buffer... now we cant !! cause we only make ONE buffer pane & modify it !!
     Quillex.Utils.PubSub.subscribe(topic: {:buffers, buf.uuid})
@@ -77,33 +87,70 @@ defmodule Quillex.GUI.Components.BufferPane do
     {:ok, init_scene}
   end
 
-  # def handle_cast({:user_input, input}, scene) do
-  #   # the GUI component converts raw user input to actions, directly on this layer,
-  #   # which are then passed back up the component tree for processing
-  #   Logger.info "BUF GOT input #{inspect input}"
-  #   case BufferPane.UserInputHandler.handle(scene.assigns, input) do
-  #     :ignore ->
-  #       {:noreply, scene}
+  # Handle input with scrolling support
+  def handle_input(input, _id, scene) do
+    case Widgex.Scrollable.handle_input(input, scene) do
+      {:handled, new_scene} ->
+        # Scrolling was handled, re-render with scroll applied
+        graph = BufferPane.Renderizer.render(
+          new_scene.assigns.graph,
+          new_scene,
+          new_scene.assigns.frame,
+          new_scene.assigns.state,
+          new_scene.assigns.buf
+        )
+        |> Widgex.Scrollable.apply_scroll(new_scene)
+        {:noreply, push_graph(new_scene, graph)}
+      {:continue, scene} ->
+        # Handle normal buffer input
+        handle_cast({:user_input, input}, scene)
+    end
+  end
 
-  #     actions when is_list(actions) ->
-  #       cast_parent(scene, {__MODULE__, :action, scene.assigns.buf_ref, actions})
-  #       {:noreply, scene}
+  def handle_call({:user_input, input}, _from, scene) do
+    # the GUI component converts raw user input to actions, directly on this layer,
+    # which are then passed back up the component tree for processing
+    # Processing user input
+    case BufferPane.UserInputHandler.handle(scene.assigns, input) do
+      :ignore ->
+        {:reply, :ok, scene}
 
-  #     actn when is_tuple(actn) ->
-  #       raise "A handler function is ont returning a list. Returned: #{inspect actn}"
+      [:ignore] ->
+        # Special case for single ignore in list - don't propagate
+        {:reply, :ok, scene}
 
-  #     # {%BufferPane.State{} = new_buf_pane_state, :ignore} ->
-  #     #   {:noreply, scene |> assign(state: new_buf_pane_state)}
+      actions when is_list(actions) ->
+        # Sending actions to parent scene (revert to async to test)
+        Scenic.Scene.cast_parent(scene, {__MODULE__, :action, scene.assigns.buf_ref, actions})
+        {:reply, :ok, scene}
 
-  #     # {%BufferPane.State{} = new_buf_pane_state, actions} when is_list(actions) ->
-  #     #   cast_parent(scene, {__MODULE__, :action, scene.assigns.buf_ref, actions})
-  #     #   {:noreply, scene |> assign(state: new_buf_pane_state)}
-  #   end
-  # end
+      actn when is_tuple(actn) ->
+        raise "A handler function is ont returning a list. Returned: #{inspect actn}"
+
+      # {%BufferPane.State{} = new_buf_pane_state, :ignore} ->
+      #   {:reply, :ok, scene |> assign(state: new_buf_pane_state)}
+
+      # {%BufferPane.State{} = new_buf_pane_state, actions} when is_list(actions) ->
+      #   cast_parent(scene, {__MODULE__, :action, scene.assigns.buf_ref, actions})
+      #   {:reply, :ok, scene |> assign(state: new_buf_pane_state)}
+    end
+  end
+
+  # Synchronous state change handling
+  def handle_call({:state_change, new_buf}, _from, scene) do
+    {:noreply, new_scene} = handle_cast({:state_change, new_buf}, scene)
+    {:reply, :ok, new_scene}
+  end
+
+  # Keep the old handle_cast for backward compatibility, but delegate to handle_call
+  def handle_cast({:user_input, input}, scene) do
+    {:reply, :ok, new_scene} = handle_call({:user_input, input}, nil, scene)
+    {:noreply, new_scene}
+  end
 
   def handle_cast({:frame_change, %Widgex.Frame{} = frame}, %{assigns: %{frame: frame}} = scene) do
     # frame didn't change (same variable name means we bound to both vars, they are equal) so do nothing
-    IO.puts "#{__MODULE__} ignoring frame change..."
+    # Ignoring frame change for buffer component
     {:noreply, scene}
   end
 
@@ -112,7 +159,7 @@ defmodule Quillex.GUI.Components.BufferPane do
     %{assigns: %{buf_ref: %{uuid: uuid, name: name, mode: mode}}} = scene
   ) do
     # no actual changes were made so we can discard this msg (all variables bind on same name)
-    IO.puts "#{__MODULE__} ignoring buf_ref change... #{inspect new_buf}"
+    # Ignoring buf_ref change
     {:noreply, scene}
   end
 
@@ -121,7 +168,7 @@ defmodule Quillex.GUI.Components.BufferPane do
     %{assigns: %{buf_ref: %{uuid: uuid}}} = scene
   ) do
 
-    IO.puts "Expect to get to here for left buffer #{inspect new_buf_ref}"
+    # Processing buffer update
     new_buf =
       %{scene.assigns.buf|name: new_buf_ref.name, mode: new_buf_ref.mode}
 
@@ -174,14 +221,8 @@ defmodule Quillex.GUI.Components.BufferPane do
     {:noreply, new_scene}
   end
 
-  def handle_cast(
-    {:state_change, %Quillex.Structs.BufState{} = buf},
-    %{assigns: %{buf: buf}} = scene
-  ) do
-    # no actual changes were made so we can discard this msg (all variables bind on same name)
-    IO.puts "#{__MODULE__} ignoring buf state change..."
-    {:noreply, scene}
-  end
+  # REMOVED: This pattern matching was incorrectly ignoring valid state changes
+  # The real state change handler below should handle ALL buffer updates
 
   def handle_cast(
     {:state_change, %Quillex.Structs.BufState{uuid: uuid} = new_buf},
@@ -212,7 +253,7 @@ defmodule Quillex.GUI.Components.BufferPane do
   end
 
   def handle_cast({:state_change, invalid}, scene) do
-    Logger.info "INVALID STATE CHANGE #{inspect invalid}"
+    Logger.warning("Invalid state change: #{inspect(invalid)}")
     {:noreply, scene}
   end
 
@@ -223,6 +264,24 @@ defmodule Quillex.GUI.Components.BufferPane do
 
   def handle_info({:user_input, input}, scene) do
     handle_cast({:user_input, input}, scene)
+  end
+
+  # Helper function to calculate content size for scrolling
+  defp calculate_buffer_content_size(buf, state) do
+    # Calculate total content dimensions based on buffer data
+    line_count = length(buf.data)
+    max_line_width = buf.data
+    |> Enum.map(&String.length/1)
+    |> Enum.max(fn -> 0 end)
+
+    # Use font metrics from state
+    line_height = state.font.size
+    char_width = state.font.size * 0.6  # Approximate character width
+
+    content_width = max_line_width * char_width + 100  # Add some padding
+    content_height = line_count * line_height
+
+    {trunc(content_width), trunc(content_height)}
   end
 end
 

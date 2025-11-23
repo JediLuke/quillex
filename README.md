@@ -6,6 +6,9 @@ A simple text-editor (basically a [Gedit](https://wiki.gnome.org/Apps/Gedit) clo
 
 ## Installing
 
+    # SCENIC LOCAL DRIVER - Running executable (spwan port): ~c"/Users/luke/workbench/flx/quillex/_build/dev/lib/scenic_driver_local/priv/scenic_driver_local 0 0 255 1 1 1680 1005 1 \"Quillex\""
+  
+
 ### Scenic
 
 The graphics in QuillEx are powered by an Elixir library called [Scenic](https://github.com/boydm/scenic). For Scenic to compile. some OpenGL libraries must be present on the system. Please see the Scenic [installation docs](https://hexdocs.pm/scenic/install_dependencies.html) on how to install Scenic on your system.

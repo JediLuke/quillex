@@ -2,6 +2,7 @@
 defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.VimKeyMappings.NormalMode do
   use ScenicWidgets.ScenicEventsDefinitions
   alias Quillex.GUI.Components.BufferPane
+  require Logger
 
   # # Handle held keys as repeated presses
   # def handle(buf, {:key, {key, @key_held, mods}}) do
@@ -116,9 +117,8 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.VimKeyMappings.Norm
   end
 
   def handle(@lowercase_p) do
-    # buf_pane_state = reset_operator_and_count(buf_pane_state)
-    # {buf_pane_state, [{:move_cursor, :prev_word}]}
-    [{:paste, :at_cursor}]
+    # In Vim, 'p' pastes after cursor for characterwise, below line for linewise
+    [{:paste, :line, :at_cursor}]
   end
 
   # # 'e' moves to the end of the word
@@ -193,15 +193,15 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.VimKeyMappings.Norm
   # end
 
   # Unhandled inputs
-  def handle(buf_pane_state, input) do
-    buf_pane_state = reset_operator_and_count(buf_pane_state)
-    IO.puts("NormalMode: Unhandled input: #{inspect(input)}")
-    # {buf_pane_state, :ignore}
+  def handle(input) do
+    Logger.warning("NormalMode: Unhandled input: #{inspect(input)}")
     :ignore
   end
 
-  def handle(input) do
-    IO.puts("NormalMode: Unhandled input: #{inspect(input)}")
+  def handle(buf_pane_state, input) do
+    buf_pane_state = reset_operator_and_count(buf_pane_state)
+    Logger.warning("NormalMode: Unhandled input: #{inspect(input)}")
+    # {buf_pane_state, :ignore}
     :ignore
   end
 

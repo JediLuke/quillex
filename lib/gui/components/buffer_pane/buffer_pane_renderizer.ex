@@ -41,8 +41,15 @@ defmodule Quillex.GUI.Components.BufferPane.Renderizer do
         |> Scenic.Primitives.group(fn graph ->
           graph
           |> render_background(scene, frame, state, buf)
-          |> render_text_lines(scene, frame, state, buf)
-          |> render_cursor(scene, frame, state, buf)
+          # Wrap scrollable content in a separate group
+          |> Scenic.Primitives.group(fn content_graph ->
+            content_graph
+            |> render_selection_highlighting(scene, frame, state, buf)
+            |> render_text_lines(scene, frame, state, buf)
+            |> render_cursor(scene, frame, state, buf)
+          end, id: :scrollable_content)
+          # Add a hidden text element with the full buffer content for semantic queries
+          |> add_semantic_buffer_content(buf)
           # |> draw_scrollbars(args)
           # |> render_status_bar(frame, buf)
           # |> render_active_row_decoration(frame, buf, font, colors)
@@ -52,8 +59,12 @@ defmodule Quillex.GUI.Components.BufferPane.Renderizer do
       _primitive ->
         graph
         |> render_background(scene, frame, state, buf)
-        |> render_text_lines(scene, frame, state, buf)
-        |> render_cursor(scene, frame, state, buf)
+        |> Scenic.Graph.modify(:scrollable_content, fn primitive ->
+          primitive
+          |> render_selection_highlighting(scene, frame, state, buf)
+          |> render_text_lines(scene, frame, state, buf)
+          |> render_cursor(scene, frame, state, buf)
+        end)
     end
   end
 
@@ -95,48 +106,70 @@ defmodule Quillex.GUI.Components.BufferPane.Renderizer do
     #  initial_y = font.size - 3
     # then I "adde4d 4" by making this plus 1, but it's still a magic number
     initial_y = state.font.size + 1 # font.size + adds adds a nice little top margin
-    max_lines = max(length(old_lines), length(new_lines))
     line_height = state.font.size
-
-    # max_lines = length(new_lines)
+    
+    # Get scroll offset
+    {scroll_x, scroll_y} = state.scroll_acc
+    
+    # Calculate viewport bounds for efficient rendering
+    viewport_height = frame.size.height
+    visible_start_line = max(1, div(-scroll_y, line_height) + 1)
+    visible_end_line = min(length(new_lines), div((-scroll_y + viewport_height), line_height) + 2)
+    
+    # Only process lines that could be visible or were previously visible
+    max_lines = max(length(old_lines), length(new_lines))
+    render_start = max(1, visible_start_line - 5)  # Buffer for smooth scrolling
+    render_end = min(max_lines, visible_end_line + 5)
 
     # TODO always render at least the first line number...
     updated_graph =
       graph
       |> Scenic.Primitives.group(fn graph ->
-        Enum.reduce(1..max_lines, graph, fn idx, acc_graph ->
+        Enum.reduce(render_start..render_end, graph, fn idx, acc_graph ->
           old_line = Enum.at(old_lines, idx - 1, nil)
           new_line = Enum.at(new_lines, idx - 1, nil)
-          y_position = initial_y + (idx - 1) * line_height
+          y_position = initial_y + (idx - 1) * line_height + scroll_y
+          
+          # Skip lines that are completely outside the viewport
+          if y_position > viewport_height + line_height or y_position < -line_height do
+            # Clean up any existing lines outside viewport
+            acc_graph
+            |> Scenic.Graph.delete({:line_number_text, idx})
+            |> Scenic.Graph.delete({:line_text, idx})
+          else
+            cond do
+              # Line unchanged, skip rendering (but update position if scrolled)
+              old_line == new_line and scroll_y == 0 ->
+                acc_graph
 
-          cond do
-            # Line unchanged, skip rendering
-            old_line == new_line ->
-              acc_graph
+              # Line removed, clean up
+              old_line != nil and new_line == nil ->
+                acc_graph
+                |> Scenic.Graph.delete({:line_number_text, idx})
+                |> Scenic.Graph.delete({:line_text, idx})
 
-            # Line removed, clean up
-            old_line != nil and new_line == nil ->
-              acc_graph
-              |> Scenic.Graph.delete({:line_number_text, idx})
-              |> Scenic.Graph.delete({:line_text, idx})
-
-            # Line added or changed, render
-            true ->
-              acc_graph
-              |> Scenic.Graph.delete({:line_text, idx})
-              |> render_line_number(idx, y_position, state.font)
-              |> render_line_text(new_line || "", idx, y_position, state.font, state.colors.text)
+              # Line added or changed, render with scroll offset
+              true ->
+                acc_graph
+                |> Scenic.Graph.delete({:line_text, idx})
+                |> render_line_number(idx, y_position, state.font)
+                |> render_line_text(new_line || "", idx, y_position, state.font, state.colors.text, scroll_x)
+            end
           end
         end)
+        # Clean up any lines outside our render range
+        |> cleanup_lines_outside_range(1, render_start - 1)
+        |> cleanup_lines_outside_range(render_end + 1, max_lines)
         # always render at least the first line number (even if that line of text is blank)
-        |> render_line_number(1, initial_y, state.font)
-      end, id: :full_text_block)
+        |> render_line_number(1, initial_y + scroll_y, state.font)
+      end, id: :full_text_block, translate: {0, 0})
 
     updated_graph
   end
 
   @line_num_column_width 40 # how wide the left-hand 'line numbers' column is
   @semi_transparent_white {255, 255, 255, Integer.floor_div(255, 3)}
+  @selection_color {100, 150, 255, 100} # semi-transparent blue for text selection
   defp render_line_number(graph, idx, y_position, font) do
     case Scenic.Graph.get(graph, {:line_number_text, idx}) do
       [] ->
@@ -159,12 +192,119 @@ defmodule Quillex.GUI.Components.BufferPane.Renderizer do
   end
 
   @margin_left 5
-  defp render_line_text(graph, line, idx, y_position, font, color) do
+
+  # Render text selection highlighting - no selection case
+  defp render_selection_highlighting(graph, _scene, _frame, _state, %{selection: nil}) do
+    # Remove any existing selection highlights
+    clean_selection_highlights(graph)
+  end
+
+  # Render text selection highlighting - with active selection
+  defp render_selection_highlighting(graph, _scene, frame, state, %{selection: %{start: {start_line, start_col}, end: {end_line, end_col}}} = buf) do
+    # Normalize selection - ensure start comes before end
+    {{sel_start_line, sel_start_col}, {sel_end_line, sel_end_col}} = 
+      if start_line < end_line or (start_line == end_line and start_col <= end_col) do
+        {{start_line, start_col}, {end_line, end_col}}
+      else
+        {{end_line, end_col}, {start_line, start_col}}
+      end
+
+    # If selection has contracted to zero (start == end), clean highlights instead
+    if sel_start_line == sel_end_line and sel_start_col == sel_end_col do
+      clean_selection_highlights(graph)
+    else
+      render_selection_rectangles(graph, {sel_start_line, sel_start_col}, {sel_end_line, sel_end_col}, state, buf)
+    end
+  end
+
+  # Extracted selection rectangle rendering logic
+  defp render_selection_rectangles(graph, {sel_start_line, sel_start_col}, {sel_end_line, sel_end_col}, state, buf) do
+    initial_y = state.font.size + 1
+    line_height = state.font.size
+    text_start_x = @line_num_column_width + @margin_left
+
+    # Render selection rectangles for each line in the selection
+    Enum.reduce(sel_start_line..sel_end_line, graph, fn line_num, acc_graph ->
+      y_position = initial_y + (line_num - 1) * line_height
+      line_text = Enum.at(buf.data, line_num - 1, "")
+      
+      # Calculate selection bounds for this line
+      {start_col_on_line, end_col_on_line} = 
+        cond do
+          line_num == sel_start_line and line_num == sel_end_line ->
+            # Selection within same line
+            {sel_start_col, sel_end_col}
+          line_num == sel_start_line ->
+            # First line of multi-line selection
+            {sel_start_col, String.length(line_text) + 1}
+          line_num == sel_end_line ->
+            # Last line of multi-line selection  
+            {1, sel_end_col}
+          true ->
+            # Middle line of multi-line selection
+            {1, String.length(line_text) + 1}
+        end
+
+      # Calculate pixel coordinates for selection rectangle
+      start_x_offset = if start_col_on_line > 1 do
+        text_before_selection = String.slice(line_text, 0, start_col_on_line - 1)
+        FontMetrics.width(text_before_selection, state.font.size, state.font.metrics)
+      else
+        0
+      end
+      
+      selection_length = max(0, end_col_on_line - start_col_on_line)
+      selected_text = String.slice(line_text, start_col_on_line - 1, selection_length)
+      selection_width = if String.length(selected_text) > 0 do
+        FontMetrics.width(selected_text, state.font.size, state.font.metrics)
+      else
+        # Minimum width for cursor-like selection
+        5
+      end
+
+      # Add selection rectangle to graph
+      case Scenic.Graph.get(acc_graph, {:selection_highlight, line_num}) do
+        [] ->
+          acc_graph
+          |> Scenic.Primitives.rect(
+            {selection_width, line_height},
+            fill: {:color_rgba, @selection_color},
+            translate: {text_start_x + start_x_offset, y_position - line_height + 1},
+            id: {:selection_highlight, line_num}
+          )
+        _primitive ->
+          acc_graph
+          |> Scenic.Graph.modify({:selection_highlight, line_num}, fn primitive ->
+            Scenic.Primitives.rect(
+              primitive,
+              {selection_width, line_height},
+              fill: {:color_rgba, @selection_color},
+              translate: {text_start_x + start_x_offset, y_position - line_height + 1}
+            )
+          end)
+      end
+    end)
+  end
+
+  # Helper function to remove all selection highlights
+  defp clean_selection_highlights(graph) do
+    # Find and remove all selection highlight primitives
+    Enum.reduce(1..100, graph, fn line_num, acc_graph ->
+      case Scenic.Graph.get(acc_graph, {:selection_highlight, line_num}) do
+        [] -> acc_graph
+        _primitive -> Scenic.Graph.delete(acc_graph, {:selection_highlight, line_num})
+      end
+    end)
+  end
+
+  defp render_line_text(graph, line, idx, y_position, font, color, scroll_x \\ 0) do
 
     # TODO this is what scenic does https://github.com/boydm/scenic/blob/master/lib/scenic/component/input/text_field.ex#L198
 
     # used to use this component... TODO salvage it for anything of worth
     # |> ScenicWidgets.TextPad.LineOfText.add_to_graph(
+
+    x_position = @line_num_column_width + @margin_left + scroll_x
 
     case Scenic.Graph.get(graph, {:line_text, idx}) do
       [] ->
@@ -174,15 +314,16 @@ defmodule Quillex.GUI.Components.BufferPane.Renderizer do
           font_size: font.size,
           font: font.name,
           fill: color,
-          translate: {@line_num_column_width + @margin_left, y_position},
+          translate: {x_position, y_position},
           id: {:line_text, idx}
         )
 
       _primitive ->
         graph
-        |> Scenic.Graph.modify({:line_text, idx},
-          &Scenic.Primitives.text(&1, line)
-        )
+        |> Scenic.Graph.modify({:line_text, idx}, fn primitive ->
+          Scenic.Primitives.text(primitive, line)
+          |> Scenic.Primitives.update_opts(translate: {x_position, y_position})
+        end)
     end
   end
 
@@ -190,6 +331,17 @@ defmodule Quillex.GUI.Components.BufferPane.Renderizer do
   #     # no cursors in read-only mode...
   #     graph
   #   end
+
+  # Helper function to clean up lines outside the render range
+  defp cleanup_lines_outside_range(graph, start_line, end_line) when start_line <= end_line do
+    Enum.reduce(start_line..end_line, graph, fn idx, acc_graph ->
+      acc_graph
+      |> Scenic.Graph.delete({:line_number_text, idx})
+      |> Scenic.Graph.delete({:line_text, idx})
+    end)
+  end
+  
+  defp cleanup_lines_outside_range(graph, _start_line, _end_line), do: graph
 
   defp render_cursor(graph, scene, frame, state, %Quillex.Structs.BufState{cursors: [cursor]} = buf) do
     cursor_id = {:cursor, 1}
@@ -216,7 +368,7 @@ defmodule Quillex.GUI.Components.BufferPane.Renderizer do
         |> Quillex.GUI.Components.BufferPane.CursorCaret.add_to_graph(
           %{
             buffer_uuid: buf.uuid,
-            starting_pin: {@line_num_column_width + @margin_left, 0},
+            starting_pin: {@line_num_column_width + @margin_left + elem(state.scroll_acc, 0), elem(state.scroll_acc, 1)},
             coords: {cursor.line, cursor.col},
             height: state.font.size,
             mode: cursor_mode,
@@ -306,6 +458,26 @@ defmodule Quillex.GUI.Components.BufferPane.Renderizer do
 # end
 
 
+  # Add a hidden text primitive with semantic information for the buffer content
+  defp add_semantic_buffer_content(graph, %Quillex.Structs.BufState{} = buf) do
+    # Join all buffer lines into a single string
+    buffer_content = Enum.join(buf.data || [], "\n")
+    
+    # Add a hidden text element with semantic annotation
+    graph
+    |> Scenic.Primitives.text(
+      buffer_content,
+      id: {:semantic_buffer_content, buf.uuid},
+      # Hide the element visually but keep it in the graph for semantic queries
+      hidden: true,
+      semantic: %{
+        type: :text_buffer,
+        buffer_id: buf.uuid,
+        editable: true,
+        role: :textbox
+      }
+    )
+  end
 end
 
 

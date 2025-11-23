@@ -22,7 +22,11 @@ defmodule QuillEx.RootScene do
     buffers =
       case Quillex.Buffer.BufferManager.list_buffers() do
         [] ->
-          {:ok, buf_ref} = Quillex.Buffer.BufferManager.new_buffer(%{mode: :edit})
+          # Use notepad :edit mode for spex tests (default_buffer_mode can be set in config)
+          # Otherwise use vim normal mode
+          mode = Application.get_env(:quillex, :default_buffer_mode, {:vim, :normal})
+          Logger.info("Creating initial buffer with mode: #{inspect(mode)}")
+          {:ok, buf_ref} = Quillex.Buffer.BufferManager.new_buffer(%{mode: mode})
           [buf_ref]
         buffers ->
           buffers
@@ -96,6 +100,7 @@ defmodule QuillEx.RootScene do
     #TODO this... isn't always true - should use UserInputHandler here
     # fwd to BufferPane for processing...
     {:ok, [pid]} = Scenic.Scene.child(scene, :buffer_pane)
+    # Revert to async cast for input processing to avoid callback cycles
     GenServer.cast(pid, {:user_input, input})
 
     {:noreply, scene}
@@ -105,7 +110,43 @@ defmodule QuillEx.RootScene do
     {:reply, {:ok, scene.assigns.state.active_buf}, scene}
   end
 
+  # Synchronous action processing for BufferPane actions
+  def handle_call({Quillex.GUI.Components.BufferPane, :action, buf_ref, actions}, _from, scene) do
+    # Processing BufferPane actions synchronously (same logic as handle_cast)
+    {:ok, new_buf} = Quillex.Buffer.BufferManager.call_buffer(buf_ref, {:action, actions})
+    
+    # Update the GUI with new buffer state synchronously
+    {:ok, [pid]} = Scenic.Scene.child(scene, :buffer_pane)
+    GenServer.call(pid, {:state_change, new_buf})
+    
+    {:reply, :ok, scene}
+  end
+
+  def handle_call({:action, actions}, _from, scene) when is_list(actions) do
+    # Processing actions from RadixReducer (synchronous version)
+    case process_actions(scene, actions) do
+      {:ok, {new_state, new_graph}} ->
+        new_scene =
+          scene
+          |> assign(state: new_state)
+          |> assign(graph: new_graph)
+          |> push_graph(new_graph)
+
+        {:reply, :ok, new_scene}
+
+      {:error, reason} ->
+        Logger.error "Couldn't compute action #{inspect actions}. #{inspect reason}"
+        {:reply, {:error, reason}, scene}
+    end
+  end
+
+  def handle_call({:action, a}, _from, scene) do
+    # wrap singular actions in a list and push through the multi-action pipeline anyway
+    handle_call({:action, [a]}, nil, scene)
+  end
+
   def handle_cast({:action, actions}, scene) when is_list(actions) do
+    # Processing actions from RadixReducer
     case process_actions(scene, actions) do
       {:ok, {new_state, new_graph}} ->
         new_scene =
@@ -136,6 +177,49 @@ defmodule QuillEx.RootScene do
     end
   end
 
+  #TODO differentiate between :gui_action
+
+  def handle_cast({:action, a}, scene) do
+    # wrap singular actions in a list and push through the multi-action pipeline anyway
+    handle_cast({:action, [a]}, scene)
+  end
+
+  # these actions bubble up from the BufferPane component, we simply forward them to the Buffer process
+  # this is where we ought to simply fwd the actions, and await a callback - we're the GUI, we just react
+  def handle_cast(
+        {
+          Quillex.GUI.Components.BufferPane,
+          :action,
+          %Quillex.Structs.BufState.BufRef{} = buf_ref,
+          actions
+        },
+        scene
+      ) do
+    # Processing BufferPane actions
+
+    # Flamelex.Fluxus.action()
+
+    # interact with the Buffer state to apply the actions - thisd is equivalent to Fluxus
+    # Applying actions to buffer
+    {:ok, new_buf} = Quillex.Buffer.BufferManager.call_buffer(buf_ref, {:action, actions})
+    # Buffer state updated
+
+    # # we normally would broadcast changesd from Fluxus, since RootScene _id_ fluxus here, here is where we broadcast from
+
+    # # alternativaly...
+    # # maybe root scene should listen to qlx_events, get that buffer updated, then in there, go fetch thye buffer & then push the updated down...
+    # # that would be more like how flamelex does it
+    # # and it allows us to proapagate changes up from quillex to flamelex in same mechanism
+
+    # # update the GUI
+    # Updating GUI with new buffer state
+    {:ok, [pid]} = Scenic.Scene.child(scene, :buffer_pane)
+    GenServer.cast(pid, {:state_change, new_buf})
+    # GUI update complete
+
+    {:noreply, scene}
+  end
+
   defp process_actions(scene, actions) do
     # wormhole will wrap this function in an ok/error tuple even if it crashes
     Wormhole.capture(fn ->
@@ -161,44 +245,6 @@ defmodule QuillEx.RootScene do
 
       {new_state, new_graph}
     end)
-  end
-
-  #TODO differentiate between :gui_action
-
-  def handle_cast({:action, a}, scene) do
-    # wrap singular actions in a list and push through the multi-action pipeline anyway
-    handle_cast({:action, [a]}, scene)
-  end
-
-  # these actions bubble up from the BufferPane component, we simply forward them to the Buffer process
-  # this is where we ought to simply fwd the actions, and await a callback - we're the GUI, we just react
-  def handle_cast(
-        {
-          Quillex.GUI.Components.BufferPane,
-          :action,
-          %Quillex.Structs.BufState.BufRef{} = buf_ref,
-          actions
-        },
-        scene
-      ) do
-
-    # Flamelex.Fluxus.action()
-
-    # interact with the Buffer state to apply the actions - thisd is equivalent to Fluxus
-    # {:ok, new_buf} = BufferManager.call_buffer(buf_ref, {:action, actions})
-
-    # # we normally would broadcast changesd from Fluxus, since RootScene _id_ fluxus here, here is where we broadcast from
-
-    # # alternativaly...
-    # # maybe root scene should listen to qlx_events, get that buffer updated, then in there, go fetch thye buffer & then push the updated down...
-    # # that would be more like how flamelex does it
-    # # and it allows us to proapagate changes up from quillex to flamelex in same mechanism
-
-    # # update the GUI
-    # {:ok, [pid]} = Scenic.Scene.child(scene, :buffer_pane)
-    # GenServer.cast(pid, {:state_change, new_buf})
-
-    {:noreply, scene}
   end
 
   # if actions come in via PubSub they come in via handle_info, just convert to handle_cast
@@ -242,8 +288,8 @@ defmodule QuillEx.RootScene do
     {:noreply, new_scene}
   end
 
-  def handle_info({:ubuntu_bar_clicked, button_id, button}, scene) do
-    Logger.info("UbuntuBar button clicked: #{inspect(button_id)} - #{inspect(button)}")
+  def handle_info({:ubuntu_bar_button_clicked, button_id, button}, scene) do
+    # UbuntuBar button clicked: #{button_id}"
     
     # Handle different button actions
     case button_id do
@@ -252,23 +298,23 @@ defmodule QuillEx.RootScene do
         handle_cast({:action, :new_buffer}, scene)
         
       :open_file ->
-        Logger.info("Open file functionality not implemented yet")
+        # Open file functionality not implemented yet
         {:noreply, scene}
         
       :save_file ->
-        Logger.info("Save file functionality not implemented yet")
+        # Save file functionality not implemented yet
         {:noreply, scene}
         
       :search ->
-        Logger.info("Search functionality not implemented yet")
+        # Search functionality not implemented yet
         {:noreply, scene}
         
       :settings ->
-        Logger.info("Settings functionality not implemented yet")
+        # Settings functionality not implemented yet
         {:noreply, scene}
         
       _other ->
-        Logger.warn("Unknown ubuntu bar button: #{inspect(button_id)}")
+        Logger.warning("Unknown ubuntu bar button: #{inspect(button_id)}")
         {:noreply, scene}
     end
   end
