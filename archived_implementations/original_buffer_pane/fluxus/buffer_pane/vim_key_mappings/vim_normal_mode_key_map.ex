@@ -117,9 +117,8 @@ defmodule Quillex.GUI.Components.BufferPane.UserInputHandler.VimKeyMappings.Norm
   end
 
   def handle(@lowercase_p) do
-    # buf_pane_state = reset_operator_and_count(buf_pane_state)
-    # {buf_pane_state, [{:move_cursor, :prev_word}]}
-    [{:paste, :at_cursor}]
+    # In Vim, 'p' pastes after cursor for characterwise, below line for linewise
+    [{:paste, :line, :at_cursor}]
   end
 
   # # 'e' moves to the end of the word
