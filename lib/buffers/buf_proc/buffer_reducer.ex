@@ -50,6 +50,11 @@ defmodule Quillex.Buffer.Process.Reducer do
     |> BufferPane.Mutator.set_mode(m)
   end
 
+  # Set the buffer data directly (used for syncing from TextField on resize)
+  def process(%Quillex.Structs.BufState{} = buf, {:set_data, lines}) when is_list(lines) do
+    %{buf | data: lines}
+  end
+
   def process(%Quillex.Structs.BufState{} = buf, {:move_cursor, direction, x}) do
     buf |> BufferPane.Mutator.move_cursor(direction, x)
   end

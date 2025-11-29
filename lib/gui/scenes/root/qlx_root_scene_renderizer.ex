@@ -1,67 +1,128 @@
 defmodule QuillEx.RootScene.Renderizer do
   require Logger
 
+  # Height of the top bar (TabBar + IconMenu)
+  @top_bar_height 35
+
   # it has to take in a scene here cause we need to cast to the scene's children
   def render(
     %Scenic.Graph{} = graph,
     %Scenic.Scene{} = scene,
     %QuillEx.RootScene.State{} = state
   ) do
-    # Simplified: just render the text area without menu bar for now
+    # Split frame: top bar and buffer pane below
+    [top_bar_frame, buffer_frame] = Widgex.Frame.v_split(state.frame, px: @top_bar_height)
+
+    # Render buffer pane FIRST so it's on the bottom layer,
+    # then top bar LAST so dropdowns appear above the text field
     graph
-    |> render_text_area(scene, state, state.frame)
+    |> render_buffer_pane(scene, state, buffer_frame)
+    |> render_top_bar(scene, state, top_bar_frame)
   end
 
-  defp render_text_area(
+  # Render the top bar containing TabBar (left) and IconMenu (right)
+  defp render_top_bar(
     %Scenic.Graph{} = graph,
-    %Scenic.Scene{} = scene,
+    %Scenic.Scene{} = _scene,
     %QuillEx.RootScene.State{} = state,
     %Widgex.Frame{} = frame
   ) do
-    # Simplified: just render the buffer pane using the full frame
+    # IconMenu takes fixed width on the right, TabBar gets the rest
+    # 4 icons at 35px each (default icon_button_size in IconMenu theme) = 140px
+    icon_menu_width = 140
+    tab_bar_width = frame.size.width - icon_menu_width
+
+    # Create frames for each component
+    tab_bar_frame = Widgex.Frame.new(
+      pin: frame.pin.point,
+      size: {tab_bar_width, frame.size.height}
+    )
+
+    icon_menu_frame = Widgex.Frame.new(
+      pin: {elem(frame.pin.point, 0) + tab_bar_width, elem(frame.pin.point, 1)},
+      size: {icon_menu_width, frame.size.height}
+    )
+
     graph
-    |> render_buffer_pane(scene, state, frame)
+    |> render_tab_bar(state, tab_bar_frame)
+    |> render_icon_menu(state, icon_menu_frame)
   end
 
-  defp render_ubuntu_bar(graph, scene, _state, frame) do
-    # Create UbuntuBar with cool ASCII buttons - creative and safe!
-    buttons = ScenicWidgets.UbuntuBar.cool_ascii_buttons()
-
-    ubuntu_bar_data = %{
-      buttons: buttons,
-      button_size: min(48, frame.size.width - 8), # Leave more padding
-      background_color: {40, 40, 40},
-      button_color: {55, 55, 55},
-      button_hover_color: {75, 75, 75},
-      button_active_color: {85, 130, 180},
-      text_color: {240, 240, 240},
-      font_size: 18, # Perfect size for symbols
-      layout: :top, # Start from the top
-      button_spacing: 10, # Nice spacing for symbols
-      remove_top_margin: true # Align with text pane since menubar provides visual separation
-      # font_family: :ibm_plex_mono # TODO: Add proper font support for symbols
-    }
-
-    case Scenic.Graph.get(graph, :ubuntu_bar) do
+  defp render_tab_bar(%Scenic.Graph{} = graph, %QuillEx.RootScene.State{} = state, %Widgex.Frame{} = frame) do
+    case Scenic.Graph.get(graph, :tab_bar) do
       [] ->
-        graph
-        |> ScenicWidgets.UbuntuBar.add_to_graph(
-          ubuntu_bar_data,
-          id: :ubuntu_bar,
+        # Build tabs from open buffers
+        tabs = Enum.map(state.buffers, fn buf ->
+          %{
+            id: buf.uuid,
+            label: buf.name,
+            closeable: true
+          }
+        end)
+
+        # Select the active buffer's tab
+        selected_id = if state.active_buf, do: state.active_buf.uuid, else: nil
+
+        tab_bar_data = %{
           frame: frame,
+          tabs: tabs,
+          selected_id: selected_id
+        }
+
+        graph
+        |> ScenicWidgets.TabBar.add_to_graph(
+          tab_bar_data,
+          id: :tab_bar,
           translate: frame.pin.point
         )
 
-      _primitive ->
-        # Component already exists, could send updates if needed
+      _existing ->
         graph
     end
   end
 
-  defp render_tab_bar(graph, scene, state, frame) do
-    #TODO this obviously
-    Logger.error "RENDER TAB BAR !!!"
-    graph
+  defp render_icon_menu(%Scenic.Graph{} = graph, %QuillEx.RootScene.State{} = _state, %Widgex.Frame{} = frame) do
+    case Scenic.Graph.get(graph, :icon_menu) do
+      [] ->
+        menus = [
+          %{id: :file, icon: "F", items: [
+            {"new", "New Buffer"},
+            {"open", "Open File..."},
+            {"save", "Save"},
+            {"save_as", "Save As..."}
+          ]},
+          %{id: :edit, icon: "E", items: [
+            {"undo", "Undo"},
+            {"redo", "Redo"},
+            {"cut", "Cut"},
+            {"copy", "Copy"},
+            {"paste", "Paste"}
+          ]},
+          %{id: :view, icon: "V", items: [
+            {"line_numbers", "Toggle Line Numbers"},
+            {"word_wrap", "Toggle Word Wrap"}
+          ]},
+          %{id: :help, icon: "?", items: [
+            {"about", "About Quillex"},
+            {"shortcuts", "Keyboard Shortcuts"}
+          ]}
+        ]
+
+        icon_menu_data = %{
+          frame: frame,
+          menus: menus
+        }
+
+        graph
+        |> ScenicWidgets.IconMenu.add_to_graph(
+          icon_menu_data,
+          id: :icon_menu,
+          translate: frame.pin.point
+        )
+
+      _existing ->
+        graph
+    end
   end
 
   defp render_buffer_pane(
@@ -80,6 +141,9 @@ defmodule QuillEx.RootScene.Renderizer do
         # Create font
         buffer_pane_state = Quillex.GUI.Components.BufferPane.State.new(%{})
         font = buffer_pane_state.font
+
+        # Check if we have a cursor position to restore (from resize)
+        initial_cursor = Map.get(state, :_restore_cursor)
 
         # Add TextField directly (no wrapper component needed!)
         text_field_data = %{
@@ -107,6 +171,8 @@ defmodule QuillEx.RootScene.Renderizer do
           viewport_buffer_lines: 5,
           id: :buffer_pane
         }
+        # Add initial_cursor if we're restoring from a resize
+        |> maybe_add_cursor(initial_cursor)
 
         graph
         |> ScenicWidgets.TextField.add_to_graph(
@@ -121,6 +187,10 @@ defmodule QuillEx.RootScene.Renderizer do
         graph
     end
   end
+
+  # Helper to add initial_cursor to text_field_data if present
+  defp maybe_add_cursor(data, nil), do: data
+  defp maybe_add_cursor(data, cursor), do: Map.put(data, :initial_cursor, cursor)
 
   # Render the menu bar
   defp render_menu_bar(

@@ -13,7 +13,7 @@ defmodule Quillex.Structs.BufState do
     # where the actual contents of the buffer is kept
     data: nil,
     # Buffers can be in various "modes" e.g. {:vim, :normal}, :edit
-    mode: {:vim, :normal},
+    mode: :edit,
     # Description of where this buffer originally came from, e.g. %{filepath: file_path}
     source: nil,
     # a list of all the cursors in the buffer (these go into the buffer, not the buffer pane, because cursors are still used even through the API)
@@ -52,8 +52,8 @@ defmodule Quillex.Structs.BufState do
     name = Map.get(args, :name) || Map.get(args, "name") || @unnamed
     data = Map.get(args, :data) || Map.get(args, "data") || [""]
     data = if is_list(data), do: data, else: raise("Buffer data must be a list of strings")
-    # mode: validate_mode(args[:mode]) || {:vim, :normal},
-    mode = Map.get(args, :mode) || Map.get(args, "mode") || {:vim, :normal}
+    # mode: validate_mode(args[:mode]) || :edit,
+    mode = Map.get(args, :mode) || Map.get(args, "mode") || :edit
     # Creating buffer with mode: #{inspect(mode)}
     source = Map.get(args, :source) || Map.get(args, "source") || nil
     cursors = Map.get(args, :cursors) || Map.get(args, "cursors") || [Cursor.new()]

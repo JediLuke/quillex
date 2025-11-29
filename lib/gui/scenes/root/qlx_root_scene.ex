@@ -22,9 +22,8 @@ defmodule QuillEx.RootScene do
     buffers =
       case Quillex.Buffer.BufferManager.list_buffers() do
         [] ->
-          # Use notepad :edit mode for spex tests (default_buffer_mode can be set in config)
-          # Otherwise use vim normal mode
-          mode = Application.get_env(:quillex, :default_buffer_mode, {:vim, :normal})
+          # Quillex uses simple :edit mode (notepad-style)
+          mode = Application.get_env(:quillex, :default_buffer_mode, :edit)
           Logger.info("Creating initial buffer with mode: #{inspect(mode)}")
           {:ok, buf_ref} = Quillex.Buffer.BufferManager.new_buffer(%{mode: mode})
           [buf_ref]
@@ -66,35 +65,65 @@ defmodule QuillEx.RootScene do
     _context,
     scene
   ) do
-    # Logger.debug("#{__MODULE__} recv'd a reshape event: #{inspect(new_vp_size)}")
+    current_frame = scene.assigns.state.frame
+    current_size = {current_frame.size.width, current_frame.size.height}
 
-    # # NOTE we could use `scene.assigns.frame.pin.point` or just {0, 0}
-    # # since, doesn't it have to be {0, 0} anyway??
-    # new_frame = Widgex.Frame.new(pin: {0, 0}, size: new_vp_size)
+    # Only re-render if size actually changed (avoids double-render on bootup)
+    if current_size != new_vp_size do
+      Logger.debug("#{__MODULE__} reshape: #{inspect(current_size)} -> #{inspect(new_vp_size)}")
 
-    # # do a full init render (make a new graph, for the new frame) and
-    # # then re-render it to update the new graph with the current state
+      # IMPORTANT: Before rebuilding the graph, sync TextField content back to buffer
+      # and capture the cursor position to restore it after rebuild
+      cursor_pos = sync_textfield_to_buffer(scene)
 
-    # scene =
-    #   scene
-    #   |> assign(frame: new_frame)
-    #   |> assign(graph: RootScene.Renderizer.init_render(scene))
+      # Create new frame with the resized dimensions
+      new_frame = Widgex.Frame.new(pin: {0, 0}, size: new_vp_size)
 
-    # new_graph =
-    #   RootScene.Renderizer.re_render(scene, scene.assigns.state)
+      # Update state with new frame and saved cursor position for the renderizer
+      new_state = scene.assigns.state
+        |> Map.put(:frame, new_frame)
+        |> Map.put(:_restore_cursor, cursor_pos)
 
-    # new_scene =
-    #   scene
-    #   |> assign(graph: new_graph)
-    #   |> push_graph(new_graph)
+      # Build a fresh graph for the new frame size
+      # Using Scenic.Graph.build() ensures we start fresh, which is needed
+      # because the TextField component needs to be recreated with new dimensions
+      # The renderizer will fetch the buffer content (now synced) for initial_text
+      new_graph = RootScene.Renderizer.render(Scenic.Graph.build(), scene, new_state)
 
-    # {:noreply, new_scene}
+      # Remove the temporary cursor restore key from state
+      final_state = Map.delete(new_state, :_restore_cursor)
 
+      new_scene =
+        scene
+        |> assign(state: final_state)
+        |> assign(graph: new_graph)
+        |> push_graph(new_graph)
 
-    #TODO this gets called twice on bootup, once to render and another with a "reshape event"??
-    # either figure out why that's happening and fix that, or else (and maybe we do this anyway) we
-    # shouldn't be re-rendering from scratch on this one, we should just adjust the frames
-    {:noreply, scene}
+      {:noreply, new_scene}
+    else
+      # Size unchanged, don't re-render (handles the double-call on bootup)
+      {:noreply, scene}
+    end
+  end
+
+  # Sync the TextField's current content back to the buffer process
+  # Returns the cursor position so it can be restored after rebuild
+  defp sync_textfield_to_buffer(scene) do
+    with {:ok, [%ScenicWidgets.TextField.State{} = tf_state]} <- Scenic.Scene.fetch_child(scene, :buffer_pane),
+         buf_ref when not is_nil(buf_ref) <- scene.assigns.state.active_buf do
+      # Update the buffer with the current text (TextField stores lines as a list)
+      Quillex.Buffer.BufferManager.call_buffer(buf_ref, {:action, [{:set_data, tf_state.lines}]})
+
+      Logger.debug("Synced TextField content to buffer (#{length(tf_state.lines)} lines), cursor at #{inspect(tf_state.cursor)}")
+      tf_state.cursor
+    else
+      {:error, :no_children} ->
+        # No TextField exists yet (first render), nothing to sync
+        nil
+      _ ->
+        Logger.warning("Could not sync TextField to buffer before resize")
+        nil
+    end
   end
 
   def handle_input(input, _context, scene) do
