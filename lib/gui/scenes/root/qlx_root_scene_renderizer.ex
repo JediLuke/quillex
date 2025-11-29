@@ -74,38 +74,50 @@ defmodule QuillEx.RootScene.Renderizer do
     # thankfully for Quillex at least we don't have to worry about it
     case Scenic.Graph.get(graph, :buffer_pane) do
       [] ->
+        # Fetch buffer to get initial content
+        {:ok, buf} = Quillex.Buffer.Process.fetch_buf(state.active_buf)
 
-        ScenicWidgets.UbuntuBar
+        # Create font
+        buffer_pane_state = Quillex.GUI.Components.BufferPane.State.new(%{})
+        font = buffer_pane_state.font
 
-        buffer_pane_state = Quillex.GUI.Components.BufferPane.State.new(%{
+        # Add TextField directly (no wrapper component needed!)
+        text_field_data = %{
           frame: frame,
-          buf_ref: state.active_buf,
-          # font: %Quillex.Structs.BufState.Font{} = _font
-          # buf_ref: QuillEx.RootScene.State.active_buf(state)
-        })
+          initial_text: Enum.join(buf.data, "\n"),
+          mode: :multi_line,
+          input_mode: :direct,  # TextField handles all input
+          show_line_numbers: true,
+          editable: true,
+          focused: true,  # Start focused - QuillEx is ready to type immediately!
+          font: %{
+            name: font.name,
+            size: font.size,
+            metrics: font.metrics
+          },
+          colors: %{
+            text: :white,
+            background: buffer_pane_state.colors.slate,
+            cursor: :white,
+            line_numbers: {255, 255, 255, 85},
+            border: :clear,
+            focused_border: :clear
+          },
+          cursor_mode: :cursor,
+          viewport_buffer_lines: 5,
+          id: :buffer_pane
+        }
 
         graph
-        |> Quillex.GUI.Components.BufferPane.add_to_graph(%{
-          frame: frame,
-          buf_ref: state.active_buf,
-          font: buffer_pane_state.font
-        },
+        |> ScenicWidgets.TextField.add_to_graph(
+          text_field_data,
           id: :buffer_pane,
           translate: frame.pin.point
         )
 
-
       _primitive ->
-        # these are the only things that could be changed in the BufferPane component by this level, the parent component
-        potential_changes = %{
-          frame: frame,
-          buf_ref: state.active_buf
-          # buf_ref: QuillEx.RootScene.State.active_buf(state)
-        }
-
-        {:ok, [pid]} = Scenic.Scene.child(scene, :buffer_pane)
-        GenServer.cast(pid, {:state_change, potential_changes})
-
+        # TextField already exists, just return graph
+        # TODO: Handle buffer updates if needed
         graph
     end
   end
