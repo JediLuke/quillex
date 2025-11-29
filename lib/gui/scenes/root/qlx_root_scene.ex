@@ -49,7 +49,8 @@ defmodule QuillEx.RootScene do
     Process.register(self(), __MODULE__)
     Quillex.Utils.PubSub.subscribe(topic: :qlx_events)
 
-    request_input(scene, [:viewport, :key])
+    # TextField handles its own input in :direct mode, so we only request viewport events
+    request_input(scene, [:viewport])
 
     {:ok, scene}
   end
@@ -97,12 +98,9 @@ defmodule QuillEx.RootScene do
   end
 
   def handle_input(input, _context, scene) do
-    #TODO this... isn't always true - should use UserInputHandler here
-    # fwd to BufferPane for processing...
-    {:ok, [pid]} = Scenic.Scene.child(scene, :buffer_pane)
-    # Revert to async cast for input processing to avoid callback cycles
-    GenServer.cast(pid, {:user_input, input})
-
+    # TextField in :direct mode handles its own input, so we don't need to forward
+    # This catch-all is kept for any unexpected input events
+    # Logger.debug("RootScene received unexpected input: #{inspect(input)}")
     {:noreply, scene}
   end
 
