@@ -49,26 +49,27 @@ defmodule QuillEx.RootScene.Renderizer do
   end
 
   defp render_tab_bar(%Scenic.Graph{} = graph, %QuillEx.RootScene.State{} = state, %Widgex.Frame{} = frame) do
+    # Build tabs from open buffers
+    tabs = Enum.map(state.buffers, fn buf ->
+      %{
+        id: buf.uuid,
+        label: buf.name,
+        closeable: true
+      }
+    end)
+
+    # Select the active buffer's tab
+    selected_id = if state.active_buf, do: state.active_buf.uuid, else: nil
+
+    tab_bar_data = %{
+      frame: frame,
+      tabs: tabs,
+      selected_id: selected_id
+    }
+
     case Scenic.Graph.get(graph, :tab_bar) do
       [] ->
-        # Build tabs from open buffers
-        tabs = Enum.map(state.buffers, fn buf ->
-          %{
-            id: buf.uuid,
-            label: buf.name,
-            closeable: true
-          }
-        end)
-
-        # Select the active buffer's tab
-        selected_id = if state.active_buf, do: state.active_buf.uuid, else: nil
-
-        tab_bar_data = %{
-          frame: frame,
-          tabs: tabs,
-          selected_id: selected_id
-        }
-
+        # Initial render - add the TabBar
         graph
         |> ScenicWidgets.TabBar.add_to_graph(
           tab_bar_data,
@@ -77,7 +78,15 @@ defmodule QuillEx.RootScene.Renderizer do
         )
 
       _existing ->
+        # TabBar exists - delete and re-add with updated data
+        # This is simpler than trying to update individual tabs
         graph
+        |> Scenic.Graph.delete(:tab_bar)
+        |> ScenicWidgets.TabBar.add_to_graph(
+          tab_bar_data,
+          id: :tab_bar,
+          translate: frame.pin.point
+        )
     end
   end
 
@@ -127,53 +136,52 @@ defmodule QuillEx.RootScene.Renderizer do
 
   defp render_buffer_pane(
     %Scenic.Graph{} = graph,
-    %Scenic.Scene{} = scene,
+    %Scenic.Scene{} = _scene,
     %QuillEx.RootScene.State{} = state,
     %Widgex.Frame{} = frame
   ) do
-    #NOTE if we ever planned to have multiple BufferPanes open at once, this might need to be rethought...
-    # thankfully for Quillex at least we don't have to worry about it
+    # Fetch buffer to get content
+    {:ok, buf} = Quillex.Buffer.Process.fetch_buf(state.active_buf)
+
+    # Create font
+    buffer_pane_state = Quillex.GUI.Components.BufferPane.State.new(%{})
+    font = buffer_pane_state.font
+
+    # Check if we have a cursor position to restore (from resize)
+    initial_cursor = Map.get(state, :_restore_cursor)
+
+    # TextField data for the active buffer
+    text_field_data = %{
+      frame: frame,
+      initial_text: Enum.join(buf.data, "\n"),
+      mode: :multi_line,
+      input_mode: :direct,  # TextField handles all input
+      show_line_numbers: true,
+      editable: true,
+      focused: true,  # Start focused - QuillEx is ready to type immediately!
+      font: %{
+        name: font.name,
+        size: font.size,
+        metrics: font.metrics
+      },
+      colors: %{
+        text: :white,
+        background: buffer_pane_state.colors.slate,
+        cursor: :white,
+        line_numbers: {255, 255, 255, 85},
+        border: :clear,
+        focused_border: :clear
+      },
+      cursor_mode: :cursor,
+      viewport_buffer_lines: 5,
+      id: :buffer_pane
+    }
+    # Add initial_cursor if we're restoring from a resize
+    |> maybe_add_cursor(initial_cursor)
+
     case Scenic.Graph.get(graph, :buffer_pane) do
       [] ->
-        # Fetch buffer to get initial content
-        {:ok, buf} = Quillex.Buffer.Process.fetch_buf(state.active_buf)
-
-        # Create font
-        buffer_pane_state = Quillex.GUI.Components.BufferPane.State.new(%{})
-        font = buffer_pane_state.font
-
-        # Check if we have a cursor position to restore (from resize)
-        initial_cursor = Map.get(state, :_restore_cursor)
-
-        # Add TextField directly (no wrapper component needed!)
-        text_field_data = %{
-          frame: frame,
-          initial_text: Enum.join(buf.data, "\n"),
-          mode: :multi_line,
-          input_mode: :direct,  # TextField handles all input
-          show_line_numbers: true,
-          editable: true,
-          focused: true,  # Start focused - QuillEx is ready to type immediately!
-          font: %{
-            name: font.name,
-            size: font.size,
-            metrics: font.metrics
-          },
-          colors: %{
-            text: :white,
-            background: buffer_pane_state.colors.slate,
-            cursor: :white,
-            line_numbers: {255, 255, 255, 85},
-            border: :clear,
-            focused_border: :clear
-          },
-          cursor_mode: :cursor,
-          viewport_buffer_lines: 5,
-          id: :buffer_pane
-        }
-        # Add initial_cursor if we're restoring from a resize
-        |> maybe_add_cursor(initial_cursor)
-
+        # Initial render - add the TextField
         graph
         |> ScenicWidgets.TextField.add_to_graph(
           text_field_data,
@@ -181,10 +189,16 @@ defmodule QuillEx.RootScene.Renderizer do
           translate: frame.pin.point
         )
 
-      _primitive ->
-        # TextField already exists, just return graph
-        # TODO: Handle buffer updates if needed
+      _existing ->
+        # TextField exists - delete and re-add with new buffer content
+        # This handles switching between buffers
         graph
+        |> Scenic.Graph.delete(:buffer_pane)
+        |> ScenicWidgets.TextField.add_to_graph(
+          text_field_data,
+          id: :buffer_pane,
+          translate: frame.pin.point
+        )
     end
   end
 

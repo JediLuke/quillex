@@ -9,4 +9,5 @@ config :quillex,
   default_buffer_mode: :edit
 
 # Use different port for scenic_mcp in Quillex test environment
-config :scenic_mcp, port: 9996
+# Using 9987 to avoid conflicts with running apps (Quillex=9997, Flamelex=9999)
+config :scenic_mcp, port: 9987

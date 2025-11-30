@@ -317,32 +317,128 @@ defmodule QuillEx.RootScene do
 
   def handle_info({:ubuntu_bar_button_clicked, button_id, button}, scene) do
     # UbuntuBar button clicked: #{button_id}"
-    
+
     # Handle different button actions
     case button_id do
       :new_file ->
         # Create a new buffer
         handle_cast({:action, :new_buffer}, scene)
-        
+
       :open_file ->
         # Open file functionality not implemented yet
         {:noreply, scene}
-        
+
       :save_file ->
         # Save file functionality not implemented yet
         {:noreply, scene}
-        
+
       :search ->
         # Search functionality not implemented yet
         {:noreply, scene}
-        
+
       :settings ->
         # Settings functionality not implemented yet
         {:noreply, scene}
-        
+
       _other ->
         Logger.warning("Unknown ubuntu bar button: #{inspect(button_id)}")
         {:noreply, scene}
     end
+  end
+
+  # Handle events from child components (IconMenu, TabBar, etc.)
+  def handle_event({:menu_item_clicked, item_id}, _from, scene) do
+    Logger.debug("Menu item clicked: #{inspect(item_id)}")
+
+    case item_id do
+      "new" ->
+        # Create a new buffer
+        handle_cast({:action, :new_buffer}, scene)
+
+      "open" ->
+        # Open file - not implemented yet
+        {:noreply, scene}
+
+      "save" ->
+        # Save file - not implemented yet
+        {:noreply, scene}
+
+      "save_as" ->
+        # Save as - not implemented yet
+        {:noreply, scene}
+
+      "undo" ->
+        # Undo - not implemented yet
+        {:noreply, scene}
+
+      "redo" ->
+        # Redo - not implemented yet
+        {:noreply, scene}
+
+      "cut" ->
+        # Cut - not implemented yet
+        {:noreply, scene}
+
+      "copy" ->
+        # Copy - not implemented yet
+        {:noreply, scene}
+
+      "paste" ->
+        # Paste - not implemented yet
+        {:noreply, scene}
+
+      "line_numbers" ->
+        # Toggle line numbers - not implemented yet
+        {:noreply, scene}
+
+      "word_wrap" ->
+        # Toggle word wrap - not implemented yet
+        {:noreply, scene}
+
+      "about" ->
+        # About dialog - not implemented yet
+        Logger.info("Quillex - A simple text editor built with Scenic")
+        {:noreply, scene}
+
+      "shortcuts" ->
+        # Keyboard shortcuts - not implemented yet
+        {:noreply, scene}
+
+      _other ->
+        Logger.warning("Unknown menu item: #{inspect(item_id)}")
+        {:noreply, scene}
+    end
+  end
+
+  # Handle tab selection from TabBar
+  def handle_event({:tab_selected, tab_id}, _from, scene) do
+    Logger.debug("Tab selected: #{inspect(tab_id)}")
+
+    # Find the buffer with this UUID and activate it
+    buf_ref = Enum.find(scene.assigns.state.buffers, fn buf -> buf.uuid == tab_id end)
+
+    if buf_ref do
+      # IMPORTANT: Sync current TextField content to buffer BEFORE switching
+      # Otherwise the text would be lost when we delete/recreate the TextField
+      sync_textfield_to_buffer(scene)
+
+      handle_cast({:action, {:activate_buffer, buf_ref}}, scene)
+    else
+      Logger.warning("Could not find buffer for tab: #{inspect(tab_id)}")
+      {:noreply, scene}
+    end
+  end
+
+  # Handle tab close from TabBar
+  def handle_event({:tab_closed, tab_id}, _from, scene) do
+    Logger.debug("Tab close requested: #{inspect(tab_id)}")
+    # TODO: Implement buffer closing
+    {:noreply, scene}
+  end
+
+  # Catch-all for unhandled events
+  def handle_event(event, _from, scene) do
+    Logger.debug("Unhandled event: #{inspect(event)}")
+    {:noreply, scene}
   end
 end
