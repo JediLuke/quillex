@@ -90,33 +90,11 @@ defmodule QuillEx.RootScene.Renderizer do
     end
   end
 
-  defp render_icon_menu(%Scenic.Graph{} = graph, %QuillEx.RootScene.State{} = _state, %Widgex.Frame{} = frame) do
+  defp render_icon_menu(%Scenic.Graph{} = graph, %QuillEx.RootScene.State{} = state, %Widgex.Frame{} = frame) do
+    menus = build_menus(state)
+
     case Scenic.Graph.get(graph, :icon_menu) do
       [] ->
-        menus = [
-          %{id: :file, icon: "F", items: [
-            {"new", "New Buffer"},
-            {"open", "Open File..."},
-            {"save", "Save"},
-            {"save_as", "Save As..."}
-          ]},
-          %{id: :edit, icon: "E", items: [
-            {"undo", "Undo"},
-            {"redo", "Redo"},
-            {"cut", "Cut"},
-            {"copy", "Copy"},
-            {"paste", "Paste"}
-          ]},
-          %{id: :view, icon: "V", items: [
-            {"line_numbers", "Toggle Line Numbers"},
-            {"word_wrap", "Toggle Word Wrap"}
-          ]},
-          %{id: :help, icon: "?", items: [
-            {"about", "About Quillex"},
-            {"shortcuts", "Keyboard Shortcuts"}
-          ]}
-        ]
-
         icon_menu_data = %{
           frame: frame,
           menus: menus
@@ -132,6 +110,36 @@ defmodule QuillEx.RootScene.Renderizer do
       _existing ->
         graph
     end
+  end
+
+  @doc """
+  Build menus with current toggle states from state.
+  """
+  def build_menus(%QuillEx.RootScene.State{} = state) do
+    [
+      %{id: :file, icon: "F", items: [
+        {"new", "New Buffer"},
+        {"open", "Open File..."},
+        {"save", "Save"},
+        {"save_as", "Save As..."},
+        {"close", "Close Buffer"}
+      ]},
+      %{id: :edit, icon: "E", items: [
+        {"undo", "Undo"},
+        {"redo", "Redo"},
+        {"cut", "Cut"},
+        {"copy", "Copy"},
+        {"paste", "Paste"}
+      ]},
+      %{id: :view, icon: "V", items: [
+        {"line_numbers", "Line Numbers", %{type: :toggle, checked: state.show_line_numbers}},
+        {"word_wrap", "Word Wrap", %{type: :toggle, checked: state.word_wrap}}
+      ]},
+      %{id: :help, icon: "?", items: [
+        {"about", "About Quillex"},
+        {"shortcuts", "Keyboard Shortcuts"}
+      ]}
+    ]
   end
 
   defp render_buffer_pane(
@@ -150,13 +158,16 @@ defmodule QuillEx.RootScene.Renderizer do
     # Check if we have a cursor position to restore (from resize)
     initial_cursor = Map.get(state, :_restore_cursor)
 
-    # TextField data for the active buffer
+    # TextField data for the active buffer (using state settings)
+    wrap_mode = if state.word_wrap, do: :word, else: :none
+
     text_field_data = %{
       frame: frame,
       initial_text: Enum.join(buf.data, "\n"),
       mode: :multi_line,
       input_mode: :direct,  # TextField handles all input
-      show_line_numbers: true,
+      show_line_numbers: state.show_line_numbers,
+      wrap_mode: wrap_mode,
       editable: true,
       focused: true,  # Start focused - QuillEx is ready to type immediately!
       font: %{

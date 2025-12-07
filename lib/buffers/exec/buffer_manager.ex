@@ -114,6 +114,13 @@ defmodule Quillex.Buffer.BufferManager do
   # end
 
   defp do_start_new_buffer_process(state, args) do
+    # If no name provided, generate a unique name
+    args = if Map.get(args, :name) || Map.get(args, "name") do
+      args
+    else
+      Map.put(args, :name, generate_unique_buffer_name(state.buffers))
+    end
+
     case Quillex.BufferSupervisor.start_new_buffer_process(args) do
       {:ok, %Quillex.Structs.BufState.BufRef{} = buf_ref} ->
 
@@ -138,6 +145,24 @@ defmodule Quillex.Buffer.BufferManager do
         # raise "in practice this can never happen since `start_new_buffer_process` always returns `{:ok, buf_ref}`"
         Logger.warning("Failed to open buffer: #{inspect(reason)}")
         {:reply, {:error, reason}, state}
+    end
+  end
+
+  # Generate a unique buffer name like "untitled", "untitled-2", "untitled-3", etc.
+  defp generate_unique_buffer_name(existing_buffers) do
+    existing_names = Enum.map(existing_buffers, & &1.name) |> MapSet.new()
+
+    # Find the first available name
+    find_available_name(existing_names, 1)
+  end
+
+  defp find_available_name(existing_names, n) do
+    candidate = if n == 1, do: "untitled", else: "untitled-#{n}"
+
+    if MapSet.member?(existing_names, candidate) do
+      find_available_name(existing_names, n + 1)
+    else
+      candidate
     end
   end
 end

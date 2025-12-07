@@ -8,7 +8,12 @@ defmodule QuillEx.RootScene.State do
     toolbar: nil,
     buffers: [],
     active_buf: nil,
-    show_ubuntu_bar: true
+    show_ubuntu_bar: true,
+    # Editor settings (synced with View menu toggles)
+    show_line_numbers: true,
+    word_wrap: false,
+    # Modal dialogs
+    show_file_picker: false
   ]
 
   def new(%{frame: %Widgex.Frame{} = frame, buffers: buffers}) when is_list(buffers) do

@@ -43,18 +43,39 @@ defmodule QuillEx.RootScene.Mutator do
   end
 
   def activate_buffer(state, %Quillex.Structs.BufState.BufRef{} = buf_ref) do
-    # n = Enum.find_index(state.buffers, & &1.uuid == buf_ref.uuid)
-    # # we index buffers starting at one so we have to convert from zero-based indexes here
-    # %{state | active_buf: n + 1}\
-
-    # IO.inspect(state.buffers, label: "BUF BUF BUF")
-
     case Enum.find(state.buffers, &(&1.uuid == buf_ref.uuid)) do
       nil ->
         raise "Buffer with UUID #{buf_ref.uuid} not found - unable to set active buffer"
 
       %Quillex.Structs.BufState.BufRef{} = new_active_buf ->
         %{state | active_buf: new_active_buf}
+    end
+  end
+
+  @doc """
+  Remove a buffer from the state. If closing the active buffer, switch to another one.
+  If this is the last buffer, create a new empty one first.
+  """
+  def remove_buffer(%QuillEx.RootScene.State{buffers: buffers} = state, %Quillex.Structs.BufState.BufRef{} = buf_ref) do
+    case length(buffers) do
+      1 ->
+        # Can't close the last buffer - just return state unchanged
+        Logger.warning("Cannot close the last buffer")
+        state
+
+      _ ->
+        # Remove the buffer from the list
+        new_buffers = Enum.reject(buffers, &(&1.uuid == buf_ref.uuid))
+
+        # If we're closing the active buffer, switch to another one
+        new_active = if state.active_buf && state.active_buf.uuid == buf_ref.uuid do
+          # Switch to the first remaining buffer
+          List.first(new_buffers)
+        else
+          state.active_buf
+        end
+
+        %{state | buffers: new_buffers, active_buf: new_active}
     end
   end
 end

@@ -22,6 +22,19 @@ defmodule QuillEx.RootScene.Reducer do
     RootScene.Mutator.activate_buffer(state, buf_ref)
   end
 
+  def process(state, {:close_buffer, %Quillex.Structs.BufState.BufRef{} = buf_ref}) do
+    RootScene.Mutator.remove_buffer(state, buf_ref)
+  end
+
+  def process(%QuillEx.RootScene.State{active_buf: active_buf} = state, :close_active_buffer) when not is_nil(active_buf) do
+    RootScene.Mutator.remove_buffer(state, active_buf)
+  end
+
+  def process(state, :close_active_buffer) do
+    # No active buffer to close
+    state
+  end
+
   def process(_state, {:new_color_schema, _colors}) do
     :cast_to_children
   end

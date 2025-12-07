@@ -3,7 +3,7 @@ defmodule Quillex.AppLaunchSpex do
   Phase 1: App Launch & Basic UI
 
   Validates that Quillex launches correctly and displays all core UI components:
-  - TabBar with initial unnamed buffer tab
+  - TabBar with initial untitled buffer tab
   - IconMenu (F/E/V/?) right-aligned
   - TextField with line numbers
   - Window resize handling
@@ -62,7 +62,7 @@ defmodule Quillex.AppLaunchSpex do
     # 2. TABBAR RENDERS WITH INITIAL TAB
     # =========================================================================
 
-    scenario "TabBar displays with initial unnamed buffer", context do
+    scenario "TabBar displays with initial untitled buffer", context do
       given_ "Quillex has launched", context do
         Process.sleep(500)
         {:ok, context}
@@ -73,13 +73,12 @@ defmodule Quillex.AppLaunchSpex do
         {:ok, Map.put(context, :rendered_content, rendered_content)}
       end
 
-      then_ "TabBar shows 'unnamed' tab for initial buffer", context do
-        # The initial buffer should be named "unnamed" or similar
-        # Note: Tab names may be truncated to "unn..." in the UI
-        assert Query.text_visible?("unn") or
-               Query.text_visible?("unnamed") or
-               Query.text_visible?("Untitled"),
-               "Initial buffer tab should show unnamed/untitled. Got: #{String.slice(context.rendered_content, 0, 200)}"
+      then_ "TabBar shows 'untitled' tab for initial buffer", context do
+        # The initial buffer should be named "untitled" or similar
+        # Note: Tab names may be truncated to "unt..." in the UI
+        assert Query.text_visible?("unt") or
+               Query.text_visible?("untitled"),
+               "Initial buffer tab should show untitled. Got: #{String.slice(context.rendered_content, 0, 200)}"
         :ok
       end
     end
@@ -237,10 +236,9 @@ defmodule Quillex.AppLaunchSpex do
 
       then_ "all core components are rendered", context do
         # Verify all major UI elements are present
-        # TabBar (may show truncated name like "unn...")
-        assert Query.text_visible?("unn") or
-               Query.text_visible?("unnamed") or
-               Query.text_visible?("Untitled"),
+        # TabBar (may show truncated name like "unt...")
+        assert Query.text_visible?("unt") or
+               Query.text_visible?("untitled"),
                "TabBar with buffer name should be visible"
 
         # IconMenu (at least some icons)

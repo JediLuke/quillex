@@ -106,6 +106,17 @@ defmodule QuillEx.RootScene do
     end
   end
 
+  # Check if actions list contains a buffer-switch action that requires syncing
+  defp contains_buffer_switch_action?(actions) do
+    Enum.any?(actions, fn
+      {:activate_buffer, _} -> true
+      :new_buffer -> true
+      {:close_buffer, _} -> true
+      :close_active_buffer -> true
+      _ -> false
+    end)
+  end
+
   # Sync the TextField's current content back to the buffer process
   # Returns the cursor position so it can be restored after rebuild
   defp sync_textfield_to_buffer(scene) do
@@ -150,6 +161,9 @@ defmodule QuillEx.RootScene do
   end
 
   def handle_call({:action, actions}, _from, scene) when is_list(actions) do
+    # Sync TextField content before buffer-switching actions
+    if contains_buffer_switch_action?(actions), do: sync_textfield_to_buffer(scene)
+
     # Processing actions from RadixReducer (synchronous version)
     case process_actions(scene, actions) do
       {:ok, {new_state, new_graph}} ->
@@ -173,6 +187,9 @@ defmodule QuillEx.RootScene do
   end
 
   def handle_cast({:action, actions}, scene) when is_list(actions) do
+    # Sync TextField content before buffer-switching actions
+    if contains_buffer_switch_action?(actions), do: sync_textfield_to_buffer(scene)
+
     # Processing actions from RadixReducer
     case process_actions(scene, actions) do
       {:ok, {new_state, new_graph}} ->
@@ -267,11 +284,20 @@ defmodule QuillEx.RootScene do
           end
         end)
 
-      # need to pass in scene so we can cast to children
-      new_graph = RootScene.Renderizer.render(scene.assigns.graph, scene, new_state)
+      # Use fresh graph to ensure correct z-order (top bar above buffer pane)
+      new_graph = RootScene.Renderizer.render(Scenic.Graph.build(), scene, new_state)
 
       {new_state, new_graph}
     end)
+  end
+
+  # Handle file picker events
+  def handle_cast({:file_picker, :file_selected, path}, scene) do
+    hide_file_picker(scene, path)
+  end
+
+  def handle_cast({:file_picker, :cancelled}, scene) do
+    hide_file_picker(scene)
   end
 
   # if actions come in via PubSub they come in via handle_info, just convert to handle_cast
@@ -304,7 +330,8 @@ defmodule QuillEx.RootScene do
       |> RootScene.Mutator.add_buffer(buf_ref)
       |> RootScene.Mutator.activate_buffer(buf_ref)
 
-    new_graph = RootScene.Renderizer.render(scene.assigns.graph, scene, new_state)
+    # Use fresh graph to ensure correct z-order (top bar above buffer pane)
+    new_graph = RootScene.Renderizer.render(Scenic.Graph.build(), scene, new_state)
 
     new_scene =
       scene
@@ -356,8 +383,8 @@ defmodule QuillEx.RootScene do
         handle_cast({:action, :new_buffer}, scene)
 
       "open" ->
-        # Open file - not implemented yet
-        {:noreply, scene}
+        # Show the file picker modal
+        show_file_picker(scene)
 
       "save" ->
         # Save file - not implemented yet
@@ -366,6 +393,11 @@ defmodule QuillEx.RootScene do
       "save_as" ->
         # Save as - not implemented yet
         {:noreply, scene}
+
+      "close" ->
+        # Close the active buffer
+        sync_textfield_to_buffer(scene)
+        handle_cast({:action, :close_active_buffer}, scene)
 
       "undo" ->
         # Undo - not implemented yet
@@ -388,12 +420,18 @@ defmodule QuillEx.RootScene do
         {:noreply, scene}
 
       "line_numbers" ->
-        # Toggle line numbers - not implemented yet
-        {:noreply, scene}
+        # Toggle line numbers
+        state = scene.assigns.state
+        new_state = %{state | show_line_numbers: not state.show_line_numbers}
+        Logger.debug("Toggling line numbers: #{new_state.show_line_numbers}")
+        update_editor_settings(scene, new_state)
 
       "word_wrap" ->
-        # Toggle word wrap - not implemented yet
-        {:noreply, scene}
+        # Toggle word wrap
+        state = scene.assigns.state
+        new_state = %{state | word_wrap: not state.word_wrap}
+        Logger.debug("Toggling word wrap: #{new_state.word_wrap}")
+        update_editor_settings(scene, new_state)
 
       "about" ->
         # About dialog - not implemented yet
@@ -432,13 +470,127 @@ defmodule QuillEx.RootScene do
   # Handle tab close from TabBar
   def handle_event({:tab_closed, tab_id}, _from, scene) do
     Logger.debug("Tab close requested: #{inspect(tab_id)}")
-    # TODO: Implement buffer closing
-    {:noreply, scene}
+
+    # Find the buffer with this UUID and close it
+    buf_ref = Enum.find(scene.assigns.state.buffers, fn buf -> buf.uuid == tab_id end)
+
+    if buf_ref do
+      # Sync current TextField content to buffer before closing
+      sync_textfield_to_buffer(scene)
+
+      handle_cast({:action, {:close_buffer, buf_ref}}, scene)
+    else
+      Logger.warning("Could not find buffer for tab close: #{inspect(tab_id)}")
+      {:noreply, scene}
+    end
   end
 
   # Catch-all for unhandled events
   def handle_event(event, _from, scene) do
     Logger.debug("Unhandled event: #{inspect(event)}")
     {:noreply, scene}
+  end
+
+  # ===========================================================================
+  # Private Helpers - Editor Settings
+  # ===========================================================================
+
+  @doc """
+  Updates editor settings (word wrap, line numbers) and re-renders.
+  This syncs the TextField to the buffer first, then rebuilds with new settings.
+  """
+  defp update_editor_settings(scene, new_state) do
+    # Sync current text to buffer before changing settings
+    sync_textfield_to_buffer(scene)
+
+    # Update the IconMenu checkmarks to reflect new state
+    new_menus = QuillEx.RootScene.Renderizer.build_menus(new_state)
+    scene = Scenic.Scene.put_child(scene, :icon_menu, {:update_menus, new_menus})
+
+    # Re-render the scene with new settings
+    # The TextField will be recreated with new wrap_mode/show_line_numbers
+    graph = scene.assigns.graph
+      |> Scenic.Graph.delete(:buffer_pane)
+
+    scene = scene
+      |> assign(state: new_state, graph: graph)
+
+    # Trigger a full re-render to apply settings
+    send(self(), :re_render)
+
+    {:noreply, scene}
+  end
+
+  # ===========================================================================
+  # Private Helpers - File Picker
+  # ===========================================================================
+
+  @doc """
+  Shows the file picker modal.
+  """
+  defp show_file_picker(scene) do
+    new_state = %{scene.assigns.state | show_file_picker: true}
+
+    # Add the file picker component to the graph
+    graph = scene.assigns.graph
+      |> ScenicWidgets.FilePicker.add_to_graph(
+        %{
+          frame: new_state.frame,
+          start_path: System.user_home!()
+        },
+        id: :file_picker
+      )
+
+    new_scene =
+      scene
+      |> assign(state: new_state)
+      |> assign(graph: graph)
+      |> push_graph(graph)
+
+    {:noreply, new_scene}
+  end
+
+  @doc """
+  Hides the file picker modal and optionally opens a file.
+  """
+  defp hide_file_picker(scene, file_path \\ nil) do
+    new_state = %{scene.assigns.state | show_file_picker: false}
+
+    # Remove the file picker from the graph
+    graph = scene.assigns.graph
+      |> Scenic.Graph.delete(:file_picker)
+
+    new_scene =
+      scene
+      |> assign(state: new_state)
+      |> assign(graph: graph)
+      |> push_graph(graph)
+
+    # If a file was selected, open it
+    if file_path do
+      open_file(new_scene, file_path)
+    else
+      {:noreply, new_scene}
+    end
+  end
+
+  @doc """
+  Opens a file and creates a new buffer for it.
+  """
+  defp open_file(scene, file_path) do
+    Logger.info("Opening file: #{file_path}")
+
+    case Quillex.API.FileAPI.open(file_path) do
+      {:ok, %{buffer_ref: buf_ref, lines: lines, bytes: bytes}} ->
+        Logger.info("Opened file with #{lines} lines, #{bytes} bytes")
+
+        # The FileAPI.open already switches to the new buffer and broadcasts
+        # the :new_buffer_opened message, so we just need to wait for that
+        {:noreply, scene}
+
+      {:error, reason} ->
+        Logger.error("Failed to open file: #{reason}")
+        {:noreply, scene}
+    end
   end
 end
