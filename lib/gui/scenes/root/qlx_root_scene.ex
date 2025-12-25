@@ -117,7 +117,7 @@ defmodule QuillEx.RootScene do
     end)
   end
 
-  # Sync the TextField's current content back to the buffer process
+  # Sync the TextField's current content and cursor back to the buffer process
   # Returns the cursor position so it can be restored after rebuild
   defp sync_textfield_to_buffer(scene) do
     with {:ok, [%ScenicWidgets.TextField.State{} = tf_state]} <- Scenic.Scene.fetch_child(scene, :buffer_pane),
@@ -125,8 +125,15 @@ defmodule QuillEx.RootScene do
       # Update the buffer with the current text (TextField stores lines as a list)
       Quillex.Buffer.BufferManager.call_buffer(buf_ref, {:action, [{:set_data, tf_state.lines}]})
 
-      Logger.debug("Synced TextField content to buffer (#{length(tf_state.lines)} lines), cursor at #{inspect(tf_state.cursor)}")
-      tf_state.cursor
+      # Also save the cursor position to the buffer so it can be restored when switching back
+      cursor = tf_state.cursor
+      if is_tuple(cursor) do
+        {line, col} = cursor
+        Quillex.Buffer.BufferManager.call_buffer(buf_ref, {:action, [{:set_cursor, {line, col}}]})
+      end
+
+      Logger.debug("Synced TextField content to buffer (#{length(tf_state.lines)} lines), cursor at #{inspect(cursor)}")
+      cursor
     else
       {:error, :no_children} ->
         # No TextField exists yet (first render), nothing to sync
@@ -160,6 +167,21 @@ defmodule QuillEx.RootScene do
     {:reply, :ok, scene}
   end
 
+  # Handle editor settings toggle actions specially - they need update_editor_settings flow
+  def handle_call({:action, [:toggle_line_numbers]}, _from, scene) do
+    state = scene.assigns.state
+    new_state = %{state | show_line_numbers: not state.show_line_numbers}
+    {:noreply, new_scene} = update_editor_settings(scene, new_state)
+    {:reply, :ok, new_scene}
+  end
+
+  def handle_call({:action, [:toggle_word_wrap]}, _from, scene) do
+    state = scene.assigns.state
+    new_state = %{state | word_wrap: not state.word_wrap}
+    {:noreply, new_scene} = update_editor_settings(scene, new_state)
+    {:reply, :ok, new_scene}
+  end
+
   def handle_call({:action, actions}, _from, scene) when is_list(actions) do
     # Sync TextField content before buffer-switching actions
     if contains_buffer_switch_action?(actions), do: sync_textfield_to_buffer(scene)
@@ -184,6 +206,19 @@ defmodule QuillEx.RootScene do
   def handle_call({:action, a}, _from, scene) do
     # wrap singular actions in a list and push through the multi-action pipeline anyway
     handle_call({:action, [a]}, nil, scene)
+  end
+
+  # Handle editor settings toggle actions specially - they need update_editor_settings flow
+  def handle_cast({:action, [:toggle_line_numbers]}, scene) do
+    state = scene.assigns.state
+    new_state = %{state | show_line_numbers: not state.show_line_numbers}
+    update_editor_settings(scene, new_state)
+  end
+
+  def handle_cast({:action, [:toggle_word_wrap]}, scene) do
+    state = scene.assigns.state
+    new_state = %{state | word_wrap: not state.word_wrap}
+    update_editor_settings(scene, new_state)
   end
 
   def handle_cast({:action, actions}, scene) when is_list(actions) do
@@ -400,11 +435,13 @@ defmodule QuillEx.RootScene do
         handle_cast({:action, :close_active_buffer}, scene)
 
       "undo" ->
-        # Undo - not implemented yet
+        # Undo - send undo action to the buffer pane
+        Scenic.Scene.put_child(scene, :buffer_pane, {:action, :undo})
         {:noreply, scene}
 
       "redo" ->
-        # Redo - not implemented yet
+        # Redo - send redo action to the buffer pane
+        Scenic.Scene.put_child(scene, :buffer_pane, {:action, :redo})
         {:noreply, scene}
 
       "cut" ->
@@ -419,6 +456,17 @@ defmodule QuillEx.RootScene do
         # Paste - not implemented yet
         {:noreply, scene}
 
+      "find" ->
+        # Find - show search bar
+        IO.puts("🔍 Find menu clicked!")
+        show_search_bar(scene)
+
+      "find_next" ->
+        # Find next match
+        IO.puts("🔍 Find Next menu clicked!")
+        Scenic.Scene.put_child(scene, :buffer_pane, {:action, :find_next})
+        {:noreply, scene}
+
       "line_numbers" ->
         # Toggle line numbers
         state = scene.assigns.state
@@ -431,6 +479,30 @@ defmodule QuillEx.RootScene do
         state = scene.assigns.state
         new_state = %{state | word_wrap: not state.word_wrap}
         Logger.debug("Toggling word wrap: #{new_state.word_wrap}")
+        update_editor_settings(scene, new_state)
+
+      "tab_width_2" ->
+        state = scene.assigns.state
+        new_state = %{state | tab_width: 2}
+        Logger.debug("Setting tab width: 2")
+        update_editor_settings(scene, new_state)
+
+      "tab_width_3" ->
+        state = scene.assigns.state
+        new_state = %{state | tab_width: 3}
+        Logger.debug("Setting tab width: 3")
+        update_editor_settings(scene, new_state)
+
+      "tab_width_4" ->
+        state = scene.assigns.state
+        new_state = %{state | tab_width: 4}
+        Logger.debug("Setting tab width: 4")
+        update_editor_settings(scene, new_state)
+
+      "tab_width_8" ->
+        state = scene.assigns.state
+        new_state = %{state | tab_width: 8}
+        Logger.debug("Setting tab width: 8")
         update_editor_settings(scene, new_state)
 
       "about" ->
@@ -485,6 +557,100 @@ defmodule QuillEx.RootScene do
     end
   end
 
+  # Save file (Ctrl+S from TextField)
+  def handle_event({:save_requested, _id, _text}, _from, scene) do
+    # First sync the TextField content to the buffer
+    sync_textfield_to_buffer(scene)
+
+    # Then save the buffer to disk
+    case scene.assigns.state.active_buf do
+      nil ->
+        Logger.warning("No active buffer to save")
+        {:noreply, scene}
+
+      buf_ref ->
+        Quillex.Buffer.BufferManager.call_buffer(buf_ref, {:action, [:save]})
+        {:noreply, scene}
+    end
+  end
+
+  # Find/Search (Ctrl+F from TextField)
+  def handle_event({:find_requested, _id}, _from, scene) do
+    IO.puts("🔍 find_requested event received - showing search bar")
+    show_search_bar(scene)
+  end
+
+  # Search bar events - query changed
+  def handle_event({:search_query_changed, _id, query}, _from, scene) do
+    IO.puts("🔍 Search query changed: \"#{query}\"")
+    # Update state with new query
+    new_state = %{scene.assigns.state | search_query: query}
+
+    # Perform the search if query is not empty
+    if String.length(query) > 0 do
+      perform_search(scene, query, new_state)
+    else
+      # Clear search results
+      new_state = %{new_state | search_current_match: 0, search_total_matches: 0}
+      Scenic.Scene.put_child(scene, :buffer_pane, {:action, :clear_search})
+      new_scene = scene |> assign(state: new_state)
+      {:noreply, new_scene}
+    end
+  end
+
+  # Search bar events - next match
+  def handle_event({:search_next, _id}, _from, scene) do
+    IO.puts("🔍 Search next")
+    Scenic.Scene.put_child(scene, :buffer_pane, {:action, :find_next})
+    {:noreply, scene}
+  end
+
+  # Search bar events - previous match
+  def handle_event({:search_prev, _id}, _from, scene) do
+    IO.puts("🔍 Search previous")
+    Scenic.Scene.put_child(scene, :buffer_pane, {:action, :find_prev})
+    {:noreply, scene}
+  end
+
+  # Search bar events - close
+  def handle_event({:search_close, _id}, _from, scene) do
+    IO.puts("🔍 Search bar closed")
+    hide_search_bar(scene)
+  end
+
+  # Search complete (from TextField after parallel search)
+  def handle_event({:search_complete, _id, query, match_count}, _from, scene) do
+    if match_count > 0 do
+      IO.puts("✨ Found #{match_count} matches for \"#{query}\"")
+    else
+      IO.puts("❌ No matches found for \"#{query}\"")
+    end
+
+    # Update state with match count
+    new_state = %{scene.assigns.state |
+      search_total_matches: match_count,
+      search_current_match: if(match_count > 0, do: 1, else: 0)
+    }
+
+    # Update the search bar's match count display
+    Scenic.Scene.put_child(scene, :search_bar, {:set_matches, new_state.search_current_match, match_count})
+
+    new_scene = scene |> assign(state: new_state)
+    {:noreply, new_scene}
+  end
+
+  # Search navigation (from TextField on Ctrl+G)
+  def handle_event({:search_navigated, _id, current_idx, total}, _from, scene) do
+    IO.puts("🔍 Match #{current_idx + 1} of #{total}")
+
+    # Update state and search bar
+    new_state = %{scene.assigns.state | search_current_match: current_idx + 1}
+    Scenic.Scene.put_child(scene, :search_bar, {:set_matches, current_idx + 1, total})
+
+    new_scene = scene |> assign(state: new_state)
+    {:noreply, new_scene}
+  end
+
   # Catch-all for unhandled events
   def handle_event(event, _from, scene) do
     Logger.debug("Unhandled event: #{inspect(event)}")
@@ -500,25 +666,117 @@ defmodule QuillEx.RootScene do
   This syncs the TextField to the buffer first, then rebuilds with new settings.
   """
   defp update_editor_settings(scene, new_state) do
-    # Sync current text to buffer before changing settings
-    sync_textfield_to_buffer(scene)
+    # Sync current text to buffer before changing settings and get cursor position
+    cursor_pos = sync_textfield_to_buffer(scene)
 
     # Update the IconMenu checkmarks to reflect new state
     new_menus = QuillEx.RootScene.Renderizer.build_menus(new_state)
-    scene = Scenic.Scene.put_child(scene, :icon_menu, {:update_menus, new_menus})
+    # put_child sends message to child but returns :ok, not scene
+    Scenic.Scene.put_child(scene, :icon_menu, {:update_menus, new_menus})
 
-    # Re-render the scene with new settings
+    # Add cursor position to state for restoration after re-render
+    new_state = if cursor_pos do
+      Map.put(new_state, :_restore_cursor, cursor_pos)
+    else
+      new_state
+    end
+
+    # Build a fresh graph with new settings
     # The TextField will be recreated with new wrap_mode/show_line_numbers
-    graph = scene.assigns.graph
-      |> Scenic.Graph.delete(:buffer_pane)
+    new_graph = RootScene.Renderizer.render(Scenic.Graph.build(), scene, new_state)
 
-    scene = scene
-      |> assign(state: new_state, graph: graph)
+    # Remove the temporary cursor restore key from state
+    final_state = Map.delete(new_state, :_restore_cursor)
 
-    # Trigger a full re-render to apply settings
-    send(self(), :re_render)
+    new_scene =
+      scene
+      |> assign(state: final_state)
+      |> assign(graph: new_graph)
+      |> push_graph(new_graph)
 
-    {:noreply, scene}
+    {:noreply, new_scene}
+  end
+
+  # ===========================================================================
+  # Private Helpers - Find/Search
+  # ===========================================================================
+
+  @doc """
+  Shows the search bar and optionally pre-fills with word under cursor.
+  """
+  defp show_search_bar(scene) do
+    alias ScenicWidgets.TextField.State, as: TFState
+
+    # Get the word under cursor from TextField to pre-fill search
+    initial_query = case Scenic.Scene.fetch_child(scene, :buffer_pane) do
+      {:ok, [%TFState{} = tf_state]} ->
+        TFState.word_at_cursor(tf_state) || ""
+      _ ->
+        ""
+    end
+
+    new_state = %{scene.assigns.state |
+      show_search_bar: true,
+      search_query: initial_query
+    }
+
+    # Build a fresh graph with search bar visible
+    new_graph = RootScene.Renderizer.render(Scenic.Graph.build(), scene, new_state)
+
+    new_scene =
+      scene
+      |> assign(state: new_state)
+      |> assign(graph: new_graph)
+      |> push_graph(new_graph)
+
+    # If we have an initial query, perform search
+    if String.length(initial_query) > 0 do
+      IO.puts("🔍 Pre-filling search with: \"#{initial_query}\"")
+      Scenic.Scene.put_child(new_scene, :search_bar, {:set_query, initial_query})
+      Scenic.Scene.put_child(new_scene, :buffer_pane, {:action, {:search, initial_query}})
+    end
+
+    {:noreply, new_scene}
+  end
+
+  @doc """
+  Hides the search bar and clears search state.
+  """
+  defp hide_search_bar(scene) do
+    new_state = %{scene.assigns.state |
+      show_search_bar: false,
+      search_query: "",
+      search_current_match: 0,
+      search_total_matches: 0
+    }
+
+    # Clear search in TextField
+    Scenic.Scene.put_child(scene, :buffer_pane, {:action, :clear_search})
+
+    # Build a fresh graph without search bar
+    new_graph = RootScene.Renderizer.render(Scenic.Graph.build(), scene, new_state)
+
+    new_scene =
+      scene
+      |> assign(state: new_state)
+      |> assign(graph: new_graph)
+      |> push_graph(new_graph)
+
+    # Refocus the buffer pane
+    Scenic.Scene.put_child(new_scene, :buffer_pane, :focus)
+
+    {:noreply, new_scene}
+  end
+
+  @doc """
+  Performs search and updates state.
+  """
+  defp perform_search(scene, query, state) do
+    # Send search action to TextField
+    Scenic.Scene.put_child(scene, :buffer_pane, {:action, {:search, query}})
+
+    new_scene = scene |> assign(state: state)
+    {:noreply, new_scene}
   end
 
   # ===========================================================================

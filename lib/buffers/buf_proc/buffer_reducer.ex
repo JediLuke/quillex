@@ -50,9 +50,14 @@ defmodule Quillex.Buffer.Process.Reducer do
     |> BufferPane.Mutator.set_mode(m)
   end
 
-  # Set the buffer data directly (used for syncing from TextField on resize)
+  # Set the buffer data directly (used for syncing from TextField on resize/switch)
   def process(%Quillex.Structs.BufState{} = buf, {:set_data, lines}) when is_list(lines) do
     %{buf | data: lines}
+  end
+
+  # Set the cursor position directly (used for syncing from TextField on resize/switch)
+  def process(%Quillex.Structs.BufState{} = buf, {:set_cursor, {line, col}}) when line >= 1 and col >= 1 do
+    buf |> BufferPane.Mutator.move_cursor({line, col})
   end
 
   def process(%Quillex.Structs.BufState{} = buf, {:move_cursor, direction, x}) do
@@ -262,6 +267,20 @@ defmodule Quillex.Buffer.Process.Reducer do
     # if name is unnamed, then change it to file path here
     # TODO update timestamps last save
     %{buf | name: Path.basename(file_path), source: %{filepath: file_path}, dirty?: false}
+  end
+
+  # Save to existing file path (Ctrl+S)
+  def process(%Quillex.Structs.BufState{source: %{filepath: file_path}} = buf, :save) when is_binary(file_path) do
+    text = Enum.join(buf.data, "\n")
+    File.write!(file_path, text)
+    IO.puts("💾 Saved to #{file_path}")
+    %{buf | dirty?: false}
+  end
+
+  # Can't save if no filepath - need save_as
+  def process(%Quillex.Structs.BufState{source: nil} = buf, :save) do
+    IO.puts("⚠️ Cannot save - no file path. Use Save As.")
+    buf
   end
 
   # def process(%{uuid: buf_uuid, source: nil} = buf, {:save, buf_uuid}) do

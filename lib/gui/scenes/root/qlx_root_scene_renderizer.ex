@@ -4,6 +4,13 @@ defmodule QuillEx.RootScene.Renderizer do
   # Height of the top bar (TabBar + IconMenu)
   @top_bar_height 35
 
+  # Height of the search bar
+  @search_bar_height 36
+
+  # Helper for tab width menu labels with checkmark
+  defp tab_width_label(width, current) when width == current, do: "#{width} Spaces  ✓"
+  defp tab_width_label(width, _current), do: "#{width} Spaces"
+
   # it has to take in a scene here cause we need to cast to the scene's children
   def render(
     %Scenic.Graph{} = graph,
@@ -13,10 +20,20 @@ defmodule QuillEx.RootScene.Renderizer do
     # Split frame: top bar and buffer pane below
     [top_bar_frame, buffer_frame] = Widgex.Frame.v_split(state.frame, px: @top_bar_height)
 
+    # If search bar is visible, split buffer area further
+    {search_bar_frame, actual_buffer_frame} =
+      if state.show_search_bar do
+        [search_frame, buf_frame] = Widgex.Frame.v_split(buffer_frame, px: @search_bar_height)
+        {search_frame, buf_frame}
+      else
+        {nil, buffer_frame}
+      end
+
     # Render buffer pane FIRST so it's on the bottom layer,
-    # then top bar LAST so dropdowns appear above the text field
+    # then search bar (if visible), then top bar LAST so dropdowns appear above
     graph
-    |> render_buffer_pane(scene, state, buffer_frame)
+    |> render_buffer_pane(scene, state, actual_buffer_frame)
+    |> maybe_render_search_bar(scene, state, search_bar_frame)
     |> render_top_bar(scene, state, top_bar_frame)
   end
 
@@ -112,6 +129,36 @@ defmodule QuillEx.RootScene.Renderizer do
     end
   end
 
+  # Render search bar if frame is provided (i.e., search bar is visible)
+  defp maybe_render_search_bar(graph, _scene, _state, nil), do: graph
+
+  defp maybe_render_search_bar(graph, _scene, state, %Widgex.Frame{} = frame) do
+    search_bar_data = %{
+      id: :search_bar,
+      frame: frame,
+      query: state.search_query
+    }
+
+    case Scenic.Graph.get(graph, :search_bar) do
+      [] ->
+        # Add search bar
+        graph
+        |> ScenicWidgets.SearchBar.add_to_graph(
+          search_bar_data,
+          id: :search_bar
+        )
+
+      _existing ->
+        # Update search bar - delete and re-add with new state
+        graph
+        |> Scenic.Graph.delete(:search_bar)
+        |> ScenicWidgets.SearchBar.add_to_graph(
+          search_bar_data,
+          id: :search_bar
+        )
+    end
+  end
+
   @doc """
   Build menus with current toggle states from state.
   """
@@ -125,15 +172,21 @@ defmodule QuillEx.RootScene.Renderizer do
         {"close", "Close Buffer"}
       ]},
       %{id: :edit, icon: "E", items: [
-        {"undo", "Undo"},
-        {"redo", "Redo"},
+        {"undo", "Undo (Ctrl+U)"},
+        {"redo", "Redo (Ctrl+R)"},
         {"cut", "Cut"},
         {"copy", "Copy"},
-        {"paste", "Paste"}
+        {"paste", "Paste"},
+        {"find", "Find (Ctrl+F)"},
+        {"find_next", "Find Next (Ctrl+G)"}
       ]},
       %{id: :view, icon: "V", items: [
         {"line_numbers", "Line Numbers", %{type: :toggle, checked: state.show_line_numbers}},
-        {"word_wrap", "Word Wrap", %{type: :toggle, checked: state.word_wrap}}
+        {"word_wrap", "Word Wrap", %{type: :toggle, checked: state.word_wrap}},
+        {"tab_width_2", tab_width_label(2, state.tab_width)},
+        {"tab_width_3", tab_width_label(3, state.tab_width)},
+        {"tab_width_4", tab_width_label(4, state.tab_width)},
+        {"tab_width_8", tab_width_label(8, state.tab_width)}
       ]},
       %{id: :help, icon: "?", items: [
         {"about", "About Quillex"},
@@ -155,8 +208,9 @@ defmodule QuillEx.RootScene.Renderizer do
     buffer_pane_state = Quillex.GUI.Components.BufferPane.State.new(%{})
     font = buffer_pane_state.font
 
-    # Check if we have a cursor position to restore (from resize)
-    initial_cursor = Map.get(state, :_restore_cursor)
+    # Check if we have a cursor position to restore (from resize or saved in buffer)
+    # Priority: 1) _restore_cursor from state (explicit restore), 2) buffer's saved cursor
+    initial_cursor = Map.get(state, :_restore_cursor) || get_buffer_cursor(buf)
 
     # TextField data for the active buffer (using state settings)
     wrap_mode = if state.word_wrap, do: :word, else: :none
@@ -168,6 +222,7 @@ defmodule QuillEx.RootScene.Renderizer do
       input_mode: :direct,  # TextField handles all input
       show_line_numbers: state.show_line_numbers,
       wrap_mode: wrap_mode,
+      tab_width: state.tab_width,
       editable: true,
       focused: true,  # Start focused - QuillEx is ready to type immediately!
       font: %{
@@ -187,7 +242,7 @@ defmodule QuillEx.RootScene.Renderizer do
       viewport_buffer_lines: 5,
       id: :buffer_pane
     }
-    # Add initial_cursor if we're restoring from a resize
+    # Add initial_cursor if we're restoring from a resize or buffer switch
     |> maybe_add_cursor(initial_cursor)
 
     case Scenic.Graph.get(graph, :buffer_pane) do
@@ -216,6 +271,13 @@ defmodule QuillEx.RootScene.Renderizer do
   # Helper to add initial_cursor to text_field_data if present
   defp maybe_add_cursor(data, nil), do: data
   defp maybe_add_cursor(data, cursor), do: Map.put(data, :initial_cursor, cursor)
+
+  # Extract cursor position from buffer's cursors field
+  # Returns {line, col} tuple or nil if not available
+  defp get_buffer_cursor(%{cursors: [%{line: line, col: col} | _]}) when line >= 1 and col >= 1 do
+    {line, col}
+  end
+  defp get_buffer_cursor(_), do: nil
 
   # Render the menu bar
   defp render_menu_bar(

@@ -272,6 +272,12 @@ defmodule Quillex.BufferManagementSpex do
 
     scenario "Closing the active buffer switches to another", context do
       given_ "we have multiple buffers open", context do
+        # Ensure we have at least 2 buffers (create one if needed)
+        if buffer_count() < 2 do
+          trigger_action(:new_buffer)
+          Process.sleep(500)
+        end
+
         count = buffer_count()
         assert count >= 2, "Need at least 2 buffers for this test, got #{count}"
         {:ok, Map.put(context, :initial_count, count)}
