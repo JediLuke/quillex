@@ -26,17 +26,23 @@ defmodule Quillex.Structs.BufState do
     read_only?: true,
     # a `dirty` buffer is one which is changed / modified in memory but not yet written to disk
     dirty?: true,
-    # opts: %{
-    #   alignment: :left,
-    #   wrap: :no_wrap,
-    #   scroll: %{
-    #     direction: :all,
-    #     # An accumulator for the amount of scroll
-    #     acc: {0, 0}
-    #   },
-    #   # toggles the display of line numbers in the left margin
-    #   show_line_nums?: false
-    # },
+
+    # ===== UNDO/REDO STATE (Single Source of Truth) =====
+    # List of {data, cursors, selection} snapshots for undo (most recent first)
+    undo_stack: [],
+    # List of {data, cursors, selection} snapshots for redo (most recent first)
+    redo_stack: [],
+    # Maximum undo stack size
+    undo_max_size: 100,
+
+    # ===== SEARCH STATE (Single Source of Truth) =====
+    # Current search query string (nil = not searching)
+    search_query: nil,
+    # List of {line, col, match_text} tuples for all matches
+    search_matches: [],
+    # Current match index (0-based)
+    search_current_index: 0,
+
     # Where we track the timestamps for various operations
     timestamps: %{
       opened: nil,
@@ -72,6 +78,14 @@ defmodule Quillex.Structs.BufState do
       history: [],
       read_only?: read_only?,
       dirty?: false,
+      # Undo/Redo - start with empty stacks
+      undo_stack: [],
+      redo_stack: [],
+      undo_max_size: Map.get(args, :undo_max_size) || 100,
+      # Search - start with no search
+      search_query: nil,
+      search_matches: [],
+      search_current_index: 0,
       timestamps: %{
         # TODO use some kind of default timezone
         opened: DateTime.utc_now()

@@ -139,13 +139,17 @@ defmodule QuillEx.RootScene.Renderizer do
       query: state.search_query
     }
 
+    # Get the pin point for positioning the component
+    pin_point = frame.pin.point
+
     case Scenic.Graph.get(graph, :search_bar) do
       [] ->
-        # Add search bar
+        # Add search bar at the frame's position
         graph
         |> ScenicWidgets.SearchBar.add_to_graph(
           search_bar_data,
-          id: :search_bar
+          id: :search_bar,
+          translate: pin_point
         )
 
       _existing ->
@@ -154,7 +158,8 @@ defmodule QuillEx.RootScene.Renderizer do
         |> Scenic.Graph.delete(:search_bar)
         |> ScenicWidgets.SearchBar.add_to_graph(
           search_bar_data,
-          id: :search_bar
+          id: :search_bar,
+          translate: pin_point
         )
     end
   end
@@ -204,6 +209,9 @@ defmodule QuillEx.RootScene.Renderizer do
     # Fetch buffer to get content
     {:ok, buf} = Quillex.Buffer.Process.fetch_buf(state.active_buf)
 
+    # Get the buffer process PID for buffer_backed mode
+    buffer_pid = get_buffer_pid(state.active_buf)
+
     # Create font
     buffer_pane_state = Quillex.GUI.Components.BufferPane.State.new(%{})
     font = buffer_pane_state.font
@@ -219,7 +227,10 @@ defmodule QuillEx.RootScene.Renderizer do
       frame: frame,
       initial_text: Enum.join(buf.data, "\n"),
       mode: :multi_line,
-      input_mode: :direct,  # TextField handles all input
+      # BUFFER-BACKED MODE: TextField is now a view, Buffer.Process is source of truth
+      input_mode: :buffer_backed,
+      buffer_controller: buffer_pid,
+      buffer_topic: {:buffers, buf.uuid},
       show_line_numbers: state.show_line_numbers,
       wrap_mode: wrap_mode,
       tab_width: state.tab_width,
@@ -278,6 +289,16 @@ defmodule QuillEx.RootScene.Renderizer do
     {line, col}
   end
   defp get_buffer_cursor(_), do: nil
+
+  # Get the buffer process PID from a BufRef
+  defp get_buffer_pid(%Quillex.Structs.BufState.BufRef{uuid: uuid}) do
+    buf_tag = {uuid, Quillex.Buffer.Process}
+    case Registry.lookup(Quillex.BufferRegistry, buf_tag) do
+      [{pid, _}] -> pid
+      _ -> nil
+    end
+  end
+  defp get_buffer_pid(_), do: nil
 
   # Render the menu bar
   defp render_menu_bar(

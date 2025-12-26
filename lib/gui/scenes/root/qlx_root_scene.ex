@@ -72,9 +72,10 @@ defmodule QuillEx.RootScene do
     if current_size != new_vp_size do
       Logger.debug("#{__MODULE__} reshape: #{inspect(current_size)} -> #{inspect(new_vp_size)}")
 
-      # IMPORTANT: Before rebuilding the graph, sync TextField content back to buffer
-      # and capture the cursor position to restore it after rebuild
-      cursor_pos = sync_textfield_to_buffer(scene)
+      # With buffer_backed mode, Buffer.Process is the source of truth.
+      # TextField sends all changes directly to Buffer, so we don't need to sync.
+      # Just get the current cursor position from the buffer for restoration.
+      cursor_pos = get_buffer_cursor(scene)
 
       # Create new frame with the resized dimensions
       new_frame = Widgex.Frame.new(pin: {0, 0}, size: new_vp_size)
@@ -87,7 +88,6 @@ defmodule QuillEx.RootScene do
       # Build a fresh graph for the new frame size
       # Using Scenic.Graph.build() ensures we start fresh, which is needed
       # because the TextField component needs to be recreated with new dimensions
-      # The renderizer will fetch the buffer content (now synced) for initial_text
       new_graph = RootScene.Renderizer.render(Scenic.Graph.build(), scene, new_state)
 
       # Remove the temporary cursor restore key from state
@@ -106,41 +106,14 @@ defmodule QuillEx.RootScene do
     end
   end
 
-  # Check if actions list contains a buffer-switch action that requires syncing
-  defp contains_buffer_switch_action?(actions) do
-    Enum.any?(actions, fn
-      {:activate_buffer, _} -> true
-      :new_buffer -> true
-      {:close_buffer, _} -> true
-      :close_active_buffer -> true
-      _ -> false
-    end)
-  end
-
-  # Sync the TextField's current content and cursor back to the buffer process
-  # Returns the cursor position so it can be restored after rebuild
-  defp sync_textfield_to_buffer(scene) do
-    with {:ok, [%ScenicWidgets.TextField.State{} = tf_state]} <- Scenic.Scene.fetch_child(scene, :buffer_pane),
-         buf_ref when not is_nil(buf_ref) <- scene.assigns.state.active_buf do
-      # Update the buffer with the current text (TextField stores lines as a list)
-      Quillex.Buffer.BufferManager.call_buffer(buf_ref, {:action, [{:set_data, tf_state.lines}]})
-
-      # Also save the cursor position to the buffer so it can be restored when switching back
-      cursor = tf_state.cursor
-      if is_tuple(cursor) do
-        {line, col} = cursor
-        Quillex.Buffer.BufferManager.call_buffer(buf_ref, {:action, [{:set_cursor, {line, col}}]})
-      end
-
-      Logger.debug("Synced TextField content to buffer (#{length(tf_state.lines)} lines), cursor at #{inspect(cursor)}")
-      cursor
+  # Get the cursor position from the active buffer (Buffer.Process is source of truth)
+  defp get_buffer_cursor(scene) do
+    with buf_ref when not is_nil(buf_ref) <- scene.assigns.state.active_buf,
+         {:ok, buf_state} <- Quillex.Buffer.Process.fetch_buf(buf_ref),
+         [%{line: line, col: col} | _] <- buf_state.cursors do
+      {line, col}
     else
-      {:error, :no_children} ->
-        # No TextField exists yet (first render), nothing to sync
-        nil
-      _ ->
-        Logger.warning("Could not sync TextField to buffer before resize")
-        nil
+      _ -> nil
     end
   end
 
@@ -183,9 +156,7 @@ defmodule QuillEx.RootScene do
   end
 
   def handle_call({:action, actions}, _from, scene) when is_list(actions) do
-    # Sync TextField content before buffer-switching actions
-    if contains_buffer_switch_action?(actions), do: sync_textfield_to_buffer(scene)
-
+    # With buffer_backed mode, no need to sync - Buffer.Process is source of truth
     # Processing actions from RadixReducer (synchronous version)
     case process_actions(scene, actions) do
       {:ok, {new_state, new_graph}} ->
@@ -222,9 +193,7 @@ defmodule QuillEx.RootScene do
   end
 
   def handle_cast({:action, actions}, scene) when is_list(actions) do
-    # Sync TextField content before buffer-switching actions
-    if contains_buffer_switch_action?(actions), do: sync_textfield_to_buffer(scene)
-
+    # With buffer_backed mode, no need to sync - Buffer.Process is source of truth
     # Processing actions from RadixReducer
     case process_actions(scene, actions) do
       {:ok, {new_state, new_graph}} ->
@@ -335,6 +304,44 @@ defmodule QuillEx.RootScene do
     hide_file_picker(scene)
   end
 
+  # ===========================================================================
+  # SearchBar events (via cast_parent)
+  # ===========================================================================
+
+  def handle_cast({:search_query_changed, _id, query}, scene) do
+    IO.puts("🔍 Search query changed (cast): \"#{query}\"")
+    # Update state with new query
+    new_state = %{scene.assigns.state | search_query: query}
+
+    # Perform the search if query is not empty
+    if String.length(query) > 0 do
+      perform_search(scene, query, new_state)
+    else
+      # Clear search results
+      new_state = %{new_state | search_current_match: 0, search_total_matches: 0}
+      Scenic.Scene.put_child(scene, :buffer_pane, {:action, :clear_search})
+      new_scene = scene |> assign(state: new_state)
+      {:noreply, new_scene}
+    end
+  end
+
+  def handle_cast({:search_next, _id}, scene) do
+    IO.puts("🔍 Search next (cast)")
+    Scenic.Scene.put_child(scene, :buffer_pane, {:action, :find_next})
+    {:noreply, scene}
+  end
+
+  def handle_cast({:search_prev, _id}, scene) do
+    IO.puts("🔍 Search previous (cast)")
+    Scenic.Scene.put_child(scene, :buffer_pane, {:action, :find_prev})
+    {:noreply, scene}
+  end
+
+  def handle_cast({:search_close, _id}, scene) do
+    IO.puts("🔍 Search bar closed (cast)")
+    hide_search_bar(scene)
+  end
+
   # if actions come in via PubSub they come in via handle_info, just convert to handle_cast
   def handle_info({:action, a}, scene) do
     handle_cast({:action, a}, scene)
@@ -430,8 +437,7 @@ defmodule QuillEx.RootScene do
         {:noreply, scene}
 
       "close" ->
-        # Close the active buffer
-        sync_textfield_to_buffer(scene)
+        # Close the active buffer (no sync needed - buffer_backed mode)
         handle_cast({:action, :close_active_buffer}, scene)
 
       "undo" ->
@@ -528,10 +534,7 @@ defmodule QuillEx.RootScene do
     buf_ref = Enum.find(scene.assigns.state.buffers, fn buf -> buf.uuid == tab_id end)
 
     if buf_ref do
-      # IMPORTANT: Sync current TextField content to buffer BEFORE switching
-      # Otherwise the text would be lost when we delete/recreate the TextField
-      sync_textfield_to_buffer(scene)
-
+      # With buffer_backed mode, Buffer.Process is source of truth - no sync needed
       handle_cast({:action, {:activate_buffer, buf_ref}}, scene)
     else
       Logger.warning("Could not find buffer for tab: #{inspect(tab_id)}")
@@ -547,9 +550,7 @@ defmodule QuillEx.RootScene do
     buf_ref = Enum.find(scene.assigns.state.buffers, fn buf -> buf.uuid == tab_id end)
 
     if buf_ref do
-      # Sync current TextField content to buffer before closing
-      sync_textfield_to_buffer(scene)
-
+      # With buffer_backed mode, Buffer.Process is source of truth - no sync needed
       handle_cast({:action, {:close_buffer, buf_ref}}, scene)
     else
       Logger.warning("Could not find buffer for tab close: #{inspect(tab_id)}")
@@ -559,10 +560,8 @@ defmodule QuillEx.RootScene do
 
   # Save file (Ctrl+S from TextField)
   def handle_event({:save_requested, _id, _text}, _from, scene) do
-    # First sync the TextField content to the buffer
-    sync_textfield_to_buffer(scene)
-
-    # Then save the buffer to disk
+    # With buffer_backed mode, Buffer.Process already has current content - no sync needed
+    # Save the buffer to disk
     case scene.assigns.state.active_buf do
       nil ->
         Logger.warning("No active buffer to save")
@@ -666,8 +665,8 @@ defmodule QuillEx.RootScene do
   This syncs the TextField to the buffer first, then rebuilds with new settings.
   """
   defp update_editor_settings(scene, new_state) do
-    # Sync current text to buffer before changing settings and get cursor position
-    cursor_pos = sync_textfield_to_buffer(scene)
+    # With buffer_backed mode, just get cursor position from buffer (no sync needed)
+    cursor_pos = get_buffer_cursor(scene)
 
     # Update the IconMenu checkmarks to reflect new state
     new_menus = QuillEx.RootScene.Renderizer.build_menus(new_state)
@@ -728,6 +727,9 @@ defmodule QuillEx.RootScene do
       |> assign(state: new_state)
       |> assign(graph: new_graph)
       |> push_graph(new_graph)
+
+    # Blur the buffer pane so keystrokes go to SearchBar, not TextField
+    Scenic.Scene.put_child(new_scene, :buffer_pane, :blur)
 
     # If we have an initial query, perform search
     if String.length(initial_query) > 0 do

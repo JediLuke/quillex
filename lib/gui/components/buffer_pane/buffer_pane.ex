@@ -25,12 +25,13 @@ defmodule Quillex.GUI.Components.BufferPane do
         } = data
       ) do
     active? = Map.get(data, :active?, true)
+    focused? = Map.get(data, :focused, false)
     state = BufferPane.State.new(data |> Map.merge(%{active?: active?}))
 
-    {:ok, %{state: state, frame: frame, buf_ref: buf_ref, font: font, active?: active?}}
+    {:ok, %{state: state, frame: frame, buf_ref: buf_ref, font: font, active?: active?, focused?: focused?}}
   end
 
-  def init(scene, %{state: buf_pane_state, frame: frame, buf_ref: buf_ref, font: font, active?: active?}, _opts) do
+  def init(scene, %{state: buf_pane_state, frame: frame, buf_ref: buf_ref, font: font, active?: active?, focused?: focused?}, _opts) do
     # Fetch initial buffer state
     {:ok, buf} = Quillex.Buffer.Process.fetch_buf(buf_ref)
 
@@ -46,6 +47,7 @@ defmodule Quillex.GUI.Components.BufferPane do
       input_mode: :direct,  # TextField handles all input directly!
       show_line_numbers: true,
       editable: active?,
+      focused: focused?,  # Auto-focus when requested (e.g., Kommander)
       font: %{
         name: font.name,
         size: font.size,
