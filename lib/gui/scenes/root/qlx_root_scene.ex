@@ -37,7 +37,8 @@ defmodule QuillEx.RootScene do
     })
 
     # need to pass in scene so we can cast to children, even though we would never do that during init
-    graph = RootScene.Renderizer.render(Scenic.Graph.build(), scene, state)
+    # On init, old_state is nil (no previous state)
+    graph = RootScene.Renderizer.render(Scenic.Graph.build(), scene, nil, state)
 
     scene =
       scene
@@ -81,14 +82,13 @@ defmodule QuillEx.RootScene do
       new_frame = Widgex.Frame.new(pin: {0, 0}, size: new_vp_size)
 
       # Update state with new frame and saved cursor position for the renderizer
-      new_state = scene.assigns.state
+      old_state = scene.assigns.state
+      new_state = old_state
         |> Map.put(:frame, new_frame)
         |> Map.put(:_restore_cursor, cursor_pos)
 
-      # Build a fresh graph for the new frame size
-      # Using Scenic.Graph.build() ensures we start fresh, which is needed
-      # because the TextField component needs to be recreated with new dimensions
-      new_graph = RootScene.Renderizer.render(Scenic.Graph.build(), scene, new_state)
+      # Reuse existing graph to preserve component PIDs and avoid race conditions
+      new_graph = RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
       # Remove the temporary cursor restore key from state
       final_state = Map.delete(new_state, :_restore_cursor)
@@ -271,9 +271,10 @@ defmodule QuillEx.RootScene do
   defp process_actions(scene, actions) do
     # wormhole will wrap this function in an ok/error tuple even if it crashes
     Wormhole.capture(fn ->
+      old_state = scene.assigns.state
 
       new_state =
-        Enum.reduce(actions, scene.assigns.state, fn action, acc_state ->
+        Enum.reduce(actions, old_state, fn action, acc_state ->
           RootScene.Reducer.process(acc_state, action)
           |> case do
             :ignore ->
@@ -288,8 +289,10 @@ defmodule QuillEx.RootScene do
           end
         end)
 
-      # Use fresh graph to ensure correct z-order (top bar above buffer pane)
-      new_graph = RootScene.Renderizer.render(Scenic.Graph.build(), scene, new_state)
+      # Reuse existing graph to preserve component PIDs and avoid race conditions
+      # during rapid buffer switches. Pass old_state to enable smart component updates
+      # (only recreate when truly necessary, like switching buffers).
+      new_graph = RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
       {new_state, new_graph}
     end)
@@ -372,8 +375,9 @@ defmodule QuillEx.RootScene do
       |> RootScene.Mutator.add_buffer(buf_ref)
       |> RootScene.Mutator.activate_buffer(buf_ref)
 
-    # Use fresh graph to ensure correct z-order (top bar above buffer pane)
-    new_graph = RootScene.Renderizer.render(Scenic.Graph.build(), scene, new_state)
+    # Reuse existing graph to preserve component PIDs and avoid race conditions
+    old_state = scene.assigns.state
+    new_graph = RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
     new_scene =
       scene
@@ -680,9 +684,9 @@ defmodule QuillEx.RootScene do
       new_state
     end
 
-    # Build a fresh graph with new settings
-    # The TextField will be recreated with new wrap_mode/show_line_numbers
-    new_graph = RootScene.Renderizer.render(Scenic.Graph.build(), scene, new_state)
+    # Reuse existing graph to preserve component PIDs and avoid race conditions
+    old_state = scene.assigns.state
+    new_graph = RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
     # Remove the temporary cursor restore key from state
     final_state = Map.delete(new_state, :_restore_cursor)
@@ -714,13 +718,14 @@ defmodule QuillEx.RootScene do
         ""
     end
 
-    new_state = %{scene.assigns.state |
+    old_state = scene.assigns.state
+    new_state = %{old_state |
       show_search_bar: true,
       search_query: initial_query
     }
 
-    # Build a fresh graph with search bar visible
-    new_graph = RootScene.Renderizer.render(Scenic.Graph.build(), scene, new_state)
+    # Reuse existing graph to preserve component PIDs and avoid race conditions
+    new_graph = RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
     new_scene =
       scene
@@ -755,8 +760,9 @@ defmodule QuillEx.RootScene do
     # Clear search in TextField
     Scenic.Scene.put_child(scene, :buffer_pane, {:action, :clear_search})
 
-    # Build a fresh graph without search bar
-    new_graph = RootScene.Renderizer.render(Scenic.Graph.build(), scene, new_state)
+    # Reuse existing graph to preserve component PIDs and avoid race conditions
+    old_state = scene.assigns.state
+    new_graph = RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
     new_scene =
       scene

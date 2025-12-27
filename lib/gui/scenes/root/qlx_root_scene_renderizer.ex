@@ -12,9 +12,11 @@ defmodule QuillEx.RootScene.Renderizer do
   defp tab_width_label(width, _current), do: "#{width} Spaces"
 
   # it has to take in a scene here cause we need to cast to the scene's children
+  # old_state is nil on init, or the previous state on updates
   def render(
     %Scenic.Graph{} = graph,
     %Scenic.Scene{} = scene,
+    old_state,
     %QuillEx.RootScene.State{} = state
   ) do
     # Split frame: top bar and buffer pane below
@@ -32,15 +34,16 @@ defmodule QuillEx.RootScene.Renderizer do
     # Render buffer pane FIRST so it's on the bottom layer,
     # then search bar (if visible), then top bar LAST so dropdowns appear above
     graph
-    |> render_buffer_pane(scene, state, actual_buffer_frame)
-    |> maybe_render_search_bar(scene, state, search_bar_frame)
-    |> render_top_bar(scene, state, top_bar_frame)
+    |> render_buffer_pane(scene, old_state, state, actual_buffer_frame)
+    |> maybe_render_search_bar(scene, old_state, state, search_bar_frame)
+    |> render_top_bar(scene, old_state, state, top_bar_frame)
   end
 
   # Render the top bar containing TabBar (left) and IconMenu (right)
   defp render_top_bar(
     %Scenic.Graph{} = graph,
     %Scenic.Scene{} = _scene,
+    old_state,
     %QuillEx.RootScene.State{} = state,
     %Widgex.Frame{} = frame
   ) do
@@ -61,11 +64,49 @@ defmodule QuillEx.RootScene.Renderizer do
     )
 
     graph
-    |> render_tab_bar(state, tab_bar_frame)
+    |> render_tab_bar(old_state, state, tab_bar_frame)
     |> render_icon_menu(state, icon_menu_frame)
   end
 
-  defp render_tab_bar(%Scenic.Graph{} = graph, %QuillEx.RootScene.State{} = state, %Widgex.Frame{} = frame) do
+  defp render_tab_bar(%Scenic.Graph{} = graph, old_state, %QuillEx.RootScene.State{} = state, %Widgex.Frame{} = frame) do
+    # Check if tabs need to be recreated
+    needs_recreation = needs_tab_bar_recreation?(old_state, state)
+
+    case {Scenic.Graph.get(graph, :tab_bar), needs_recreation} do
+      {[], _} ->
+        # Initial render - add the TabBar
+        do_create_tab_bar(graph, state, frame)
+
+      {_existing, false} ->
+        # TabBar exists and no changes needed - skip recreation
+        graph
+
+      {_existing, true} ->
+        # TabBar needs updating (tabs or selection changed)
+        graph
+        |> Scenic.Graph.delete(:tab_bar)
+        |> do_create_tab_bar(state, frame)
+    end
+  end
+
+  # Check if tab bar needs recreation
+  defp needs_tab_bar_recreation?(nil, _new_state), do: true  # Initial render
+  defp needs_tab_bar_recreation?(old_state, new_state) do
+    # Compare buffer UUIDs (order matters for tabs)
+    old_uuids = Enum.map(old_state.buffers, & &1.uuid)
+    new_uuids = Enum.map(new_state.buffers, & &1.uuid)
+    buffers_changed = old_uuids != new_uuids
+
+    # Compare selected buffer
+    old_selected = old_state.active_buf && old_state.active_buf.uuid
+    new_selected = new_state.active_buf && new_state.active_buf.uuid
+    selection_changed = old_selected != new_selected
+
+    buffers_changed or selection_changed
+  end
+
+  # Helper to create tab bar
+  defp do_create_tab_bar(graph, state, frame) do
     # Build tabs from open buffers
     tabs = Enum.map(state.buffers, fn buf ->
       %{
@@ -84,27 +125,12 @@ defmodule QuillEx.RootScene.Renderizer do
       selected_id: selected_id
     }
 
-    case Scenic.Graph.get(graph, :tab_bar) do
-      [] ->
-        # Initial render - add the TabBar
-        graph
-        |> ScenicWidgets.TabBar.add_to_graph(
-          tab_bar_data,
-          id: :tab_bar,
-          translate: frame.pin.point
-        )
-
-      _existing ->
-        # TabBar exists - delete and re-add with updated data
-        # This is simpler than trying to update individual tabs
-        graph
-        |> Scenic.Graph.delete(:tab_bar)
-        |> ScenicWidgets.TabBar.add_to_graph(
-          tab_bar_data,
-          id: :tab_bar,
-          translate: frame.pin.point
-        )
-    end
+    graph
+    |> ScenicWidgets.TabBar.add_to_graph(
+      tab_bar_data,
+      id: :tab_bar,
+      translate: frame.pin.point
+    )
   end
 
   defp render_icon_menu(%Scenic.Graph{} = graph, %QuillEx.RootScene.State{} = state, %Widgex.Frame{} = frame) do
@@ -130,21 +156,20 @@ defmodule QuillEx.RootScene.Renderizer do
   end
 
   # Render search bar if frame is provided (i.e., search bar is visible)
-  defp maybe_render_search_bar(graph, _scene, _state, nil), do: graph
+  defp maybe_render_search_bar(graph, _scene, _old_state, _state, nil), do: graph
 
-  defp maybe_render_search_bar(graph, _scene, state, %Widgex.Frame{} = frame) do
-    search_bar_data = %{
-      id: :search_bar,
-      frame: frame,
-      query: state.search_query
-    }
-
-    # Get the pin point for positioning the component
-    pin_point = frame.pin.point
-
+  defp maybe_render_search_bar(graph, _scene, _old_state, state, %Widgex.Frame{} = frame) do
+    # Check if search bar already exists in graph
     case Scenic.Graph.get(graph, :search_bar) do
       [] ->
-        # Add search bar at the frame's position
+        # No search bar exists - create it
+        search_bar_data = %{
+          id: :search_bar,
+          frame: frame,
+          query: state.search_query
+        }
+        pin_point = frame.pin.point
+
         graph
         |> ScenicWidgets.SearchBar.add_to_graph(
           search_bar_data,
@@ -153,14 +178,10 @@ defmodule QuillEx.RootScene.Renderizer do
         )
 
       _existing ->
-        # Update search bar - delete and re-add with new state
+        # Search bar already exists - don't recreate
+        # Query updates happen via put_child(:search_bar, {:set_query, query})
+        # which is called by show_search_bar in qlx_root_scene.ex
         graph
-        |> Scenic.Graph.delete(:search_bar)
-        |> ScenicWidgets.SearchBar.add_to_graph(
-          search_bar_data,
-          id: :search_bar,
-          translate: pin_point
-        )
     end
   end
 
@@ -203,9 +224,49 @@ defmodule QuillEx.RootScene.Renderizer do
   defp render_buffer_pane(
     %Scenic.Graph{} = graph,
     %Scenic.Scene{} = _scene,
+    old_state,
     %QuillEx.RootScene.State{} = state,
     %Widgex.Frame{} = frame
   ) do
+    # Check if we need to recreate the TextField or can skip (buffer_backed mode handles updates)
+    needs_recreation = needs_buffer_pane_recreation?(old_state, state)
+
+    case {Scenic.Graph.get(graph, :buffer_pane), needs_recreation} do
+      {[], _} ->
+        # No existing buffer_pane - create it
+        do_create_buffer_pane(graph, state, frame)
+
+      {_existing, false} ->
+        # Existing buffer_pane and no need to recreate - buffer_backed mode handles updates via PubSub
+        graph
+
+      {_existing, true} ->
+        # Need to recreate (buffer switch or settings change)
+        graph
+        |> Scenic.Graph.delete(:buffer_pane)
+        |> do_create_buffer_pane(state, frame)
+    end
+  end
+
+  # Check if buffer_pane needs to be recreated based on state changes
+  defp needs_buffer_pane_recreation?(nil, _new_state), do: true  # Initial render
+  defp needs_buffer_pane_recreation?(old_state, new_state) do
+    # Recreate if active buffer changed
+    old_uuid = old_state.active_buf && old_state.active_buf.uuid
+    new_uuid = new_state.active_buf && new_state.active_buf.uuid
+    buffer_changed = old_uuid != new_uuid
+
+    # Recreate if editor settings changed (these affect TextField rendering)
+    settings_changed =
+      old_state.show_line_numbers != new_state.show_line_numbers or
+      old_state.word_wrap != new_state.word_wrap or
+      old_state.tab_width != new_state.tab_width
+
+    buffer_changed or settings_changed
+  end
+
+  # Helper to create the buffer_pane TextField
+  defp do_create_buffer_pane(graph, state, frame) do
     # Fetch buffer to get content
     {:ok, buf} = Quillex.Buffer.Process.fetch_buf(state.active_buf)
 
@@ -256,27 +317,12 @@ defmodule QuillEx.RootScene.Renderizer do
     # Add initial_cursor if we're restoring from a resize or buffer switch
     |> maybe_add_cursor(initial_cursor)
 
-    case Scenic.Graph.get(graph, :buffer_pane) do
-      [] ->
-        # Initial render - add the TextField
-        graph
-        |> ScenicWidgets.TextField.add_to_graph(
-          text_field_data,
-          id: :buffer_pane,
-          translate: frame.pin.point
-        )
-
-      _existing ->
-        # TextField exists - delete and re-add with new buffer content
-        # This handles switching between buffers
-        graph
-        |> Scenic.Graph.delete(:buffer_pane)
-        |> ScenicWidgets.TextField.add_to_graph(
-          text_field_data,
-          id: :buffer_pane,
-          translate: frame.pin.point
-        )
-    end
+    graph
+    |> ScenicWidgets.TextField.add_to_graph(
+      text_field_data,
+      id: :buffer_pane,
+      translate: frame.pin.point
+    )
   end
 
   # Helper to add initial_cursor to text_field_data if present

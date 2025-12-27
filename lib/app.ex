@@ -38,7 +38,7 @@ defmodule QuillEx.App do
     Supervisor.start_link(children, strategy: :one_for_one)
   end
 
-  @window_title "Quillex"
+  @window_title if Mix.env() == :test, do: "Quillex (test)", else: "Quillex"
   @default_resolution {1680, 1005}
   def scenic_config() do
     # Use test window size if available (wider to prevent text wrapping)

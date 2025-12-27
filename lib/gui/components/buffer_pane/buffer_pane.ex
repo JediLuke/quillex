@@ -26,12 +26,13 @@ defmodule Quillex.GUI.Components.BufferPane do
       ) do
     active? = Map.get(data, :active?, true)
     focused? = Map.get(data, :focused, false)
+    mode = Map.get(data, :mode, :multi_line)  # :multi_line or :single_line
     state = BufferPane.State.new(data |> Map.merge(%{active?: active?}))
 
-    {:ok, %{state: state, frame: frame, buf_ref: buf_ref, font: font, active?: active?, focused?: focused?}}
+    {:ok, %{state: state, frame: frame, buf_ref: buf_ref, font: font, active?: active?, focused?: focused?, mode: mode}}
   end
 
-  def init(scene, %{state: buf_pane_state, frame: frame, buf_ref: buf_ref, font: font, active?: active?, focused?: focused?}, _opts) do
+  def init(scene, %{state: buf_pane_state, frame: frame, buf_ref: buf_ref, font: font, active?: active?, focused?: focused?, mode: mode}, _opts) do
     # Fetch initial buffer state
     {:ok, buf} = Quillex.Buffer.Process.fetch_buf(buf_ref)
 
@@ -43,7 +44,7 @@ defmodule Quillex.GUI.Components.BufferPane do
     text_field_data = %{
       frame: frame,
       initial_text: Enum.join(buf.data, "\n"),
-      mode: :multi_line,
+      mode: mode,  # :multi_line for editors, :single_line for Kommander
       input_mode: :direct,  # TextField handles all input directly!
       show_line_numbers: true,
       editable: active?,
@@ -141,6 +142,22 @@ defmodule Quillex.GUI.Components.BufferPane do
     {:noreply, scene}
   end
 
+  # Enter pressed in single-line mode - bubble up to parent (e.g., Kommander)
+  def handle_event({:enter_pressed, :text_field, text}, _from, scene) do
+    Logger.debug("BufferPane: Enter pressed, text: #{String.slice(text, 0, 50)}...")
+    # Bubble this event up to the parent scene
+    # The parent (e.g., Kommander) will handle execution
+    GenServer.cast(scene.parent, {__MODULE__, :enter_pressed, scene.assigns.buf_ref, text})
+    {:noreply, scene}
+  end
+
+  # Escape pressed - bubble up to parent (e.g., Kommander to close)
+  def handle_event({:escape_pressed, :text_field}, _from, scene) do
+    Logger.debug("BufferPane: Escape pressed")
+    GenServer.cast(scene.parent, {__MODULE__, :escape_pressed, scene.assigns.buf_ref})
+    {:noreply, scene}
+  end
+
   # Catch-all for unexpected events
   def handle_event(event, _from, scene) do
     Logger.debug("BufferPane: unhandled event #{inspect(event)}")
@@ -157,6 +174,26 @@ defmodule Quillex.GUI.Components.BufferPane do
   end
 
   def handle_info(_msg, scene) do
+    {:noreply, scene}
+  end
+
+  # ============================================================
+  # EXTERNAL CONTROL API
+  # ============================================================
+
+  @doc """
+  Handle external put commands - e.g., clear the text.
+  Uses Scenic's put protocol to send to child TextField.
+  """
+  def handle_put(:clear, scene) do
+    Logger.debug("BufferPane: clearing text")
+    # Send empty string to TextField to clear it
+    Scenic.Scene.put_child(scene, :text_field, "")
+    {:noreply, scene}
+  end
+
+  def handle_put(msg, scene) do
+    Logger.debug("BufferPane: unhandled put #{inspect(msg)}")
     {:noreply, scene}
   end
 end

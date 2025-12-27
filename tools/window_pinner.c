@@ -1,7 +1,7 @@
 /*
- * window_pinner - Pins Quillex test windows to the current desktop
+ * window_pinner - Pins Quillex windows to the current desktop
  *
- * Event-driven X11 daemon that watches for "Quillex (Test)" windows
+ * Event-driven X11 daemon that watches for "Quillex" windows
  * and moves them to whichever desktop was active when this program
  * started. Run this on your "test desktop" to keep spex tests from
  * popping up while you work on other desktops.
@@ -9,7 +9,7 @@
  * How it works:
  *   1. On startup, reads _NET_CURRENT_DESKTOP to get target desktop
  *   2. Subscribes to X11 window creation/property events
- *   3. When a window with "Quillex (Test)" in title appears,
+ *   3. When a window with "Quillex" in title appears,
  *      sends _NET_WM_DESKTOP client message to move it
  *
  * Build: cd tools && make
@@ -26,7 +26,8 @@
 #include <string.h>
 #include <signal.h>
 
-#define MATCH_TITLE "Quillex (test)"
+// Keep this broad to match both normal and test titles.
+#define MATCH_TITLE "Quillex"
 
 // Global X11 connection and atom handles for EWMH properties.
 static Display *dpy;
@@ -40,6 +41,15 @@ static volatile int running = 1;
 
 // The desktop index captured at startup.
 static int target_desktop = 0;
+
+// X11 error handler: ignore transient BadWindow errors when windows vanish.
+int x11_error_handler(Display *display, XErrorEvent *error) {
+    (void)display;
+    if (error->error_code == BadWindow) {
+        return 0;
+    }
+    return 0;
+}
 
 // Signal handler: stop the event loop gracefully.
 void cleanup(int sig) {
@@ -140,6 +150,9 @@ int main(void) {
         fprintf(stderr, "Cannot open display\n");
         return 1;
     }
+
+    // Ignore transient X11 errors from windows that disappear mid-query.
+    XSetErrorHandler(x11_error_handler);
 
     // Cache atom identifiers used by EWMH.
     net_wm_desktop = XInternAtom(dpy, "_NET_WM_DESKTOP", False);

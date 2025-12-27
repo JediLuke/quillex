@@ -219,8 +219,10 @@ defmodule Quillex.Buffer.Process.Reducer do
   end
 
   def process(%Quillex.Structs.BufState{} = buf, {:select_text, direction, count}) do
-    buf
-    |> BufferPane.Mutator.select_text(direction, count)
+    IO.puts("📍 BufferReducer: select_text direction=#{inspect(direction)} count=#{count} cursor=#{inspect(hd(buf.cursors))} selection=#{inspect(buf.selection)}")
+    result = buf |> BufferPane.Mutator.select_text(direction, count)
+    IO.puts("📍 BufferReducer: after select_text selection=#{inspect(result.selection)}")
+    result
   end
 
   def process(%Quillex.Structs.BufState{} = buf, :clear_selection) do
@@ -356,6 +358,18 @@ defmodule Quillex.Buffer.Process.Reducer do
   def process(%BufState{selection: selection} = buf, {:cut, :selection}) do
     selected_text = extract_selected_text(buf, selection)
     Clipboard.copy(selected_text)
+    # Push undo before deletion
+    buf_with_undo = push_undo(buf)
+    BufferPane.Mutator.delete_selected_text(buf_with_undo)
+  end
+
+  # Delete selection without copying to clipboard (used by TextField cut operation)
+  def process(%BufState{selection: nil} = buf, {:delete, :selection}) do
+    # No selection, do nothing
+    buf
+  end
+
+  def process(%BufState{} = buf, {:delete, :selection}) do
     # Push undo before deletion
     buf_with_undo = push_undo(buf)
     BufferPane.Mutator.delete_selected_text(buf_with_undo)
