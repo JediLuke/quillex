@@ -13,6 +13,8 @@
 - `iex -S mix run` starts the app in dev mode (matches README guidance).
 - `mix test` runs the full ExUnit suite.
 - `mix format` formats `mix`, `config`, `lib`, and `test` sources per `.formatter.exs`.
+- Spex runs require `SCENIC_LOCAL_TARGET=glfw` (cairo-gtk is currently broken for spex).
+  Example: `SCENIC_LOCAL_TARGET=glfw MIX_ENV=test mix spex test/spex/quillex/01_app_launch_spex.exs`.
 
 ## Coding Style & Naming Conventions
 - Elixir code uses standard `mix format` conventions; run it before committing.
