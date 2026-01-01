@@ -281,6 +281,9 @@ defmodule QuillEx.RootScene.Renderizer do
     # Priority: 1) _restore_cursor from state (explicit restore), 2) buffer's saved cursor
     initial_cursor = Map.get(state, :_restore_cursor) || get_buffer_cursor(buf)
 
+    # Check if we have a first visible line to restore (for scroll preservation during word wrap toggle)
+    first_visible_line = Map.get(state, :_restore_first_visible_line)
+
     # TextField data for the active buffer (using state settings)
     wrap_mode = if state.word_wrap, do: :word, else: :none
 
@@ -319,6 +322,8 @@ defmodule QuillEx.RootScene.Renderizer do
     }
     # Add initial_cursor if we're restoring from a resize or buffer switch
     |> maybe_add_cursor(initial_cursor)
+    # Add first_visible_line if we're restoring scroll position (e.g., after word wrap toggle)
+    |> maybe_add_first_visible_line(first_visible_line)
 
     graph
     |> ScenicWidgets.TextField.add_to_graph(
@@ -331,6 +336,10 @@ defmodule QuillEx.RootScene.Renderizer do
   # Helper to add initial_cursor to text_field_data if present
   defp maybe_add_cursor(data, nil), do: data
   defp maybe_add_cursor(data, cursor), do: Map.put(data, :initial_cursor, cursor)
+
+  # Helper to add first_visible_line to text_field_data if present
+  defp maybe_add_first_visible_line(data, nil), do: data
+  defp maybe_add_first_visible_line(data, line), do: Map.put(data, :first_visible_line, line)
 
   # Extract cursor position from buffer's cursors field
   # Returns {line, col} tuple or nil if not available

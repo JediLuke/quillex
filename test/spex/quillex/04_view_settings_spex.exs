@@ -235,6 +235,113 @@ defmodule Quillex.ViewSettingsSpex do
     end
   end
 
+  spex "View Settings - Word Wrap Scroll Behavior",
+    description: "Validates that word wrap correctly handles long documents and scroll position",
+    tags: [:phase_4, :view_settings, :word_wrap, :scroll] do
+
+    # =========================================================================
+    # LONG DOCUMENT SCROLL BEHAVIOR WITH WORD WRAP
+    # =========================================================================
+
+    scenario "Long document is fully scrollable with word wrap enabled", context do
+      given_ "we have a document with many lines of varying length", context do
+        close_buffers_until_one_remains()
+        clear_buffer()
+        # Create content with mix of short and long lines
+        # This simulates documents like Spinoza's Ethics with paragraphs
+        Enum.each(1..50, fn i ->
+          if rem(i, 5) == 0 do
+            # Every 5th line is a long paragraph
+            long_text = "Line #{i}: This is a much longer line that will definitely need to wrap when word wrap is enabled because it contains a lot of text that exceeds the typical editor viewport width and continues on and on."
+            type_text(long_text)
+          else
+            type_text("Line #{i}: Short content")
+          end
+          Probes.send_keys("enter", [])
+          Process.sleep(10)
+        end)
+        type_text("Line 51: THE END MARKER")
+        Process.sleep(500)
+
+        {:ok, context}
+      end
+
+      when_ "we enable word wrap", context do
+        toggle_word_wrap()
+        Process.sleep(500)
+        {:ok, context}
+      end
+
+      then_ "we should be able to scroll to the bottom of the document", context do
+        # Press Ctrl+End to go to end of document
+        Probes.send_keys("end", [:ctrl])
+        Process.sleep(500)
+
+        # The end marker should be visible
+        assert Query.text_visible?("THE END MARKER"),
+               "End of document should be reachable with word wrap enabled"
+        :ok
+      end
+
+      then_ "we should be able to scroll back to the top", context do
+        # Press Ctrl+Home to go to start
+        Probes.send_keys("home", [:ctrl])
+        Process.sleep(500)
+
+        # Line 1 should be visible
+        assert Query.text_visible?("Line 1:"),
+               "Beginning of document should be reachable"
+        :ok
+      end
+    end
+
+    scenario "Scroll position is preserved when toggling word wrap", context do
+      given_ "we have scrolled to a specific position in a long document", context do
+        # Navigate to middle of document (around line 25)
+        Probes.send_keys("home", [:ctrl])
+        Process.sleep(200)
+
+        # Move down 25 lines
+        Enum.each(1..25, fn _ ->
+          Probes.send_keys("down", [])
+          Process.sleep(10)
+        end)
+        Process.sleep(300)
+
+        # Verify we're at line 25 area
+        assert Query.text_visible?("Line 25:") or Query.text_visible?("Line 26:"),
+               "Should be viewing around line 25"
+        {:ok, context}
+      end
+
+      when_ "we toggle word wrap off", context do
+        toggle_word_wrap()
+        Process.sleep(500)
+        {:ok, context}
+      end
+
+      then_ "the same content area should still be visible", context do
+        # Line 25 area should still be visible (scroll position preserved)
+        assert Query.text_visible?("Line 25:") or Query.text_visible?("Line 26:") or Query.text_visible?("Line 24:"),
+               "Content around line 25 should still be visible after word wrap toggle"
+        :ok
+      end
+
+      when_ "we toggle word wrap back on", context do
+        toggle_word_wrap()
+        Process.sleep(500)
+        {:ok, context}
+      end
+
+      then_ "the same content area should still be visible", context do
+        # Should still see the same area
+        assert Query.text_visible?("Line 25:") or Query.text_visible?("Line 26:") or Query.text_visible?("Line 24:"),
+               "Content around line 25 should still be visible after toggling back"
+        :ok
+      end
+    end
+  end
+
   spex "View Settings - Cursor Preservation",
     description: "Validates that cursor position is preserved when switching buffers (verified via marker insertion)",
     tags: [:phase_4, :view_settings, :cursor_preservation] do

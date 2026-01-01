@@ -117,6 +117,23 @@ defmodule QuillEx.RootScene do
     end
   end
 
+  # Get the first visible line from the TextField (for scroll preservation during word wrap toggle)
+  defp get_first_visible_line(scene) do
+    alias ScenicWidgets.TextField.State, as: TFState
+
+    case Scenic.Scene.fetch_child(scene, :buffer_pane) do
+      {:ok, [%TFState{scroll: scroll, font: font} = _tf_state]} ->
+        line_height = font.size
+        # Calculate which source line is at the top of the viewport
+        # offset_y is how far we've scrolled down in pixels
+        first_line = max(1, trunc(scroll.offset_y / line_height) + 1)
+        first_line
+
+      _ ->
+        nil
+    end
+  end
+
   def handle_input(input, _context, scene) do
     # TextField in :direct mode handles its own input, so we don't need to forward
     # This catch-all is kept for any unexpected input events
@@ -672,14 +689,23 @@ defmodule QuillEx.RootScene do
     # With buffer_backed mode, just get cursor position from buffer (no sync needed)
     cursor_pos = get_buffer_cursor(scene)
 
+    # Get first visible line for scroll preservation during word wrap toggle
+    first_visible_line = get_first_visible_line(scene)
+
     # Update the IconMenu checkmarks to reflect new state
     new_menus = QuillEx.RootScene.Renderizer.build_menus(new_state)
     # put_child sends message to child but returns :ok, not scene
     Scenic.Scene.put_child(scene, :icon_menu, {:update_menus, new_menus})
 
-    # Add cursor position to state for restoration after re-render
+    # Add cursor position and first visible line for restoration after re-render
     new_state = if cursor_pos do
       Map.put(new_state, :_restore_cursor, cursor_pos)
+    else
+      new_state
+    end
+
+    new_state = if first_visible_line do
+      Map.put(new_state, :_restore_first_visible_line, first_visible_line)
     else
       new_state
     end
@@ -688,8 +714,10 @@ defmodule QuillEx.RootScene do
     old_state = scene.assigns.state
     new_graph = RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
-    # Remove the temporary cursor restore key from state
-    final_state = Map.delete(new_state, :_restore_cursor)
+    # Remove the temporary restore keys from state
+    final_state = new_state
+      |> Map.delete(:_restore_cursor)
+      |> Map.delete(:_restore_first_visible_line)
 
     new_scene =
       scene
