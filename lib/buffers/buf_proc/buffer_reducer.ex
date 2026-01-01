@@ -125,20 +125,26 @@ defmodule Quillex.Buffer.Process.Reducer do
   # Find all occurrences of query in lines
   defp find_all_matches(lines, query) when is_list(lines) and is_binary(query) do
     query_len = String.length(query)
+    query_lower = String.downcase(query)
     lines
     |> Enum.with_index(1)
     |> Enum.flat_map(fn {line, line_num} ->
-      find_matches_in_line(line, query, query_len, line_num, 1, [])
+      find_matches_in_line(line, query, query_lower, query_len, line_num, 1, [])
     end)
   end
 
-  defp find_matches_in_line(line, query, query_len, line_num, col, acc) do
-    case :binary.match(line, query) do
+  # Case-insensitive search - match against lowercase but preserve original match text
+  defp find_matches_in_line(line, _original_query, query_lower, query_len, line_num, col, acc) do
+    line_lower = String.downcase(line)
+    case :binary.match(line_lower, query_lower) do
       {pos, _len} ->
         match_col = col + pos
+        # Extract the actual matched text from original line (preserving case)
+        match_text = String.slice(line, pos, query_len)
         remaining = String.slice(line, pos + query_len, String.length(line))
-        find_matches_in_line(remaining, query, query_len, line_num, match_col + query_len,
-          [{line_num, match_col, query} | acc])
+        # Recursively search in remaining part of line
+        find_matches_in_line(remaining, match_text, query_lower, query_len, line_num, match_col + query_len,
+          [{line_num, match_col, match_text} | acc])
       :nomatch ->
         Enum.reverse(acc)
     end
