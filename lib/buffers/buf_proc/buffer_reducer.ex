@@ -208,8 +208,11 @@ defmodule Quillex.Buffer.Process.Reducer do
   end
 
   # Set the cursor position directly (used for syncing from TextField on resize/switch)
+  # Also clears selection since clicking to position cursor should deselect
   def process(%Quillex.Structs.BufState{} = buf, {:set_cursor, {line, col}}) when line >= 1 and col >= 1 do
-    buf |> BufferPane.Mutator.move_cursor({line, col})
+    buf
+    |> BufferPane.Mutator.move_cursor({line, col})
+    |> Map.put(:selection, nil)
   end
 
   def process(%Quillex.Structs.BufState{} = buf, {:move_cursor, direction, x}) do
@@ -237,6 +240,23 @@ defmodule Quillex.Buffer.Process.Reducer do
 
   def process(%Quillex.Structs.BufState{} = buf, :select_all) do
     BufferPane.Mutator.select_all(buf)
+  end
+
+  # Select a range from start to end position (used for mouse drag selection)
+  def process(%Quillex.Structs.BufState{} = buf, {:select_range, start_pos, end_pos}) do
+    # Convert positions to selection format and update cursor
+    {start_line, start_col} = start_pos
+    {end_line, end_col} = end_pos
+
+    # Create selection structure
+    selection = %{
+      start: %{line: start_line, col: start_col},
+      end: %{line: end_line, col: end_col}
+    }
+
+    # Update cursor to end position and set selection
+    new_cursor = %{line: end_line, col: end_col}
+    %{buf | cursors: [new_cursor], selection: selection}
   end
 
   def process(%BufState{} = buf, {:newline, :at_cursor}) do

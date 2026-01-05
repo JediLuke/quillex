@@ -320,6 +320,10 @@ defmodule QuillEx.RootScene do
     hide_file_picker(scene, path)
   end
 
+  def handle_cast({:file_picker, :file_saved, path}, scene) do
+    hide_file_picker_and_save(scene, path)
+  end
+
   def handle_cast({:file_picker, :cancelled}, scene) do
     hide_file_picker(scene)
   end
@@ -454,8 +458,8 @@ defmodule QuillEx.RootScene do
         {:noreply, scene}
 
       "save_as" ->
-        # Save as - not implemented yet
-        {:noreply, scene}
+        # Show file picker in save mode
+        show_file_picker_save(scene)
 
       "close" ->
         # Close the active buffer (no sync needed - buffer_backed mode)
@@ -820,7 +824,7 @@ defmodule QuillEx.RootScene do
   # ===========================================================================
 
   @doc """
-  Shows the file picker modal.
+  Shows the file picker modal (for opening files).
   """
   defp show_file_picker(scene) do
     new_state = %{scene.assigns.state | show_file_picker: true}
@@ -830,7 +834,8 @@ defmodule QuillEx.RootScene do
       |> ScenicWidgets.FilePicker.add_to_graph(
         %{
           frame: new_state.frame,
-          start_path: System.user_home!()
+          start_path: System.user_home!(),
+          mode: :open
         },
         id: :file_picker
       )
@@ -840,6 +845,56 @@ defmodule QuillEx.RootScene do
       |> assign(state: new_state)
       |> assign(graph: graph)
       |> push_graph(graph)
+
+    # Blur the buffer pane so keystrokes go to FilePicker, not TextField
+    Scenic.Scene.put_child(new_scene, :buffer_pane, :blur)
+
+    {:noreply, new_scene}
+  end
+
+  @doc """
+  Shows the file picker modal in save mode (for saving files).
+  """
+  defp show_file_picker_save(scene) do
+    new_state = %{scene.assigns.state | show_file_picker: true}
+
+    # Get the current buffer name as default filename
+    default_filename = case scene.assigns.state.active_buf do
+      nil -> "untitled.txt"
+      buf_ref ->
+        case Quillex.Buffer.Process.fetch_buf(buf_ref) do
+          {:ok, buf} ->
+            if buf.source do
+              # If buffer has a file path, use its basename
+              Path.basename(buf.source)
+            else
+              # Otherwise use buffer name or default
+              buf.name || "untitled.txt"
+            end
+          _ -> "untitled.txt"
+        end
+    end
+
+    # Add the file picker component in save mode
+    graph = scene.assigns.graph
+      |> ScenicWidgets.FilePicker.add_to_graph(
+        %{
+          frame: new_state.frame,
+          start_path: System.user_home!(),
+          mode: :save,
+          filename: default_filename
+        },
+        id: :file_picker
+      )
+
+    new_scene =
+      scene
+      |> assign(state: new_state)
+      |> assign(graph: graph)
+      |> push_graph(graph)
+
+    # IMPORTANT: Blur the buffer pane so keystrokes go to FilePicker, not TextField
+    Scenic.Scene.put_child(new_scene, :buffer_pane, :blur)
 
     {:noreply, new_scene}
   end
@@ -860,11 +915,94 @@ defmodule QuillEx.RootScene do
       |> assign(graph: graph)
       |> push_graph(graph)
 
+    # Refocus the buffer pane
+    Scenic.Scene.put_child(new_scene, :buffer_pane, :focus)
+
     # If a file was selected, open it
     if file_path do
       open_file(new_scene, file_path)
     else
       {:noreply, new_scene}
+    end
+  end
+
+  @doc """
+  Hides the file picker modal and saves the current buffer to the specified path.
+  """
+  defp hide_file_picker_and_save(scene, file_path) do
+    new_state = %{scene.assigns.state | show_file_picker: false}
+
+    # Remove the file picker from the graph
+    graph = scene.assigns.graph
+      |> Scenic.Graph.delete(:file_picker)
+
+    new_scene =
+      scene
+      |> assign(state: new_state)
+      |> assign(graph: graph)
+      |> push_graph(graph)
+
+    # Save the current buffer to the specified path
+    save_buffer_as(new_scene, file_path)
+  end
+
+  @doc """
+  Saves the current buffer to a new file path.
+  """
+  defp save_buffer_as(scene, file_path) do
+    case scene.assigns.state.active_buf do
+      nil ->
+        Logger.warning("No active buffer to save")
+        {:noreply, scene}
+
+      buf_ref ->
+        Logger.info("Saving buffer as: #{file_path}")
+
+        # Use the buffer's save_as action
+        result = Quillex.Buffer.Process.save_as(buf_ref, file_path)
+        Logger.info("save_as result: #{inspect(result)}")
+
+        case result do
+          {:ok, updated_buf} ->
+            Logger.info("Successfully saved to: #{file_path}, new name: #{updated_buf.name}")
+
+            # Generate a new BufRef with the updated name
+            new_buf_ref = Quillex.Structs.BufState.BufRef.generate(updated_buf)
+
+            # Update the buffers list with the new BufRef
+            old_state = scene.assigns.state
+            updated_buffers = Enum.map(old_state.buffers, fn b ->
+              if b.uuid == buf_ref.uuid, do: new_buf_ref, else: b
+            end)
+
+            # Update state with new buffers list and active_buf
+            new_state = %{old_state |
+              buffers: updated_buffers,
+              active_buf: new_buf_ref
+            }
+
+            # Re-render to update the tab bar with new filename
+            new_graph = RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+
+            new_scene =
+              scene
+              |> assign(state: new_state)
+              |> assign(graph: new_graph)
+              |> push_graph(new_graph)
+
+            # Refocus the buffer pane
+            Scenic.Scene.put_child(new_scene, :buffer_pane, :focus)
+
+            {:noreply, new_scene}
+
+          {:error, reason} ->
+            Logger.error("Failed to save file: #{inspect(reason)}")
+            {:noreply, scene}
+
+          other ->
+            Logger.error("Unexpected save_as result: #{inspect(other)}")
+            {:noreply, scene}
+        end
     end
   end
 
