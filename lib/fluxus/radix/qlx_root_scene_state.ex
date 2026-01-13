@@ -13,6 +13,10 @@ defmodule QuillEx.RootScene.State do
     show_line_numbers: true,
     word_wrap: false,
     tab_width: 4,
+    # File navigator sidebar
+    show_file_nav: false,
+    file_nav_path: nil,
+    file_nav_width: 250,
     # Modal dialogs
     show_file_picker: false,
     # Search bar
@@ -29,7 +33,8 @@ defmodule QuillEx.RootScene.State do
         height: 50
       },
       buffers: buffers,
-      active_buf: hd(buffers)
+      active_buf: hd(buffers),
+      file_nav_path: File.cwd!()
     }
   end
 

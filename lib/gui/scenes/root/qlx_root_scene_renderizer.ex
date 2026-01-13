@@ -1,6 +1,8 @@
 defmodule QuillEx.RootScene.Renderizer do
   require Logger
 
+  alias Quillex.Utils.FileTree
+
   # Height of the top bar (TabBar + IconMenu)
   @top_bar_height 35
 
@@ -30,12 +32,21 @@ defmodule QuillEx.RootScene.Renderizer do
     [top_bar_frame, buffer_frame] = Widgex.Frame.v_split(state.frame, px: @top_bar_height)
 
     # If search bar is visible, split buffer area further
-    {search_bar_frame, actual_buffer_frame} =
+    {search_bar_frame, remaining_frame} =
       if state.show_search_bar do
         [search_frame, buf_frame] = Widgex.Frame.v_split(buffer_frame, px: @search_bar_height)
         {search_frame, buf_frame}
       else
         {nil, buffer_frame}
+      end
+
+    # If file nav is visible, split horizontally for sidebar
+    {file_nav_frame, actual_buffer_frame} =
+      if state.show_file_nav do
+        [nav_frame, buf_frame] = Widgex.Frame.h_split(remaining_frame, px: state.file_nav_width)
+        {nav_frame, buf_frame}
+      else
+        {nil, remaining_frame}
       end
 
     # Check if we need full z-order rebuild
@@ -45,15 +56,18 @@ defmodule QuillEx.RootScene.Renderizer do
       # Delete all and recreate in correct z-order
       graph
       |> Scenic.Graph.delete(:buffer_pane)
+      |> Scenic.Graph.delete(:file_nav)
       |> Scenic.Graph.delete(:search_bar)
       |> Scenic.Graph.delete(:tab_bar)
       |> Scenic.Graph.delete(:icon_menu)
+      |> maybe_create_file_nav(state, file_nav_frame)
       |> do_create_buffer_pane(state, actual_buffer_frame)
       |> maybe_create_search_bar(state, search_bar_frame)
       |> render_top_bar(old_state, state, top_bar_frame)
     else
       # Incremental updates - z-order preserved
       graph
+      |> maybe_update_file_nav(state, file_nav_frame)
       |> maybe_update_search_bar(state, search_bar_frame)
       |> render_top_bar(old_state, state, top_bar_frame)
     end
@@ -91,6 +105,46 @@ defmodule QuillEx.RootScene.Renderizer do
         # Need to add search bar - but this changes z-order!
         # For now, add it (will be below topbar since topbar exists)
         maybe_create_search_bar(graph, state, frame)
+
+      _existing ->
+        graph
+    end
+  end
+
+  # Create file navigator sidebar if frame is provided (file nav visible)
+  defp maybe_create_file_nav(graph, _state, nil), do: graph
+  defp maybe_create_file_nav(graph, state, %Widgex.Frame{} = frame) do
+    # Build file tree from current path
+    file_tree = FileTree.build(state.file_nav_path || File.cwd!())
+
+    side_nav_data = %{
+      frame: frame,
+      tree: file_tree,
+      active_id: nil
+    }
+
+    graph
+    |> ScenicWidgets.SideNav.add_to_graph(
+      side_nav_data,
+      id: :file_nav,
+      translate: frame.pin.point
+    )
+  end
+
+  # Update file nav (add/remove) without full rebuild
+  defp maybe_update_file_nav(graph, _state, nil) do
+    # File nav should be hidden
+    case Scenic.Graph.get(graph, :file_nav) do
+      [] -> graph
+      _existing -> Scenic.Graph.delete(graph, :file_nav)
+    end
+  end
+
+  defp maybe_update_file_nav(graph, state, %Widgex.Frame{} = frame) do
+    case Scenic.Graph.get(graph, :file_nav) do
+      [] ->
+        # Need to add file nav
+        maybe_create_file_nav(graph, state, frame)
 
       _existing ->
         graph
@@ -221,6 +275,7 @@ defmodule QuillEx.RootScene.Renderizer do
         {"find_next", "Find Next (Ctrl+G)"}
       ]},
       %{id: :view, icon: "V", items: [
+        {"file_nav", "File Navigator", %{type: :toggle, checked: state.show_file_nav}},
         {"line_numbers", "Line Numbers", %{type: :toggle, checked: state.show_line_numbers}},
         {"word_wrap", "Word Wrap", %{type: :toggle, checked: state.word_wrap}},
         {"tab_width_2", tab_width_label(2, state.tab_width)},
@@ -249,8 +304,9 @@ defmodule QuillEx.RootScene.Renderizer do
       old_state.word_wrap != new_state.word_wrap or
       old_state.tab_width != new_state.tab_width
 
-    # Recreate if search bar visibility changed (affects buffer frame size)
-    layout_changed = old_state.show_search_bar != new_state.show_search_bar
+    # Recreate if search bar or file nav visibility changed (affects buffer frame size)
+    layout_changed = old_state.show_search_bar != new_state.show_search_bar or
+      old_state.show_file_nav != new_state.show_file_nav
 
     # Recreate if the buffer process PID changed (e.g., buffer was restarted by supervisor)
     # This ensures the TextField always has a valid buffer_controller reference

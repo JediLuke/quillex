@@ -121,16 +121,20 @@ defmodule QuillEx.RootScene do
   defp get_first_visible_line(scene) do
     alias ScenicWidgets.TextField.State, as: TFState
 
-    case Scenic.Scene.fetch_child(scene, :buffer_pane) do
-      {:ok, [%TFState{scroll: scroll, font: font} = _tf_state]} ->
-        line_height = font.size
-        # Calculate which source line is at the top of the viewport
-        # offset_y is how far we've scrolled down in pixels
-        first_line = max(1, trunc(scroll.offset_y / line_height) + 1)
-        first_line
+    try do
+      case Scenic.Scene.fetch_child(scene, :buffer_pane) do
+        {:ok, [%TFState{scroll: scroll, font: font} = _tf_state]} ->
+          line_height = font.size
+          # Calculate which source line is at the top of the viewport
+          # offset_y is how far we've scrolled down in pixels
+          first_line = max(1, trunc(scroll.offset_y / line_height) + 1)
+          first_line
 
-      _ ->
-        nil
+        _ ->
+          nil
+      end
+    catch
+      :exit, _ -> nil
     end
   end
 
@@ -143,6 +147,10 @@ defmodule QuillEx.RootScene do
 
   def handle_call(:get_active_buffer, _from, scene) do
     {:reply, {:ok, scene.assigns.state.active_buf}, scene}
+  end
+
+  def handle_call(:get_state, _from, scene) do
+    {:reply, {:ok, scene.assigns.state}, scene}
   end
 
   # Synchronous action processing for BufferPane actions
@@ -168,6 +176,13 @@ defmodule QuillEx.RootScene do
   def handle_call({:action, [:toggle_word_wrap]}, _from, scene) do
     state = scene.assigns.state
     new_state = %{state | word_wrap: not state.word_wrap}
+    {:noreply, new_scene} = update_editor_settings(scene, new_state)
+    {:reply, :ok, new_scene}
+  end
+
+  def handle_call({:action, [:toggle_file_nav]}, _from, scene) do
+    state = scene.assigns.state
+    new_state = %{state | show_file_nav: not state.show_file_nav}
     {:noreply, new_scene} = update_editor_settings(scene, new_state)
     {:reply, :ok, new_scene}
   end
@@ -206,6 +221,12 @@ defmodule QuillEx.RootScene do
   def handle_cast({:action, [:toggle_word_wrap]}, scene) do
     state = scene.assigns.state
     new_state = %{state | word_wrap: not state.word_wrap}
+    update_editor_settings(scene, new_state)
+  end
+
+  def handle_cast({:action, [:toggle_file_nav]}, scene) do
+    state = scene.assigns.state
+    new_state = %{state | show_file_nav: not state.show_file_nav}
     update_editor_settings(scene, new_state)
   end
 
@@ -498,6 +519,13 @@ defmodule QuillEx.RootScene do
         Scenic.Scene.put_child(scene, :buffer_pane, {:action, :find_next})
         {:noreply, scene}
 
+      "file_nav" ->
+        # Toggle file navigator sidebar
+        state = scene.assigns.state
+        new_state = %{state | show_file_nav: not state.show_file_nav}
+        Logger.debug("Toggling file nav: #{new_state.show_file_nav}")
+        update_editor_settings(scene, new_state)
+
       "line_numbers" ->
         # Toggle line numbers
         state = scene.assigns.state
@@ -674,6 +702,23 @@ defmodule QuillEx.RootScene do
     new_scene = scene |> assign(state: new_state)
     {:noreply, new_scene}
   end
+
+  # Handle file navigation from SideNav (file explorer sidebar)
+  def handle_event({:sidebar, :navigate, item_id}, _from, scene) when is_binary(item_id) do
+    # item_id is the file path
+    if File.regular?(item_id) do
+      Logger.info("File nav: opening file #{item_id}")
+      open_file(scene, item_id)
+    else
+      Logger.debug("File nav: not a regular file: #{item_id}")
+      {:noreply, scene}
+    end
+  end
+
+  # Handle expand/collapse events from SideNav (informational only)
+  def handle_event({:sidebar, :expand, _item_id}, _from, scene), do: {:noreply, scene}
+  def handle_event({:sidebar, :collapse, _item_id}, _from, scene), do: {:noreply, scene}
+  def handle_event({:sidebar, :hover, _item_id}, _from, scene), do: {:noreply, scene}
 
   # Catch-all for unhandled events
   def handle_event(event, _from, scene) do
@@ -864,12 +909,13 @@ defmodule QuillEx.RootScene do
       buf_ref ->
         case Quillex.Buffer.Process.fetch_buf(buf_ref) do
           {:ok, buf} ->
-            if buf.source do
-              # If buffer has a file path, use its basename
-              Path.basename(buf.source)
-            else
-              # Otherwise use buffer name or default
-              buf.name || "untitled.txt"
+            case buf.source do
+              %{filepath: file_path} when is_binary(file_path) ->
+                # If buffer has a file path, use its basename
+                Path.basename(file_path)
+              _ ->
+                # Otherwise use buffer name or default
+                buf.name || "untitled.txt"
             end
           _ -> "untitled.txt"
         end
