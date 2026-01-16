@@ -2,6 +2,7 @@ defmodule QuillEx.RootScene.Renderizer do
   require Logger
 
   alias Quillex.Utils.FileTree
+  alias Quillex.Utils.SideNavThemes
 
   # Height of the top bar (TabBar + IconMenu)
   @top_bar_height 35
@@ -117,10 +118,12 @@ defmodule QuillEx.RootScene.Renderizer do
     # Build file tree from current path
     file_tree = FileTree.build(state.file_nav_path || File.cwd!())
 
+    # Use dark theme for file navigator (merlinex-inspired)
     side_nav_data = %{
       frame: frame,
       tree: file_tree,
-      active_id: nil
+      active_id: nil,
+      theme: SideNavThemes.dark()
     }
 
     graph

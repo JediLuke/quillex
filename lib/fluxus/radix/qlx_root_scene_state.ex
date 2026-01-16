@@ -23,7 +23,9 @@ defmodule QuillEx.RootScene.State do
     show_search_bar: false,
     search_query: "",
     search_current_match: 0,
-    search_total_matches: 0
+    search_total_matches: 0,
+    # Cursor position tracking for scroll routing
+    cursor_pos: {0, 0}
   ]
 
   def new(%{frame: %Widgex.Frame{} = frame, buffers: buffers}) when is_list(buffers) do

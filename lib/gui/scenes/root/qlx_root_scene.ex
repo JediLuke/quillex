@@ -50,7 +50,8 @@ defmodule QuillEx.RootScene do
     Quillex.Utils.PubSub.subscribe(topic: :qlx_events)
 
     # TextField handles its own input in :direct mode, so we only request viewport events
-    request_input(scene, [:viewport])
+    # Also request cursor_pos and cursor_scroll for scroll routing between components
+    request_input(scene, [:viewport, :cursor_pos, :cursor_scroll])
 
     {:ok, scene}
   end
@@ -136,6 +137,31 @@ defmodule QuillEx.RootScene do
     catch
       :exit, _ -> nil
     end
+  end
+
+  # Track cursor position for scroll routing
+  def handle_input({:cursor_pos, coords}, _context, scene) do
+    state = scene.assigns.state
+    new_state = %{state | cursor_pos: coords}
+    {:noreply, assign(scene, state: new_state)}
+  end
+
+  # Route scroll events to the appropriate component based on cursor position
+  def handle_input({:cursor_scroll, scroll_data}, _context, scene) do
+    state = scene.assigns.state
+    {cursor_x, _cursor_y} = state.cursor_pos
+
+    # Determine which component should receive the scroll based on cursor position
+    # If file_nav is visible and cursor is within its width, route to file_nav
+    if state.show_file_nav and cursor_x < state.file_nav_width do
+      # Route scroll to file navigator
+      Scenic.Scene.put_child(scene, :file_nav, %{scroll: scroll_data})
+    else
+      # Route scroll to buffer pane (TextField handles its own scroll)
+      Scenic.Scene.put_child(scene, :buffer_pane, {:scroll, scroll_data})
+    end
+
+    {:noreply, scene}
   end
 
   def handle_input(input, _context, scene) do
