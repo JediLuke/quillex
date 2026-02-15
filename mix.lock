@@ -20,7 +20,7 @@
   "scenic": {:git, "https://github.com/JediLuke/scenic.git", "29244592b8261b8cbbed222df804f0bf0d7e9cba", [branch: "main"]},
   "scenic_driver_local": {:git, "https://github.com/JediLuke/scenic_driver_local.git", "825261acc3edcfc840ff511b405ca7c57a366efd", [branch: "main"]},
   "scenic_mcp": {:git, "https://github.com/scenic-contrib/scenic_mcp_experimental.git", "b3e0cb9b1a17dae2b645cb67a75531c503bc960d", [branch: "main"]},
-  "scenic_widget_contrib": {:git, "https://github.com/JediLuke/scenic-widget-contrib.git", "cd20d83da0495b1aaa25b5c665a8d4fd4aebb762", [branch: "main"]},
+  "scenic_widget_contrib": {:git, "https://github.com/JediLuke/scenic-widget-contrib.git", "69761606afb7d395c66e2ff57f77208f4ef38c59", [branch: "main"]},
   "sexy_spex": {:git, "https://github.com/JediLuke/spex.git", "e220afce46f1c60dce5edc4a7c23e07f43f1badd", [branch: "main"]},
   "stream_data": {:hex, :stream_data, "0.6.0", "e87a9a79d7ec23d10ff83eb025141ef4915eeb09d4491f79e52f2562b73e5f47", [:mix], [], "hexpm", "b92b5031b650ca480ced047578f1d57ea6dd563f5b57464ad274718c9c29501c"},
   "struct_access": {:hex, :struct_access, "1.1.2", "a42e6ceedd9b9ea090ee94a6da089d56e16f374dbbc010c3eebdf8be17df286f", [:mix], [], "hexpm", "e4c411dcc0226081b95709909551fc92b8feb1a3476108348ea7e3f6c12e586a"},
