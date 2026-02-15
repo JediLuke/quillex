@@ -4,6 +4,7 @@ defmodule QuillEx.App do
   """
 
   @tidewave_port 31337
+  @start_tidewave? Mix.env() == :dev and Code.ensure_loaded?(Tidewave) and Code.ensure_loaded?(Bandit)
 
   def start(_type, _args) do
     # QuillEx.Metrics.Instrumenter.setup()
@@ -26,8 +27,7 @@ defmodule QuillEx.App do
 
     children =
       children ++
-        # Conditionally start Tidewave server for development
-        if Application.get_env(:quillex, :env) == :dev and Code.ensure_loaded?(Tidewave) and Code.ensure_loaded?(Bandit) do
+        if @start_tidewave? do
           require Logger
           Logger.info("Starting Tidewave server on port #{@tidewave_port} for development")
           [{Bandit, plug: Tidewave, port: @tidewave_port}]
