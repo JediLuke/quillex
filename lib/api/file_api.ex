@@ -39,8 +39,9 @@ defmodule Quillex.API.FileAPI do
     case File.read(file_path) do
       {:ok, content} ->
         # File exists, create buffer with content
+        # Note: BufferSupervisor expects :filepath (no underscore)
         {:ok, buf_ref} = Buffer.new(%{
-          file_path: file_path,
+          filepath: file_path,
           data: String.split(content, "\n"),
           dirty: false
         })
@@ -57,8 +58,9 @@ defmodule Quillex.API.FileAPI do
         
       {:error, :enoent} ->
         # File doesn't exist, create new buffer for this path
+        # Note: BufferSupervisor expects :filepath (no underscore)
         {:ok, buf_ref} = Buffer.new(%{
-          file_path: file_path,
+          filepath: file_path,
           data: [""],
           dirty: false
         })

@@ -21,18 +21,19 @@ defmodule QuillEx.MixProject do
   def application do
     [
       mod: {QuillEx.App, []},
-      extra_applications: [:event_bus, :scenic_mcp]
+
+      extra_applications:
+        [:event_bus] ++
+        if(Mix.env() in [:dev, :test], do: [:scenic_mcp], else: [])
     ]
   end
 
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:scenic, path: "../scenic_local", override: true},
-      # {:scenic, git: "https://github.com/ScenicFramework/scenic.git", tag: "v0.11.1", override: true},
-      {:scenic_driver_local, path: "../scenic_driver_local", override: true},
-      #{:scenic_driver_local, git: "https://github.com/JediLuke/scenic_driver_local", branch: "flamelex_vsn"},
-      {:scenic_widget_contrib, path: "../scenic-widget-contrib"},
+      {:scenic, git: "https://github.com/JediLuke/scenic.git", branch: "main", override: true},
+      {:scenic_driver_local, git: "https://github.com/JediLuke/scenic_driver_local.git", branch: "main", override: true},
+      {:scenic_widget_contrib, git: "https://github.com/JediLuke/scenic-widget-contrib.git", branch: "main"},
       {:elixir_uuid, "~> 1.2"},
       {:font_metrics, "~> 0.5"},
       {:event_bus, "~> 1.7.0"},
@@ -40,8 +41,8 @@ defmodule QuillEx.MixProject do
       {:wormhole, "~> 2.3"},
 
       # dev tools
-      {:sexy_spex, path: "../spex", only: [:test, :dev]},
-      {:scenic_mcp, path: "../scenic_mcp", only: [:dev, :test]},
+      {:sexy_spex, git: "https://github.com/JediLuke/spex.git", branch: "main", only: [:test, :dev]},
+      {:scenic_mcp, git: "https://github.com/scenic-contrib/scenic_mcp_experimental.git", branch: "main", only: [:dev, :test]},
       {:stream_data, "~> 0.6", only: [:test, :dev]},
       {:tidewave, "~> 0.1", only: :dev},
       {:bandit, "~> 1.0", only: :dev},

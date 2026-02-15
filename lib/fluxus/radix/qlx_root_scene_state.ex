@@ -12,8 +12,20 @@ defmodule QuillEx.RootScene.State do
     # Editor settings (synced with View menu toggles)
     show_line_numbers: true,
     word_wrap: false,
+    tab_width: 4,
+    # File navigator sidebar
+    show_file_nav: false,
+    file_nav_path: nil,
+    file_nav_width: 250,
     # Modal dialogs
-    show_file_picker: false
+    show_file_picker: false,
+    # Search bar
+    show_search_bar: false,
+    search_query: "",
+    search_current_match: 0,
+    search_total_matches: 0,
+    # Cursor position tracking for scroll routing
+    cursor_pos: {0, 0}
   ]
 
   def new(%{frame: %Widgex.Frame{} = frame, buffers: buffers}) when is_list(buffers) do
@@ -23,7 +35,8 @@ defmodule QuillEx.RootScene.State do
         height: 50
       },
       buffers: buffers,
-      active_buf: hd(buffers)
+      active_buf: hd(buffers),
+      file_nav_path: File.cwd!()
     }
   end
 

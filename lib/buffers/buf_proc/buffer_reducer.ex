@@ -1,6 +1,158 @@
 defmodule Quillex.Buffer.Process.Reducer do
   require Logger
   alias Quillex.GUI.Components.BufferPane
+  alias Quillex.Structs.BufState
+
+  # ===========================================================================
+  # UNDO/REDO HELPERS
+  # ===========================================================================
+
+  @doc """
+  Push current state onto undo stack before making a change.
+  Call this BEFORE modifying data/cursors/selection, not after.
+  Clears the redo stack (new changes invalidate redo history).
+  """
+  def push_undo(%BufState{data: data, cursors: cursors, selection: selection,
+                          undo_stack: stack, undo_max_size: max_size} = buf) do
+    snapshot = {data, cursors, selection}
+    new_stack = [snapshot | stack] |> Enum.take(max_size)
+    %{buf | undo_stack: new_stack, redo_stack: []}
+  end
+
+  @doc """
+  Process undo action - restore previous state from undo stack.
+  """
+  def process(%BufState{undo_stack: []} = buf, :undo) do
+    # Nothing to undo
+    buf
+  end
+
+  def process(%BufState{undo_stack: [{prev_data, prev_cursors, prev_selection} | rest],
+                        data: curr_data, cursors: curr_cursors, selection: curr_selection,
+                        redo_stack: redo} = buf, :undo) do
+    # Push current state onto redo stack before restoring
+    redo_snapshot = {curr_data, curr_cursors, curr_selection}
+    %{buf |
+      data: prev_data,
+      cursors: prev_cursors,
+      selection: prev_selection,
+      undo_stack: rest,
+      redo_stack: [redo_snapshot | redo]
+    }
+  end
+
+  @doc """
+  Process redo action - restore state from redo stack.
+  """
+  def process(%BufState{redo_stack: []} = buf, :redo) do
+    # Nothing to redo
+    buf
+  end
+
+  def process(%BufState{redo_stack: [{next_data, next_cursors, next_selection} | rest],
+                        data: curr_data, cursors: curr_cursors, selection: curr_selection,
+                        undo_stack: undo} = buf, :redo) do
+    # Push current state onto undo stack before restoring
+    undo_snapshot = {curr_data, curr_cursors, curr_selection}
+    %{buf |
+      data: next_data,
+      cursors: next_cursors,
+      selection: next_selection,
+      redo_stack: rest,
+      undo_stack: [undo_snapshot | undo]
+    }
+  end
+
+  # ===========================================================================
+  # SEARCH ACTIONS
+  # ===========================================================================
+
+  @doc """
+  Set search query and find all matches.
+  """
+  def process(%BufState{} = buf, {:search, query}) when is_binary(query) and query != "" do
+    matches = find_all_matches(buf.data, query)
+    IO.puts("🔍 Buffer search: query=#{inspect(query)}, found=#{length(matches)} matches in #{length(buf.data)} lines")
+    %{buf |
+      search_query: query,
+      search_matches: matches,
+      search_current_index: if(matches == [], do: 0, else: 0)
+    }
+  end
+
+  def process(%BufState{} = buf, {:search, _empty}) do
+    # Empty or nil query - clear search
+    %{buf | search_query: nil, search_matches: [], search_current_index: 0}
+  end
+
+  @doc """
+  Navigate to next search match.
+  """
+  def process(%BufState{search_matches: []} = buf, :find_next), do: buf
+  def process(%BufState{search_matches: matches, search_current_index: idx} = buf, :find_next) do
+    new_idx = rem(idx + 1, length(matches))
+    move_cursor_to_match(buf, new_idx)
+  end
+
+  @doc """
+  Navigate to previous search match.
+  """
+  def process(%BufState{search_matches: []} = buf, :find_prev), do: buf
+  def process(%BufState{search_matches: matches, search_current_index: idx} = buf, :find_prev) do
+    new_idx = if idx == 0, do: length(matches) - 1, else: idx - 1
+    move_cursor_to_match(buf, new_idx)
+  end
+
+  @doc """
+  Clear search state.
+  """
+  def process(%BufState{} = buf, :clear_search) do
+    %{buf | search_query: nil, search_matches: [], search_current_index: 0}
+  end
+
+  # Move cursor to match at given index
+  defp move_cursor_to_match(%BufState{search_matches: matches} = buf, idx) do
+    case Enum.at(matches, idx) do
+      {line, col, _text} ->
+        buf
+        |> BufferPane.Mutator.move_cursor({line, col})
+        |> Map.put(:search_current_index, idx)
+      nil ->
+        buf
+    end
+  end
+
+  # Find all occurrences of query in lines
+  defp find_all_matches(lines, query) when is_list(lines) and is_binary(query) do
+    query_len = String.length(query)
+    query_lower = String.downcase(query)
+    lines
+    |> Enum.with_index(1)
+    |> Enum.flat_map(fn {line, line_num} ->
+      find_matches_in_line(line, query, query_lower, query_len, line_num, 1, [])
+    end)
+  end
+
+  # Case-insensitive search - match against lowercase but preserve original match text
+  defp find_matches_in_line(line, _original_query, query_lower, query_len, line_num, col, acc) do
+    line_lower = String.downcase(line)
+    case :binary.match(line_lower, query_lower) do
+      {pos, _len} ->
+        match_col = col + pos
+        # Extract the actual matched text from original line (preserving case)
+        match_text = String.slice(line, pos, query_len)
+        remaining = String.slice(line, pos + query_len, String.length(line))
+        # Recursively search in remaining part of line
+        find_matches_in_line(remaining, match_text, query_lower, query_len, line_num, match_col + query_len,
+          [{line_num, match_col, match_text} | acc])
+      :nomatch ->
+        Enum.reverse(acc)
+    end
+  end
+
+  # ===========================================================================
+  # EXISTING BUFFER ACTIONS (with undo support)
+  # ===========================================================================
 
   # Helper function to extract selected text from buffer
   defp extract_selected_text(buf, %{start: {start_line, start_col} = start_pos, end: {end_line, end_col} = end_pos}) do
@@ -50,9 +202,17 @@ defmodule Quillex.Buffer.Process.Reducer do
     |> BufferPane.Mutator.set_mode(m)
   end
 
-  # Set the buffer data directly (used for syncing from TextField on resize)
+  # Set the buffer data directly (used for syncing from TextField on resize/switch)
   def process(%Quillex.Structs.BufState{} = buf, {:set_data, lines}) when is_list(lines) do
     %{buf | data: lines}
+  end
+
+  # Set the cursor position directly (used for syncing from TextField on resize/switch)
+  # Also clears selection since clicking to position cursor should deselect
+  def process(%Quillex.Structs.BufState{} = buf, {:set_cursor, {line, col}}) when line >= 1 and col >= 1 do
+    buf
+    |> BufferPane.Mutator.move_cursor({line, col})
+    |> Map.put(:selection, nil)
   end
 
   def process(%Quillex.Structs.BufState{} = buf, {:move_cursor, direction, x}) do
@@ -68,8 +228,10 @@ defmodule Quillex.Buffer.Process.Reducer do
   end
 
   def process(%Quillex.Structs.BufState{} = buf, {:select_text, direction, count}) do
-    buf
-    |> BufferPane.Mutator.select_text(direction, count)
+    IO.puts("📍 BufferReducer: select_text direction=#{inspect(direction)} count=#{count} cursor=#{inspect(hd(buf.cursors))} selection=#{inspect(buf.selection)}")
+    result = buf |> BufferPane.Mutator.select_text(direction, count)
+    IO.puts("📍 BufferReducer: after select_text selection=#{inspect(result.selection)}")
+    result
   end
 
   def process(%Quillex.Structs.BufState{} = buf, :clear_selection) do
@@ -80,85 +242,108 @@ defmodule Quillex.Buffer.Process.Reducer do
     BufferPane.Mutator.select_all(buf)
   end
 
-  def process(%Quillex.Structs.BufState{} = buf, {:newline, :at_cursor}) do
+  # Select a range from start to end position (used for mouse drag selection)
+  def process(%Quillex.Structs.BufState{} = buf, {:select_range, start_pos, end_pos}) do
+    # Convert positions to selection format and update cursor
+    {start_line, start_col} = start_pos
+    {end_line, end_col} = end_pos
+
+    # Create selection structure
+    selection = %{
+      start: %{line: start_line, col: start_col},
+      end: %{line: end_line, col: end_col}
+    }
+
+    # Update cursor to end position and set selection
+    new_cursor = %{line: end_line, col: end_col}
+    %{buf | cursors: [new_cursor], selection: selection}
+  end
+
+  def process(%BufState{} = buf, {:newline, :at_cursor}) do
     [c] = buf.cursors
 
     buf
+    |> push_undo()
     |> BufferPane.Mutator.insert_new_line(:at_cursor)
     |> BufferPane.Mutator.move_cursor({c.line + 1, 1})
-
-    # |> Buffer.History.record_action({:newline, :at_cursor})
   end
 
   # here `below_cursor` implies the cursor is in NORMAL mode, though I dunno if it makes any difference really
-  def process(%Quillex.Structs.BufState{} = buf, {:newline, :below_cursor}) do
+  def process(%BufState{} = buf, {:newline, :below_cursor}) do
     [c] = buf.cursors
 
     buf
+    |> push_undo()
     |> BufferPane.Mutator.insert_new_line(:at_cursor)
     |> BufferPane.Mutator.move_cursor({c.line + 1, 1})
-
-    # |> Buffer.History.record_action({:newline, :at_cursor})
   end
 
 
-  def process(%Quillex.Structs.BufState{} = buf, {:insert, text, :at_cursor}) do
+  def process(%BufState{} = buf, {:insert, text, :at_cursor}) do
     [c] = buf.cursors
+
+    # Push undo BEFORE making changes
+    buf_with_undo = push_undo(buf)
 
     # Handle selection replacement - delete selection first, then insert normally
     if buf.selection != nil do
       # Delete the selected text and clear selection
-      buf_after_deletion = BufferPane.Mutator.delete_selected_text(buf)
+      buf_after_deletion = BufferPane.Mutator.delete_selected_text(buf_with_undo)
       [cursor] = buf_after_deletion.cursors
-      
+
       # Use multi-line insert function which returns {buffer, final_cursor_pos}
-      {buf_after_insert, {final_line, final_col}} = 
+      {buf_after_insert, {final_line, final_col}} =
         BufferPane.Mutator.insert_multi_line_text(buf_after_deletion, {cursor.line, cursor.col}, text)
-      
+
       # Move cursor to the final position
       BufferPane.Mutator.move_cursor(buf_after_insert, {final_line, final_col})
     else
       # No selection - normal insertion and cursor movement
       # Use multi-line insert function which returns {buffer, final_cursor_pos}
-      {buf_after_insert, {final_line, final_col}} = 
-        BufferPane.Mutator.insert_multi_line_text(buf, {c.line, c.col}, text)
-      
+      {buf_after_insert, {final_line, final_col}} =
+        BufferPane.Mutator.insert_multi_line_text(buf_with_undo, {c.line, c.col}, text)
+
       # Move cursor to the final position
       BufferPane.Mutator.move_cursor(buf_after_insert, {final_line, final_col})
     end
   end
 
-  def process(%Quillex.Structs.BufState{cursors: [c]} = buf, {:insert, :line, clipboard_text, :below_cursor_line}) do
+  def process(%BufState{cursors: [c]} = buf, {:insert, :line, clipboard_text, :below_cursor_line}) do
     # minus one index for zero based index but then plus one cause it's the next line, so they cancel and it's just c.line
-    new_data = List.insert_at(buf.data, c.line, clipboard_text)
-
-    %{ buf | data: new_data}
+    buf_with_undo = push_undo(buf)
+    new_data = List.insert_at(buf_with_undo.data, c.line, clipboard_text)
+    %{buf_with_undo | data: new_data}
   end
 
-  def process(%Quillex.Structs.BufState{} = buf, :empty_buffer) do
+  def process(%BufState{} = buf, :empty_buffer) do
     buf
+    |> push_undo()
     |> BufferPane.Mutator.empty_buffer()
   end
 
-  def process(%Quillex.Structs.BufState{} = buf, {:delete, :before_cursor}) do
+  def process(%BufState{} = buf, {:delete, :before_cursor}) do
+    # Push undo BEFORE making changes
+    buf_with_undo = push_undo(buf)
+
     # If there's a selection, delete the selection instead of just one character
     if buf.selection != nil do
-      BufferPane.Mutator.delete_selected_text(buf)
+      BufferPane.Mutator.delete_selected_text(buf_with_undo)
     else
-      [cursor] = buf.cursors
-      result_buf = buf |> BufferPane.Mutator.delete_char_before_cursor(cursor)
-      result_buf
+      [cursor] = buf_with_undo.cursors
+      BufferPane.Mutator.delete_char_before_cursor(buf_with_undo, cursor)
     end
   end
 
-  def process(%Quillex.Structs.BufState{} = buf, {:delete, :at_cursor}) do
+  def process(%BufState{} = buf, {:delete, :at_cursor}) do
+    # Push undo BEFORE making changes
+    buf_with_undo = push_undo(buf)
+
     # If there's a selection, delete the selection instead of just one character
     if buf.selection != nil do
-      BufferPane.Mutator.delete_selected_text(buf)
+      BufferPane.Mutator.delete_selected_text(buf_with_undo)
     else
-      [cursor] = buf.cursors
-      result_buf = buf |> BufferPane.Mutator.delete_char_after_cursor(cursor)
-      result_buf
+      [cursor] = buf_with_undo.cursors
+      BufferPane.Mutator.delete_char_after_cursor(buf_with_undo, cursor)
     end
   end
 
@@ -191,52 +376,70 @@ defmodule Quillex.Buffer.Process.Reducer do
   end
 
   # Selection-based cut (copy selected text to clipboard and delete it)
-  def process(%Quillex.Structs.BufState{selection: nil} = buf, {:cut, :selection}) do
+  def process(%BufState{selection: nil} = buf, {:cut, :selection}) do
     # No selection, do nothing
     buf
   end
 
-  def process(%Quillex.Structs.BufState{selection: selection} = buf, {:cut, :selection}) do
+  def process(%BufState{selection: selection} = buf, {:cut, :selection}) do
     selected_text = extract_selected_text(buf, selection)
     Clipboard.copy(selected_text)
-    BufferPane.Mutator.delete_selected_text(buf)
+    # Push undo before deletion
+    buf_with_undo = push_undo(buf)
+    BufferPane.Mutator.delete_selected_text(buf_with_undo)
+  end
+
+  # Delete selection without copying to clipboard (used by TextField cut operation)
+  def process(%BufState{selection: nil} = buf, {:delete, :selection}) do
+    # No selection, do nothing
+    buf
+  end
+
+  def process(%BufState{} = buf, {:delete, :selection}) do
+    # Push undo before deletion
+    buf_with_undo = push_undo(buf)
+    BufferPane.Mutator.delete_selected_text(buf_with_undo)
   end
 
   # Regular paste at cursor position (for both line and inline text)
-  def process(%Quillex.Structs.BufState{} = buf, {:paste, :at_cursor}) do
+  def process(%BufState{} = buf, {:paste, :at_cursor}) do
     clipboard_text = Clipboard.paste!()
-    
+
+    # Push undo BEFORE making changes
+    buf_with_undo = push_undo(buf)
+
     # Handle selection replacement if there's a selection
     if buf.selection != nil do
       # Delete selection first, then insert clipboard text
-      buf_after_deletion = BufferPane.Mutator.delete_selected_text(buf)
+      buf_after_deletion = BufferPane.Mutator.delete_selected_text(buf_with_undo)
       [cursor] = buf_after_deletion.cursors
-      
+
       # Use multi-line insert function which returns {buffer, final_cursor_pos}
-      {buf_after_insert, {final_line, final_col}} = 
+      {buf_after_insert, {final_line, final_col}} =
         BufferPane.Mutator.insert_multi_line_text(buf_after_deletion, {cursor.line, cursor.col}, clipboard_text)
-      
+
       # Move cursor to the final position
       BufferPane.Mutator.move_cursor(buf_after_insert, {final_line, final_col})
     else
       # No selection - regular paste
-      [c] = buf.cursors
-      
+      [c] = buf_with_undo.cursors
+
       # Use multi-line insert function which returns {buffer, final_cursor_pos}
-      {buf_after_insert, {final_line, final_col}} = 
-        BufferPane.Mutator.insert_multi_line_text(buf, {c.line, c.col}, clipboard_text)
-      
+      {buf_after_insert, {final_line, final_col}} =
+        BufferPane.Mutator.insert_multi_line_text(buf_with_undo, {c.line, c.col}, clipboard_text)
+
       # Move cursor to the final position
       BufferPane.Mutator.move_cursor(buf_after_insert, {final_line, final_col})
     end
   end
 
   # Legacy line-based paste (keep for vim compatibility)
-  def process(%Quillex.Structs.BufState{cursors: [_c]} = buf, {:paste, :line, :at_cursor}) do
+  def process(%BufState{cursors: [c]} = buf, {:paste, :line, :at_cursor}) do
     clipboard_text = Clipboard.paste!()
 
-    buf
-    |> process({:insert, :line, clipboard_text, :below_cursor_line})
+    buf_with_undo = push_undo(buf)
+    new_data = List.insert_at(buf_with_undo.data, c.line, clipboard_text)
+    %{buf_with_undo | data: new_data}
     |> BufferPane.Mutator.move_cursor(:down, 1)
   end
 
@@ -262,6 +465,20 @@ defmodule Quillex.Buffer.Process.Reducer do
     # if name is unnamed, then change it to file path here
     # TODO update timestamps last save
     %{buf | name: Path.basename(file_path), source: %{filepath: file_path}, dirty?: false}
+  end
+
+  # Save to existing file path (Ctrl+S)
+  def process(%Quillex.Structs.BufState{source: %{filepath: file_path}} = buf, :save) when is_binary(file_path) do
+    text = Enum.join(buf.data, "\n")
+    File.write!(file_path, text)
+    IO.puts("💾 Saved to #{file_path}")
+    %{buf | dirty?: false}
+  end
+
+  # Can't save if no filepath - need save_as
+  def process(%Quillex.Structs.BufState{source: nil} = buf, :save) do
+    IO.puts("⚠️ Cannot save - no file path. Use Save As.")
+    buf
   end
 
   # def process(%{uuid: buf_uuid, source: nil} = buf, {:save, buf_uuid}) do

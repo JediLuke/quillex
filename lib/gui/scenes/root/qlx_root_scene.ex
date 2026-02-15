@@ -37,7 +37,8 @@ defmodule QuillEx.RootScene do
     })
 
     # need to pass in scene so we can cast to children, even though we would never do that during init
-    graph = RootScene.Renderizer.render(Scenic.Graph.build(), scene, state)
+    # On init, old_state is nil (no previous state)
+    graph = RootScene.Renderizer.render(Scenic.Graph.build(), scene, nil, state)
 
     scene =
       scene
@@ -49,7 +50,8 @@ defmodule QuillEx.RootScene do
     Quillex.Utils.PubSub.subscribe(topic: :qlx_events)
 
     # TextField handles its own input in :direct mode, so we only request viewport events
-    request_input(scene, [:viewport])
+    # Also request cursor_pos and cursor_scroll for scroll routing between components
+    request_input(scene, [:viewport, :cursor_pos, :cursor_scroll])
 
     {:ok, scene}
   end
@@ -72,23 +74,22 @@ defmodule QuillEx.RootScene do
     if current_size != new_vp_size do
       Logger.debug("#{__MODULE__} reshape: #{inspect(current_size)} -> #{inspect(new_vp_size)}")
 
-      # IMPORTANT: Before rebuilding the graph, sync TextField content back to buffer
-      # and capture the cursor position to restore it after rebuild
-      cursor_pos = sync_textfield_to_buffer(scene)
+      # With buffer_backed mode, Buffer.Process is the source of truth.
+      # TextField sends all changes directly to Buffer, so we don't need to sync.
+      # Just get the current cursor position from the buffer for restoration.
+      cursor_pos = get_buffer_cursor(scene)
 
       # Create new frame with the resized dimensions
       new_frame = Widgex.Frame.new(pin: {0, 0}, size: new_vp_size)
 
       # Update state with new frame and saved cursor position for the renderizer
-      new_state = scene.assigns.state
+      old_state = scene.assigns.state
+      new_state = old_state
         |> Map.put(:frame, new_frame)
         |> Map.put(:_restore_cursor, cursor_pos)
 
-      # Build a fresh graph for the new frame size
-      # Using Scenic.Graph.build() ensures we start fresh, which is needed
-      # because the TextField component needs to be recreated with new dimensions
-      # The renderizer will fetch the buffer content (now synced) for initial_text
-      new_graph = RootScene.Renderizer.render(Scenic.Graph.build(), scene, new_state)
+      # Reuse existing graph to preserve component PIDs and avoid race conditions
+      new_graph = RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
       # Remove the temporary cursor restore key from state
       final_state = Map.delete(new_state, :_restore_cursor)
@@ -106,35 +107,61 @@ defmodule QuillEx.RootScene do
     end
   end
 
-  # Check if actions list contains a buffer-switch action that requires syncing
-  defp contains_buffer_switch_action?(actions) do
-    Enum.any?(actions, fn
-      {:activate_buffer, _} -> true
-      :new_buffer -> true
-      {:close_buffer, _} -> true
-      :close_active_buffer -> true
-      _ -> false
-    end)
+  # Get the cursor position from the active buffer (Buffer.Process is source of truth)
+  defp get_buffer_cursor(scene) do
+    with buf_ref when not is_nil(buf_ref) <- scene.assigns.state.active_buf,
+         {:ok, buf_state} <- Quillex.Buffer.Process.fetch_buf(buf_ref),
+         [%{line: line, col: col} | _] <- buf_state.cursors do
+      {line, col}
+    else
+      _ -> nil
+    end
   end
 
-  # Sync the TextField's current content back to the buffer process
-  # Returns the cursor position so it can be restored after rebuild
-  defp sync_textfield_to_buffer(scene) do
-    with {:ok, [%ScenicWidgets.TextField.State{} = tf_state]} <- Scenic.Scene.fetch_child(scene, :buffer_pane),
-         buf_ref when not is_nil(buf_ref) <- scene.assigns.state.active_buf do
-      # Update the buffer with the current text (TextField stores lines as a list)
-      Quillex.Buffer.BufferManager.call_buffer(buf_ref, {:action, [{:set_data, tf_state.lines}]})
+  # Get the first visible line from the TextField (for scroll preservation during word wrap toggle)
+  defp get_first_visible_line(scene) do
+    alias ScenicWidgets.TextField.State, as: TFState
 
-      Logger.debug("Synced TextField content to buffer (#{length(tf_state.lines)} lines), cursor at #{inspect(tf_state.cursor)}")
-      tf_state.cursor
-    else
-      {:error, :no_children} ->
-        # No TextField exists yet (first render), nothing to sync
-        nil
-      _ ->
-        Logger.warning("Could not sync TextField to buffer before resize")
-        nil
+    try do
+      case Scenic.Scene.fetch_child(scene, :buffer_pane) do
+        {:ok, [%TFState{scroll: scroll, font: font} = _tf_state]} ->
+          line_height = font.size
+          # Calculate which source line is at the top of the viewport
+          # offset_y is how far we've scrolled down in pixels
+          first_line = max(1, trunc(scroll.offset_y / line_height) + 1)
+          first_line
+
+        _ ->
+          nil
+      end
+    catch
+      :exit, _ -> nil
     end
+  end
+
+  # Track cursor position for scroll routing
+  def handle_input({:cursor_pos, coords}, _context, scene) do
+    state = scene.assigns.state
+    new_state = %{state | cursor_pos: coords}
+    {:noreply, assign(scene, state: new_state)}
+  end
+
+  # Route scroll events to the appropriate component based on cursor position
+  def handle_input({:cursor_scroll, scroll_data}, _context, scene) do
+    state = scene.assigns.state
+    {cursor_x, _cursor_y} = state.cursor_pos
+
+    # Determine which component should receive the scroll based on cursor position
+    # If file_nav is visible and cursor is within its width, route to file_nav
+    if state.show_file_nav and cursor_x < state.file_nav_width do
+      # Route scroll to file navigator
+      Scenic.Scene.put_child(scene, :file_nav, %{scroll: scroll_data})
+    else
+      # Route scroll to buffer pane (TextField handles its own scroll)
+      Scenic.Scene.put_child(scene, :buffer_pane, {:scroll, scroll_data})
+    end
+
+    {:noreply, scene}
   end
 
   def handle_input(input, _context, scene) do
@@ -146,6 +173,10 @@ defmodule QuillEx.RootScene do
 
   def handle_call(:get_active_buffer, _from, scene) do
     {:reply, {:ok, scene.assigns.state.active_buf}, scene}
+  end
+
+  def handle_call(:get_state, _from, scene) do
+    {:reply, {:ok, scene.assigns.state}, scene}
   end
 
   # Synchronous action processing for BufferPane actions
@@ -160,10 +191,30 @@ defmodule QuillEx.RootScene do
     {:reply, :ok, scene}
   end
 
-  def handle_call({:action, actions}, _from, scene) when is_list(actions) do
-    # Sync TextField content before buffer-switching actions
-    if contains_buffer_switch_action?(actions), do: sync_textfield_to_buffer(scene)
+  # Handle editor settings toggle actions specially - they need update_editor_settings flow
+  def handle_call({:action, [:toggle_line_numbers]}, _from, scene) do
+    state = scene.assigns.state
+    new_state = %{state | show_line_numbers: not state.show_line_numbers}
+    {:noreply, new_scene} = update_editor_settings(scene, new_state)
+    {:reply, :ok, new_scene}
+  end
 
+  def handle_call({:action, [:toggle_word_wrap]}, _from, scene) do
+    state = scene.assigns.state
+    new_state = %{state | word_wrap: not state.word_wrap}
+    {:noreply, new_scene} = update_editor_settings(scene, new_state)
+    {:reply, :ok, new_scene}
+  end
+
+  def handle_call({:action, [:toggle_file_nav]}, _from, scene) do
+    state = scene.assigns.state
+    new_state = %{state | show_file_nav: not state.show_file_nav}
+    {:noreply, new_scene} = update_editor_settings(scene, new_state)
+    {:reply, :ok, new_scene}
+  end
+
+  def handle_call({:action, actions}, _from, scene) when is_list(actions) do
+    # With buffer_backed mode, no need to sync - Buffer.Process is source of truth
     # Processing actions from RadixReducer (synchronous version)
     case process_actions(scene, actions) do
       {:ok, {new_state, new_graph}} ->
@@ -186,10 +237,27 @@ defmodule QuillEx.RootScene do
     handle_call({:action, [a]}, nil, scene)
   end
 
-  def handle_cast({:action, actions}, scene) when is_list(actions) do
-    # Sync TextField content before buffer-switching actions
-    if contains_buffer_switch_action?(actions), do: sync_textfield_to_buffer(scene)
+  # Handle editor settings toggle actions specially - they need update_editor_settings flow
+  def handle_cast({:action, [:toggle_line_numbers]}, scene) do
+    state = scene.assigns.state
+    new_state = %{state | show_line_numbers: not state.show_line_numbers}
+    update_editor_settings(scene, new_state)
+  end
 
+  def handle_cast({:action, [:toggle_word_wrap]}, scene) do
+    state = scene.assigns.state
+    new_state = %{state | word_wrap: not state.word_wrap}
+    update_editor_settings(scene, new_state)
+  end
+
+  def handle_cast({:action, [:toggle_file_nav]}, scene) do
+    state = scene.assigns.state
+    new_state = %{state | show_file_nav: not state.show_file_nav}
+    update_editor_settings(scene, new_state)
+  end
+
+  def handle_cast({:action, actions}, scene) when is_list(actions) do
+    # With buffer_backed mode, no need to sync - Buffer.Process is source of truth
     # Processing actions from RadixReducer
     case process_actions(scene, actions) do
       {:ok, {new_state, new_graph}} ->
@@ -267,9 +335,10 @@ defmodule QuillEx.RootScene do
   defp process_actions(scene, actions) do
     # wormhole will wrap this function in an ok/error tuple even if it crashes
     Wormhole.capture(fn ->
+      old_state = scene.assigns.state
 
       new_state =
-        Enum.reduce(actions, scene.assigns.state, fn action, acc_state ->
+        Enum.reduce(actions, old_state, fn action, acc_state ->
           RootScene.Reducer.process(acc_state, action)
           |> case do
             :ignore ->
@@ -284,8 +353,10 @@ defmodule QuillEx.RootScene do
           end
         end)
 
-      # Use fresh graph to ensure correct z-order (top bar above buffer pane)
-      new_graph = RootScene.Renderizer.render(Scenic.Graph.build(), scene, new_state)
+      # Reuse existing graph to preserve component PIDs and avoid race conditions
+      # during rapid buffer switches. Pass old_state to enable smart component updates
+      # (only recreate when truly necessary, like switching buffers).
+      new_graph = RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
       {new_state, new_graph}
     end)
@@ -296,8 +367,50 @@ defmodule QuillEx.RootScene do
     hide_file_picker(scene, path)
   end
 
+  def handle_cast({:file_picker, :file_saved, path}, scene) do
+    hide_file_picker_and_save(scene, path)
+  end
+
   def handle_cast({:file_picker, :cancelled}, scene) do
     hide_file_picker(scene)
+  end
+
+  # ===========================================================================
+  # SearchBar events (via cast_parent)
+  # ===========================================================================
+
+  def handle_cast({:search_query_changed, _id, query}, scene) do
+    IO.puts("🔍 Search query changed (cast): \"#{query}\"")
+    # Update state with new query
+    new_state = %{scene.assigns.state | search_query: query}
+
+    # Perform the search if query is not empty
+    if String.length(query) > 0 do
+      perform_search(scene, query, new_state)
+    else
+      # Clear search results
+      new_state = %{new_state | search_current_match: 0, search_total_matches: 0}
+      Scenic.Scene.put_child(scene, :buffer_pane, {:action, :clear_search})
+      new_scene = scene |> assign(state: new_state)
+      {:noreply, new_scene}
+    end
+  end
+
+  def handle_cast({:search_next, _id}, scene) do
+    IO.puts("🔍 Search next (cast)")
+    Scenic.Scene.put_child(scene, :buffer_pane, {:action, :find_next})
+    {:noreply, scene}
+  end
+
+  def handle_cast({:search_prev, _id}, scene) do
+    IO.puts("🔍 Search previous (cast)")
+    Scenic.Scene.put_child(scene, :buffer_pane, {:action, :find_prev})
+    {:noreply, scene}
+  end
+
+  def handle_cast({:search_close, _id}, scene) do
+    IO.puts("🔍 Search bar closed (cast)")
+    hide_search_bar(scene)
   end
 
   # if actions come in via PubSub they come in via handle_info, just convert to handle_cast
@@ -330,8 +443,9 @@ defmodule QuillEx.RootScene do
       |> RootScene.Mutator.add_buffer(buf_ref)
       |> RootScene.Mutator.activate_buffer(buf_ref)
 
-    # Use fresh graph to ensure correct z-order (top bar above buffer pane)
-    new_graph = RootScene.Renderizer.render(Scenic.Graph.build(), scene, new_state)
+    # Reuse existing graph to preserve component PIDs and avoid race conditions
+    old_state = scene.assigns.state
+    new_graph = RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
     new_scene =
       scene
@@ -391,20 +505,21 @@ defmodule QuillEx.RootScene do
         {:noreply, scene}
 
       "save_as" ->
-        # Save as - not implemented yet
-        {:noreply, scene}
+        # Show file picker in save mode
+        show_file_picker_save(scene)
 
       "close" ->
-        # Close the active buffer
-        sync_textfield_to_buffer(scene)
+        # Close the active buffer (no sync needed - buffer_backed mode)
         handle_cast({:action, :close_active_buffer}, scene)
 
       "undo" ->
-        # Undo - not implemented yet
+        # Undo - send undo action to the buffer pane
+        Scenic.Scene.put_child(scene, :buffer_pane, {:action, :undo})
         {:noreply, scene}
 
       "redo" ->
-        # Redo - not implemented yet
+        # Redo - send redo action to the buffer pane
+        Scenic.Scene.put_child(scene, :buffer_pane, {:action, :redo})
         {:noreply, scene}
 
       "cut" ->
@@ -419,6 +534,24 @@ defmodule QuillEx.RootScene do
         # Paste - not implemented yet
         {:noreply, scene}
 
+      "find" ->
+        # Find - show search bar
+        IO.puts("🔍 Find menu clicked!")
+        show_search_bar(scene)
+
+      "find_next" ->
+        # Find next match
+        IO.puts("🔍 Find Next menu clicked!")
+        Scenic.Scene.put_child(scene, :buffer_pane, {:action, :find_next})
+        {:noreply, scene}
+
+      "file_nav" ->
+        # Toggle file navigator sidebar
+        state = scene.assigns.state
+        new_state = %{state | show_file_nav: not state.show_file_nav}
+        Logger.debug("Toggling file nav: #{new_state.show_file_nav}")
+        update_editor_settings(scene, new_state)
+
       "line_numbers" ->
         # Toggle line numbers
         state = scene.assigns.state
@@ -431,6 +564,30 @@ defmodule QuillEx.RootScene do
         state = scene.assigns.state
         new_state = %{state | word_wrap: not state.word_wrap}
         Logger.debug("Toggling word wrap: #{new_state.word_wrap}")
+        update_editor_settings(scene, new_state)
+
+      "tab_width_2" ->
+        state = scene.assigns.state
+        new_state = %{state | tab_width: 2}
+        Logger.debug("Setting tab width: 2")
+        update_editor_settings(scene, new_state)
+
+      "tab_width_3" ->
+        state = scene.assigns.state
+        new_state = %{state | tab_width: 3}
+        Logger.debug("Setting tab width: 3")
+        update_editor_settings(scene, new_state)
+
+      "tab_width_4" ->
+        state = scene.assigns.state
+        new_state = %{state | tab_width: 4}
+        Logger.debug("Setting tab width: 4")
+        update_editor_settings(scene, new_state)
+
+      "tab_width_8" ->
+        state = scene.assigns.state
+        new_state = %{state | tab_width: 8}
+        Logger.debug("Setting tab width: 8")
         update_editor_settings(scene, new_state)
 
       "about" ->
@@ -456,10 +613,7 @@ defmodule QuillEx.RootScene do
     buf_ref = Enum.find(scene.assigns.state.buffers, fn buf -> buf.uuid == tab_id end)
 
     if buf_ref do
-      # IMPORTANT: Sync current TextField content to buffer BEFORE switching
-      # Otherwise the text would be lost when we delete/recreate the TextField
-      sync_textfield_to_buffer(scene)
-
+      # With buffer_backed mode, Buffer.Process is source of truth - no sync needed
       handle_cast({:action, {:activate_buffer, buf_ref}}, scene)
     else
       Logger.warning("Could not find buffer for tab: #{inspect(tab_id)}")
@@ -475,15 +629,122 @@ defmodule QuillEx.RootScene do
     buf_ref = Enum.find(scene.assigns.state.buffers, fn buf -> buf.uuid == tab_id end)
 
     if buf_ref do
-      # Sync current TextField content to buffer before closing
-      sync_textfield_to_buffer(scene)
-
+      # With buffer_backed mode, Buffer.Process is source of truth - no sync needed
       handle_cast({:action, {:close_buffer, buf_ref}}, scene)
     else
       Logger.warning("Could not find buffer for tab close: #{inspect(tab_id)}")
       {:noreply, scene}
     end
   end
+
+  # Save file (Ctrl+S from TextField)
+  def handle_event({:save_requested, _id, _text}, _from, scene) do
+    # With buffer_backed mode, Buffer.Process already has current content - no sync needed
+    # Save the buffer to disk
+    case scene.assigns.state.active_buf do
+      nil ->
+        Logger.warning("No active buffer to save")
+        {:noreply, scene}
+
+      buf_ref ->
+        Quillex.Buffer.BufferManager.call_buffer(buf_ref, {:action, [:save]})
+        {:noreply, scene}
+    end
+  end
+
+  # Find/Search (Ctrl+F from TextField)
+  def handle_event({:find_requested, _id}, _from, scene) do
+    IO.puts("🔍 find_requested event received - showing search bar")
+    show_search_bar(scene)
+  end
+
+  # Search bar events - query changed
+  def handle_event({:search_query_changed, _id, query}, _from, scene) do
+    IO.puts("🔍 Search query changed: \"#{query}\"")
+    # Update state with new query
+    new_state = %{scene.assigns.state | search_query: query}
+
+    # Perform the search if query is not empty
+    if String.length(query) > 0 do
+      perform_search(scene, query, new_state)
+    else
+      # Clear search results
+      new_state = %{new_state | search_current_match: 0, search_total_matches: 0}
+      Scenic.Scene.put_child(scene, :buffer_pane, {:action, :clear_search})
+      new_scene = scene |> assign(state: new_state)
+      {:noreply, new_scene}
+    end
+  end
+
+  # Search bar events - next match
+  def handle_event({:search_next, _id}, _from, scene) do
+    IO.puts("🔍 Search next")
+    Scenic.Scene.put_child(scene, :buffer_pane, {:action, :find_next})
+    {:noreply, scene}
+  end
+
+  # Search bar events - previous match
+  def handle_event({:search_prev, _id}, _from, scene) do
+    IO.puts("🔍 Search previous")
+    Scenic.Scene.put_child(scene, :buffer_pane, {:action, :find_prev})
+    {:noreply, scene}
+  end
+
+  # Search bar events - close
+  def handle_event({:search_close, _id}, _from, scene) do
+    IO.puts("🔍 Search bar closed")
+    hide_search_bar(scene)
+  end
+
+  # Search complete (from TextField after parallel search)
+  def handle_event({:search_complete, _id, query, match_count}, _from, scene) do
+    if match_count > 0 do
+      IO.puts("✨ Found #{match_count} matches for \"#{query}\"")
+    else
+      IO.puts("❌ No matches found for \"#{query}\"")
+    end
+
+    # Update state with match count
+    new_state = %{scene.assigns.state |
+      search_total_matches: match_count,
+      search_current_match: if(match_count > 0, do: 1, else: 0)
+    }
+
+    # Update the search bar's match count display
+    Scenic.Scene.put_child(scene, :search_bar, {:set_matches, new_state.search_current_match, match_count})
+
+    new_scene = scene |> assign(state: new_state)
+    {:noreply, new_scene}
+  end
+
+  # Search navigation (from TextField on Ctrl+G)
+  def handle_event({:search_navigated, _id, current_idx, total}, _from, scene) do
+    IO.puts("🔍 Match #{current_idx + 1} of #{total}")
+
+    # Update state and search bar
+    new_state = %{scene.assigns.state | search_current_match: current_idx + 1}
+    Scenic.Scene.put_child(scene, :search_bar, {:set_matches, current_idx + 1, total})
+
+    new_scene = scene |> assign(state: new_state)
+    {:noreply, new_scene}
+  end
+
+  # Handle file navigation from SideNav (file explorer sidebar)
+  def handle_event({:sidebar, :navigate, item_id}, _from, scene) when is_binary(item_id) do
+    # item_id is the file path
+    if File.regular?(item_id) do
+      Logger.info("File nav: opening file #{item_id}")
+      open_file(scene, item_id)
+    else
+      Logger.debug("File nav: not a regular file: #{item_id}")
+      {:noreply, scene}
+    end
+  end
+
+  # Handle expand/collapse events from SideNav (informational only)
+  def handle_event({:sidebar, :expand, _item_id}, _from, scene), do: {:noreply, scene}
+  def handle_event({:sidebar, :collapse, _item_id}, _from, scene), do: {:noreply, scene}
+  def handle_event({:sidebar, :hover, _item_id}, _from, scene), do: {:noreply, scene}
 
   # Catch-all for unhandled events
   def handle_event(event, _from, scene) do
@@ -500,25 +761,133 @@ defmodule QuillEx.RootScene do
   This syncs the TextField to the buffer first, then rebuilds with new settings.
   """
   defp update_editor_settings(scene, new_state) do
-    # Sync current text to buffer before changing settings
-    sync_textfield_to_buffer(scene)
+    # With buffer_backed mode, just get cursor position from buffer (no sync needed)
+    cursor_pos = get_buffer_cursor(scene)
+
+    # Get first visible line for scroll preservation during word wrap toggle
+    first_visible_line = get_first_visible_line(scene)
 
     # Update the IconMenu checkmarks to reflect new state
     new_menus = QuillEx.RootScene.Renderizer.build_menus(new_state)
-    scene = Scenic.Scene.put_child(scene, :icon_menu, {:update_menus, new_menus})
+    # put_child sends message to child but returns :ok, not scene
+    Scenic.Scene.put_child(scene, :icon_menu, {:update_menus, new_menus})
 
-    # Re-render the scene with new settings
-    # The TextField will be recreated with new wrap_mode/show_line_numbers
-    graph = scene.assigns.graph
-      |> Scenic.Graph.delete(:buffer_pane)
+    # Add cursor position and first visible line for restoration after re-render
+    new_state = if cursor_pos do
+      Map.put(new_state, :_restore_cursor, cursor_pos)
+    else
+      new_state
+    end
 
-    scene = scene
-      |> assign(state: new_state, graph: graph)
+    new_state = if first_visible_line do
+      Map.put(new_state, :_restore_first_visible_line, first_visible_line)
+    else
+      new_state
+    end
 
-    # Trigger a full re-render to apply settings
-    send(self(), :re_render)
+    # Reuse existing graph to preserve component PIDs and avoid race conditions
+    old_state = scene.assigns.state
+    new_graph = RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
-    {:noreply, scene}
+    # Remove the temporary restore keys from state
+    final_state = new_state
+      |> Map.delete(:_restore_cursor)
+      |> Map.delete(:_restore_first_visible_line)
+
+    new_scene =
+      scene
+      |> assign(state: final_state)
+      |> assign(graph: new_graph)
+      |> push_graph(new_graph)
+
+    {:noreply, new_scene}
+  end
+
+  # ===========================================================================
+  # Private Helpers - Find/Search
+  # ===========================================================================
+
+  @doc """
+  Shows the search bar and optionally pre-fills with word under cursor.
+  """
+  defp show_search_bar(scene) do
+    alias ScenicWidgets.TextField.State, as: TFState
+
+    # Get the word under cursor from TextField to pre-fill search
+    initial_query = case Scenic.Scene.fetch_child(scene, :buffer_pane) do
+      {:ok, [%TFState{} = tf_state]} ->
+        TFState.word_at_cursor(tf_state) || ""
+      _ ->
+        ""
+    end
+
+    old_state = scene.assigns.state
+    new_state = %{old_state |
+      show_search_bar: true,
+      search_query: initial_query
+    }
+
+    # Reuse existing graph to preserve component PIDs and avoid race conditions
+    new_graph = RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+
+    new_scene =
+      scene
+      |> assign(state: new_state)
+      |> assign(graph: new_graph)
+      |> push_graph(new_graph)
+
+    # Blur the buffer pane so keystrokes go to SearchBar, not TextField
+    Scenic.Scene.put_child(new_scene, :buffer_pane, :blur)
+
+    # If we have an initial query, perform search
+    if String.length(initial_query) > 0 do
+      IO.puts("🔍 Pre-filling search with: \"#{initial_query}\"")
+      Scenic.Scene.put_child(new_scene, :search_bar, {:set_query, initial_query})
+      Scenic.Scene.put_child(new_scene, :buffer_pane, {:action, {:search, initial_query}})
+    end
+
+    {:noreply, new_scene}
+  end
+
+  @doc """
+  Hides the search bar and clears search state.
+  """
+  defp hide_search_bar(scene) do
+    new_state = %{scene.assigns.state |
+      show_search_bar: false,
+      search_query: "",
+      search_current_match: 0,
+      search_total_matches: 0
+    }
+
+    # Clear search in TextField
+    Scenic.Scene.put_child(scene, :buffer_pane, {:action, :clear_search})
+
+    # Reuse existing graph to preserve component PIDs and avoid race conditions
+    old_state = scene.assigns.state
+    new_graph = RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+
+    new_scene =
+      scene
+      |> assign(state: new_state)
+      |> assign(graph: new_graph)
+      |> push_graph(new_graph)
+
+    # Refocus the buffer pane
+    Scenic.Scene.put_child(new_scene, :buffer_pane, :focus)
+
+    {:noreply, new_scene}
+  end
+
+  @doc """
+  Performs search and updates state.
+  """
+  defp perform_search(scene, query, state) do
+    # Send search action to TextField
+    Scenic.Scene.put_child(scene, :buffer_pane, {:action, {:search, query}})
+
+    new_scene = scene |> assign(state: state)
+    {:noreply, new_scene}
   end
 
   # ===========================================================================
@@ -526,7 +895,7 @@ defmodule QuillEx.RootScene do
   # ===========================================================================
 
   @doc """
-  Shows the file picker modal.
+  Shows the file picker modal (for opening files).
   """
   defp show_file_picker(scene) do
     new_state = %{scene.assigns.state | show_file_picker: true}
@@ -536,7 +905,8 @@ defmodule QuillEx.RootScene do
       |> ScenicWidgets.FilePicker.add_to_graph(
         %{
           frame: new_state.frame,
-          start_path: System.user_home!()
+          start_path: System.user_home!(),
+          mode: :open
         },
         id: :file_picker
       )
@@ -546,6 +916,57 @@ defmodule QuillEx.RootScene do
       |> assign(state: new_state)
       |> assign(graph: graph)
       |> push_graph(graph)
+
+    # Blur the buffer pane so keystrokes go to FilePicker, not TextField
+    Scenic.Scene.put_child(new_scene, :buffer_pane, :blur)
+
+    {:noreply, new_scene}
+  end
+
+  @doc """
+  Shows the file picker modal in save mode (for saving files).
+  """
+  defp show_file_picker_save(scene) do
+    new_state = %{scene.assigns.state | show_file_picker: true}
+
+    # Get the current buffer name as default filename
+    default_filename = case scene.assigns.state.active_buf do
+      nil -> "untitled.txt"
+      buf_ref ->
+        case Quillex.Buffer.Process.fetch_buf(buf_ref) do
+          {:ok, buf} ->
+            case buf.source do
+              %{filepath: file_path} when is_binary(file_path) ->
+                # If buffer has a file path, use its basename
+                Path.basename(file_path)
+              _ ->
+                # Otherwise use buffer name or default
+                buf.name || "untitled.txt"
+            end
+          _ -> "untitled.txt"
+        end
+    end
+
+    # Add the file picker component in save mode
+    graph = scene.assigns.graph
+      |> ScenicWidgets.FilePicker.add_to_graph(
+        %{
+          frame: new_state.frame,
+          start_path: System.user_home!(),
+          mode: :save,
+          filename: default_filename
+        },
+        id: :file_picker
+      )
+
+    new_scene =
+      scene
+      |> assign(state: new_state)
+      |> assign(graph: graph)
+      |> push_graph(graph)
+
+    # IMPORTANT: Blur the buffer pane so keystrokes go to FilePicker, not TextField
+    Scenic.Scene.put_child(new_scene, :buffer_pane, :blur)
 
     {:noreply, new_scene}
   end
@@ -566,11 +987,94 @@ defmodule QuillEx.RootScene do
       |> assign(graph: graph)
       |> push_graph(graph)
 
+    # Refocus the buffer pane
+    Scenic.Scene.put_child(new_scene, :buffer_pane, :focus)
+
     # If a file was selected, open it
     if file_path do
       open_file(new_scene, file_path)
     else
       {:noreply, new_scene}
+    end
+  end
+
+  @doc """
+  Hides the file picker modal and saves the current buffer to the specified path.
+  """
+  defp hide_file_picker_and_save(scene, file_path) do
+    new_state = %{scene.assigns.state | show_file_picker: false}
+
+    # Remove the file picker from the graph
+    graph = scene.assigns.graph
+      |> Scenic.Graph.delete(:file_picker)
+
+    new_scene =
+      scene
+      |> assign(state: new_state)
+      |> assign(graph: graph)
+      |> push_graph(graph)
+
+    # Save the current buffer to the specified path
+    save_buffer_as(new_scene, file_path)
+  end
+
+  @doc """
+  Saves the current buffer to a new file path.
+  """
+  defp save_buffer_as(scene, file_path) do
+    case scene.assigns.state.active_buf do
+      nil ->
+        Logger.warning("No active buffer to save")
+        {:noreply, scene}
+
+      buf_ref ->
+        Logger.info("Saving buffer as: #{file_path}")
+
+        # Use the buffer's save_as action
+        result = Quillex.Buffer.Process.save_as(buf_ref, file_path)
+        Logger.info("save_as result: #{inspect(result)}")
+
+        case result do
+          {:ok, updated_buf} ->
+            Logger.info("Successfully saved to: #{file_path}, new name: #{updated_buf.name}")
+
+            # Generate a new BufRef with the updated name
+            new_buf_ref = Quillex.Structs.BufState.BufRef.generate(updated_buf)
+
+            # Update the buffers list with the new BufRef
+            old_state = scene.assigns.state
+            updated_buffers = Enum.map(old_state.buffers, fn b ->
+              if b.uuid == buf_ref.uuid, do: new_buf_ref, else: b
+            end)
+
+            # Update state with new buffers list and active_buf
+            new_state = %{old_state |
+              buffers: updated_buffers,
+              active_buf: new_buf_ref
+            }
+
+            # Re-render to update the tab bar with new filename
+            new_graph = RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+
+            new_scene =
+              scene
+              |> assign(state: new_state)
+              |> assign(graph: new_graph)
+              |> push_graph(new_graph)
+
+            # Refocus the buffer pane
+            Scenic.Scene.put_child(new_scene, :buffer_pane, :focus)
+
+            {:noreply, new_scene}
+
+          {:error, reason} ->
+            Logger.error("Failed to save file: #{inspect(reason)}")
+            {:noreply, scene}
+
+          other ->
+            Logger.error("Unexpected save_as result: #{inspect(other)}")
+            {:noreply, scene}
+        end
     end
   end
 

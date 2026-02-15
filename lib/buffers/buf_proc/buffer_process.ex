@@ -87,6 +87,34 @@ defmodule Quillex.Buffer.Process do
     handle_call({:action, [a]}, from, state)
   end
 
+  # Handle async action casts from TextField (buffer_backed mode)
+  def handle_cast({:action, actions}, state) when is_list(actions) do
+    new_state =
+      actions
+      |> Enum.reduce(state, fn action, state_acc ->
+        case Quillex.Buffer.Process.Reducer.process(state_acc, action) do
+          :ignore ->
+            state_acc
+
+          %Quillex.Structs.BufState{} = new_state ->
+            new_state
+        end
+      end)
+
+    # Broadcast changes so TextField can update
+    Quillex.Utils.PubSub.broadcast(
+      topic: {:buffers, new_state.uuid},
+      msg: {:buf_state_changes, new_state}
+    )
+
+    {:noreply, new_state}
+  end
+
+  def handle_cast({:action, a}, state) when is_tuple(a) or is_atom(a) do
+    # convenience API for single actions
+    handle_cast({:action, [a]}, state)
+  end
+
   #TODo dont have buffers opening ports!!!
   def handle_info({_port, :closed}, scene) do
     # Debug: Need to handle this case properly

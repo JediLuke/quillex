@@ -2,14 +2,32 @@ defmodule Quillex.GUI.Components.BufferPane do
   @moduledoc """
   BufferPane component - wraps ScenicWidgets.TextField from scenic-widget-contrib.
 
-  QuillEx is a simple Notepad-style editor (no Vim modes), so we use TextField
-  in direct input mode where it handles all editing, and we sync changes back
-  to the BufferProcess.
+  ## Input Mode Configuration
 
-  The architecture:
-  - TextField handles: all input, rendering, cursor positioning, text editing
-  - BufferPane handles: syncing TextField changes to BufferProcess
-  - BufferProcess handles: buffer state persistence, undo/redo (future)
+  BufferPane supports different input modes via the `:input_mode` option:
+
+  ### `:direct` (default)
+  TextField handles all keyboard input directly. Good for standalone editors
+  where BufferPane is the primary input target.
+
+  ### `:external`
+  TextField does NOT handle input. The parent application routes input through
+  its own system (e.g., Fluxus) and updates the buffer. TextField just renders.
+
+  ## Architecture
+
+  - **:direct mode**: TextField handles input → emits events → BufferPane syncs to Buffer
+  - **:external mode**: App handles input → updates Buffer → PubSub → BufferPane re-renders
+
+  ## Options
+
+  - `:frame` (required) - Widgex.Frame for positioning
+  - `:buf_ref` (required) - Reference to Buffer.Process
+  - `:font` (required) - Font configuration
+  - `:input_mode` - `:direct` (default) or `:external`
+  - `:mode` - `:multi_line` (default) or `:single_line`
+  - `:focused` - Boolean, auto-focus on mount
+  - `:active?` - Boolean, whether editing is enabled
   """
 
   use Scenic.Component
@@ -25,27 +43,32 @@ defmodule Quillex.GUI.Components.BufferPane do
         } = data
       ) do
     active? = Map.get(data, :active?, true)
+    focused? = Map.get(data, :focused, false)
+    mode = Map.get(data, :mode, :multi_line)
+    input_mode = Map.get(data, :input_mode, :direct)
+    show_line_numbers = Map.get(data, :show_line_numbers, true)
     state = BufferPane.State.new(data |> Map.merge(%{active?: active?}))
 
-    {:ok, %{state: state, frame: frame, buf_ref: buf_ref, font: font, active?: active?}}
+    {:ok, %{state: state, frame: frame, buf_ref: buf_ref, font: font, active?: active?, focused?: focused?, mode: mode, input_mode: input_mode, show_line_numbers: show_line_numbers}}
   end
 
-  def init(scene, %{state: buf_pane_state, frame: frame, buf_ref: buf_ref, font: font, active?: active?}, _opts) do
+  def init(scene, %{state: buf_pane_state, frame: frame, buf_ref: buf_ref, font: font, active?: active?, focused?: focused?, mode: mode, input_mode: input_mode, show_line_numbers: show_line_numbers}, _opts) do
     # Fetch initial buffer state
     {:ok, buf} = Quillex.Buffer.Process.fetch_buf(buf_ref)
 
     # Subscribe to buffer updates (for external changes)
     Quillex.Utils.PubSub.subscribe(topic: {:buffers, buf.uuid})
 
-    # Prepare TextField configuration using DIRECT input mode
-    # TextField will handle all input itself
+    # Prepare TextField configuration
     text_field_data = %{
       frame: frame,
       initial_text: Enum.join(buf.data, "\n"),
-      mode: :multi_line,
-      input_mode: :direct,  # TextField handles all input directly!
-      show_line_numbers: true,
+      mode: mode,
+      input_mode: input_mode,
+      wrap_mode: :none,  # No word wrap - enables horizontal scrolling for long lines
+      show_line_numbers: show_line_numbers,
       editable: active?,
+      focused: focused?,
       font: %{
         name: font.name,
         size: font.size,
@@ -61,7 +84,7 @@ defmodule Quillex.GUI.Components.BufferPane do
       },
       cursor_mode: :cursor,
       viewport_buffer_lines: 5,
-      id: :text_field  # ID for receiving events
+      id: :text_field
     }
 
     # Build graph with TextField
@@ -95,12 +118,7 @@ defmodule Quillex.GUI.Components.BufferPane do
     new_lines = String.split(new_text, "\n")
 
     # Update buffer process with new content
-    # TODO: We need to create an action for this, or directly update
-    # For now, let's just update our local buf state
     updated_buf = %{scene.assigns.buf | data: new_lines, dirty?: true}
-
-    # Notify buffer process of change
-    # Quillex.Buffer.Process.update_content(scene.assigns.buf_ref, new_lines)
 
     {:noreply, assign(scene, buf: updated_buf)}
   end
@@ -119,7 +137,6 @@ defmodule Quillex.GUI.Components.BufferPane do
   # Clipboard events from TextField
   def handle_event({:clipboard_copy, :text_field, text}, _from, scene) do
     Logger.debug("BufferPane: copy #{String.length(text)} chars")
-    # TextField already handled the clipboard, nothing to do
     {:noreply, scene}
   end
 
@@ -133,9 +150,22 @@ defmodule Quillex.GUI.Components.BufferPane do
     {:noreply, scene}
   end
 
-  def handle_event({:save_requested, :text_field, text}, _from, scene) do
+  def handle_event({:save_requested, :text_field, _text}, _from, scene) do
     Logger.debug("BufferPane: Ctrl+S pressed, save requested")
-    # TODO: Trigger save
+    {:noreply, scene}
+  end
+
+  # Enter pressed in single-line mode - bubble up to parent
+  def handle_event({:enter_pressed, :text_field, text}, _from, scene) do
+    Logger.debug("BufferPane: Enter pressed, text: #{String.slice(text, 0, 50)}...")
+    GenServer.cast(scene.parent, {__MODULE__, :enter_pressed, scene.assigns.buf_ref, text})
+    {:noreply, scene}
+  end
+
+  # Escape pressed - bubble up to parent
+  def handle_event({:escape_pressed, :text_field}, _from, scene) do
+    Logger.debug("BufferPane: Escape pressed")
+    GenServer.cast(scene.parent, {__MODULE__, :escape_pressed, scene.assigns.buf_ref})
     {:noreply, scene}
   end
 
@@ -146,15 +176,38 @@ defmodule Quillex.GUI.Components.BufferPane do
   end
 
   # Handle buffer state updates from PubSub (external changes)
-  def handle_info({:buffer_updated, buf_uuid, new_buf}, %{assigns: %{buf: %{uuid: buf_uuid}}} = scene) do
-    Logger.debug("BufferPane: external buffer update received")
+  def handle_info({:buf_state_changes, new_buf}, %{assigns: %{buf: %{uuid: buf_uuid}}} = scene) do
+    if new_buf.uuid == buf_uuid do
+      Logger.debug("BufferPane: received buffer update, syncing to TextField")
 
-    # Update TextField with new content
-    # For now, we'll just update our state - full sync would require rebuilding TextField
-    {:noreply, assign(scene, buf: new_buf)}
+      new_text = Enum.join(new_buf.data, "\n")
+      Scenic.Scene.put_child(scene, :text_field, new_text)
+
+      {:noreply, assign(scene, buf: new_buf)}
+    else
+      {:noreply, scene}
+    end
   end
 
   def handle_info(_msg, scene) do
+    {:noreply, scene}
+  end
+
+  # ============================================================
+  # EXTERNAL CONTROL API
+  # ============================================================
+
+  @doc """
+  Handle external put commands - e.g., clear the text.
+  """
+  def handle_put(:clear, scene) do
+    Logger.debug("BufferPane: clearing text")
+    Scenic.Scene.put_child(scene, :text_field, "")
+    {:noreply, scene}
+  end
+
+  def handle_put(msg, scene) do
+    Logger.debug("BufferPane: unhandled put #{inspect(msg)}")
     {:noreply, scene}
   end
 end

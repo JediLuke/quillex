@@ -3,6 +3,9 @@ defmodule QuillEx.App do
   QuillEx is a simple text-editor, written in Elixir, using the Scenic gfx lib.
   """
 
+  @tidewave_port 31337
+  @start_tidewave? Mix.env() == :dev and Code.ensure_loaded?(Tidewave) and Code.ensure_loaded?(Bandit)
+
   def start(_type, _args) do
     # QuillEx.Metrics.Instrumenter.setup()
 
@@ -24,11 +27,10 @@ defmodule QuillEx.App do
 
     children =
       children ++
-        # Conditionally start Tidewave server for development
-        if Application.get_env(:quillex, :env) == :dev and Code.ensure_loaded?(Tidewave) and Code.ensure_loaded?(Bandit) do
+        if @start_tidewave? do
           require Logger
-          Logger.info("Starting Tidewave server on port 4000 for development")
-          [{Bandit, plug: Tidewave, port: 4000}]
+          Logger.info("Starting Tidewave server on port #{@tidewave_port} for development")
+          [{Bandit, plug: Tidewave, port: @tidewave_port}]
         else
           []
         end
@@ -36,7 +38,7 @@ defmodule QuillEx.App do
     Supervisor.start_link(children, strategy: :one_for_one)
   end
 
-  @window_title "Quillex"
+  @window_title if Mix.env() == :test, do: "Quillex (test)", else: "Quillex"
   @default_resolution {1680, 1005}
   def scenic_config() do
     # Use test window size if available (wider to prevent text wrapping)
@@ -44,7 +46,7 @@ defmodule QuillEx.App do
       :test -> {2000, 1200}  # Force wider window in test environment
       _ -> Application.get_env(:quillex, :test_window_size, @default_resolution)
     end
-    
+
     [
       name: :main_viewport,
       size: window_size,
