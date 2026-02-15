@@ -86,9 +86,40 @@ echo ""
 echo "System dependencies installed."
 echo ""
 
+# --- Set Scenic driver target ---
+export SCENIC_LOCAL_TARGET=glfw
+
+# Persist SCENIC_LOCAL_TARGET in the user's shell config
+persist_env_var() {
+  local shell_rc=""
+  if [ -n "$ZSH_VERSION" ] || [ "$(basename "$SHELL")" = "zsh" ]; then
+    shell_rc="$HOME/.zshrc"
+  elif [ -n "$BASH_VERSION" ] || [ "$(basename "$SHELL")" = "bash" ]; then
+    shell_rc="$HOME/.bashrc"
+  fi
+
+  if [ -n "$shell_rc" ] && [ -f "$shell_rc" ]; then
+    if ! grep -q 'SCENIC_LOCAL_TARGET' "$shell_rc"; then
+      echo "" >> "$shell_rc"
+      echo "# Scenic driver target (set by QuillEx installer)" >> "$shell_rc"
+      echo "export SCENIC_LOCAL_TARGET=glfw" >> "$shell_rc"
+      echo "Added SCENIC_LOCAL_TARGET=glfw to $shell_rc"
+    else
+      echo "SCENIC_LOCAL_TARGET already set in $shell_rc"
+    fi
+  else
+    echo "WARNING: Could not detect shell config file."
+    echo "  Please add this to your shell profile:"
+    echo "  export SCENIC_LOCAL_TARGET=glfw"
+  fi
+}
+
+echo "Setting SCENIC_LOCAL_TARGET=glfw..."
+persist_env_var
+echo ""
+
 # --- Fetch and compile ---
 echo "Fetching Elixir dependencies..."
-export SCENIC_LOCAL_TARGET=glfw
 mix local.hex --force --if-missing
 mix local.rebar --force --if-missing
 mix deps.get

@@ -39,10 +39,12 @@ defmodule QuillEx.MixProject do
       {:event_bus, "~> 1.7.0"},
       {:struct_access, "~> 1.1.2"},
       {:wormhole, "~> 2.3"},
+      {:nimble_options, "~> 1.0", override: true},
+      {:elixir_make, "~> 0.6", override: true},
 
       # dev tools
-      {:sexy_spex, git: "https://github.com/JediLuke/spex.git", branch: "main", only: [:test, :dev]},
-      {:scenic_mcp, git: "https://github.com/scenic-contrib/scenic_mcp_experimental.git", branch: "main", only: [:dev, :test]},
+      {:sexy_spex, git: "https://github.com/JediLuke/spex.git", branch: "main", only: [:test, :dev], override: true},
+      {:scenic_mcp, git: "https://github.com/scenic-contrib/scenic_mcp_experimental.git", branch: "main", only: [:dev, :test], override: true},
       {:stream_data, "~> 0.6", only: [:test, :dev]},
       {:tidewave, "~> 0.1", only: :dev},
       {:bandit, "~> 1.0", only: :dev},
