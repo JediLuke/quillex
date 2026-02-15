@@ -29,7 +29,7 @@ The install script will:
 
 ### Manual Setup
 
-If you prefer to set things up yourself:
+If you prefer to set things up yourself, you'll need the system dependencies that [Scenic requires](https://hexdocs.pm/scenic/install_dependencies.html):
 
 **macOS:**
 ```bash
