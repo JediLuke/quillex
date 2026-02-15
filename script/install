@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+set -e
+
+echo "=== QuillEx Setup ==="
+echo ""
+
+# --- Detect OS ---
+detect_os() {
+  case "$(uname -s)" in
+    Darwin) echo "macos" ;;
+    Linux)
+      if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        case "$ID" in
+          ubuntu|debian|pop|linuxmint) echo "debian" ;;
+          fedora) echo "fedora" ;;
+          arch|manjaro|endeavouros) echo "arch" ;;
+          *) echo "unknown-linux" ;;
+        esac
+      else
+        echo "unknown-linux"
+      fi
+      ;;
+    *) echo "unknown" ;;
+  esac
+}
+
+OS=$(detect_os)
+echo "Detected OS: $OS"
+echo ""
+
+# --- Check for Elixir/Erlang ---
+check_elixir() {
+  if ! command -v elixir &> /dev/null; then
+    echo "ERROR: Elixir not found. Please install Elixir first:"
+    echo "  https://elixir-lang.org/install.html"
+    exit 1
+  fi
+  echo "Elixir: $(elixir --version | grep Elixir)"
+  echo "OTP:    $(elixir --version | grep OTP | head -1)"
+}
+
+check_elixir
+echo ""
+
+# --- Install system dependencies ---
+echo "Installing system dependencies for Scenic..."
+echo ""
+
+case "$OS" in
+  macos)
+    if ! command -v brew &> /dev/null; then
+      echo "ERROR: Homebrew not found. Install it from https://brew.sh"
+      exit 1
+    fi
+    brew update
+    brew install glfw3 glew pkg-config
+    ;;
+  debian)
+    sudo apt-get update
+    sudo apt-get install -y build-essential pkg-config libglfw3-dev libglew-dev libgl1-mesa-dev
+    ;;
+  fedora)
+    sudo dnf install -y glfw glfw-devel pkgconf glew glew-devel
+    ;;
+  arch)
+    sudo pacman -S --needed glfw-x11 glew pkg-config
+    ;;
+  *)
+    echo "WARNING: Unsupported OS. You'll need to manually install:"
+    echo "  - GLFW 3"
+    echo "  - GLEW"
+    echo "  - pkg-config"
+    echo ""
+    echo "See: https://hexdocs.pm/scenic/install_dependencies.html"
+    echo ""
+    read -p "Continue anyway? [y/N] " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+      exit 1
+    fi
+    ;;
+esac
+
+echo ""
+echo "System dependencies installed."
+echo ""
+
+# --- Fetch and compile ---
+echo "Fetching Elixir dependencies..."
+export SCENIC_LOCAL_TARGET=glfw
+mix local.hex --force --if-missing
+mix local.rebar --force --if-missing
+mix deps.get
+
+echo ""
+echo "Compiling (this may take a while on first run)..."
+mix compile
+
+echo ""
+echo "=== Setup complete! ==="
+echo ""
+echo "Run QuillEx with:"
+echo "  iex -S mix"
