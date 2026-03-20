@@ -170,6 +170,14 @@ defmodule Quillex.Buffer.Process.Reducer do
     buf |> BufferPane.Mutator.move_cursor(:line_start)
   end
 
+  def process(%Quillex.Structs.BufState{} = buf, {:move_cursor, :doc_start}) do
+    buf |> BufferPane.Mutator.move_cursor(:doc_start)
+  end
+
+  def process(%Quillex.Structs.BufState{} = buf, {:move_cursor, :doc_end}) do
+    buf |> BufferPane.Mutator.move_cursor(:doc_end)
+  end
+
   def process(%Quillex.Structs.BufState{} = buf, {:select_text, direction, count}) do
     buf |> BufferPane.Mutator.select_text(direction, count)
   end

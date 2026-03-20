@@ -64,6 +64,34 @@ defmodule Quillex.GUI.Components.BufferPane.Mutator do
     %{buf | cursors: [new_cursor]}
   end
 
+  def move_cursor(%{cursors: [c], selection: _selection} = buf, :doc_start) when buf.selection != nil do
+    # Ctrl+Home: move cursor to very first character of document, clear selection
+    new_cursor = c |> Cursor.move({1, 1})
+    %{buf | cursors: [new_cursor], selection: nil}
+  end
+
+  def move_cursor(%{cursors: [c]} = buf, :doc_start) do
+    # Ctrl+Home: move cursor to very first character of document
+    new_cursor = c |> Cursor.move({1, 1})
+    %{buf | cursors: [new_cursor]}
+  end
+
+  def move_cursor(%{cursors: [c], selection: _selection} = buf, :doc_end) when buf.selection != nil do
+    # Ctrl+End: move cursor to end of last line in document, clear selection
+    last_line = length(buf.data)
+    last_col = String.length(Enum.at(buf.data, last_line - 1) || "") + 1
+    new_cursor = c |> Cursor.move({last_line, last_col})
+    %{buf | cursors: [new_cursor], selection: nil}
+  end
+
+  def move_cursor(%{cursors: [c]} = buf, :doc_end) do
+    # Ctrl+End: move cursor to end of last line in document
+    last_line = length(buf.data)
+    last_col = String.length(Enum.at(buf.data, last_line - 1) || "") + 1
+    new_cursor = c |> Cursor.move({last_line, last_col})
+    %{buf | cursors: [new_cursor]}
+  end
+
   # def move_cursor(buf, :next_word) do
   #   next_word_coords =
   #   dbg()

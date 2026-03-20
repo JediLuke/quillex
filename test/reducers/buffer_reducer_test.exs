@@ -492,6 +492,84 @@ defmodule Quillex.Buffer.Process.ReducerTest do
   end
 
   # ---------------------------------------------------------------------------
+  # process/2 {:move_cursor, :doc_start}  (Ctrl+Home)
+  # ---------------------------------------------------------------------------
+
+  describe "process/2 {:move_cursor, :doc_start}" do
+    test "moves cursor to {1, 1} on a multi-line buffer" do
+      b = buf(["first", "second", "third"], cursors: [Cursor.new(3, 4)])
+      b2 = Reducer.process(b, {:move_cursor, :doc_start})
+      [c] = b2.cursors
+      assert c.line == 1
+      assert c.col == 1
+    end
+
+    test "moves cursor to {1, 1} when already on line 1" do
+      b = buf(["hello world"], cursors: [Cursor.new(1, 6)])
+      b2 = Reducer.process(b, {:move_cursor, :doc_start})
+      [c] = b2.cursors
+      assert c.line == 1
+      assert c.col == 1
+    end
+
+    test "clears active selection when moving to doc start" do
+      selection = %{start: {2, 1}, end: {3, 5}}
+      b = %{buf(["alpha", "beta", "gamma"], cursors: [Cursor.new(3, 5)]) | selection: selection}
+      b2 = Reducer.process(b, {:move_cursor, :doc_start})
+      assert b2.selection == nil
+      [c] = b2.cursors
+      assert c.line == 1
+      assert c.col == 1
+    end
+
+    test "does not modify buffer data" do
+      b = buf(["unchanged"], cursors: [Cursor.new(1, 5)])
+      b2 = Reducer.process(b, {:move_cursor, :doc_start})
+      assert b2.data == ["unchanged"]
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # process/2 {:move_cursor, :doc_end}  (Ctrl+End)
+  # ---------------------------------------------------------------------------
+
+  describe "process/2 {:move_cursor, :doc_end}" do
+    test "moves cursor to end of last line on a multi-line buffer" do
+      # "third" has 5 chars → col 6 (one past the last character, 1-based)
+      b = buf(["first", "second", "third"], cursors: [Cursor.new(1, 1)])
+      b2 = Reducer.process(b, {:move_cursor, :doc_end})
+      [c] = b2.cursors
+      assert c.line == 3
+      assert c.col == 6
+    end
+
+    test "moves cursor to end of single-line buffer" do
+      # "hello" = 5 chars → col 6
+      b = buf(["hello"], cursors: [Cursor.new(1, 1)])
+      b2 = Reducer.process(b, {:move_cursor, :doc_end})
+      [c] = b2.cursors
+      assert c.line == 1
+      assert c.col == 6
+    end
+
+    test "clears active selection when moving to doc end" do
+      selection = %{start: {1, 1}, end: {1, 3}}
+      b = %{buf(["alpha", "beta"], cursors: [Cursor.new(1, 1)]) | selection: selection}
+      b2 = Reducer.process(b, {:move_cursor, :doc_end})
+      assert b2.selection == nil
+      [c] = b2.cursors
+      assert c.line == 2
+      assert c.col == 5  # "beta" = 4 chars → col 5
+    end
+
+    test "does not modify buffer data" do
+      b = buf(["unchanged"], cursors: [Cursor.new(1, 1)])
+      b2 = Reducer.process(b, {:move_cursor, :doc_end})
+      assert b2.data == ["unchanged"]
+    end
+  end
+
+  # ---------------------------------------------------------------------------
   # process/2 :delete_line  (Ctrl+D)
   # ---------------------------------------------------------------------------
 
