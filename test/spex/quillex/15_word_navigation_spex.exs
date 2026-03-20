@@ -110,7 +110,7 @@ defmodule Quillex.WordNavigationSpex do
     tags: [:word_navigation, :ctrl_right, :cursor_movement] do
 
     scenario "Ctrl+Right from the start of 'hello world' moves to col 7 (start of 'world')",
-      context do
+      _context do
 
       given_ "the buffer contains 'hello world' with cursor at col 1", context do
         reset_to_empty_single_buffer()
@@ -138,7 +138,7 @@ defmodule Quillex.WordNavigationSpex do
       end
     end
 
-    scenario "Ctrl+Right from the start of 'world' advances to the line end", context do
+    scenario "Ctrl+Right from the start of 'world' advances to the line end", _context do
       given_ "the buffer contains 'hello world' with cursor at col 7 (start of 'world')", context do
         reset_to_empty_single_buffer()
         Probes.send_text("hello world")
@@ -173,7 +173,7 @@ defmodule Quillex.WordNavigationSpex do
     end
 
     scenario "Ctrl+Right skips leading spaces and lands on the first letter of the next word",
-      context do
+      _context do
 
       given_ "the buffer contains '  foo  bar' (leading spaces) with cursor at col 1", context do
         reset_to_empty_single_buffer()
@@ -220,7 +220,7 @@ defmodule Quillex.WordNavigationSpex do
     tags: [:word_navigation, :ctrl_left, :cursor_movement] do
 
     scenario "Ctrl+Left from col 7 ('w' of 'world') moves to col 1 ('h' of 'hello')",
-      context do
+      _context do
 
       given_ "the buffer contains 'hello world' with cursor at col 7", context do
         reset_to_empty_single_buffer()
@@ -246,7 +246,7 @@ defmodule Quillex.WordNavigationSpex do
       end
     end
 
-    scenario "Ctrl+Left from col 1 (already at start of line) stays at col 1", context do
+    scenario "Ctrl+Left from col 1 (already at start of line) stays at col 1", _context do
       given_ "the buffer contains 'hello' with cursor at col 1", context do
         reset_to_empty_single_buffer()
         Probes.send_text("hello")
@@ -286,7 +286,7 @@ defmodule Quillex.WordNavigationSpex do
     description: "Pressing Ctrl+Right and then Ctrl+Left forms a round-trip back to the word start",
     tags: [:word_navigation, :round_trip, :cursor_movement] do
 
-    scenario "Ctrl+Right then Ctrl+Left on 'foo bar' returns to col 1", context do
+    scenario "Ctrl+Right then Ctrl+Left on 'foo bar' returns to col 1", _context do
       given_ "the buffer contains 'foo bar' with cursor at col 1", context do
         reset_to_empty_single_buffer()
         Probes.send_text("foo bar")
@@ -320,7 +320,7 @@ defmodule Quillex.WordNavigationSpex do
     description: "Adding Ctrl+Left/Right should not disturb plain Left/Right arrow key behaviour",
     tags: [:word_navigation, :regression, :arrow_keys] do
 
-    scenario "Plain Right arrow moves one character at a time", context do
+    scenario "Plain Right arrow moves one character at a time", _context do
       given_ "the buffer contains 'abc' with cursor at col 1", context do
         reset_to_empty_single_buffer()
         Probes.send_text("abc")
@@ -346,7 +346,7 @@ defmodule Quillex.WordNavigationSpex do
       end
     end
 
-    scenario "Plain Left arrow moves one character at a time", context do
+    scenario "Plain Left arrow moves one character at a time", _context do
       given_ "the buffer contains 'abc' with cursor at the end", context do
         reset_to_empty_single_buffer()
         Probes.send_text("abc")

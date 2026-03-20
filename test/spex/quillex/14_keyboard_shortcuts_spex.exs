@@ -83,7 +83,7 @@ defmodule Quillex.KeyboardShortcutsSpex do
     description: "Pressing Ctrl+N is equivalent to File → New Buffer: a fresh tab appears",
     tags: [:keyboard_shortcuts, :ctrl_n, :new_buffer] do
 
-    scenario "Ctrl+N adds a new tab to the tab bar", context do
+    scenario "Ctrl+N adds a new tab to the tab bar", _context do
       given_ "we have a known number of open tabs", context do
         close_buffers_until_one_remains()
         count = tab_count()
@@ -121,7 +121,7 @@ defmodule Quillex.KeyboardShortcutsSpex do
       end
     end
 
-    scenario "Pressing Ctrl+N multiple times creates multiple tabs", context do
+    scenario "Pressing Ctrl+N multiple times creates multiple tabs", _context do
       given_ "we start fresh with one tab", context do
         close_buffers_until_one_remains()
         count = tab_count()
@@ -155,7 +155,7 @@ defmodule Quillex.KeyboardShortcutsSpex do
     description: "Pressing Ctrl+O is equivalent to File → Open: the file picker overlay appears",
     tags: [:keyboard_shortcuts, :ctrl_o, :open_file, :file_picker] do
 
-    scenario "Ctrl+O opens the file picker overlay", context do
+    scenario "Ctrl+O opens the file picker overlay", _context do
       given_ "the file picker is not open and we have one buffer", context do
         press_escape()
         close_buffers_until_one_remains()
@@ -183,7 +183,7 @@ defmodule Quillex.KeyboardShortcutsSpex do
       end
     end
 
-    scenario "Ctrl+O file picker is in open mode (shows Open button, not Save)", context do
+    scenario "Ctrl+O file picker is in open mode (shows Open button, not Save)", _context do
       given_ "the file picker is not open", context do
         press_escape()
         refute file_picker_visible?()
@@ -221,7 +221,7 @@ defmodule Quillex.KeyboardShortcutsSpex do
     description: "Pressing Ctrl+W is equivalent to File → Close Buffer",
     tags: [:keyboard_shortcuts, :ctrl_w, :close_buffer] do
 
-    scenario "Ctrl+W closes the active buffer when multiple tabs are open", context do
+    scenario "Ctrl+W closes the active buffer when multiple tabs are open", _context do
       given_ "we have exactly two open tabs", context do
         close_buffers_until_one_remains()
         create_buffer_via_menu()
@@ -258,7 +258,7 @@ defmodule Quillex.KeyboardShortcutsSpex do
       end
     end
 
-    scenario "Ctrl+W on the last buffer does not crash (cannot close last buffer)", context do
+    scenario "Ctrl+W on the last buffer does not crash (cannot close last buffer)", _context do
       given_ "there is exactly one tab open", context do
         close_buffers_until_one_remains()
         count = tab_count()
@@ -296,7 +296,7 @@ defmodule Quillex.KeyboardShortcutsSpex do
     description: "Pressing Ctrl+D removes the entire line under the cursor",
     tags: [:keyboard_shortcuts, :ctrl_d, :delete_line] do
 
-    scenario "Ctrl+D on a single-line buffer clears the line to empty", context do
+    scenario "Ctrl+D on a single-line buffer clears the line to empty", _context do
       given_ "we have a buffer with a single line of text", context do
         close_buffers_until_one_remains()
         press_escape()
@@ -331,7 +331,7 @@ defmodule Quillex.KeyboardShortcutsSpex do
       end
     end
 
-    scenario "Ctrl+D on a multi-line buffer removes the current line", context do
+    scenario "Ctrl+D on a multi-line buffer removes the current line", _context do
       given_ "we have a buffer with two lines", context do
         close_buffers_until_one_remains()
         press_escape()
@@ -371,7 +371,7 @@ defmodule Quillex.KeyboardShortcutsSpex do
       end
     end
 
-    scenario "Ctrl+D can be undone with Ctrl+U", context do
+    scenario "Ctrl+D can be undone with Ctrl+U", _context do
       given_ "we have a buffer with known text", context do
         close_buffers_until_one_remains()
         press_escape()
@@ -409,7 +409,7 @@ defmodule Quillex.KeyboardShortcutsSpex do
     description: "Ctrl+H (Find & Replace) and Ctrl+V+F (Verify) still work after adding new shortcuts",
     tags: [:keyboard_shortcuts, :regression] do
 
-    scenario "Ctrl+H still opens Find & Replace bar", context do
+    scenario "Ctrl+H still opens Find & Replace bar", _context do
       given_ "the search bar is not visible", context do
         press_escape()
         # Make sure only one buffer is open

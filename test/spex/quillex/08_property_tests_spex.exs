@@ -68,7 +68,7 @@ defmodule Quillex.PropertyTestsSpex do
     description: "After any sequence of cursor movements, cursor stays within valid bounds",
     tags: [:property, :cursor, :bounds] do
 
-    scenario "Random cursor movements maintain bounds", context do
+    scenario "Random cursor movements maintain bounds", _context do
       given_ "fresh buffer with some initial content", context do
         clear_buffer()
         # Type some multi-line content
@@ -133,7 +133,7 @@ defmodule Quillex.PropertyTestsSpex do
     description: "Cursor should always be visible (scroll follows cursor)",
     tags: [:property, :cursor, :scroll] do
 
-    scenario "Cursor stays visible during rapid navigation", context do
+    scenario "Cursor stays visible during rapid navigation", _context do
       given_ "buffer with many lines of content", context do
         clear_buffer()
 
@@ -188,7 +188,7 @@ defmodule Quillex.PropertyTestsSpex do
     description: "Selection start and end are always valid positions",
     tags: [:property, :selection, :bounds] do
 
-    scenario "Random selection operations maintain valid bounds", context do
+    scenario "Random selection operations maintain valid bounds", _context do
       given_ "buffer with multi-line content", context do
         clear_buffer()
         Probes.send_text("ABCDEFGHIJ")
@@ -239,7 +239,7 @@ defmodule Quillex.PropertyTestsSpex do
     description: "Random edit operations maintain buffer consistency",
     tags: [:property, :editing, :consistency] do
 
-    scenario "Random edit sequence maintains consistency", context do
+    scenario "Random edit sequence maintains consistency", _context do
       given_ "buffer with initial content", context do
         clear_buffer()
         Probes.send_text("Initial content")
@@ -283,7 +283,7 @@ defmodule Quillex.PropertyTestsSpex do
     description: "Undo and redo operations maintain buffer consistency",
     tags: [:property, :undo, :redo] do
 
-    scenario "Random undo/redo sequence is consistent", context do
+    scenario "Random undo/redo sequence is consistent", _context do
       given_ "buffer with some edits", context do
         clear_buffer()
 
