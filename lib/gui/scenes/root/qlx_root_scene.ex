@@ -129,17 +129,14 @@ defmodule QuillEx.RootScene do
     dispatch_to_active_buffer(scene, {:move_cursor, :doc_end})
   end
 
-  # Handle Ctrl+Left — move cursor to the start of the previous word.
-  # Mirrors GEdit behaviour: jumps backwards over whitespace then over a word.
-  def handle_input({:key, {:key_left, 1, [:ctrl]}}, _context, scene) do
-    dispatch_to_active_buffer(scene, {:move_cursor, :prev_word})
-  end
-
-  # Handle Ctrl+Right — move cursor to the start of the next word.
-  # Mirrors GEdit behaviour: jumps forwards over the current word then over whitespace.
-  def handle_input({:key, {:key_right, 1, [:ctrl]}}, _context, scene) do
-    dispatch_to_active_buffer(scene, {:move_cursor, :next_word})
-  end
+  # NOTE: Ctrl+Left/Right (word navigation) are handled in the TextField's
+  # input_to_buffer_action/2 directly, NOT here. Adding them here caused
+  # double-firing: both root scene AND TextField processed each keypress,
+  # resulting in two actions sent to the buffer (e.g. :next_word then
+  # :move_cursor :right 1), landing the cursor at the wrong position.
+  # The TextField sends {:move_cursor, :prev_word} / {:move_cursor, :next_word}
+  # to the buffer controller in buffer_backed mode, which is the single
+  # correct code path.
 
   def handle_input({:viewport, {input, _coords}}, _context, scene)
     when input in [:enter, :exit] do
