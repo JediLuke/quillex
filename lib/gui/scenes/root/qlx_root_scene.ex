@@ -613,25 +613,6 @@ defmodule QuillEx.RootScene do
   def handle_info({:new_buffer_opened, %Quillex.Structs.BufState.BufRef{} = buf_ref}, scene) do
     new_state =
       scene.assigns.state
-      # to be honest I dont understand how this is already been added here but I guess it has....
-      # its cause when we start a new buffer, we do add it to the state of this process!
-
-      # we _should_ check incase it hasn't been added I guess...
-
-      # do we were adding it in both places sometimes, I had to cancel adding it in the mutator (which was calling new buffer in BNufrMgr)
-      # and instead RootScene has to wait for the callback that it worked...
-
-      # if Enum.any?(state.buffers, & &1.uuid == buf_ref.uuid) do
-      #   Quillex.Utils.PubSub.broadcast(
-      #       topic: :qlx_events,
-      #       msg: {:action, {:activate_buffer, buf_ref}}
-      #     )
-      #   {:reply, {:ok, buf_ref}, state}
-      # else
-      #   raise "Could not find buffer: #{inspect buf_ref}"
-      #   # do_start_new_buffer_process(state, buf_red)
-      # end
-
       |> RootScene.Mutator.add_buffer(buf_ref)
       |> RootScene.Mutator.activate_buffer(buf_ref)
 
