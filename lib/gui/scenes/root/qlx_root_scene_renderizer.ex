@@ -397,6 +397,9 @@ defmodule QuillEx.RootScene.Renderizer do
       Map.get(old_state, :show_replace, false) != Map.get(new_state, :show_replace, false) or
       old_state.show_file_nav != new_state.show_file_nav
 
+    # Recreate if status bar appears or disappears (carves @status_bar_height from content area)
+    status_bar_changed = (old_state.status_message == nil) != (new_state.status_message == nil)
+
     # Recreate if the buffer process PID changed (e.g., buffer was restarted by supervisor)
     # This ensures the TextField always has a valid buffer_controller reference
     buffer_pid_changed = if new_state.active_buf do
@@ -407,7 +410,7 @@ defmodule QuillEx.RootScene.Renderizer do
       false
     end
 
-    buffer_changed or settings_changed or layout_changed or buffer_pid_changed
+    buffer_changed or settings_changed or layout_changed or status_bar_changed or buffer_pid_changed
   end
 
   # Helper to create the buffer_pane TextField
