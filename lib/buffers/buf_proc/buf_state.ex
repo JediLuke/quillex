@@ -80,10 +80,6 @@ defmodule Quillex.Structs.BufState do
     }
   ]
 
-  #   @valid_types [:text, :list]
-  #   @vim_modes [{:vim, :insert}, {:vim, :normal}]
-  #   @valid_modes [:edit] ++ @vim_modes
-
   @doc """
   Create a new BufState from a map of arguments.
 
@@ -99,12 +95,9 @@ defmodule Quillex.Structs.BufState do
     name = Map.get(args, :name) || Map.get(args, "name") || @unnamed
     data = Map.get(args, :data) || Map.get(args, "data") || [""]
     data = if is_list(data), do: data, else: raise("Buffer data must be a list of strings")
-    # mode: validate_mode(args[:mode]) || :edit,
     mode = Map.get(args, :mode) || Map.get(args, "mode") || :edit
-    # Creating buffer with mode: #{inspect(mode)}
     source = Map.get(args, :source) || Map.get(args, "source") || nil
     cursors = Map.get(args, :cursors) || Map.get(args, "cursors") || [Cursor.new()]
-    # scroll_acc = Map.get(args, :scroll_acc) || Map.get(args, "scroll_acc") || {0, 0}
     read_only? = Map.get(args, :read_only?) || Map.get(args, "read_only?") || false
 
     %__MODULE__{
