@@ -251,30 +251,26 @@ defmodule QuillEx.RootSceneTest do
   # Ctrl+W — Close Buffer
   # ---------------------------------------------------------------------------
   #
-  # The Ctrl+W handler calls handle_cast({:action, :close_active_buffer}).
-  # With active_buf: nil the Reducer no-ops (returns state unchanged).
-  # Renderizer.render/4 nil-frame guard returns the graph immediately (frame: nil).
-  # process_actions returns {:ok, {state, graph}}, then assign/push_graph raise
-  # FunctionClauseError because bare_scene is a plain map, not %Scenic.Scene{}.
+  # The Ctrl+W handler now calls try_close_active_buffer/1.
+  # With active_buf: nil it returns {:noreply, scene} immediately — no
+  # process_actions call, no FunctionClauseError.
+  #
+  # With a dirty active_buf it would call show_unsaved_prompt/2, which calls
+  # ScenicWidgets.ConfirmDialog.add_to_graph/3 with frame: nil — that raises
+  # RuntimeError (same pattern as Ctrl+O / show_file_picker).
   #
   # The :close_active_buffer Reducer action is pure and tested thoroughly below.
   # Full UI behaviour is covered by test/spex/quillex/14_keyboard_shortcuts_spex.exs.
 
   describe "Ctrl+W handle_input clause" do
-    test "Ctrl+W with nil active_buf does not crash the test process" do
+    test "Ctrl+W with nil active_buf returns {:noreply, scene} immediately (no-op)" do
       # Scenic 0.12 atom-based key format: {:key_w, 1, [:ctrl]}.
-      # With active_buf: nil the Reducer no-ops (returns state unchanged).
-      # Renderizer.render/4 nil-frame guard returns graph immediately.
-      # process_actions returns {:ok, {state, graph}}.
-      # assign/push_graph then raises FunctionClauseError because bare_scene
-      # is a plain map, not a %Scenic.Scene{} struct.
+      # try_close_active_buffer/1 returns {:noreply, scene} directly when
+      # active_buf is nil — no process_actions call, no side effects.
       scene = bare_scene()
-      try do
-        result = RootScene.handle_input({:key, {:key_w, 1, [:ctrl]}}, nil, scene)
-        assert match?({:noreply, _}, result)
-      rescue
-        FunctionClauseError -> :ok  # assign/push_graph on bare map — correct clause fired
-      end
+      result = RootScene.handle_input({:key, {:key_w, 1, [:ctrl]}}, nil, scene)
+      assert {:noreply, ^scene} = result,
+             "Ctrl+W with no active buffer must return {:noreply, scene} unchanged"
     end
   end
 
@@ -443,6 +439,67 @@ defmodule QuillEx.RootSceneTest do
       new_state = QuillEx.RootScene.Reducer.process(state, :close_active_buffer)
       assert length(new_state.buffers) == 1
       assert new_state.active_buf == buf1
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Close-buffer dirty check — Reducer and Mutator layer
+  # ---------------------------------------------------------------------------
+  #
+  # The scene's try_close_buffer/2 intercepts dirty buffers BEFORE they reach
+  # the Reducer: a dirty BufRef shows the ConfirmDialog and waits for a
+  # response.  Only after the user confirms (save or discard) does the action
+  # {:close_buffer, buf_ref} get forwarded to the Reducer.
+  #
+  # The Reducer itself has NO dirty? guard — it trusts the scene to have already
+  # obtained confirmation. These tests verify the Reducer and Mutator layer in
+  # isolation from the scene-level guard.
+
+  describe "close buffer dirty check" do
+    test "Reducer.process({:close_buffer, dirty_ref}) removes the buffer regardless of dirty?" do
+      # The Reducer has no dirty guard — that is the scene's responsibility.
+      # A dirty BufRef that reaches the Reducer (after dialog confirmation) is
+      # simply removed, just like a clean one.
+      dirty_buf = %Quillex.Structs.BufState.BufRef{uuid: "dirty-1", name: "modified.txt", dirty?: true}
+      clean_buf = %Quillex.Structs.BufState.BufRef{uuid: "clean-1", name: "clean.txt",    dirty?: false}
+      state = %QuillEx.RootScene.State{active_buf: dirty_buf, buffers: [dirty_buf, clean_buf]}
+
+      new_state = QuillEx.RootScene.Reducer.process(state, {:close_buffer, dirty_buf})
+
+      refute Enum.any?(new_state.buffers, &(&1.uuid == "dirty-1")),
+             "Reducer must remove the dirty buffer when explicitly told to close it"
+      assert Enum.any?(new_state.buffers, &(&1.uuid == "clean-1")),
+             "Other buffers must remain after close"
+    end
+
+    test "Mutator.remove_buffer/2 is a no-op when only one buffer remains (last-buffer guard)" do
+      # The scene's try_close_buffer will still show the dialog for a sole
+      # dirty buffer (the user chose discard or save), but Mutator guards
+      # against removing the last buffer unconditionally, so even if
+      # {:close_buffer, sole} reaches the Reducer it is safe.
+      sole_buf = %Quillex.Structs.BufState.BufRef{uuid: "sole-1", name: "last.txt", dirty?: true}
+      state = %QuillEx.RootScene.State{active_buf: sole_buf, buffers: [sole_buf]}
+
+      new_state = QuillEx.RootScene.Mutator.remove_buffer(state, sole_buf)
+
+      assert length(new_state.buffers) == 1,
+             "Mutator must not remove the last remaining buffer"
+      assert new_state.active_buf == sole_buf,
+             "active_buf must remain unchanged when the last buffer cannot be closed"
+    end
+
+    test "Reducer.process({:close_buffer, clean_ref}) removes a clean buffer normally" do
+      # Sanity check: clean buffers still close via the same Reducer path.
+      buf_a = %Quillex.Structs.BufState.BufRef{uuid: "a", name: "a.txt", dirty?: false}
+      buf_b = %Quillex.Structs.BufState.BufRef{uuid: "b", name: "b.txt", dirty?: false}
+      state = %QuillEx.RootScene.State{active_buf: buf_a, buffers: [buf_a, buf_b]}
+
+      new_state = QuillEx.RootScene.Reducer.process(state, {:close_buffer, buf_a})
+
+      refute Enum.any?(new_state.buffers, &(&1.uuid == "a")),
+             "Clean buffer must be removed by Reducer"
+      assert new_state.active_buf.uuid == "b",
+             "active_buf must switch to the remaining buffer"
     end
   end
 

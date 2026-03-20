@@ -823,6 +823,24 @@ defmodule Quillex.TestHelpers.SemanticHelpers do
   end
 
   # ===========================================================================
+  # Dialog Visibility Helpers
+  # ===========================================================================
+
+  @doc """
+  Check if the unsaved-changes confirmation dialog is currently visible.
+
+  Returns `true` when the ConfirmDialog titled "Unsaved Changes" is rendered in
+  the viewport (i.e. the user is being prompted about a dirty buffer close).
+  Returns `false` otherwise.
+
+  Used in integration tests to assert or refute dialog presence without
+  coupling to a specific semantic element ID.
+  """
+  def unsaved_prompt_visible? do
+    ScenicMcp.Query.text_visible?("Unsaved Changes")
+  end
+
+  # ===========================================================================
   # Viewport Helpers
   # ===========================================================================
 

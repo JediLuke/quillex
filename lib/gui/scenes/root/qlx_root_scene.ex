@@ -104,10 +104,10 @@ defmodule QuillEx.RootScene do
   end
 
   # Handle Ctrl+W keyboard shortcut for Close Buffer
-  # Closes the currently active buffer. If it is the last buffer, the close
-  # is silently ignored (see Mutator.remove_buffer/2 — cannot close last buffer).
+  # If the active buffer has unsaved changes, shows a Save/Discard/Cancel dialog.
+  # If the buffer is clean (or there is no active buffer), closes immediately.
   def handle_input({:key, {:key_w, 1, [:ctrl]}}, _context, scene) do
-    handle_cast({:action, :close_active_buffer}, scene)
+    try_close_active_buffer(scene)
   end
 
   # Handle Ctrl+D keyboard shortcut for Delete Line.
@@ -844,8 +844,8 @@ defmodule QuillEx.RootScene do
         handle_cast({:action, :reload_from_disk}, scene)
 
       "close" ->
-        # Close the active buffer (no sync needed - buffer_backed mode)
-        handle_cast({:action, :close_active_buffer}, scene)
+        # Close the active buffer — show unsaved-changes dialog if buffer is dirty.
+        try_close_active_buffer(scene)
 
       "undo" ->
         # Undo - send undo action to the buffer pane
@@ -966,8 +966,9 @@ defmodule QuillEx.RootScene do
     buf_ref = Enum.find(scene.assigns.state.buffers, fn buf -> buf.uuid == tab_id end)
 
     if buf_ref do
-      # With buffer_backed mode, Buffer.Process is source of truth - no sync needed
-      handle_cast({:action, {:close_buffer, buf_ref}}, scene)
+      # With buffer_backed mode, Buffer.Process is source of truth — show
+      # unsaved-changes dialog if dirty, otherwise close immediately.
+      try_close_buffer(scene, buf_ref)
     else
       Logger.warning("Could not find buffer for tab close: #{inspect(tab_id)}")
       {:noreply, scene}
@@ -1082,6 +1083,41 @@ defmodule QuillEx.RootScene do
   def handle_event({:sidebar, :expand, _item_id}, _from, scene), do: {:noreply, scene}
   def handle_event({:sidebar, :collapse, _item_id}, _from, scene), do: {:noreply, scene}
   def handle_event({:sidebar, :hover, _item_id}, _from, scene), do: {:noreply, scene}
+
+  # ===========================================================================
+  # Unsaved-changes dialog responses
+  # ===========================================================================
+  #
+  # The ConfirmDialog component sends {:confirm_dialog_response, id, action}
+  # to its parent (this scene) when the user clicks a button or presses a
+  # keyboard shortcut (s = save, d = discard, Escape = cancel).
+  #
+  # :save   — write the buffer to disk, then close it.
+  #           NOTE: for buffers that have no filepath yet (new, unsaved files),
+  #           do_save/1 will open the file-picker in save mode. In that case the
+  #           close is deferred — the user must close again after choosing a path.
+  #           This is a known v1 limitation; a seamless "save-then-close" for new
+  #           files requires chained state machines and is left for a later cycle.
+  # :discard — close without saving (changes are lost).
+  # :cancel  — leave the buffer open with its unsaved changes intact.
+
+  def handle_event({:confirm_dialog_response, _id, :save}, _from, scene) do
+    buf_ref = scene.assigns.state.pending_close_buf_ref
+    new_scene = hide_unsaved_prompt(scene)
+    {:noreply, saved_scene} = do_save(new_scene)
+    handle_cast({:action, {:close_buffer, buf_ref}}, saved_scene)
+  end
+
+  def handle_event({:confirm_dialog_response, _id, :discard}, _from, scene) do
+    buf_ref = scene.assigns.state.pending_close_buf_ref
+    new_scene = hide_unsaved_prompt(scene)
+    handle_cast({:action, {:close_buffer, buf_ref}}, new_scene)
+  end
+
+  def handle_event({:confirm_dialog_response, _id, :cancel}, _from, scene) do
+    new_scene = hide_unsaved_prompt(scene)
+    {:noreply, new_scene}
+  end
 
   # Catch-all for unhandled events
   def handle_event(event, _from, scene) do
@@ -1443,6 +1479,85 @@ defmodule QuillEx.RootScene do
 
     # Save the current buffer to the specified path
     save_buffer_as(new_scene, file_path)
+  end
+
+  # ===========================================================================
+  # Private Helpers - Unsaved Changes Prompt
+  # ===========================================================================
+
+  # Try to close a specific buffer. If it has unsaved changes, show the
+  # Save/Discard/Cancel dialog and wait for a response before acting.
+  # Clean buffers are closed immediately (no dialog shown).
+  defp try_close_buffer(scene, %Quillex.Structs.BufState.BufRef{dirty?: true} = buf_ref) do
+    show_unsaved_prompt(scene, buf_ref)
+  end
+
+  defp try_close_buffer(scene, buf_ref) do
+    handle_cast({:action, {:close_buffer, buf_ref}}, scene)
+  end
+
+  # Try to close the currently active buffer.
+  # Returns {:noreply, scene} if there is no active buffer.
+  defp try_close_active_buffer(scene) do
+    case scene.assigns.state.active_buf do
+      nil -> {:noreply, scene}
+      buf_ref -> try_close_buffer(scene, buf_ref)
+    end
+  end
+
+  # Show the "Unsaved Changes" confirmation dialog.
+  # Stores the pending buf_ref in state so the dialog response handlers can
+  # retrieve it. Blurs the buffer pane so keystrokes (s/d/Escape) reach the
+  # dialog component rather than the editor.
+  defp show_unsaved_prompt(scene, buf_ref) do
+    state = scene.assigns.state
+    buf_name = buf_ref.name || "untitled"
+    new_state = %{state | show_unsaved_prompt: true, pending_close_buf_ref: buf_ref}
+
+    graph =
+      scene.assigns.graph
+      |> ScenicWidgets.ConfirmDialog.add_to_graph(
+        %{
+          frame: new_state.frame,
+          title: "Unsaved Changes",
+          message: "Save changes to \"#{buf_name}\" before closing?",
+          buttons: [{:save, "Save"}, {:discard, "Discard"}, {:cancel, "Cancel"}]
+        },
+        id: :unsaved_prompt
+      )
+
+    new_scene =
+      scene
+      |> assign(state: new_state)
+      |> assign(graph: graph)
+      |> push_graph(graph)
+
+    # Blur the buffer pane so keystrokes go to the dialog, not the editor.
+    Scenic.Scene.put_child(new_scene, :buffer_pane, :blur)
+
+    {:noreply, new_scene}
+  end
+
+  # Hide the "Unsaved Changes" dialog and restore focus to the buffer pane.
+  # Returns the new scene directly (not {:noreply, scene}) so callers can
+  # continue processing — e.g. save the buffer and then close it in sequence.
+  defp hide_unsaved_prompt(scene) do
+    new_state = %{scene.assigns.state | show_unsaved_prompt: false, pending_close_buf_ref: nil}
+
+    graph =
+      scene.assigns.graph
+      |> Scenic.Graph.delete(:unsaved_prompt)
+
+    new_scene =
+      scene
+      |> assign(state: new_state)
+      |> assign(graph: graph)
+      |> push_graph(graph)
+
+    # Refocus the buffer pane.
+    Scenic.Scene.put_child(new_scene, :buffer_pane, :focus)
+
+    new_scene
   end
 
   # Saves the current buffer to a new file path.

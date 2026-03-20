@@ -302,17 +302,17 @@ defmodule Quillex.KeyboardShortcutsSpex do
         press_escape()
         # Clear any existing text by selecting all and deleting
         Probes.send_keys("a", [:ctrl])
-        Process.sleep(100)
-        Probes.send_keys("backspace", [])
-        Process.sleep(100)
-        Probes.send_text("only line")
         Process.sleep(200)
+        Probes.send_keys("backspace", [])
+        Process.sleep(200)
+        Probes.send_text("only line")
+        Process.sleep(400)
         {:ok, context}
       end
 
       when_ "we press Ctrl+D", context do
         Probes.send_keys("d", [:ctrl])
-        Process.sleep(300)
+        Process.sleep(500)
         {:ok, context}
       end
 
@@ -344,9 +344,10 @@ defmodule Quillex.KeyboardShortcutsSpex do
         Probes.send_keys("enter", [])
         Probes.send_text("second line")
         Process.sleep(200)
-        # Move cursor back to the first line
+        # Move cursor back to the first line — wait long enough for the buffer
+        # to register the Up key before Ctrl+D fires in the next step.
         Probes.send_keys("up", [])
-        Process.sleep(100)
+        Process.sleep(400)
         {:ok, context}
       end
 

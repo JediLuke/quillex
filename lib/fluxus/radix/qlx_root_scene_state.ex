@@ -19,6 +19,8 @@ defmodule QuillEx.RootScene.State do
     file_nav_width: 250,
     # Modal dialogs
     show_file_picker: false,
+    show_unsaved_prompt: false,
+    pending_close_buf_ref: nil,
     # Search bar
     show_search_bar: false,
     search_query: "",
