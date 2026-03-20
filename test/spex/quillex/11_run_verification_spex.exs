@@ -150,6 +150,13 @@ defmodule Quillex.RunVerificationSpex do
         :ok
       end
 
+      then_ "the status bar shows that the buffer has no associated file path", context do
+        rendered = Query.rendered_text()
+        assert String.contains?(rendered, "no associated file path"),
+               "Status bar should show 'no associated file path'. Got: #{inspect(rendered)}"
+        :ok
+      end
+
       then_ "the buffer is still editable", context do
         # Type additional text — if the buffer process died, this would fail
         type_text("x")
@@ -215,6 +222,13 @@ defmodule Quillex.RunVerificationSpex do
         :ok
       end
 
+      then_ "the status bar shows that the file is unchanged on disk", context do
+        rendered = Query.rendered_text()
+        assert String.contains?(rendered, "unchanged on disk"),
+               "Status bar should show 'unchanged on disk'. Got: #{inspect(rendered)}"
+        :ok
+      end
+
       then_ "the buffer content is intact", context do
         # The file content should still be visible in the editor
         rendered = Query.rendered_text()
@@ -277,6 +291,13 @@ defmodule Quillex.RunVerificationSpex do
         :ok
       end
 
+      then_ "the status bar shows that the file was deleted from disk", context do
+        rendered = Query.rendered_text()
+        assert String.contains?(rendered, "deleted from disk"),
+               "Status bar should show 'deleted from disk'. Got: #{inspect(rendered)}"
+        :ok
+      end
+
       then_ "cleanup: close extra buffer", context do
         close_all_but_one()
         :ok
@@ -326,6 +347,13 @@ defmodule Quillex.RunVerificationSpex do
         rendered = Query.rendered_text()
         assert is_binary(rendered) and rendered != "",
                "App should still be alive after verifying a modified file"
+        :ok
+      end
+
+      then_ "the status bar shows that the file was modified on disk", context do
+        rendered = Query.rendered_text()
+        assert String.contains?(rendered, "modified on disk"),
+               "Status bar should show 'modified on disk'. Got: #{inspect(rendered)}"
         :ok
       end
 
