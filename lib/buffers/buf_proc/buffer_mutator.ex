@@ -92,18 +92,6 @@ defmodule Quillex.GUI.Components.BufferPane.Mutator do
     %{buf | cursors: [new_cursor]}
   end
 
-  # def move_cursor(buf, :next_word) do
-  #   next_word_coords =
-  #   dbg()
-  #   # %{buf | cursors: [Cursor.new(line, col)]}
-  # end
-
-  # def move_cursor(buf, :prev_word) do
-  #   next_word_coords =
-  #   dbg()
-  #   # %{buf | cursors: [Cursor.new(line, col)]}
-  # end
-
   # Handle cursor movement when there's an active selection
   # This must come before the general move_cursor/3 clause for pattern matching to work correctly
   def move_cursor(%{selection: selection} = buf, direction, count) when selection != nil do

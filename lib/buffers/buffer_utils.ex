@@ -33,7 +33,9 @@ defmodule Quillex.Buffer.Utils do
   defp find_prev_word_start(line, col) do
     graphemes = String.graphemes(line)
     max_col   = length(graphemes)
-    col       = min(col, max_col)
+    # Clip to valid range. max/1 guards against empty lines where max_col == 0,
+    # which would otherwise produce col 0 (invalid — columns are 1-based).
+    col       = max(1, min(col, max_col))
 
     # Skip left over spaces, then skip left over the word
     col = skip_while_left(col, graphemes, fn ch -> ch == " " end)
