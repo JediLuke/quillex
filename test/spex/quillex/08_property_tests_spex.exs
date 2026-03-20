@@ -46,7 +46,7 @@ defmodule Quillex.PropertyTestsSpex do
       StreamData.constant(:backspace),
       StreamData.constant(:delete),
       StreamData.constant(:enter),
-      {:char, StreamData.string(:alphanumeric, min_length: 1, max_length: 1)}
+      StreamData.map(StreamData.string(:alphanumeric, min_length: 1, max_length: 1), fn char -> {:char, char} end)
     ])
   end
 
@@ -312,8 +312,8 @@ defmodule Quillex.PropertyTestsSpex do
 
         for op <- operations do
           case op do
-            :undo -> Probes.send_keys("z", [:ctrl])
-            :redo -> Probes.send_keys("y", [:ctrl])
+            :undo -> Probes.send_keys("u", [:ctrl])
+            :redo -> Probes.send_keys("r", [:ctrl])
           end
           Process.sleep(50)
         end

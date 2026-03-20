@@ -3,39 +3,21 @@ defmodule QuillEx.RootScene.Mutator do
 
   def add_buffer(%QuillEx.RootScene.State{} = state, buf_ref) do
     if Enum.any?(state.buffers, & &1.uuid == buf_ref.uuid) do
-      raise "tried to add a buffer that was already open... #{inspect buf_ref}"
-      # Logger.warning "tried to add a buffer that was already open... #{inspect buf_ref}"
+      # Buffer already in state — this can happen if the PubSub {:new_buffer_opened}
+      # message arrives after a redundant activation cast. Log and return unchanged.
+      Logger.warning("add_buffer: buffer already open, ignoring: #{inspect(buf_ref.name)}")
       state
     else
       %{state | buffers: state.buffers ++ [buf_ref]}
     end
   end
 
-  # def set_active_buffer(state, %{uuid: active_buf_uuid}) do
-  #   case Enum.find_index(state.buffers, &(&1.uuid == active_buf_uuid)) do
-  #     nil ->
-  #       raise "Buffer with UUID #{active_buf_uuid} not found - unable to set active buffer"
-
-  #     index ->
-  #       # nobody says "open the 0th buffer"...
-  #       %{state | active_buf: index + 1}
-  #   end
-  # end
-
   def activate_buffer(state, n) when is_integer(n) and n >= 1 do
-
-    # # we count buffers starting at 1 but elixir uses 0 for list index
-    # {before, [head | tail]} = Enum.split(state.buffers, n - 1)
-
-    # %{state | buffers: [head | before ++ tail]}
-    # %{state | active_buf: n - 1}
-
-    # %{state | active_buf: active_buf}
-
     # nobody says "open the 0th buffer"...
     case Enum.at(state.buffers, n-1) do
       nil ->
-        raise "Buffer number #{n} not found - unable to set active buffer"
+        Logger.warning("activate_buffer: buffer number #{n} not found in state, ignoring")
+        state
 
       %Quillex.Structs.BufState.BufRef{} = buf_ref ->
         activate_buffer(state, buf_ref)
@@ -45,7 +27,10 @@ defmodule QuillEx.RootScene.Mutator do
   def activate_buffer(state, %Quillex.Structs.BufState.BufRef{} = buf_ref) do
     case Enum.find(state.buffers, &(&1.uuid == buf_ref.uuid)) do
       nil ->
-        raise "Buffer with UUID #{buf_ref.uuid} not found - unable to set active buffer"
+        # Buffer not yet in state — this can occur if an {:activate_buffer} cast races
+        # ahead of the PubSub {:new_buffer_opened} message. Log and return unchanged.
+        Logger.warning("activate_buffer: buffer UUID #{buf_ref.uuid} not found in state, ignoring")
+        state
 
       %Quillex.Structs.BufState.BufRef{} = new_active_buf ->
         %{state | active_buf: new_active_buf}

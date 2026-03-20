@@ -39,21 +39,15 @@ defmodule Quillex.AppLaunchSpex do
     scenario "Quillex app launches without errors", context do
       given_ "we start the Quillex application", context do
         # App should already be started from setup_all
-        # Verify the viewport exists
-        viewport_name = Application.get_env(:quillex, :viewport_name, :main_viewport)
-
-        case Process.whereis(viewport_name) do
-          nil ->
-            {:error, "Viewport not found"}
-
-          pid when is_pid(pid) ->
-            {:ok, Map.put(context, :viewport_pid, pid)}
-        end
+        # Verify it's rendering by checking we can read content from the viewport
+        Process.sleep(500)
+        {:ok, context}
       end
 
-      then_ "the viewport process is running", context do
-        assert is_pid(context.viewport_pid), "Viewport should be a running process"
-        assert Process.alive?(context.viewport_pid), "Viewport process should be alive"
+      then_ "the app is rendering content" do
+        rendered = Query.rendered_text()
+        assert is_binary(rendered) and rendered != "",
+               "App should be rendering content after launch"
         :ok
       end
     end

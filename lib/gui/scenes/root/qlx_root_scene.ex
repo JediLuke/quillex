@@ -1,9 +1,16 @@
 defmodule QuillEx.RootScene do
   use Scenic.Scene
   alias QuillEx.RootScene
-  alias Quillex.GUI.RadixReducer
-  alias Quillex.Buffer.BufferManager
   require Logger
+
+  # Layout constants — must stay in sync with qlx_root_scene_renderizer.ex
+  @top_bar_height 35
+  @search_bar_height 36
+
+  # Icon menu constants — must match ScenicWidgets.IconMenu default theme values
+  # and the icon_menu_width used in qlx_root_scene_renderizer.ex
+  @icon_menu_width 140
+  @dropdown_width 180
 
   # the way input works is that we route input to the active buffer
   # component, which then converts it to actions, which are then then
@@ -31,14 +38,14 @@ defmodule QuillEx.RootScene do
           buffers
       end
 
-    state = RootScene.State.new(%{
+    state = QuillEx.RootScene.State.new(%{
       frame: Widgex.Frame.new(scene.viewport),
       buffers: buffers
     })
 
     # need to pass in scene so we can cast to children, even though we would never do that during init
     # On init, old_state is nil (no previous state)
-    graph = RootScene.Renderizer.render(Scenic.Graph.build(), scene, nil, state)
+    graph = QuillEx.RootScene.Renderizer.render(Scenic.Graph.build(), scene, nil, state)
 
     scene =
       scene
@@ -49,11 +56,66 @@ defmodule QuillEx.RootScene do
     Process.register(self(), __MODULE__)
     Quillex.Utils.PubSub.subscribe(topic: :qlx_events)
 
-    # TextField handles its own input in :direct mode, so we only request viewport events
-    # Also request cursor_pos and cursor_scroll for scroll routing between components
-    request_input(scene, [:viewport, :cursor_pos, :cursor_scroll])
+    # Request input types for the root scene:
+    # - :viewport  — resize/reshape events
+    # - :cursor_pos — cursor tracking for scroll routing and close-on-outside-click
+    # - :cursor_scroll — routing scroll events to the right child component
+    # - :cursor_button — close-on-outside-click for menus and the search bar
+    #
+    # TextField (child component) also independently requests :cursor_button for
+    # cursor positioning.  Both can coexist because they are separate GenServer
+    # processes that each receive their own copy of the event from Scenic.
+    # The root scene handler only acts when a menu/overlay is open, so there is
+    # no meaningful conflict with TextField's normal click handling.
+    request_input(scene, [:viewport, :cursor_pos, :cursor_scroll, :cursor_button])
 
     {:ok, scene}
+  end
+
+  # Handle Ctrl+V+F keyboard shortcut for file verification
+  def handle_input({:key, {"f", 1, ["ctrl", "v"]}}, _context, scene) do
+    # Trigger file verification action
+    handle_cast({:action, :run_verification}, scene)
+  end
+
+  # Handle alternative Ctrl+V+F pattern (different platforms may send different modifier order)
+  def handle_input({:key, {"f", 1, ["v", "ctrl"]}}, _context, scene) do
+    handle_cast({:action, :run_verification}, scene)
+  end
+
+  # Handle Ctrl+H keyboard shortcut for Find & Replace
+  # Opens the search bar in replace mode (show_replace: true).
+  # This fires at the root scene level so it works even when the TextField
+  # does not have focus (e.g. the search bar itself is focused).
+  def handle_input({:key, {"h", 1, ["ctrl"]}}, _context, scene) do
+    show_search_bar(scene, replace_mode: true)
+  end
+
+  # Handle Ctrl+F keyboard shortcut for Find (search-only, no replace row)
+  # Opens the search bar in search-only mode (show_replace stays false).
+  # This fires at the root scene level so it works even when the TextField
+  # does not have focus (e.g. the search bar itself is focused).
+  def handle_input({:key, {"f", 1, ["ctrl"]}}, _context, scene) do
+    show_search_bar(scene)
+  end
+
+  # Handle Ctrl+N keyboard shortcut for New Buffer
+  # Creates a new empty buffer, equivalent to File → New Buffer.
+  def handle_input({:key, {"n", 1, ["ctrl"]}}, _context, scene) do
+    handle_cast({:action, :new_buffer}, scene)
+  end
+
+  # Handle Ctrl+O keyboard shortcut for Open File
+  # Opens the file picker modal in open mode, equivalent to File → Open.
+  def handle_input({:key, {"o", 1, ["ctrl"]}}, _context, scene) do
+    show_file_picker(scene)
+  end
+
+  # Handle Ctrl+W keyboard shortcut for Close Buffer
+  # Closes the currently active buffer. If it is the last buffer, the close
+  # is silently ignored (see Mutator.remove_buffer/2 — cannot close last buffer).
+  def handle_input({:key, {"w", 1, ["ctrl"]}}, _context, scene) do
+    handle_cast({:action, :close_active_buffer}, scene)
   end
 
   def handle_input({:viewport, {input, _coords}}, _context, scene)
@@ -89,7 +151,7 @@ defmodule QuillEx.RootScene do
         |> Map.put(:_restore_cursor, cursor_pos)
 
       # Reuse existing graph to preserve component PIDs and avoid race conditions
-      new_graph = RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+      new_graph = QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
       # Remove the temporary cursor restore key from state
       final_state = Map.delete(new_state, :_restore_cursor)
@@ -156,18 +218,60 @@ defmodule QuillEx.RootScene do
     if state.show_file_nav and cursor_x < state.file_nav_width do
       # Route scroll to file navigator
       Scenic.Scene.put_child(scene, :file_nav, %{scroll: scroll_data})
-    else
-      # Route scroll to buffer pane (TextField handles its own scroll)
-      Scenic.Scene.put_child(scene, :buffer_pane, {:scroll, scroll_data})
     end
+    # Note: buffer_pane (TextField in buffer_backed mode) handles its own scroll
+    # via request_input/cursor_scroll - no need to forward via put_child
 
     {:noreply, scene}
   end
 
-  def handle_input(input, _context, scene) do
-    # TextField in :direct mode handles its own input, so we don't need to forward
-    # This catch-all is kept for any unexpected input events
-    # Logger.debug("RootScene received unexpected input: #{inspect(input)}")
+  # Close-on-outside-click: intercept left-button presses to dismiss open menus
+  # and overlays when the user clicks outside them.
+  #
+  # Two behaviours implemented here:
+  #
+  #   1. **Icon menu dropdown** — When a dropdown is open and the user clicks in
+  #      the editor area (y > top bar, x safely outside the dropdown x-range),
+  #      we send {:close_menu} to the IconMenu child.  We only fire this when the
+  #      click is to the LEFT of the full dropdown extent (icon_menu_width +
+  #      dropdown_width from the right edge) to avoid a race condition between
+  #      this handler and the IconMenu's own click handler.
+  #
+  #   2. **Search bar** — When the search bar is visible and the user clicks in
+  #      the buffer area below it (y > top_bar + search_bar height), we close the
+  #      search bar and return focus to the buffer pane.
+  #
+  # The FilePicker already handles close-on-outside-click internally (it renders
+  # a full-screen overlay and cancels when the overlay is clicked).
+  def handle_input({:cursor_button, {:btn_left, 1, _mods, {click_x, click_y}}}, _context, scene) do
+    state = scene.assigns.state
+    frame_width = state.frame.size.width
+
+    # --- Icon menu dropdown ---
+    # Clicks that are (a) below the top bar AND (b) to the left of the leftmost
+    # possible dropdown position are guaranteed to be outside every dropdown.
+    # Sending {:close_menu} when the menu is already closed is a harmless no-op.
+    dropdown_safe_threshold_x = frame_width - @icon_menu_width - @dropdown_width
+
+    if click_y > @top_bar_height and click_x < dropdown_safe_threshold_x do
+      Scenic.Scene.put_child(scene, :icon_menu, {:close_menu})
+    end
+
+    # --- Search bar ---
+    # Close the search bar when the click lands below it (in the buffer area).
+    search_height = if state.show_replace, do: @search_bar_height * 2, else: @search_bar_height
+
+    if state.show_search_bar and click_y > @top_bar_height + search_height do
+      hide_search_bar(scene)
+    else
+      {:noreply, scene}
+    end
+  end
+
+  # Mouse clicks on child components (TextField, IconMenu, FilePicker, etc.) are
+  # handled by those components via Scenic's hit-testing and their own
+  # request_input registrations.  This catch-all handles any remaining events.
+  def handle_input(_input, _context, scene) do
     {:noreply, scene}
   end
 
@@ -183,11 +287,14 @@ defmodule QuillEx.RootScene do
   def handle_call({Quillex.GUI.Components.BufferPane, :action, buf_ref, actions}, _from, scene) do
     # Processing BufferPane actions synchronously (same logic as handle_cast)
     {:ok, new_buf} = Quillex.Buffer.BufferManager.call_buffer(buf_ref, {:action, actions})
-    
+
     # Update the GUI with new buffer state synchronously
     {:ok, [pid]} = Scenic.Scene.child(scene, :buffer_pane)
     GenServer.call(pid, {:state_change, new_buf})
-    
+
+    # Update dirty state in BufRef so tab bar shows " *" indicator
+    scene = maybe_update_dirty_state(scene, new_buf)
+
     {:reply, :ok, scene}
   end
 
@@ -213,6 +320,25 @@ defmodule QuillEx.RootScene do
     {:reply, :ok, new_scene}
   end
 
+  # Open a file - handled outside the action pipeline to avoid timing issues
+  # with PubSub-based buffer activation
+  def handle_call({:action, [{:open_file, path}]}, _from, scene) when is_binary(path) do
+    case File.read(path) do
+      {:ok, content} ->
+        {:ok, _buf_ref} = Quillex.Buffer.BufferManager.new_buffer(%{
+          name: Path.basename(path),
+          source: %{filepath: path},
+          data: String.split(content, "\n"),
+          dirty: false
+        })
+        {:reply, :ok, scene}
+
+      {:error, reason} ->
+        Logger.warning("Failed to open file: #{path}, reason: #{inspect(reason)}")
+        {:reply, {:error, reason}, scene}
+    end
+  end
+
   def handle_call({:action, actions}, _from, scene) when is_list(actions) do
     # With buffer_backed mode, no need to sync - Buffer.Process is source of truth
     # Processing actions from RadixReducer (synchronous version)
@@ -227,7 +353,7 @@ defmodule QuillEx.RootScene do
         {:reply, :ok, new_scene}
 
       {:error, reason} ->
-        Logger.error "Couldn't compute action #{inspect actions}. #{inspect reason}"
+        Logger.warning("Couldn't compute action #{inspect(actions)}. #{inspect(reason)}")
         {:reply, {:error, reason}, scene}
     end
   end
@@ -256,6 +382,61 @@ defmodule QuillEx.RootScene do
     update_editor_settings(scene, new_state)
   end
 
+  def handle_cast({:action, :run_verification}, scene) do
+    # Access active buffer directly from scene state to avoid a GenServer.call deadlock.
+    # FileAPI.verify_file_integrity() goes through Buffer.active_buf() which calls
+    # GenServer.call(QuillEx.RootScene, :get_active_buffer) — a self-call that deadlocks
+    # because run_verification is always invoked from within the RootScene GenServer.
+    # Instead, read buf_ref from scene assigns and call Buffer.Process.fetch_buf/1 directly
+    # (which calls the separate Buffer.Process GenServer, not RootScene — no deadlock).
+    case scene.assigns.state.active_buf do
+      nil ->
+        Logger.info("[run_verification] No active buffer")
+
+      buf_ref ->
+        # Wrap fetch_buf in try/catch: call_buffer/2 raises (rather than returning
+        # {:error, ...}) when the buffer process is not found in the Registry.
+        # This can happen if the buffer crashes between the active_buf check and
+        # this call, or in test environments where no Registry is running.
+        buf_result =
+          try do
+            Quillex.Buffer.Process.fetch_buf(buf_ref)
+          rescue
+            e -> {:error, Exception.message(e)}
+          catch
+            :exit, reason -> {:error, "buffer process exited: #{inspect(reason)}"}
+          end
+
+        case buf_result do
+          {:ok, %Quillex.Structs.BufState{source: %{filepath: file_path}, data: buf_data}}
+              when is_binary(file_path) ->
+            # Delegate comparison to the canonical implementation in FileAPI so
+            # the file-reading + line-splitting logic lives in exactly one place.
+            case Quillex.API.FileAPI.check_file_status(buf_data, file_path) do
+              {:ok, :unchanged} ->
+                Logger.info("[run_verification] File is unchanged on disk")
+
+              {:ok, :modified} ->
+                Logger.warning("[run_verification] File has been modified on disk since last save")
+
+              {:ok, :deleted} ->
+                Logger.warning("[run_verification] File has been deleted from disk")
+
+              {:error, reason} ->
+                Logger.warning("[run_verification] Failed to read file: #{reason}")
+            end
+
+          {:ok, %Quillex.Structs.BufState{}} ->
+            Logger.info("[run_verification] Buffer has no associated file path")
+
+          {:error, reason} ->
+            Logger.debug("[run_verification] Skipped (failed to fetch buffer state): #{inspect(reason)}")
+        end
+    end
+
+    {:noreply, scene}
+  end
+
   def handle_cast({:action, actions}, scene) when is_list(actions) do
     # With buffer_backed mode, no need to sync - Buffer.Process is source of truth
     # Processing actions from RadixReducer
@@ -271,8 +452,7 @@ defmodule QuillEx.RootScene do
 
       {:error, reason} ->
         # this is a big problem but we still dont want to crash the root scene over it (right ?)
-        Logger.error "Couldn't compute action #{inspect actions}. #{inspect reason}"
-        raise "Couldn't compute action #{inspect actions}. #{inspect reason}"
+        Logger.warning("Couldn't compute action #{inspect(actions)}. #{inspect(reason)}")
 
         #TODO recovery idea - there is a possibility that we sometimes have a race condition
         # and that's why this happens, e.g. we open a buffer via BufferManager, BfrMgr is supposed
@@ -284,7 +464,7 @@ defmodule QuillEx.RootScene do
         # 1- we could have a repetition here, if it failed, send the action back to ourself 50ms
         # from now, and try again. Then we need to keep track of state so we dont indefinitely keep retrying forever
         # 2- we could also listen to the pubsub broadcast channel from the API, and make it
-        # wait for acknowldge ment that way
+        # wait for acknowledgement that way
         {:noreply, scene}
     end
   end
@@ -308,12 +488,14 @@ defmodule QuillEx.RootScene do
         scene
       ) do
     # Processing BufferPane actions
+    Logger.debug("[ROOT_SCENE] Received BufferPane actions: #{inspect(actions)}")
 
     # Flamelex.Fluxus.action()
 
     # interact with the Buffer state to apply the actions - thisd is equivalent to Fluxus
     # Applying actions to buffer
     {:ok, new_buf} = Quillex.Buffer.BufferManager.call_buffer(buf_ref, {:action, actions})
+    Logger.debug("[ROOT_SCENE] Buffer action processed, new cursors: #{inspect(new_buf.cursors)}")
     # Buffer state updated
 
     # # we normally would broadcast changesd from Fluxus, since RootScene _id_ fluxus here, here is where we broadcast from
@@ -328,6 +510,9 @@ defmodule QuillEx.RootScene do
     {:ok, [pid]} = Scenic.Scene.child(scene, :buffer_pane)
     GenServer.cast(pid, {:state_change, new_buf})
     # GUI update complete
+
+    # Update dirty state in BufRef so tab bar shows " *" indicator
+    scene = maybe_update_dirty_state(scene, new_buf)
 
     {:noreply, scene}
   end
@@ -356,7 +541,7 @@ defmodule QuillEx.RootScene do
       # Reuse existing graph to preserve component PIDs and avoid race conditions
       # during rapid buffer switches. Pass old_state to enable smart component updates
       # (only recreate when truly necessary, like switching buffers).
-      new_graph = RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+      new_graph = QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
       {new_state, new_graph}
     end)
@@ -380,7 +565,7 @@ defmodule QuillEx.RootScene do
   # ===========================================================================
 
   def handle_cast({:search_query_changed, _id, query}, scene) do
-    IO.puts("🔍 Search query changed (cast): \"#{query}\"")
+    Logger.debug("[search] query changed: #{inspect(query)}")
     # Update state with new query
     new_state = %{scene.assigns.state | search_query: query}
 
@@ -397,20 +582,27 @@ defmodule QuillEx.RootScene do
   end
 
   def handle_cast({:search_next, _id}, scene) do
-    IO.puts("🔍 Search next (cast)")
     Scenic.Scene.put_child(scene, :buffer_pane, {:action, :find_next})
     {:noreply, scene}
   end
 
   def handle_cast({:search_prev, _id}, scene) do
-    IO.puts("🔍 Search previous (cast)")
     Scenic.Scene.put_child(scene, :buffer_pane, {:action, :find_prev})
     {:noreply, scene}
   end
 
   def handle_cast({:search_close, _id}, scene) do
-    IO.puts("🔍 Search bar closed (cast)")
     hide_search_bar(scene)
+  end
+
+  def handle_cast({:replace_requested, _id, replacement}, scene) do
+    Scenic.Scene.put_child(scene, :buffer_pane, {:action, {:replace, replacement}})
+    {:noreply, scene}
+  end
+
+  def handle_cast({:replace_all_requested, _id, replacement}, scene) do
+    Scenic.Scene.put_child(scene, :buffer_pane, {:action, {:replace_all, replacement}})
+    {:noreply, scene}
   end
 
   # if actions come in via PubSub they come in via handle_info, just convert to handle_cast
@@ -445,7 +637,7 @@ defmodule QuillEx.RootScene do
 
     # Reuse existing graph to preserve component PIDs and avoid race conditions
     old_state = scene.assigns.state
-    new_graph = RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+    new_graph = QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
     new_scene =
       scene
@@ -456,7 +648,7 @@ defmodule QuillEx.RootScene do
     {:noreply, new_scene}
   end
 
-  def handle_info({:ubuntu_bar_button_clicked, button_id, button}, scene) do
+  def handle_info({:ubuntu_bar_button_clicked, button_id, _button}, scene) do
     # UbuntuBar button clicked: #{button_id}"
 
     # Handle different button actions
@@ -466,16 +658,13 @@ defmodule QuillEx.RootScene do
         handle_cast({:action, :new_buffer}, scene)
 
       :open_file ->
-        # Open file functionality not implemented yet
-        {:noreply, scene}
+        show_file_picker(scene)
 
       :save_file ->
-        # Save file functionality not implemented yet
-        {:noreply, scene}
+        do_save(scene)
 
       :search ->
-        # Search functionality not implemented yet
-        {:noreply, scene}
+        show_search_bar(scene)
 
       :settings ->
         # Settings functionality not implemented yet
@@ -501,12 +690,15 @@ defmodule QuillEx.RootScene do
         show_file_picker(scene)
 
       "save" ->
-        # Save file - not implemented yet
-        {:noreply, scene}
+        do_save(scene)
 
       "save_as" ->
         # Show file picker in save mode
         show_file_picker_save(scene)
+
+      "verify" ->
+        # Run file verification
+        handle_cast({:action, :run_verification}, scene)
 
       "close" ->
         # Close the active buffer (no sync needed - buffer_backed mode)
@@ -523,25 +715,27 @@ defmodule QuillEx.RootScene do
         {:noreply, scene}
 
       "cut" ->
-        # Cut - not implemented yet
+        Scenic.Scene.put_child(scene, :buffer_pane, {:action, {:cut, :selection}})
         {:noreply, scene}
 
       "copy" ->
-        # Copy - not implemented yet
+        Scenic.Scene.put_child(scene, :buffer_pane, {:action, {:copy, :selection}})
         {:noreply, scene}
 
       "paste" ->
-        # Paste - not implemented yet
+        Scenic.Scene.put_child(scene, :buffer_pane, {:action, {:paste, :at_cursor}})
         {:noreply, scene}
 
       "find" ->
         # Find - show search bar
-        IO.puts("🔍 Find menu clicked!")
         show_search_bar(scene)
+
+      "find_replace" ->
+        # Find & Replace - show search bar with replace row
+        show_search_bar(scene, replace_mode: true)
 
       "find_next" ->
         # Find next match
-        IO.puts("🔍 Find Next menu clicked!")
         Scenic.Scene.put_child(scene, :buffer_pane, {:action, :find_next})
         {:noreply, scene}
 
@@ -640,27 +834,22 @@ defmodule QuillEx.RootScene do
   # Save file (Ctrl+S from TextField)
   def handle_event({:save_requested, _id, _text}, _from, scene) do
     # With buffer_backed mode, Buffer.Process already has current content - no sync needed
-    # Save the buffer to disk
-    case scene.assigns.state.active_buf do
-      nil ->
-        Logger.warning("No active buffer to save")
-        {:noreply, scene}
-
-      buf_ref ->
-        Quillex.Buffer.BufferManager.call_buffer(buf_ref, {:action, [:save]})
-        {:noreply, scene}
-    end
+    do_save(scene)
   end
 
   # Find/Search (Ctrl+F from TextField)
   def handle_event({:find_requested, _id}, _from, scene) do
-    IO.puts("🔍 find_requested event received - showing search bar")
     show_search_bar(scene)
+  end
+
+  # Find & Replace (Ctrl+H from TextField)
+  def handle_event({:replace_mode_requested, _id}, _from, scene) do
+    show_search_bar(scene, replace_mode: true)
   end
 
   # Search bar events - query changed
   def handle_event({:search_query_changed, _id, query}, _from, scene) do
-    IO.puts("🔍 Search query changed: \"#{query}\"")
+    Logger.debug("[search] query changed: #{inspect(query)}")
     # Update state with new query
     new_state = %{scene.assigns.state | search_query: query}
 
@@ -678,31 +867,36 @@ defmodule QuillEx.RootScene do
 
   # Search bar events - next match
   def handle_event({:search_next, _id}, _from, scene) do
-    IO.puts("🔍 Search next")
     Scenic.Scene.put_child(scene, :buffer_pane, {:action, :find_next})
     {:noreply, scene}
   end
 
   # Search bar events - previous match
   def handle_event({:search_prev, _id}, _from, scene) do
-    IO.puts("🔍 Search previous")
     Scenic.Scene.put_child(scene, :buffer_pane, {:action, :find_prev})
     {:noreply, scene}
   end
 
   # Search bar events - close
   def handle_event({:search_close, _id}, _from, scene) do
-    IO.puts("🔍 Search bar closed")
     hide_search_bar(scene)
+  end
+
+  # Replace events - replace current match
+  def handle_event({:replace_requested, _id, replacement}, _from, scene) do
+    Scenic.Scene.put_child(scene, :buffer_pane, {:action, {:replace, replacement}})
+    {:noreply, scene}
+  end
+
+  # Replace events - replace all matches
+  def handle_event({:replace_all_requested, _id, replacement}, _from, scene) do
+    Scenic.Scene.put_child(scene, :buffer_pane, {:action, {:replace_all, replacement}})
+    {:noreply, scene}
   end
 
   # Search complete (from TextField after parallel search)
   def handle_event({:search_complete, _id, query, match_count}, _from, scene) do
-    if match_count > 0 do
-      IO.puts("✨ Found #{match_count} matches for \"#{query}\"")
-    else
-      IO.puts("❌ No matches found for \"#{query}\"")
-    end
+    Logger.debug("[search] #{match_count} matches for #{inspect(query)}")
 
     # Update state with match count
     new_state = %{scene.assigns.state |
@@ -719,7 +913,7 @@ defmodule QuillEx.RootScene do
 
   # Search navigation (from TextField on Ctrl+G)
   def handle_event({:search_navigated, _id, current_idx, total}, _from, scene) do
-    IO.puts("🔍 Match #{current_idx + 1} of #{total}")
+    Logger.debug("[search] navigated to match #{current_idx + 1} of #{total}")
 
     # Update state and search bar
     new_state = %{scene.assigns.state | search_current_match: current_idx + 1}
@@ -753,13 +947,68 @@ defmodule QuillEx.RootScene do
   end
 
   # ===========================================================================
+  # Private Helpers - Dirty State
+  # ===========================================================================
+
+  # Update the BufRef dirty? flag in state when a buffer's dirty state changes.
+  # This triggers tab bar re-render to show/hide the " *" indicator.
+  defp maybe_update_dirty_state(scene, %Quillex.Structs.BufState{} = new_buf) do
+    state = scene.assigns.state
+
+    # Find the matching BufRef in the state's buffers list
+    old_buf_ref = Enum.find(state.buffers, & &1.uuid == new_buf.uuid)
+
+    if old_buf_ref && old_buf_ref.dirty? != new_buf.dirty? do
+      # Dirty state changed - update the BufRef and re-render tab bar
+      new_buf_ref = Quillex.Structs.BufState.BufRef.generate(new_buf)
+
+      updated_buffers = Enum.map(state.buffers, fn b ->
+        if b.uuid == new_buf.uuid, do: new_buf_ref, else: b
+      end)
+
+      new_active = if state.active_buf && state.active_buf.uuid == new_buf.uuid do
+        new_buf_ref
+      else
+        state.active_buf
+      end
+
+      old_state = state
+      new_state = %{state | buffers: updated_buffers, active_buf: new_active}
+
+      new_graph = QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+
+      scene
+      |> assign(state: new_state)
+      |> assign(graph: new_graph)
+      |> push_graph(new_graph)
+    else
+      scene
+    end
+  end
+
+  # ===========================================================================
+  # Private Helpers - Save
+  # ===========================================================================
+
+  defp do_save(scene) do
+    case scene.assigns.state.active_buf do
+      nil ->
+        Logger.warning("No active buffer to save")
+        {:noreply, scene}
+
+      buf_ref ->
+        {:ok, new_buf} = Quillex.Buffer.BufferManager.call_buffer(buf_ref, {:action, [:save]})
+        scene = maybe_update_dirty_state(scene, new_buf)
+        {:noreply, scene}
+    end
+  end
+
+  # ===========================================================================
   # Private Helpers - Editor Settings
   # ===========================================================================
 
-  @doc """
-  Updates editor settings (word wrap, line numbers) and re-renders.
-  This syncs the TextField to the buffer first, then rebuilds with new settings.
-  """
+  # Updates editor settings (word wrap, line numbers) and re-renders.
+  # This syncs the TextField to the buffer first, then rebuilds with new settings.
   defp update_editor_settings(scene, new_state) do
     # With buffer_backed mode, just get cursor position from buffer (no sync needed)
     cursor_pos = get_buffer_cursor(scene)
@@ -787,7 +1036,7 @@ defmodule QuillEx.RootScene do
 
     # Reuse existing graph to preserve component PIDs and avoid race conditions
     old_state = scene.assigns.state
-    new_graph = RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+    new_graph = QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
     # Remove the temporary restore keys from state
     final_state = new_state
@@ -807,11 +1056,12 @@ defmodule QuillEx.RootScene do
   # Private Helpers - Find/Search
   # ===========================================================================
 
-  @doc """
-  Shows the search bar and optionally pre-fills with word under cursor.
-  """
-  defp show_search_bar(scene) do
+  # Shows the search bar and optionally pre-fills with word under cursor.
+  # Options:
+  # - replace_mode: true to show replace row (Ctrl+H)
+  defp show_search_bar(scene, opts \\ []) do
     alias ScenicWidgets.TextField.State, as: TFState
+    replace_mode = Keyword.get(opts, :replace_mode, false)
 
     # Get the word under cursor from TextField to pre-fill search
     initial_query = case Scenic.Scene.fetch_child(scene, :buffer_pane) do
@@ -822,13 +1072,34 @@ defmodule QuillEx.RootScene do
     end
 
     old_state = scene.assigns.state
+
+    # If search bar is already showing and we're toggling replace mode, just update replace
+    if old_state.show_search_bar and replace_mode do
+      new_state = %{old_state | show_replace: true}
+      new_graph = QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+
+      new_scene =
+        scene
+        |> assign(state: new_state)
+        |> assign(graph: new_graph)
+        |> push_graph(new_graph)
+
+      Scenic.Scene.put_child(new_scene, :search_bar, :enable_replace_mode)
+      {:noreply, new_scene}
+    else
+      do_show_search_bar(scene, old_state, initial_query, replace_mode)
+    end
+  end
+
+  defp do_show_search_bar(scene, old_state, initial_query, replace_mode) do
     new_state = %{old_state |
       show_search_bar: true,
-      search_query: initial_query
+      search_query: initial_query,
+      show_replace: replace_mode
     }
 
     # Reuse existing graph to preserve component PIDs and avoid race conditions
-    new_graph = RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+    new_graph = QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
     new_scene =
       scene
@@ -841,7 +1112,6 @@ defmodule QuillEx.RootScene do
 
     # If we have an initial query, perform search
     if String.length(initial_query) > 0 do
-      IO.puts("🔍 Pre-filling search with: \"#{initial_query}\"")
       Scenic.Scene.put_child(new_scene, :search_bar, {:set_query, initial_query})
       Scenic.Scene.put_child(new_scene, :buffer_pane, {:action, {:search, initial_query}})
     end
@@ -849,12 +1119,11 @@ defmodule QuillEx.RootScene do
     {:noreply, new_scene}
   end
 
-  @doc """
-  Hides the search bar and clears search state.
-  """
+  # Hides the search bar and clears search state.
   defp hide_search_bar(scene) do
     new_state = %{scene.assigns.state |
       show_search_bar: false,
+      show_replace: false,
       search_query: "",
       search_current_match: 0,
       search_total_matches: 0
@@ -865,7 +1134,7 @@ defmodule QuillEx.RootScene do
 
     # Reuse existing graph to preserve component PIDs and avoid race conditions
     old_state = scene.assigns.state
-    new_graph = RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+    new_graph = QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
     new_scene =
       scene
@@ -879,9 +1148,7 @@ defmodule QuillEx.RootScene do
     {:noreply, new_scene}
   end
 
-  @doc """
-  Performs search and updates state.
-  """
+  # Performs search and updates state.
   defp perform_search(scene, query, state) do
     # Send search action to TextField
     Scenic.Scene.put_child(scene, :buffer_pane, {:action, {:search, query}})
@@ -894,9 +1161,7 @@ defmodule QuillEx.RootScene do
   # Private Helpers - File Picker
   # ===========================================================================
 
-  @doc """
-  Shows the file picker modal (for opening files).
-  """
+  # Shows the file picker modal (for opening files).
   defp show_file_picker(scene) do
     new_state = %{scene.assigns.state | show_file_picker: true}
 
@@ -923,9 +1188,7 @@ defmodule QuillEx.RootScene do
     {:noreply, new_scene}
   end
 
-  @doc """
-  Shows the file picker modal in save mode (for saving files).
-  """
+  # Shows the file picker modal in save mode (for saving files).
   defp show_file_picker_save(scene) do
     new_state = %{scene.assigns.state | show_file_picker: true}
 
@@ -971,9 +1234,7 @@ defmodule QuillEx.RootScene do
     {:noreply, new_scene}
   end
 
-  @doc """
-  Hides the file picker modal and optionally opens a file.
-  """
+  # Hides the file picker modal and optionally opens a file.
   defp hide_file_picker(scene, file_path \\ nil) do
     new_state = %{scene.assigns.state | show_file_picker: false}
 
@@ -998,9 +1259,7 @@ defmodule QuillEx.RootScene do
     end
   end
 
-  @doc """
-  Hides the file picker modal and saves the current buffer to the specified path.
-  """
+  # Hides the file picker modal and saves the current buffer to the specified path.
   defp hide_file_picker_and_save(scene, file_path) do
     new_state = %{scene.assigns.state | show_file_picker: false}
 
@@ -1018,9 +1277,7 @@ defmodule QuillEx.RootScene do
     save_buffer_as(new_scene, file_path)
   end
 
-  @doc """
-  Saves the current buffer to a new file path.
-  """
+  # Saves the current buffer to a new file path.
   defp save_buffer_as(scene, file_path) do
     case scene.assigns.state.active_buf do
       nil ->
@@ -1054,7 +1311,7 @@ defmodule QuillEx.RootScene do
             }
 
             # Re-render to update the tab bar with new filename
-            new_graph = RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+            new_graph = QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
             new_scene =
               scene
@@ -1068,24 +1325,22 @@ defmodule QuillEx.RootScene do
             {:noreply, new_scene}
 
           {:error, reason} ->
-            Logger.error("Failed to save file: #{inspect(reason)}")
+            Logger.warning("Failed to save file: #{inspect(reason)}")
             {:noreply, scene}
 
           other ->
-            Logger.error("Unexpected save_as result: #{inspect(other)}")
+            Logger.warning("Unexpected save_as result: #{inspect(other)}")
             {:noreply, scene}
         end
     end
   end
 
-  @doc """
-  Opens a file and creates a new buffer for it.
-  """
+  # Opens a file and creates a new buffer for it.
   defp open_file(scene, file_path) do
     Logger.info("Opening file: #{file_path}")
 
     case Quillex.API.FileAPI.open(file_path) do
-      {:ok, %{buffer_ref: buf_ref, lines: lines, bytes: bytes}} ->
+      {:ok, %{buffer_ref: _buf_ref, lines: lines, bytes: bytes}} ->
         Logger.info("Opened file with #{lines} lines, #{bytes} bytes")
 
         # The FileAPI.open already switches to the new buffer and broadcasts
@@ -1093,8 +1348,9 @@ defmodule QuillEx.RootScene do
         {:noreply, scene}
 
       {:error, reason} ->
-        Logger.error("Failed to open file: #{reason}")
+        Logger.warning("Failed to open file: #{reason}")
         {:noreply, scene}
     end
   end
+
 end

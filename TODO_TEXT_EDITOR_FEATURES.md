@@ -2,35 +2,24 @@
 
 ## Discussed / In Queue
 - [ ] **Mouse controls** - click to position cursor, drag to select text
-- [ ] **Tab rendering** - configurable tab width (2/4/8 spaces)
-- [ ] **Find/Search** - Ctrl+F to find text, highlight matches, next/prev
+- [ ] **Replace** - Ctrl+H find and replace dialog
 
 ## Core Editing (Missing)
-- [ ] **Undo/Redo** - Ctrl+Z / Ctrl+Shift+Z
-- [ ] **Select All** - Ctrl+A
-- [ ] **Go to line** - Ctrl+G jump to line number
+- [ ] **Select All** - Ctrl+A (works at buffer level, may need TextField integration)
+- [ ] **Go to line** - Ctrl+G jump to line number (Ctrl+G currently mapped to Find Next)
 - [ ] **Delete line** - Ctrl+Shift+K or similar
 - [ ] **Duplicate line** - Ctrl+D
 - [ ] **Move line up/down** - Alt+Up/Down
 - [ ] **Indent/Dedent** - Tab/Shift+Tab on selection
 - [ ] **Auto-indent** - maintain indentation on newline
 
-## File Operations
-- [ ] **Save file** - Ctrl+S (write buffer back to disk)
-- [ ] **Save As** - Ctrl+Shift+S
-- [ ] **Reload from disk** - revert changes
-- [ ] **Modified indicator** - show when buffer has unsaved changes
-
 ## Search & Replace
-- [ ] **Find** - Ctrl+F with highlight matches
-- [ ] **Find next/prev** - F3/Shift+F3 or Enter/Shift+Enter
 - [ ] **Replace** - Ctrl+H
 - [ ] **Replace all**
 - [ ] **Case sensitive toggle**
 - [ ] **Regex search** (advanced)
 
 ## Display & Rendering
-- [ ] **Tab rendering** - show tabs as configurable width
 - [ ] **Trailing whitespace** - optional visualization
 - [ ] **Current line highlight** - subtle background on cursor line
 - [ ] **Matching bracket highlight**
@@ -42,20 +31,15 @@
 - [ ] **Double-click** - select word
 - [ ] **Triple-click** - select line
 - [ ] **Shift+click** - extend selection
-- [ ] **Shift+arrows** - keyboard selection (may already work?)
 - [ ] **Multiple cursors** (advanced)
 
 ## Status/Info
 - [ ] **Status bar** - line:col, file name, encoding, line endings
-- [ ] **Modified indicator** - asterisk or dot when unsaved
 
 ## Settings
-- [ ] **Tab width** - 2/4/8 spaces
 - [ ] **Tabs vs Spaces** - insert tabs or spaces
 - [ ] **Line endings** - LF / CRLF
 - [ ] **Encoding** - UTF-8 (display/handle)
-- [ ] **Word wrap toggle** (already have!)
-- [ ] **Line numbers toggle** (already have!)
 
 ## Performance
 - [ ] **Large file handling** - virtual scrolling / lazy rendering
@@ -66,9 +50,18 @@
 - [x] Cursor movement (arrows, home/end)
 - [x] Horizontal & vertical scrolling
 - [x] Scrollbar drag
-- [x] Word wrap modes (none/word/char)
-- [x] Line numbers with dynamic width
+- [x] Word wrap modes (none/word/char) — toggle in View menu
+- [x] Line numbers with dynamic width — toggle in View menu
 - [x] Copy/Cut/Paste (Ctrl+C/X/V)
 - [x] Backspace/Delete
-- [x] Basic text selection (keyboard)
+- [x] Basic text selection (keyboard, Shift+arrows)
 - [x] Cursor blink
+- [x] Find/Search (Ctrl+F) with search bar
+- [x] Find Next (Ctrl+G) / Find Prev
+- [x] Undo/Redo (Ctrl+U / Ctrl+R)
+- [x] Save file (Ctrl+S)
+- [x] Save As
+- [x] Modified/dirty indicator (" *" on tab labels)
+- [x] Tab rendering — configurable tab width (2/3/4/8 spaces)
+- [x] Toggle sidebar (File Navigator)
+- [x] File integrity verification (Ctrl+V+F) — detect external file modifications

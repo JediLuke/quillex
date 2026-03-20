@@ -33,15 +33,19 @@ defmodule Quillex.ViewSettingsSpex do
   # UI-Based Helpers
   # ===========================================================================
 
-  # Toggle line numbers via action dispatch
+  # Toggle line numbers via View menu
   defp toggle_line_numbers do
-    GenServer.call(QuillEx.RootScene, {:action, :toggle_line_numbers})
+    Probes.click_element("icon_menu_view")
+    Process.sleep(200)
+    Probes.click_element("icon_menu_view_line_numbers")
     Process.sleep(300)
   end
 
-  # Toggle word wrap via action dispatch
+  # Toggle word wrap via View menu
   defp toggle_word_wrap do
-    GenServer.call(QuillEx.RootScene, {:action, :toggle_word_wrap})
+    Probes.click_element("icon_menu_view")
+    Process.sleep(200)
+    Probes.click_element("icon_menu_view_word_wrap")
     Process.sleep(300)
   end
 
@@ -50,15 +54,19 @@ defmodule Quillex.ViewSettingsSpex do
     SemanticHelpers.get_tab_count() || 0
   end
 
-  # Create new buffer via action dispatch
+  # Create new buffer via File menu
   defp create_new_buffer do
-    GenServer.call(QuillEx.RootScene, {:action, :new_buffer})
+    Probes.click_element("icon_menu_file")
+    Process.sleep(200)
+    Probes.click_element("icon_menu_file_new")
     Process.sleep(500)
   end
 
-  # Close active buffer via action dispatch
+  # Close active buffer via File menu
   defp close_active_buffer do
-    GenServer.call(QuillEx.RootScene, {:action, :close_active_buffer})
+    Probes.click_element("icon_menu_file")
+    Process.sleep(200)
+    Probes.click_element("icon_menu_file_close")
     Process.sleep(300)
   end
 
@@ -70,15 +78,19 @@ defmodule Quillex.ViewSettingsSpex do
     end
   end
 
-  # Switch to a buffer by index (1-based) using keyboard or semantic helpers
+  # Switch to a buffer by 1-based index by clicking its tab
   defp switch_to_buffer(index) do
     labels = SemanticHelpers.get_tab_labels()
 
-    if index <= length(labels) do
-      # Use GenServer call for now until we have clickable tab coordinates
-      GenServer.call(QuillEx.RootScene, {:action, {:activate_buffer, index}})
-      Process.sleep(300)
-      true
+    if index >= 1 and index <= length(labels) do
+      label = Enum.at(labels, index - 1)
+      case SemanticHelpers.click_tab_by_label(label) do
+        {:ok, _} ->
+          Process.sleep(300)
+          true
+        _ ->
+          false
+      end
     else
       false
     end

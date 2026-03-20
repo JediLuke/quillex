@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "scenic-mcp": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["/home/luke/workbench/flx/scenic_mcp_experimental/dist/index.js"]
+    },
+    "memelex-mcp": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["/home/luke/workbench/flx/memelex_mcp/dist/index.js"]
+    },
+    "memelex-agent-tools-mcp": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["/home/luke/workbench/flx/memelex_mcp/dist/agent_index.js"]
+    }
+  }
+}

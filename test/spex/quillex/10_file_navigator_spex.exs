@@ -34,33 +34,28 @@ defmodule Quillex.FileNavigatorSpex do
   # UI-Based Helpers
   # ===========================================================================
 
-  # Toggle file navigator via action dispatch
+  # Toggle file navigator via View menu (black-box UI interaction).
+  # Uses the same pattern as other view settings: click View, then the item.
   defp toggle_file_nav do
-    GenServer.call(QuillEx.RootScene, {:action, :toggle_file_nav})
+    Probes.click_element("icon_menu_view")
+    Process.sleep(200)
+    Probes.click_element("icon_menu_view_file_nav")
     Process.sleep(500)
   end
 
-  # Get current file_nav visibility state
+  # Check file nav visibility via rendered content.
+  # When the file nav sidebar is open it renders the project's file tree,
+  # which includes "mix.exs" — a string that won't appear in normal test
+  # buffer content (typing "Hello World", "Line1", etc.).
   defp file_nav_visible? do
-    # Check if file_nav component exists in the scene
-    case GenServer.call(QuillEx.RootScene, :get_state, 5000) do
-      {:ok, state} -> state.show_file_nav
-      _ -> false
-    end
-  rescue
-    _ -> false
-  catch
-    :exit, _ -> false
+    Query.text_visible?("mix.exs")
   end
 
-  # Alternative: check visibility via rendered text
+  # Broader visibility check via rendered text (used by file_nav_shows_files?)
   defp file_nav_shows_files? do
-    # The file tree should show some common files from the project
     rendered = Query.rendered_text()
-    # Check for common project files/dirs
-    String.contains?(rendered, "lib") or
-    String.contains?(rendered, "test") or
-    String.contains?(rendered, "mix.exs")
+    String.contains?(rendered, "mix.exs") or
+    String.contains?(rendered, "mix.lock")
   end
 
   # Get tab count from semantic viewport
@@ -68,9 +63,11 @@ defmodule Quillex.FileNavigatorSpex do
     SemanticHelpers.get_tab_count() || 0
   end
 
-  # Close active buffer via action dispatch
+  # Close active buffer via File menu
   defp close_active_buffer do
-    GenServer.call(QuillEx.RootScene, {:action, :close_active_buffer})
+    Probes.click_element("icon_menu_file")
+    Process.sleep(300)
+    Probes.click_element("icon_menu_file_close")
     Process.sleep(300)
   end
 

@@ -98,8 +98,11 @@ defmodule QuillEx.Utils.SafeFontLoader do
   """
   def list_available_fonts() do
     try do
-      QuillEx.Assets.library()
-      |> Map.keys()
+      lib = QuillEx.Assets.library()
+      alias_keys = Map.keys(lib.aliases)
+      meta_keys = Map.keys(lib.metas)
+      (alias_keys ++ meta_keys)
+      |> Enum.uniq()
       |> Enum.filter(&font_available?/1)
     rescue
       _ -> [:ibm_plex_mono] # Fallback list
@@ -108,15 +111,19 @@ defmodule QuillEx.Utils.SafeFontLoader do
   
   # Private helper to try loading a single font
   defp try_load_font(font_id) do
-    case Scenic.Assets.Static.meta(font_id) do
-      {:ok, {Scenic.Assets.Static.Font, _metadata}} -> 
-        {:ok, font_id}
-      {:ok, {other_type, _}} -> 
-        {:error, "#{inspect(font_id)} is #{other_type}, not a font"}
-      :error -> 
-        {:error, "#{inspect(font_id)} not found"}
-      other -> 
-        {:error, "Unexpected response: #{inspect(other)}"}
+    try do
+      case Scenic.Assets.Static.meta(font_id) do
+        {:ok, {Scenic.Assets.Static.Font, _metadata}} ->
+          {:ok, font_id}
+        {:ok, {other_type, _}} ->
+          {:error, "#{inspect(font_id)} is #{other_type}, not a font"}
+        :error ->
+          {:error, "#{inspect(font_id)} not found"}
+        other ->
+          {:error, "Unexpected response: #{inspect(other)}"}
+      end
+    rescue
+      _ -> {:error, "#{inspect(font_id)} unavailable (assets not configured)"}
     end
   end
 end

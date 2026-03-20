@@ -33,9 +33,12 @@ defmodule QuillEx.RootScene.Renderizer do
     [top_bar_frame, buffer_frame] = Widgex.Frame.v_split(state.frame, px: @top_bar_height)
 
     # If search bar is visible, split buffer area further
+    # When replace mode is on, double the search bar height
+    search_height = if state.show_replace, do: @search_bar_height * 2, else: @search_bar_height
+
     {search_bar_frame, remaining_frame} =
       if state.show_search_bar do
-        [search_frame, buf_frame] = Widgex.Frame.v_split(buffer_frame, px: @search_bar_height)
+        [search_frame, buf_frame] = Widgex.Frame.v_split(buffer_frame, px: search_height)
         {search_frame, buf_frame}
       else
         {nil, buffer_frame}
@@ -80,7 +83,8 @@ defmodule QuillEx.RootScene.Renderizer do
     search_bar_data = %{
       id: :search_bar,
       frame: frame,
-      query: state.search_query
+      query: state.search_query,
+      replace_mode: state.show_replace
     }
 
     graph
@@ -225,16 +229,22 @@ defmodule QuillEx.RootScene.Renderizer do
     new_selected = new_state.active_buf && new_state.active_buf.uuid
     selection_changed = old_selected != new_selected
 
-    buffers_changed or selection_changed
+    # Compare dirty states (tab labels change when dirty flag changes)
+    old_dirty = Enum.map(old_state.buffers, & &1.dirty?)
+    new_dirty = Enum.map(new_state.buffers, & &1.dirty?)
+    dirty_changed = old_dirty != new_dirty
+
+    buffers_changed or selection_changed or dirty_changed
   end
 
   # Helper to create tab bar
   defp do_create_tab_bar(graph, state, frame) do
-    # Build tabs from open buffers
+    # Build tabs from open buffers, appending " *" for dirty (unsaved) buffers
     tabs = Enum.map(state.buffers, fn buf ->
+      label = if buf.dirty?, do: buf.name <> " *", else: buf.name
       %{
         id: buf.uuid,
-        label: buf.name,
+        label: label,
         closeable: true
       }
     end)
@@ -264,17 +274,19 @@ defmodule QuillEx.RootScene.Renderizer do
       %{id: :file, icon: "F", items: [
         {"new", "New Buffer"},
         {"open", "Open File..."},
-        {"save", "Save"},
+        {"save", "Save (Ctrl+S)"},
         {"save_as", "Save As..."},
+        {"verify", "Verify File (Ctrl+V+F)"},
         {"close", "Close Buffer"}
       ]},
       %{id: :edit, icon: "E", items: [
         {"undo", "Undo (Ctrl+U)"},
         {"redo", "Redo (Ctrl+R)"},
-        {"cut", "Cut"},
-        {"copy", "Copy"},
-        {"paste", "Paste"},
+        {"cut", "Cut (Ctrl+X)"},
+        {"copy", "Copy (Ctrl+C)"},
+        {"paste", "Paste (Ctrl+V)"},
         {"find", "Find (Ctrl+F)"},
+        {"find_replace", "Find & Replace (Ctrl+H)"},
         {"find_next", "Find Next (Ctrl+G)"}
       ]},
       %{id: :view, icon: "V", items: [
@@ -307,8 +319,9 @@ defmodule QuillEx.RootScene.Renderizer do
       old_state.word_wrap != new_state.word_wrap or
       old_state.tab_width != new_state.tab_width
 
-    # Recreate if search bar or file nav visibility changed (affects buffer frame size)
+    # Recreate if search bar, replace mode, or file nav visibility changed (affects buffer frame size)
     layout_changed = old_state.show_search_bar != new_state.show_search_bar or
+      Map.get(old_state, :show_replace, false) != Map.get(new_state, :show_replace, false) or
       old_state.show_file_nav != new_state.show_file_nav
 
     # Recreate if the buffer process PID changed (e.g., buffer was restarted by supervisor)
@@ -357,6 +370,7 @@ defmodule QuillEx.RootScene.Renderizer do
       input_mode: :buffer_backed,
       buffer_controller: buffer_pid,
       buffer_topic: {:buffers, buf.uuid},
+      buffer_id: buf.uuid,
       show_line_numbers: state.show_line_numbers,
       wrap_mode: wrap_mode,
       tab_width: state.tab_width,

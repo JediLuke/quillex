@@ -13,20 +13,35 @@ defmodule Quillex.Structs.BufState.BufRef do
   always go stale, instead I prefer the extra expense of calling `fetch_buf`
   """
 
+  @type t :: %__MODULE__{
+    uuid: String.t() | nil,
+    name: String.t() | nil,
+    mode: atom() | {atom(), atom()} | nil,
+    dirty?: boolean()
+  }
+
   defstruct [
     :uuid,
     :name,
     # we need mode in the buf_ref because the buf_ref gets stored in the RadixState,
     # and we need to know the mode to decide how to handle user input
-    :mode
-    # TODO needs a source, for filenames - we will try without it for a while & see
+    :mode,
+    # dirty? tracks whether the buffer has unsaved changes - used by the tab bar
+    # to display a visual indicator (e.g. " *" suffix on the tab label)
+    dirty?: false
   ]
 
+  @doc """
+  Generate a `BufRef` from a full `BufState`. Extracts only the fields needed
+  for routing and display (uuid, name, mode, dirty?).
+  """
+  @spec generate(Quillex.Structs.BufState.t()) :: t()
   def generate(%Quillex.Structs.BufState{} = buf) do
     %__MODULE__{
       uuid: buf.uuid,
       name: buf.name,
-      mode: buf.mode
+      mode: buf.mode,
+      dirty?: buf.dirty?
     }
   end
 

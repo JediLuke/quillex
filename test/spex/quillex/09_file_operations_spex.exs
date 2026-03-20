@@ -53,17 +53,17 @@ defmodule Quillex.FileOperationsSpex do
 
   # Create a new buffer via menu
   defp create_new_buffer do
-    ScenicMcp.Tools.click_element(%{"element_id" => "icon_menu_file"})
+    Probes.click_element("icon_menu_file")
     Process.sleep(300)
-    ScenicMcp.Tools.click_element(%{"element_id" => "icon_menu_file_new"})
+    Probes.click_element("icon_menu_file_new")
     Process.sleep(500)
   end
 
   # Close the active buffer via menu
   defp close_active_buffer do
-    ScenicMcp.Tools.click_element(%{"element_id" => "icon_menu_file"})
+    Probes.click_element("icon_menu_file")
     Process.sleep(300)
-    ScenicMcp.Tools.click_element(%{"element_id" => "icon_menu_file_close"})
+    Probes.click_element("icon_menu_file_close")
     Process.sleep(300)
   end
 
@@ -77,9 +77,9 @@ defmodule Quillex.FileOperationsSpex do
 
   # Open Save As dialog via menu
   defp open_save_as_dialog do
-    ScenicMcp.Tools.click_element(%{"element_id" => "icon_menu_file"})
+    Probes.click_element("icon_menu_file")
     Process.sleep(300)
-    ScenicMcp.Tools.click_element(%{"element_id" => "icon_menu_file_save_as"})
+    Probes.click_element("icon_menu_file_save_as")
     Process.sleep(500)
   end
 
@@ -118,13 +118,13 @@ defmodule Quillex.FileOperationsSpex do
   # Click Save button in file picker
   defp click_save_button do
     # The save button should be clickable
-    ScenicMcp.Tools.click_element(%{"element_id" => "save_button"})
+    Probes.click_element("save_button")
     Process.sleep(500)
   end
 
   # Click Cancel button in file picker
   defp click_cancel_button do
-    ScenicMcp.Tools.click_element(%{"element_id" => "cancel_button"})
+    Probes.click_element("cancel_button")
     Process.sleep(300)
   end
 

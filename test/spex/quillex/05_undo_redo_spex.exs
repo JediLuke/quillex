@@ -45,7 +45,7 @@ defmodule Quillex.UndoRedoSpex do
       given_ "Quillex has launched with empty buffer", context do
         Process.sleep(300)
         # Clear any existing text
-        Probes.send_keys("ctrl+a", [])
+        Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
         Probes.send_keys("backspace", [])
         Process.sleep(100)
@@ -133,7 +133,7 @@ defmodule Quillex.UndoRedoSpex do
     scenario "Redo restores undone text", context do
       given_ "we start fresh and type 'Test'", context do
         Process.sleep(300)
-        Probes.send_keys("ctrl+a", [])
+        Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
         Probes.send_keys("backspace", [])
         Process.sleep(50)
@@ -193,7 +193,7 @@ defmodule Quillex.UndoRedoSpex do
     scenario "Typing after undo clears redo stack", context do
       given_ "we type 'ABC', undo to 'AB'", context do
         Process.sleep(300)
-        Probes.send_keys("ctrl+a", [])
+        Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
         Probes.send_keys("backspace", [])
         Process.sleep(50)
@@ -235,7 +235,7 @@ defmodule Quillex.UndoRedoSpex do
     scenario "Undo restores deleted character (backspace)", context do
       given_ "we type 'Hello' then press Backspace", context do
         Process.sleep(300)
-        Probes.send_keys("ctrl+a", [])
+        Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
         Probes.send_keys("backspace", [])
         Process.sleep(50)
@@ -264,7 +264,7 @@ defmodule Quillex.UndoRedoSpex do
 
     scenario "Undo restores merged lines (after Enter)", context do
       given_ "we type 'Line1', Enter, 'Line2'", context do
-        Probes.send_keys("ctrl+a", [])
+        Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
         Probes.send_keys("backspace", [])
         Process.sleep(50)
@@ -302,7 +302,7 @@ defmodule Quillex.UndoRedoSpex do
 
     scenario "Undo removes inserted tab", context do
       given_ "we type 'Prefix', Tab, 'Suffix'", context do
-        Probes.send_keys("ctrl+a", [])
+        Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
         Probes.send_keys("backspace", [])
         Process.sleep(50)
@@ -346,7 +346,7 @@ defmodule Quillex.UndoRedoSpex do
     scenario "Undo restores cursor to position before change", context do
       given_ "we type 'Start', move left, insert 'X'", context do
         Process.sleep(300)
-        Probes.send_keys("ctrl+a", [])
+        Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
         Probes.send_keys("backspace", [])
         Process.sleep(50)
@@ -388,7 +388,7 @@ defmodule Quillex.UndoRedoSpex do
 
     scenario "Redo restores cursor to position after change", context do
       given_ "we have text and undo it", context do
-        Probes.send_keys("ctrl+a", [])
+        Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
         Probes.send_keys("backspace", [])
         Process.sleep(50)
@@ -428,7 +428,7 @@ defmodule Quillex.UndoRedoSpex do
     scenario "Undo with empty stack does nothing", context do
       given_ "we clear the buffer completely", context do
         Process.sleep(300)
-        Probes.send_keys("ctrl+a", [])
+        Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
         Probes.send_keys("backspace", [])
         Process.sleep(100)
@@ -468,7 +468,7 @@ defmodule Quillex.UndoRedoSpex do
 
     scenario "Redo with empty stack does nothing", context do
       given_ "we have text without any undos", context do
-        Probes.send_keys("ctrl+a", [])
+        Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
         Probes.send_keys("backspace", [])
         Process.sleep(50)
@@ -501,7 +501,7 @@ defmodule Quillex.UndoRedoSpex do
     scenario "Undo restores character deleted with Delete key", context do
       given_ "we type 'ABCD' and move cursor to middle", context do
         Process.sleep(300)
-        Probes.send_keys("ctrl+a", [])
+        Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
         Probes.send_keys("backspace", [])
         Process.sleep(50)

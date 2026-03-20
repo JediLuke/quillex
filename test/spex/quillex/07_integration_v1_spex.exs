@@ -49,9 +49,38 @@ defmodule Quillex.IntegrationV1Spex do
   # HELPERS - UI-Based (prefer semantic viewport over internal state)
   # =========================================================================
 
-  # Trigger action - OK to call directly, but verify results through UI
-  defp trigger_action(action) do
-    GenServer.call(QuillEx.RootScene, {:action, action})
+  # Trigger action via UI interactions (boundary-compliant: no direct RootScene calls)
+  defp trigger_action(:close_active_buffer) do
+    Probes.click_element("icon_menu_file")
+    Process.sleep(200)
+    Probes.click_element("icon_menu_file_close")
+    Process.sleep(300)
+  end
+
+  defp trigger_action({:open_file, path}) when is_binary(path) do
+    Quillex.TestHelpers.FileOpener.open_file(path)
+  end
+
+  defp trigger_action({:activate_buffer, n}) when is_integer(n) do
+    labels = buffer_names()
+    case Enum.at(labels, n - 1) do
+      nil -> :error
+      label -> SemanticHelpers.click_tab_by_label(label)
+    end
+  end
+
+  defp trigger_action(:new_buffer) do
+    Probes.click_element("icon_menu_file")
+    Process.sleep(200)
+    Probes.click_element("icon_menu_file_new")
+    Process.sleep(500)
+  end
+
+  defp trigger_action(:toggle_word_wrap) do
+    Probes.click_element("icon_menu_view")
+    Process.sleep(200)
+    Probes.click_element("icon_menu_view_word_wrap")
+    Process.sleep(300)
   end
 
   # UI-based: Get tab count from semantic viewport
@@ -69,12 +98,18 @@ defmodule Quillex.IntegrationV1Spex do
     SemanticHelpers.get_selected_tab_label()
   end
 
-  # Internal state access (still needed for buffer content lookup)
-  # TODO: Add buffer_id to semantic metadata to eliminate this
+  # UI-based: get buffer_id from semantic metadata (no sys.get_state needed)
   defp active_buffer_id do
-    state = :sys.get_state(QuillEx.RootScene)
-    active_buf = state.assigns.state.active_buf
-    active_buf && active_buf.uuid
+    case Scenic.ViewPort.info(:main_viewport) do
+      {:ok, viewport} ->
+        case SemanticHelpers.find_text_buffer(viewport) do
+          {:ok, buffer} -> get_in(buffer, [:semantic, :buffer_id])
+          _ -> nil
+        end
+
+      _ ->
+        nil
+    end
   end
 
   defp active_buffer_content do
@@ -120,33 +155,7 @@ defmodule Quillex.IntegrationV1Spex do
   end
 
   defp wait_for_active_selection(timeout \\ 2000) do
-    end_time = System.monotonic_time(:millisecond) + timeout
-    wait_for_active_selection_loop(end_time)
-  end
-
-  defp wait_for_active_selection_loop(end_time) do
-    case active_buffer_semantic() do
-      {:ok, buffer} ->
-        selection = get_in(buffer, [:semantic, :selection])
-
-        if selection do
-          {:ok, buffer, selection}
-        else
-          retry_active_selection(end_time)
-        end
-
-      _ ->
-        retry_active_selection(end_time)
-    end
-  end
-
-  defp retry_active_selection(end_time) do
-    if System.monotonic_time(:millisecond) < end_time do
-      Process.sleep(50)
-      wait_for_active_selection_loop(end_time)
-    else
-      {:error, :selection_timeout}
-    end
+    SemanticHelpers.wait_for_active_selection(timeout)
   end
 
   defp normalize_selection(%{start: start_pos, end: end_pos}) do
@@ -181,8 +190,7 @@ defmodule Quillex.IntegrationV1Spex do
   end
 
   defp open_file(path) do
-    # Use FileAPI directly to open files
-    Quillex.API.FileAPI.open(path)
+    trigger_action({:open_file, path})
   end
 
   defp send_mouse_click(x, y) do
@@ -1524,21 +1532,237 @@ defmodule Quillex.IntegrationV1Spex do
         Probes.send_text("Line three here")
         Process.sleep(300)
 
-        {:ok, context}
+        # Capture initial cursor position
+        initial_cursor = SemanticHelpers.get_cursor_position()
+        Logger.debug("Initial cursor position before mouse click: #{inspect(initial_cursor)}")
+
+        {:ok, Map.put(context, :initial_cursor, initial_cursor)}
       end
 
       when_ "we click in the text area", context do
-        # Click somewhere in the visible text area
-        # Approximate position for line 2
-        send_mouse_click(200, 300)
+        # Click somewhere in the visible text area targeting line 2
+        # Using more precise coordinates: x=120 (past line numbers), y=40 (line 2 baseline)
+        # With line_height=20, text baselines are at y=20, 40, 60 for lines 1, 2, 3
+        click_x = 120
+        click_y = 40
+        Logger.debug("Clicking at coordinates (#{click_x}, #{click_y}) to target line 2")
+        send_mouse_click(click_x, click_y)
+        Process.sleep(300)
+        {:ok, Map.put(context, :click_coords, {click_x, click_y})}
+      end
+
+      then_ "cursor should move to clicked position", context do
+        # Verify cursor actually moved from initial position
+        new_cursor = SemanticHelpers.get_cursor_position()
+        initial_cursor = context.initial_cursor
+
+        Logger.debug("Cursor position after mouse click: #{inspect(new_cursor)}")
+
+        # Verify the cursor actually changed position
+        assert new_cursor != initial_cursor,
+               "Cursor should have moved from #{inspect(initial_cursor)} after mouse click, but got #{inspect(new_cursor)}"
+
+        # The cursor should have moved to a reasonable position
+        {click_x, click_y} = context.click_coords
+        case new_cursor do
+          {line, col} ->
+            # We clicked at coordinates targeting line 2
+            # The click should position cursor on line 2
+            assert line == 2,
+                   "Cursor should be positioned on line 2 after click at (#{click_x}, #{click_y}), got line #{line}"
+            # Column should be valid (between 1 and line length + 1 for end position)
+            line_2_content = "Line two here"
+            assert col >= 1 and col <= String.length(line_2_content) + 1,
+                   "Cursor column should be valid within line 2 content bounds [1-#{String.length(line_2_content) + 1}], got #{col}"
+            # Additional validation: cursor should be near beginning of line since we clicked at x=120
+            assert col <= 5,
+                   "Cursor should be near beginning of line 2 (col 1-5) based on click position x=#{click_x}, got col #{col}"
+          nil ->
+            flunk("Cursor position should not be nil after mouse click")
+        end
+
+        Logger.debug("✅ Mouse click successfully positioned cursor at #{inspect(new_cursor)} from initial position #{inspect(initial_cursor)}")
+
+        # Enhanced validation: verify cursor positioning is accurate, not just "no crash"
+        # Test that mouse click-to-cursor conversion works with proper coordinate math
+        # Note: With default font size 20px, text baselines are positioned at:
+        # Line 1: y=20, Line 2: y=40, Line 3: y=60, etc.
+        # Click coordinates should target these baseline positions for accurate positioning
+        case {initial_cursor, new_cursor} do
+          {{initial_line, _}, {new_line, new_col}} ->
+            # Verify click coordinates properly converted to line 2
+            assert new_line == 2,
+                   "Click at y=#{click_y} should position cursor on line 2, got line #{new_line}"
+
+            # Verify column is reasonable for click at x=120 (near beginning after line numbers)
+            assert new_col >= 1 and new_col <= 7,
+                   "Click at x=#{click_x} should position cursor near beginning of line 2 (col 1-7), got col #{new_col}"
+
+            # Verify we're not just getting a random cursor position - the positioning should be related to click coordinates
+            # For line 2 content "Line two here" (14 chars), clicking near beginning should give early column
+            assert new_col <= 5,
+                   "Click near beginning (x=#{click_x}) should position cursor in first few characters, got col #{new_col}"
+
+          _ ->
+            flunk("Cursor should be valid {line, col} tuple after mouse click, got #{inspect(new_cursor)}")
+        end
+
+        # Additional validation: verify coordinate conversion precision
+        # The click_to_cursor math should account for gutters, scroll, and font metrics
+        {expected_line, _} = {2, 1}  # We clicked targeting line 2
+        {actual_line, actual_col} = new_cursor
+
+        assert actual_line == expected_line,
+               "Mouse click coordinate conversion failed: expected line #{expected_line}, got #{actual_line}"
+
+        # Log successful coordinate conversion for debugging
+        Logger.debug("✅ Coordinate conversion successful: click (#{click_x}, #{click_y}) → cursor (#{actual_line}, #{actual_col})")
+
+        {:ok, Map.put(context, :final_cursor, new_cursor)}
+
+        # Content should still be intact
+        content = active_buffer_content()
+        assert content != nil, "Buffer should still have content after click"
+        expected_content = "Line one here\nLine two here\nLine three here"
+        assert content == expected_content, "Buffer content should remain unchanged after click positioning"
+        {:ok, context}
+      end
+    end
+
+    scenario "Click and drag selects text on a single line", context do
+      given_ "we have a buffer with known text", context do
+        trigger_action(:new_buffer)
+        Process.sleep(500)
+
+        Probes.send_keys("a", [:ctrl])
+        Process.sleep(100)
+        Probes.send_keys("backspace", [])
+        Process.sleep(200)
+
+        Probes.send_text("Hello World Test")
         Process.sleep(300)
         {:ok, context}
       end
 
-      then_ "cursor should move (no crash)", context do
-        # Primary goal is no crash - cursor positioning is hard to verify
-        content = active_buffer_content()
-        assert content != nil, "Buffer should still have content after click"
+      when_ "we mouse-down, drag right, and mouse-up", context do
+        start_x = 120
+        drag_end_x = 200
+        line_y = 20
+        Probes.mouse_down(start_x, line_y)
+        Process.sleep(50)
+        Probes.send_mouse_move(start_x + 30, line_y)
+        Process.sleep(30)
+        Probes.send_mouse_move(drag_end_x, line_y)
+        Process.sleep(30)
+        Probes.mouse_up(drag_end_x, line_y)
+        Process.sleep(300)
+        {:ok, context}
+      end
+
+      then_ "a selection should exist on line 1", context do
+        case wait_for_active_selection(3000) do
+          {:ok, _buffer, selection} ->
+            {start_pos, end_pos} = normalize_selection(selection)
+            {start_line, start_col} = start_pos
+            {end_line, end_col} = end_pos
+            assert start_line == 1,
+                   "Drag selection should start on line 1, got line #{start_line}"
+            assert end_line == 1,
+                   "Drag selection should end on line 1, got line #{end_line}"
+            assert end_col > start_col,
+                   "Drag selection end col (#{end_col}) should be greater than start col (#{start_col})"
+            {:ok, context}
+
+          {:error, :selection_timeout} ->
+            flunk("Mouse drag should create a selection but none was detected after 3s")
+        end
+      end
+    end
+
+    scenario "Double-click selects a word", context do
+      given_ "we have a buffer with words", context do
+        trigger_action(:new_buffer)
+        Process.sleep(500)
+
+        Probes.send_keys("a", [:ctrl])
+        Process.sleep(100)
+        Probes.send_keys("backspace", [])
+        Process.sleep(200)
+
+        Probes.send_text("Hello World")
+        Process.sleep(300)
+        {:ok, context}
+      end
+
+      when_ "we double-click on the first word", context do
+        click_x = 130
+        click_y = 20
+        Probes.click(click_x, click_y)
+        Process.sleep(50)
+        Probes.click(click_x, click_y)
+        Process.sleep(300)
+        {:ok, context}
+      end
+
+      then_ "the word under the cursor should be selected", context do
+        case wait_for_active_selection(3000) do
+          {:ok, _buffer, selection} ->
+            {start_pos, end_pos} = normalize_selection(selection)
+            {_start_line, start_col} = start_pos
+            {_end_line, end_col} = end_pos
+            assert end_col > start_col,
+                   "Double-click word selection should span multiple columns (start=#{start_col}, end=#{end_col})"
+            {:ok, context}
+
+          {:error, :selection_timeout} ->
+            flunk("Double-click should select a word but no selection was detected after 3s")
+        end
+      end
+    end
+
+    scenario "Single click after drag selection clears the selection", context do
+      given_ "we have a drag selection active", context do
+        trigger_action(:new_buffer)
+        Process.sleep(500)
+
+        Probes.send_keys("a", [:ctrl])
+        Process.sleep(100)
+        Probes.send_keys("backspace", [])
+        Process.sleep(200)
+
+        Probes.send_text("Some text here")
+        Process.sleep(200)
+        Probes.mouse_down(120, 20)
+        Process.sleep(50)
+        Probes.send_mouse_move(200, 20)
+        Process.sleep(50)
+        Probes.mouse_up(200, 20)
+        Process.sleep(300)
+
+        case wait_for_active_selection(2000) do
+          {:ok, _, _} -> {:ok, context}
+          {:error, :selection_timeout} -> flunk("Setup: drag selection should have been created")
+        end
+      end
+
+      when_ "we single-click elsewhere", context do
+        Probes.click(150, 20)
+        Process.sleep(300)
+        {:ok, context}
+      end
+
+      then_ "selection should be cleared", context do
+        case active_buffer_semantic() do
+          {:ok, buffer} ->
+            selection = get_in(buffer, [:semantic, :selection])
+
+            assert is_nil(selection),
+                   "Selection should be cleared after single click, got: #{inspect(selection)}"
+
+          _ ->
+            :ok
+        end
+
         {:ok, context}
       end
     end

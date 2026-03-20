@@ -9,6 +9,9 @@ defmodule QuillEx.MixProject do
       build_embedded: true,
       start_permanent: Mix.env() == :prod,
       elixirc_paths: elixirc_paths(Mix.env()),
+      compilers: [:boundary] ++ Mix.compilers() ++ [:spex],
+      spex: [pattern: "test/spex/**/*_spex.exs", boundary: Quillex.Spex],
+      preferred_cli_env: [spex: :test, run_spex: :test],
       deps: deps()
     ]
   end
@@ -36,14 +39,18 @@ defmodule QuillEx.MixProject do
       {:scenic_widget_contrib, git: "https://github.com/JediLuke/scenic-widget-contrib.git", branch: "main"},
       {:elixir_uuid, "~> 1.2"},
       {:font_metrics, "~> 0.5"},
+      {:truetype_metrics, "~> 0.6"},
       {:event_bus, "~> 1.7.0"},
       {:struct_access, "~> 1.1.2"},
       {:wormhole, "~> 2.3"},
       {:nimble_options, "~> 1.0", override: true},
       {:elixir_make, "~> 0.6", override: true},
+      {:boundary, "~> 0.10", runtime: false},
+      {:jason, "~> 1.4"},
 
       # dev tools
-      {:sexy_spex, git: "https://github.com/JediLuke/spex.git", branch: "main", only: [:test, :dev], override: true},
+      # {:sexy_spex, git: "https://github.com/JediLuke/spex.git", branch: "main", only: [:test, :dev], override: true},
+      {:sexy_spex, path: "../spex", only: [:test, :dev], override: true},
       {:scenic_mcp, git: "https://github.com/scenic-contrib/scenic_mcp_experimental.git", branch: "main", only: [:dev, :test], override: true},
       {:stream_data, "~> 0.6", only: [:test, :dev]},
       {:tidewave, "~> 0.1", only: :dev},

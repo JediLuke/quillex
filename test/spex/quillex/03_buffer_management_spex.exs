@@ -53,22 +53,22 @@ defmodule Quillex.BufferManagementSpex do
   # Create a new buffer by clicking File menu -> New Buffer
   defp create_new_buffer do
     # Click the File menu icon
-    ScenicMcp.Tools.click_element(%{"element_id" => "icon_menu_file"})
+    Probes.click_element("icon_menu_file")
     Process.sleep(300)
 
     # Click the "New Buffer" menu item
-    ScenicMcp.Tools.click_element(%{"element_id" => "icon_menu_file_new"})
+    Probes.click_element("icon_menu_file_new")
     Process.sleep(500)
   end
 
   # Close the active buffer by clicking File menu -> Close Buffer
   defp close_active_buffer do
     # Click the File menu icon
-    ScenicMcp.Tools.click_element(%{"element_id" => "icon_menu_file"})
+    Probes.click_element("icon_menu_file")
     Process.sleep(300)
 
     # Click the "Close Buffer" menu item
-    ScenicMcp.Tools.click_element(%{"element_id" => "icon_menu_file_close"})
+    Probes.click_element("icon_menu_file_close")
     Process.sleep(300)
   end
 
@@ -80,20 +80,14 @@ defmodule Quillex.BufferManagementSpex do
     end
   end
 
-  # Click on a tab by label to switch to it
+  # Click on a tab by label using semantic clickable registration
   defp click_tab(label) do
-    # For now, use action dispatch since we don't have tab click coordinates
-    # TODO: Once TabBar exposes bounds in semantic data, use Probes.click
-    labels = tab_labels()
-    index = Enum.find_index(labels, &(&1 == label))
-
-    if index do
-      # Use trigger action as fallback until we have clickable tab coordinates
-      GenServer.call(QuillEx.RootScene, {:action, {:activate_buffer, index + 1}})
-      Process.sleep(300)
-      true
-    else
-      false
+    case SemanticHelpers.click_tab_by_label(label) do
+      {:ok, _} ->
+        Process.sleep(300)
+        true
+      _ ->
+        false
     end
   end
 
@@ -428,10 +422,6 @@ defmodule Quillex.BufferManagementSpex do
 
       then_ "the new tab should be selected", context do
         # After creating a new buffer, it should become active
-        new_labels = tab_labels()
-        new_label = Enum.at(new_labels, -1)  # Last tab should be the new one
-
-        # Verify the new buffer is now shown (empty content or untitled marker)
         # The semantic layer should show this tab as selected
         selected = selected_tab_label()
         assert selected != nil, "Should have a selected tab"

@@ -52,4 +52,18 @@ defmodule QuillEx.RootScene.Reducer do
   def process(%QuillEx.RootScene.State{} = state, :toggle_word_wrap) do
     {:editor_settings_change, %{state | word_wrap: not state.word_wrap}}
   end
+
+  # Open the find-and-replace bar (Ctrl+H).
+  # Sets both show_search_bar and show_replace to true so the renderizer
+  # draws the full search + replace panel.
+  def process(%QuillEx.RootScene.State{} = state, :open_replace) do
+    %{state | show_search_bar: true, show_replace: true}
+  end
+
+  # Close the find-and-replace bar — clears all search/replace UI state.
+  def process(%QuillEx.RootScene.State{} = state, :close_replace) do
+    %{state | show_search_bar: false, show_replace: false, search_query: "",
+              search_current_match: 0, search_total_matches: 0}
+  end
+
 end

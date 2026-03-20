@@ -2,7 +2,7 @@ defmodule QuillEx.Metrics.Stash do
     use Agent
     require Logger
 
-    def start_link(args) do
+    def start_link(_args) do
       Agent.start_link(fn -> %{start: :init} end, name: __MODULE__)
     end
 
@@ -11,7 +11,7 @@ defmodule QuillEx.Metrics.Stash do
         %{start: nil} ->
             %{start: start_t}
         _otherwise ->
-            Logger.warning "recv'd start event before corresponding finish"
+            Logger.warning("recv'd start event before corresponding finish")
             %{start: nil}
       end)
     end
@@ -19,14 +19,14 @@ defmodule QuillEx.Metrics.Stash do
     def stop(end_t) do
       Agent.update(__MODULE__, fn
         %{start: :init} ->
-          Logger.warning "ignoring first finish draw..."
+          Logger.warning("ignoring first finish draw...")
           %{start: nil}
         %{start: start_t} when not is_nil(start_t) ->
           ms = System.convert_time_unit(end_t - start_t, :native, :millisecond)
-          Logger.info "Loop time: #{inspect ms}ms"
+          Logger.info("Loop time: #{inspect(ms)}ms")
           %{start: nil}
       _otherwise ->
-          Logger.warning "recv'd finish event without a start event"
+          Logger.warning("recv'd finish event without a start event")
           %{start: nil}
       end)
     end

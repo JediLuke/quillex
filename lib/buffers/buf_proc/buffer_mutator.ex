@@ -23,7 +23,7 @@ defmodule Quillex.GUI.Components.BufferPane.Mutator do
   end
 
   def set_mode(buf, mode) when mode in @valid_modes do
-    Logger.warning "SETTING MODE FOR BUF #{buf.name}  mode: #{inspect mode}"
+    Logger.warning("SETTING MODE FOR BUF #{buf.name}  mode: #{inspect(mode)}")
     %{buf | mode: mode}
   end
 
@@ -32,16 +32,9 @@ defmodule Quillex.GUI.Components.BufferPane.Mutator do
   end
 
   def move_cursor(%{cursors: [_c]} = buf, {_line, _col} = coords) do
-    Logger.warning "CANT MOVE TO #{inspect coords}"
+    Logger.warning("CANT MOVE TO #{inspect(coords)}")
     # %{buf | cursors: [c |> Cursor.move(coords)]}
     buf
-  end
-
-  def move_cursor(%{cursors: [c]} = buf, :line_end) do
-    current_line = Enum.at(buf.data, c.line - 1) || ""
-    # need extra column cause of zero vs one based indexing, columns start at 1 god damnit!!
-    new_col = String.length(current_line) + 1
-    move_cursor(buf, {c.line, new_col})
   end
 
   def move_cursor(%{cursors: [c], selection: _selection} = buf, :line_end) when buf.selection != nil do
@@ -52,16 +45,23 @@ defmodule Quillex.GUI.Components.BufferPane.Mutator do
     %{buf | cursors: [new_cursor], selection: nil}
   end
 
-  def move_cursor(%{cursors: [c]} = buf, :line_start) do
-    # Move cursor to beginning of current line (column 1)
-    new_cursor = c |> Cursor.move({c.line, 1})
-    %{buf | cursors: [new_cursor]}
+  def move_cursor(%{cursors: [c]} = buf, :line_end) do
+    current_line = Enum.at(buf.data, c.line - 1) || ""
+    # need extra column cause of zero vs one based indexing, columns start at 1 god damnit!!
+    new_col = String.length(current_line) + 1
+    move_cursor(buf, {c.line, new_col})
   end
 
   def move_cursor(%{cursors: [c], selection: _selection} = buf, :line_start) when buf.selection != nil do
     # Move cursor to beginning of current line (column 1) and clear selection
     new_cursor = c |> Cursor.move({c.line, 1})
     %{buf | cursors: [new_cursor], selection: nil}
+  end
+
+  def move_cursor(%{cursors: [c]} = buf, :line_start) do
+    # Move cursor to beginning of current line (column 1)
+    new_cursor = c |> Cursor.move({c.line, 1})
+    %{buf | cursors: [new_cursor]}
   end
 
   # def move_cursor(buf, :next_word) do

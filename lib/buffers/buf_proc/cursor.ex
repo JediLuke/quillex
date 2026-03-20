@@ -1,6 +1,12 @@
 defmodule Quillex.Structs.BufState.Cursor do
   use ScenicWidgets.Core.Utils.CustomGuards
 
+  @type t :: %__MODULE__{
+    num: pos_integer() | nil,
+    line: pos_integer(),
+    col: pos_integer()
+  }
+
   defstruct [
     # TODO maybe we don't need cursor nums, we can just use the place in the list of cursors as their number...
     # which number cursor this is in the buffer, cursor 1 is considered the main cursor
@@ -14,10 +20,14 @@ defmodule Quillex.Structs.BufState.Cursor do
     # TODO consider cursors by other users, or by AI agents
   ]
 
+  @doc "Create a default cursor at line 1, column 1."
+  @spec new() :: t()
   def new do
     %__MODULE__{}
   end
 
+  @doc "Create a cursor at the given line and column (both must be positive integers)."
+  @spec new(pos_integer(), pos_integer()) :: t()
   def new(line, col) when all_positive_integers(line, col) do
     %__MODULE__{
       line: line,
@@ -25,65 +35,59 @@ defmodule Quillex.Structs.BufState.Cursor do
     }
   end
 
-  # def new(%{num: n}) when is_integer(n) and n >= 1 do
-  #   %__MODULE__{
-  #     num: n
-  #   }
-  # end
-
-  # def update(%__MODULE__{line: _l, col: _c} = old_cursor, %{line: new_line, col: new_col}) do
-  #   old_cursor
-  #   |> Map.put(:line, new_line)
-  #   |> Map.put(:col, new_col)
-  # end
-
-  def move(%__MODULE__{} = old_cursor, {new_line, new_col}) do
+  @doc """
+  Move the cursor to an absolute position. If either coordinate is invalid (not a
+  positive integer) it is clamped to the nearest safe value.
+  """
+  @spec move(t(), {number(), number()}) :: t()
+  def move(%__MODULE__{} = old_cursor, {new_line, new_col})
+      when all_positive_integers(new_line, new_col) do
     old_cursor
     |> Map.put(:line, new_line)
     |> Map.put(:col, new_col)
   end
 
-  def move_up(%__MODULE__{} = cursor, x) do
-    cursor
-    |> Map.update!(:line, &(&1 - x))
+  # Clamp invalid coordinates to safe values instead of crashing
+  def move(%__MODULE__{} = old_cursor, {new_line, new_col}) do
+    safe_line = clamp_coord(new_line, old_cursor.line)
+    safe_col = clamp_coord(new_col, old_cursor.col)
+
+    old_cursor
+    |> Map.put(:line, safe_line)
+    |> Map.put(:col, safe_col)
   end
 
-  def move_down(%__MODULE__{} = cursor, x) do
+  @doc "Move the cursor up by `x` lines (will not go above line 1)."
+  @spec move_up(t(), integer()) :: t()
+  def move_up(%__MODULE__{} = cursor, x) when is_integer(x) do
+    cursor
+    |> Map.update!(:line, &max(1, &1 - x))
+  end
+
+  @doc "Move the cursor down by `x` lines."
+  @spec move_down(t(), integer()) :: t()
+  def move_down(%__MODULE__{} = cursor, x) when is_integer(x) do
     cursor
     |> Map.update!(:line, &(&1 + x))
   end
 
-  def move_left(%__MODULE__{} = cursor, x) do
+  @doc "Move the cursor left by `x` columns (will not go past column 1)."
+  @spec move_left(t(), integer()) :: t()
+  def move_left(%__MODULE__{} = cursor, x) when is_integer(x) do
     cursor
-    |> Map.update!(:col, &(&1 - x))
+    |> Map.update!(:col, &max(1, &1 - x))
   end
 
-  def move_right(%__MODULE__{} = cursor, x) do
+  @doc "Move the cursor right by `x` columns."
+  @spec move_right(t(), integer()) :: t()
+  def move_right(%__MODULE__{} = cursor, x) when is_integer(x) do
     cursor
     |> Map.update!(:col, &(&1 + x))
   end
 
-  # @doc """
-  # This function calculates how much the cursor needs to move when some text
-  # is inserted into a Buffer.
-  # """
-  # def calc_text_insertion_cursor_movement(%__MODULE__{} = cursor, "") do
-  #   cursor
-  # end
-
-  # def calc_text_insertion_cursor_movement(
-  #       %__MODULE__{line: cursor_line, col: cursor_col} = cursor,
-  #       "\n" <> rest
-  #     ) do
-  #   # for a newline char, go down one line and return to column 1
-  #   calc_text_insertion_cursor_movement(%{cursor | line: cursor_line + 1, col: 1}, rest)
-  # end
-
-  # def calc_text_insertion_cursor_movement(
-  #       %__MODULE__{line: cursor_line, col: cursor_col} = cursor,
-  #       <<char::utf8, rest::binary>>
-  #     ) do
-  #   # for a utf8 character just move along one column
-  #   calc_text_insertion_cursor_movement(%{cursor | line: cursor_line, col: cursor_col + 1}, rest)
-  # end
+  # Clamp a coordinate to a safe positive integer, falling back to the current value
+  defp clamp_coord(val, _fallback) when is_integer(val) and val >= 1, do: val
+  defp clamp_coord(val, _fallback) when is_integer(val), do: 1
+  defp clamp_coord(val, _fallback) when is_float(val), do: max(1, round(val))
+  defp clamp_coord(_val, fallback), do: fallback
 end

@@ -14,17 +14,22 @@ defmodule Quillex.GUI.Components.BufferPane do
   TextField does NOT handle input. The parent application routes input through
   its own system (e.g., Fluxus) and updates the buffer. TextField just renders.
 
+  ### `:buffer_backed`
+  TextField handles input and directly communicates with Buffer.Process via PubSub.
+  This mode provides live syncing between TextField state and Buffer state.
+
   ## Architecture
 
   - **:direct mode**: TextField handles input → emits events → BufferPane syncs to Buffer
   - **:external mode**: App handles input → updates Buffer → PubSub → BufferPane re-renders
+  - **:buffer_backed mode**: TextField handles input → updates Buffer directly → PubSub sync
 
   ## Options
 
   - `:frame` (required) - Widgex.Frame for positioning
   - `:buf_ref` (required) - Reference to Buffer.Process
   - `:font` (required) - Font configuration
-  - `:input_mode` - `:direct` (default) or `:external`
+  - `:input_mode` - `:direct` (default), `:external`, or `:buffer_backed`
   - `:mode` - `:multi_line` (default) or `:single_line`
   - `:focused` - Boolean, auto-focus on mount
   - `:active?` - Boolean, whether editing is enabled
@@ -69,6 +74,10 @@ defmodule Quillex.GUI.Components.BufferPane do
       show_line_numbers: show_line_numbers,
       editable: active?,
       focused: focused?,
+      # Pass the buffer UUID as buffer_id so the TextField's semantic metadata
+      # identifies which buffer this pane displays. SemanticHelpers.find_text_buffer/2
+      # uses this to distinguish between multiple open buffers.
+      buffer_id: buf.uuid,
       font: %{
         name: font.name,
         size: font.size,
@@ -86,6 +95,16 @@ defmodule Quillex.GUI.Components.BufferPane do
       viewport_buffer_lines: 5,
       id: :text_field
     }
+
+    # Add buffer_backed mode specific configuration if needed
+    text_field_data = if input_mode == :buffer_backed do
+      Map.merge(text_field_data, %{
+        buffer_controller: get_buffer_pid(buf_ref),
+        buffer_topic: {:buffers, buf.uuid}
+      })
+    else
+      text_field_data
+    end
 
     # Build graph with TextField
     graph =
@@ -169,19 +188,30 @@ defmodule Quillex.GUI.Components.BufferPane do
     {:noreply, scene}
   end
 
-  # Catch-all for unexpected events
+  # Catch-all for unexpected events - continue propagation so events like
+  # {:replace_mode_requested, id} and {:find_requested, id} bubble up to RootScene.
   def handle_event(event, _from, scene) do
-    Logger.debug("BufferPane: unhandled event #{inspect(event)}")
-    {:noreply, scene}
+    Logger.debug("BufferPane: propagating unhandled event #{inspect(event)} to parent")
+    {:cont, event, scene}
   end
 
   # Handle buffer state updates from PubSub (external changes)
   def handle_info({:buf_state_changes, new_buf}, %{assigns: %{buf: %{uuid: buf_uuid}}} = scene) do
     if new_buf.uuid == buf_uuid do
-      Logger.debug("BufferPane: received buffer update, syncing to TextField")
+      # Extract the primary cursor position
+      cursor_pos = case new_buf.cursors do
+        [cursor | _] -> {cursor.line, cursor.col}
+        _ -> {1, 1}  # Default if no cursors
+      end
+
+      Logger.debug("[BUFFER_PANE] Received buffer update via PubSub, syncing to TextField - cursor: #{inspect(cursor_pos)}")
 
       new_text = Enum.join(new_buf.data, "\n")
+      Logger.debug("[BUFFER_PANE] Syncing text content and cursor position to TextField")
+
+      # Sync both text content AND cursor position
       Scenic.Scene.put_child(scene, :text_field, new_text)
+      Scenic.Scene.put_child(scene, :text_field, {:set_cursor, cursor_pos})
 
       {:noreply, assign(scene, buf: new_buf)}
     else
@@ -206,8 +236,37 @@ defmodule Quillex.GUI.Components.BufferPane do
     {:noreply, scene}
   end
 
+  # Forward actions from RootScene to TextField
+  def handle_put({:action, action}, scene) do
+    Logger.debug("BufferPane: forwarding action #{inspect(action)} to TextField")
+    Scenic.Scene.put_child(scene, :text_field, {:action, action})
+    {:noreply, scene}
+  end
+
+  def handle_put(:blur, scene) do
+    Logger.debug("BufferPane: blurring TextField")
+    Scenic.Scene.put_child(scene, :text_field, :blur)
+    {:noreply, scene}
+  end
+
+  def handle_put(:focus, scene) do
+    Logger.debug("BufferPane: focusing TextField")
+    Scenic.Scene.put_child(scene, :text_field, :focus)
+    {:noreply, scene}
+  end
+
   def handle_put(msg, scene) do
     Logger.debug("BufferPane: unhandled put #{inspect(msg)}")
     {:noreply, scene}
   end
+
+  # Get the buffer process PID from a BufRef
+  defp get_buffer_pid(%Quillex.Structs.BufState.BufRef{uuid: uuid}) do
+    buf_tag = {uuid, Quillex.Buffer.Process}
+    case Registry.lookup(Quillex.BufferRegistry, buf_tag) do
+      [{pid, _}] -> pid
+      _ -> nil
+    end
+  end
+  defp get_buffer_pid(_), do: nil
 end

@@ -20,19 +20,12 @@ defmodule Quillex.TabHandlingSpex do
 
   # Helper to change tab width dynamically
   defp change_tab_width(new_width) when new_width in [2, 3, 4, 8] do
-    # Find the root scene and send a menu event
-    # This simulates selecting a tab width from the View menu
-    menu_item_id = "tab_width_#{new_width}"
-
-    # Send the menu event through the viewport
-    case Scenic.ViewPort.info(:main_viewport) do
-      {:ok, %{scene: scene_pid}} ->
-        send(scene_pid, {:menu_item_clicked, menu_item_id})
-        Process.sleep(100)
-        :ok
-      _ ->
-        :error
-    end
+    # Open the View menu and click the appropriate tab width item
+    Probes.click_element("icon_menu_view")
+    Process.sleep(300)
+    Probes.click_element("icon_menu_view_tab_width_#{new_width}")
+    Process.sleep(200)
+    :ok
   end
 
   setup_all do
@@ -116,7 +109,7 @@ defmodule Quillex.TabHandlingSpex do
     scenario "Tab mid-word inserts tab at cursor position", context do
       given_ "we start fresh with 'HelloWorld'", context do
         # Clear and type new text
-        Probes.send_keys("ctrl+a", [])
+        Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
         Probes.send_text("HelloWorld")
         Process.sleep(100)
@@ -190,7 +183,7 @@ defmodule Quillex.TabHandlingSpex do
 
     scenario "Consecutive tabs create increasing indentation", context do
       given_ "we start a new line", context do
-        Probes.send_keys("ctrl+a", [])
+        Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
         {:ok, context}
       end
@@ -225,7 +218,7 @@ defmodule Quillex.TabHandlingSpex do
 
     scenario "Cursor moves to correct position after tab", context do
       given_ "we start with 'AB' at column 1", context do
-        Probes.send_keys("ctrl+a", [])
+        Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
         Probes.send_text("AB")
         Process.sleep(100)
@@ -258,7 +251,7 @@ defmodule Quillex.TabHandlingSpex do
 
     scenario "Backspace removes entire tab character", context do
       given_ "we have text with a tab", context do
-        Probes.send_keys("ctrl+a", [])
+        Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
         Probes.send_text("Start")
         Probes.send_keys("tab", [])
@@ -302,7 +295,7 @@ defmodule Quillex.TabHandlingSpex do
 
     scenario "Tab width change re-renders existing tabs", context do
       given_ "we have text with tabs", context do
-        Probes.send_keys("ctrl+a", [])
+        Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
         Probes.send_keys("tab", [])
         Probes.send_text("Indented")
@@ -356,7 +349,7 @@ defmodule Quillex.TabHandlingSpex do
 
     scenario "Tab from column 2 (odd position) goes to column 5", context do
       given_ "we have single character 'A' at column 1", context do
-        Probes.send_keys("ctrl+a", [])
+        Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
         Probes.send_text("A")
         Process.sleep(100)
@@ -384,7 +377,7 @@ defmodule Quillex.TabHandlingSpex do
 
     scenario "Tab from column 3 (odd position) goes to column 5", context do
       given_ "we have 'AB' at columns 1-2", context do
-        Probes.send_keys("ctrl+a", [])
+        Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
         Probes.send_text("AB")
         Process.sleep(100)
@@ -411,7 +404,7 @@ defmodule Quillex.TabHandlingSpex do
 
     scenario "Tab from column 4 (even position) goes to column 5", context do
       given_ "we have 'ABC' at columns 1-3", context do
-        Probes.send_keys("ctrl+a", [])
+        Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
         Probes.send_text("ABC")
         Process.sleep(100)
@@ -438,7 +431,7 @@ defmodule Quillex.TabHandlingSpex do
 
     scenario "Tab from column 5 goes to column 9 (next tab stop)", context do
       given_ "we have 'ABCD' at columns 1-4", context do
-        Probes.send_keys("ctrl+a", [])
+        Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
         Probes.send_text("ABCD")
         Process.sleep(100)
@@ -474,7 +467,7 @@ defmodule Quillex.TabHandlingSpex do
 
     scenario "Cursor stays between same characters after tab width change", context do
       given_ "we have 'A<tab>B' with cursor between tab and B", context do
-        Probes.send_keys("ctrl+a", [])
+        Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
         Probes.send_text("A")
         Probes.send_keys("tab", [])
@@ -506,7 +499,7 @@ defmodule Quillex.TabHandlingSpex do
 
     scenario "Cursor stays at correct line after tab width shrink", context do
       given_ "we have text with multiple tabs on one line", context do
-        Probes.send_keys("ctrl+a", [])
+        Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
         Probes.send_text("Col1")
         Probes.send_keys("tab", [])
@@ -535,7 +528,7 @@ defmodule Quillex.TabHandlingSpex do
 
     scenario "Tab width change with cursor mid-line preserves relative position", context do
       given_ "we have 'Start<tab>Middle<tab>End' with cursor in 'Middle'", context do
-        Probes.send_keys("ctrl+a", [])
+        Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
         Probes.send_text("Start")
         Probes.send_keys("tab", [])
@@ -572,7 +565,7 @@ defmodule Quillex.TabHandlingSpex do
 
     scenario "Tab width change doesn't move cursor to different line", context do
       given_ "we have multiple lines with tabs", context do
-        Probes.send_keys("ctrl+a", [])
+        Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
         # Line 1: indented text
         Probes.send_keys("tab", [])

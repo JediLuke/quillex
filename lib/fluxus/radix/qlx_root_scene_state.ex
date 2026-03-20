@@ -24,6 +24,8 @@ defmodule QuillEx.RootScene.State do
     search_query: "",
     search_current_match: 0,
     search_total_matches: 0,
+    # Replace mode (Ctrl+H)
+    show_replace: false,
     # Cursor position tracking for scroll routing
     cursor_pos: {0, 0}
   ]
