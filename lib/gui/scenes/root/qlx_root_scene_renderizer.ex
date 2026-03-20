@@ -1,6 +1,8 @@
 defmodule QuillEx.RootScene.Renderizer do
   require Logger
 
+  import Scenic.Primitives, only: [group: 3, rect: 3, text: 3]
+
   alias Quillex.Utils.FileTree
   alias Quillex.Utils.SideNavThemes
 
@@ -9,6 +11,14 @@ defmodule QuillEx.RootScene.Renderizer do
 
   # Height of the search bar
   @search_bar_height 36
+
+  # Height of the transient status notification bar
+  @status_bar_height 24
+
+  # Background colours for each severity level
+  @status_color_info {60, 130, 70}
+  @status_color_warning {170, 100, 30}
+  @status_color_error {160, 40, 40}
 
   # Helper for tab width menu labels with checkmark
   defp tab_width_label(width, current) when width == current, do: "#{width} Spaces  ✓"
@@ -22,8 +32,9 @@ defmodule QuillEx.RootScene.Renderizer do
   # When any component needs recreation that could affect z-order, we delete
   # and recreate ALL components in the correct order (bottom to top):
   #   1. buffer_pane (bottom)
-  #   2. search_bar (middle, when visible)
-  #   3. tab_bar + icon_menu (top - dropdowns render above everything)
+  #   2. status_bar (above buffer, when a notification is active)
+  #   3. search_bar (middle, when visible)
+  #   4. tab_bar + icon_menu (top - dropdowns render above everything)
 
   # Guard: no frame means we cannot lay out components yet.  This happens during
   # process startup or in unit-test contexts where a bare state struct (frame: nil)
@@ -54,7 +65,7 @@ defmodule QuillEx.RootScene.Renderizer do
       end
 
     # If file nav is visible, split horizontally for sidebar
-    {file_nav_frame, actual_buffer_frame} =
+    {file_nav_frame, content_frame} =
       if state.show_file_nav do
         [nav_frame, buf_frame] = Widgex.Frame.h_split(remaining_frame, px: state.file_nav_width)
         {nav_frame, buf_frame}
@@ -62,25 +73,39 @@ defmodule QuillEx.RootScene.Renderizer do
         {nil, remaining_frame}
       end
 
+    # If a status message is active, carve a thin bar from the bottom of the content area
+    {status_bar_frame, actual_buffer_frame} =
+      if state.status_message do
+        content_height = content_frame.size.height
+        [buf_frame, stat_frame] =
+          Widgex.Frame.v_split(content_frame, px: content_height - @status_bar_height)
+        {stat_frame, buf_frame}
+      else
+        {nil, content_frame}
+      end
+
     # Check if we need full z-order rebuild
     needs_reorder = needs_buffer_pane_recreation?(old_state, state)
 
     if needs_reorder do
-      # Delete all and recreate in correct z-order
+      # Delete all and recreate in correct z-order (bottom to top)
       graph
       |> Scenic.Graph.delete(:buffer_pane)
+      |> Scenic.Graph.delete(:status_bar)
       |> Scenic.Graph.delete(:file_nav)
       |> Scenic.Graph.delete(:search_bar)
       |> Scenic.Graph.delete(:tab_bar)
       |> Scenic.Graph.delete(:icon_menu)
       |> maybe_create_file_nav(state, file_nav_frame)
       |> do_create_buffer_pane(state, actual_buffer_frame)
+      |> maybe_create_status_bar(state, status_bar_frame)
       |> maybe_create_search_bar(state, search_bar_frame)
       |> render_top_bar(old_state, state, top_bar_frame)
     else
       # Incremental updates - z-order preserved
       graph
       |> maybe_update_file_nav(state, file_nav_frame)
+      |> maybe_update_status_bar(state, status_bar_frame)
       |> maybe_update_search_bar(state, search_bar_frame)
       |> render_top_bar(old_state, state, top_bar_frame)
     end
@@ -166,6 +191,45 @@ defmodule QuillEx.RootScene.Renderizer do
         graph
     end
   end
+
+  # Create status bar (transient notification strip at bottom of content area)
+  defp maybe_create_status_bar(graph, _state, nil), do: graph
+  defp maybe_create_status_bar(graph, state, %Widgex.Frame{} = frame) do
+    bg_color = status_color(state.status_severity)
+    {w, h} = {frame.size.width, frame.size.height}
+    {tx, ty} = frame.pin.point
+    msg = state.status_message || ""
+
+    graph
+    |> group(
+      fn g ->
+        g
+        |> rect({w, h}, fill: bg_color)
+        |> text(msg, translate: {8, h - 6}, fill: :white, font_size: 14)
+      end,
+      id: :status_bar,
+      translate: {tx, ty}
+    )
+  end
+
+  # Update status bar (add/remove/refresh) without full rebuild
+  defp maybe_update_status_bar(graph, _state, nil) do
+    case Scenic.Graph.get(graph, :status_bar) do
+      [] -> graph
+      _existing -> Scenic.Graph.delete(graph, :status_bar)
+    end
+  end
+
+  defp maybe_update_status_bar(graph, state, %Widgex.Frame{} = frame) do
+    graph
+    |> Scenic.Graph.delete(:status_bar)
+    |> maybe_create_status_bar(state, frame)
+  end
+
+  # Map severity atom to a background colour tuple
+  defp status_color(:warning), do: @status_color_warning
+  defp status_color(:error), do: @status_color_error
+  defp status_color(_), do: @status_color_info
 
   # Render top bar (tab bar + icon menu)
   defp render_top_bar(graph, old_state, state, frame) do
