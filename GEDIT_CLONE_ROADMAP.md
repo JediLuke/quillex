@@ -110,7 +110,7 @@ A comprehensive breakdown of current functionality vs target functionality for a
 - [ ] **Go to Line** (Ctrl+G) - Jump to specific line number (Ctrl+G currently mapped to Find Next)
 - [x] **Home/End** - Go to start/end of line
 - [x] **Ctrl+Home/End** - Go to start/end of document
-- [ ] **Page Up/Down** - Scroll by page
+- [x] **Page Up/Down** - Move cursor by one visible page (Page Up / Page Down keys)
 - [x] **Ctrl+Left/Right** - Move by word (prev_word / next_word in buffer_reducer)
 - [x] **Scroll with mouse wheel** - Vertical scrolling
 - [x] **Horizontal scroll** - For long lines (if no word wrap)
@@ -182,7 +182,7 @@ A comprehensive breakdown of current functionality vs target functionality for a
 2. ~~Replace (Ctrl+H) with Replace All~~ ✓
 3. Go to line — not yet
 4. ~~Word-wise cursor movement~~ ✓ (Ctrl+Left/Right: prev_word / next_word; Ctrl+Home/End: start/end of document)
-5. Page up/down — not yet
+5. ~~Page Up/Down~~ ✓ (Page Up / Page Down keys: move cursor by one visible page)
 
 ### Phase 4: Polish (Nice to Have)
 1. Syntax highlighting (at least for Elixir)
@@ -258,6 +258,7 @@ Quillex.Buffer.Process
 - [x] Find & Replace (Ctrl+H) — `12_replace_spex.exs`
 - [x] Menu close on outside click — `13_menu_close_outside_click_spex.exs`
 - [x] Keyboard shortcuts (Ctrl+N/O/W/S/etc.) — `14_keyboard_shortcuts_spex.exs`
+- [x] Word navigation (Ctrl+Left/Right) — `15_word_navigation_spex.exs`
 
 ### Visual/E2E Tests (via ScenicMCP)
 - [x] Menu opens on click

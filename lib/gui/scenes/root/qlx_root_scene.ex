@@ -7,6 +7,10 @@ defmodule QuillEx.RootScene do
   @top_bar_height 35
   @search_bar_height 36
 
+  # Line height of the buffer pane text (must match BufferPane font_size).
+  # Used to estimate the visible page size for Page Up / Page Down navigation.
+  @line_height 24
+
   # Icon menu constants — must match ScenicWidgets.IconMenu default theme values
   # and the icon_menu_width used in qlx_root_scene_renderizer.ex
   @icon_menu_width 140
@@ -127,6 +131,22 @@ defmodule QuillEx.RootScene do
   # position, clearing any active selection.
   def handle_input({:key, {:key_end, 1, [:ctrl]}}, _context, scene) do
     dispatch_to_active_buffer(scene, {:move_cursor, :doc_end})
+  end
+
+  # Handle Page Up — move cursor up by roughly one screen-height of lines.
+  # Page size is estimated from the viewport frame height minus the top bar,
+  # divided by the buffer line height. Matches GEdit behaviour: cursor jumps
+  # upward by a page, clamping at line 1. Clears any active selection.
+  def handle_input({:key, {:key_pageup, 1, _mods}}, _context, scene) do
+    page_size = compute_page_size(scene)
+    dispatch_to_active_buffer(scene, {:move_cursor, {:page_up, page_size}})
+  end
+
+  # Handle Page Down — move cursor down by roughly one screen-height of lines.
+  # Same page size logic as Page Up; clamps at the last line of the document.
+  def handle_input({:key, {:key_pagedown, 1, _mods}}, _context, scene) do
+    page_size = compute_page_size(scene)
+    dispatch_to_active_buffer(scene, {:move_cursor, {:page_down, page_size}})
   end
 
   # NOTE: Ctrl+Left/Right (word navigation) are handled in the TextField's
@@ -268,6 +288,16 @@ defmodule QuillEx.RootScene do
   # to the BufferPane (TextField) for an immediate UI update.  Also updates
   # the dirty indicator in the tab bar.  When no buffer is active (e.g. during
   # startup) the call is silently ignored and the scene is returned unchanged.
+  # Compute how many lines fit in the visible buffer area.
+  # Uses the current viewport frame height, subtracts the top bar, and divides
+  # by the buffer line height. Falls back to 20 if the frame is not yet set.
+  defp compute_page_size(scene) do
+    case scene.assigns.state.frame do
+      nil -> 20
+      frame -> max(1, div(trunc(frame.size.height) - @top_bar_height, @line_height))
+    end
+  end
+
   defp dispatch_to_active_buffer(scene, action) do
     case scene.assigns.state.active_buf do
       nil ->

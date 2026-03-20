@@ -27,11 +27,12 @@ defmodule Quillex.GUI.Components.BufferPane.Mutator do
     %{buf | mode: mode}
   end
 
-  def move_cursor(%{cursors: [c]} = buf, {line, col} = coords) when line >= 1 and col >= 1 do
+  def move_cursor(%{cursors: [c]} = buf, {line, col} = coords)
+      when is_integer(line) and is_integer(col) and line >= 1 and col >= 1 do
     %{buf | cursors: [c |> Cursor.move(coords)]}
   end
 
-  def move_cursor(%{cursors: [_c]} = buf, {_line, _col} = coords) do
+  def move_cursor(%{cursors: [_c]} = buf, {line, _col} = coords) when is_integer(line) do
     Logger.warning("CANT MOVE TO #{inspect(coords)}")
     # %{buf | cursors: [c |> Cursor.move(coords)]}
     buf
@@ -89,6 +90,38 @@ defmodule Quillex.GUI.Components.BufferPane.Mutator do
     last_line = length(buf.data)
     last_col = String.length(Enum.at(buf.data, last_line - 1) || "") + 1
     new_cursor = c |> Cursor.move({last_line, last_col})
+    %{buf | cursors: [new_cursor]}
+  end
+
+  def move_cursor(%{cursors: [c], selection: _selection} = buf, {:page_up, n})
+      when buf.selection != nil and is_integer(n) and n > 0 do
+    # Page Up: move cursor up by n lines, clamped to line 1. Clears any selection.
+    new_line = max(1, c.line - n)
+    new_cursor = c |> Cursor.move({new_line, c.col})
+    %{buf | cursors: [new_cursor], selection: nil}
+  end
+
+  def move_cursor(%{cursors: [c]} = buf, {:page_up, n}) when is_integer(n) and n > 0 do
+    # Page Up: move cursor up by n lines, clamped to line 1.
+    new_line = max(1, c.line - n)
+    new_cursor = c |> Cursor.move({new_line, c.col})
+    %{buf | cursors: [new_cursor]}
+  end
+
+  def move_cursor(%{cursors: [c], selection: _selection} = buf, {:page_down, n})
+      when buf.selection != nil and is_integer(n) and n > 0 do
+    # Page Down: move cursor down by n lines, clamped to last line. Clears any selection.
+    last_line = length(buf.data)
+    new_line = min(last_line, c.line + n)
+    new_cursor = c |> Cursor.move({new_line, c.col})
+    %{buf | cursors: [new_cursor], selection: nil}
+  end
+
+  def move_cursor(%{cursors: [c]} = buf, {:page_down, n}) when is_integer(n) and n > 0 do
+    # Page Down: move cursor down by n lines, clamped to last line.
+    last_line = length(buf.data)
+    new_line = min(last_line, c.line + n)
+    new_cursor = c |> Cursor.move({new_line, c.col})
     %{buf | cursors: [new_cursor]}
   end
 

@@ -136,7 +136,7 @@ defmodule Quillex.RunVerificationSpex do
         # close_all_but_one() + clear_buffer() is insufficient: the remaining buffer
         # may carry a filepath from a prior Save As test (e.g. file 09).
         Probes.send_keys("escape", [])
-        Process.sleep(100)
+        Process.sleep(500)
         Probes.send_keys("n", [:ctrl])
         Process.sleep(400)
         type_text("some unsaved content")

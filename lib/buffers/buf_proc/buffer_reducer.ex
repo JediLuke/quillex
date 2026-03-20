@@ -178,6 +178,14 @@ defmodule Quillex.Buffer.Process.Reducer do
     buf |> BufferPane.Mutator.move_cursor(:doc_end)
   end
 
+  def process(%Quillex.Structs.BufState{} = buf, {:move_cursor, {:page_up, n}}) when is_integer(n) and n > 0 do
+    buf |> BufferPane.Mutator.move_cursor({:page_up, n})
+  end
+
+  def process(%Quillex.Structs.BufState{} = buf, {:move_cursor, {:page_down, n}}) when is_integer(n) and n > 0 do
+    buf |> BufferPane.Mutator.move_cursor({:page_down, n})
+  end
+
   def process(%Quillex.Structs.BufState{} = buf, {:select_text, direction, count}) do
     buf |> BufferPane.Mutator.select_text(direction, count)
   end

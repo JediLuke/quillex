@@ -1229,4 +1229,110 @@ defmodule Quillex.Buffer.Process.ReducerTest do
       assert length(b2.data) == 3
     end
   end
+
+  # ---------------------------------------------------------------------------
+  # Page Up / Page Down navigation
+  # ---------------------------------------------------------------------------
+
+  describe "page up ({:move_cursor, {:page_up, n}})" do
+    test "moves cursor up by page_size lines" do
+      lines = for i <- 1..30, do: "line #{i}"
+      b = buf(lines, cursors: [Cursor.new(25, 1)])
+      b2 = Reducer.process(b, {:move_cursor, {:page_up, 10}})
+      [c] = b2.cursors
+      assert c.line == 15
+    end
+
+    test "clamps at line 1 when page_size exceeds current line" do
+      lines = for i <- 1..20, do: "line #{i}"
+      b = buf(lines, cursors: [Cursor.new(5, 1)])
+      b2 = Reducer.process(b, {:move_cursor, {:page_up, 20}})
+      [c] = b2.cursors
+      assert c.line == 1
+    end
+
+    test "preserves column position" do
+      lines = for i <- 1..20, do: "line #{i}"
+      b = buf(lines, cursors: [Cursor.new(15, 4)])
+      b2 = Reducer.process(b, {:move_cursor, {:page_up, 5}})
+      [c] = b2.cursors
+      assert c.col == 4
+    end
+
+    test "clears active selection" do
+      lines = for i <- 1..20, do: "line #{i}"
+      b = buf(lines,
+        cursors: [Cursor.new(15, 1)],
+        selection: %{start: {10, 1}, end: {15, 1}}
+      )
+      b2 = Reducer.process(b, {:move_cursor, {:page_up, 5}})
+      assert b2.selection == nil
+    end
+
+    test "page_up from line 1 stays at line 1" do
+      b = buf(["only line"], cursors: [Cursor.new(1, 1)])
+      b2 = Reducer.process(b, {:move_cursor, {:page_up, 10}})
+      [c] = b2.cursors
+      assert c.line == 1
+    end
+
+    test "page_up by exactly current line - 1 lands on line 1" do
+      lines = for i <- 1..10, do: "line #{i}"
+      b = buf(lines, cursors: [Cursor.new(6, 1)])
+      b2 = Reducer.process(b, {:move_cursor, {:page_up, 5}})
+      [c] = b2.cursors
+      assert c.line == 1
+    end
+  end
+
+  describe "page down ({:move_cursor, {:page_down, n}})" do
+    test "moves cursor down by page_size lines" do
+      lines = for i <- 1..30, do: "line #{i}"
+      b = buf(lines, cursors: [Cursor.new(5, 1)])
+      b2 = Reducer.process(b, {:move_cursor, {:page_down, 10}})
+      [c] = b2.cursors
+      assert c.line == 15
+    end
+
+    test "clamps at last line when page_size exceeds remaining lines" do
+      lines = for i <- 1..20, do: "line #{i}"
+      b = buf(lines, cursors: [Cursor.new(15, 1)])
+      b2 = Reducer.process(b, {:move_cursor, {:page_down, 20}})
+      [c] = b2.cursors
+      assert c.line == 20
+    end
+
+    test "preserves column position" do
+      lines = for i <- 1..20, do: "line #{i}"
+      b = buf(lines, cursors: [Cursor.new(5, 3)])
+      b2 = Reducer.process(b, {:move_cursor, {:page_down, 5}})
+      [c] = b2.cursors
+      assert c.col == 3
+    end
+
+    test "clears active selection" do
+      lines = for i <- 1..20, do: "line #{i}"
+      b = buf(lines,
+        cursors: [Cursor.new(5, 1)],
+        selection: %{start: {1, 1}, end: {5, 1}}
+      )
+      b2 = Reducer.process(b, {:move_cursor, {:page_down, 5}})
+      assert b2.selection == nil
+    end
+
+    test "page_down from last line stays at last line" do
+      lines = for i <- 1..10, do: "line #{i}"
+      b = buf(lines, cursors: [Cursor.new(10, 1)])
+      b2 = Reducer.process(b, {:move_cursor, {:page_down, 5}})
+      [c] = b2.cursors
+      assert c.line == 10
+    end
+
+    test "page_down from a short document clamps correctly" do
+      b = buf(["line one", "line two"], cursors: [Cursor.new(1, 1)])
+      b2 = Reducer.process(b, {:move_cursor, {:page_down, 20}})
+      [c] = b2.cursors
+      assert c.line == 2
+    end
+  end
 end
