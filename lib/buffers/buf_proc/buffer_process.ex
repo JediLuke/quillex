@@ -59,7 +59,7 @@ defmodule Quillex.Buffer.Process do
     {:reply, {:ok, new_state}, new_state}
   end
 
-  def handle_call({:action, a}, from, state) when is_tuple(a) do
+  def handle_call({:action, a}, from, state) when is_tuple(a) or is_atom(a) do
     handle_call({:action, [a]}, from, state)
   end
 

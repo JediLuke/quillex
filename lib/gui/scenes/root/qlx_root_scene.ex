@@ -117,6 +117,15 @@ defmodule QuillEx.RootScene do
     handle_cast({:action, :close_active_buffer}, scene)
   end
 
+  # Handle Ctrl+D keyboard shortcut for Delete Line.
+  # Deletes the entire line under the cursor and moves the cursor to column 1
+  # on the same line number (or the new last line if the bottom line was deleted).
+  # When only one line remains the buffer is cleared to a single empty line.
+  # Supports undo via Ctrl+U.
+  def handle_input({:key, {:key_d, 1, [:ctrl]}}, _context, scene) do
+    dispatch_to_active_buffer(scene, :delete_line)
+  end
+
   def handle_input({:viewport, {input, _coords}}, _context, scene)
     when input in [:enter, :exit] do
       # don't do anything when the mouse enters/leaves the viewport
@@ -240,6 +249,30 @@ defmodule QuillEx.RootScene do
   # request_input registrations.  This catch-all handles any remaining events.
   def handle_input(_input, _context, scene) do
     {:noreply, scene}
+  end
+
+  # Dispatch a single buffer action to the currently active buffer.
+  # Calls the Buffer.Process synchronously, then pushes the resulting state
+  # to the BufferPane (TextField) for an immediate UI update.  Also updates
+  # the dirty indicator in the tab bar.  When no buffer is active (e.g. during
+  # startup) the call is silently ignored and the scene is returned unchanged.
+  defp dispatch_to_active_buffer(scene, action) do
+    case scene.assigns.state.active_buf do
+      nil ->
+        {:noreply, scene}
+
+      buf_ref ->
+        {:ok, new_buf} = Quillex.Buffer.BufferManager.call_buffer(buf_ref, {:action, action})
+
+        # Push updated buffer state to the TextField component immediately.
+        {:ok, [pid]} = Scenic.Scene.child(scene, :buffer_pane)
+        GenServer.cast(pid, {:state_change, new_buf})
+
+        # Reflect any dirty change in the tab bar.
+        scene = maybe_update_dirty_state(scene, new_buf)
+
+        {:noreply, scene}
+    end
   end
 
   # Get the cursor position from the active buffer (Buffer.Process is source of truth)

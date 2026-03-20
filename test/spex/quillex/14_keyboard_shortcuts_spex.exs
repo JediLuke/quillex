@@ -1,16 +1,17 @@
 defmodule Quillex.KeyboardShortcutsSpex do
   @moduledoc """
-  Phase 14: Keyboard Shortcuts — Ctrl+N, Ctrl+O, Ctrl+W
+  Phase 14: Keyboard Shortcuts — Ctrl+N, Ctrl+O, Ctrl+W, Ctrl+D
 
   Validates standard text-editor keyboard shortcuts:
   - Ctrl+N  → New Buffer (creates a new empty buffer with a fresh tab)
   - Ctrl+O  → Open File  (opens the file picker overlay in :open mode)
   - Ctrl+W  → Close Buffer (closes the active buffer, switches to another)
   - Ctrl+W on last buffer → silently ignored (app remains stable)
+  - Ctrl+D  → Delete Line (removes current line; single-line becomes empty)
 
   These are purely wiring tests: the underlying actions (new_buffer,
-  close_active_buffer, show_file_picker) already existed; we verify that
-  the keyboard path reaches them correctly.
+  close_active_buffer, show_file_picker, delete_line) already existed; we
+  verify that the keyboard path reaches them correctly.
   """
   use SexySpex
 
@@ -282,6 +283,119 @@ defmodule Quillex.KeyboardShortcutsSpex do
         rendered = Query.rendered_text()
         assert is_binary(rendered) and rendered != "",
                "App should keep rendering after Ctrl+W on last buffer"
+        :ok
+      end
+    end
+  end
+
+  # ===========================================================================
+  # Ctrl+D — Delete Line
+  # ===========================================================================
+
+  spex "Keyboard Shortcuts - Ctrl+D deletes the current line",
+    description: "Pressing Ctrl+D removes the entire line under the cursor",
+    tags: [:keyboard_shortcuts, :ctrl_d, :delete_line] do
+
+    scenario "Ctrl+D on a single-line buffer clears the line to empty", context do
+      given_ "we have a buffer with a single line of text", context do
+        close_buffers_until_one_remains()
+        press_escape()
+        # Clear any existing text by selecting all and deleting
+        Probes.send_keys("a", [:ctrl])
+        Process.sleep(100)
+        Probes.send_keys("backspace", [])
+        Process.sleep(100)
+        Probes.send_text("only line")
+        Process.sleep(200)
+        {:ok, context}
+      end
+
+      when_ "we press Ctrl+D", context do
+        Probes.send_keys("d", [:ctrl])
+        Process.sleep(300)
+        {:ok, context}
+      end
+
+      then_ "the original text is gone", _context do
+        rendered = Query.rendered_text()
+        refute String.contains?(rendered, "only line"),
+               "Ctrl+D should have deleted the line. Rendered: #{rendered}"
+        :ok
+      end
+
+      then_ "the app is still rendering normally", _context do
+        rendered = Query.rendered_text()
+        assert is_binary(rendered),
+               "App should keep rendering after Ctrl+D on single line"
+        :ok
+      end
+    end
+
+    scenario "Ctrl+D on a multi-line buffer removes the current line", context do
+      given_ "we have a buffer with two lines", context do
+        close_buffers_until_one_remains()
+        press_escape()
+        # Select all and replace with two lines
+        Probes.send_keys("a", [:ctrl])
+        Process.sleep(100)
+        Probes.send_keys("backspace", [])
+        Process.sleep(100)
+        Probes.send_text("first line")
+        Probes.send_keys("enter", [])
+        Probes.send_text("second line")
+        Process.sleep(200)
+        # Move cursor back to the first line
+        Probes.send_keys("up", [])
+        Process.sleep(100)
+        {:ok, context}
+      end
+
+      when_ "we press Ctrl+D on the first line", context do
+        Probes.send_keys("d", [:ctrl])
+        Process.sleep(300)
+        {:ok, context}
+      end
+
+      then_ "the first line is gone", _context do
+        rendered = Query.rendered_text()
+        refute String.contains?(rendered, "first line"),
+               "Ctrl+D should have deleted the first line. Rendered: #{rendered}"
+        :ok
+      end
+
+      then_ "the second line is still present", _context do
+        rendered = Query.rendered_text()
+        assert String.contains?(rendered, "second line"),
+               "Second line should still be visible after Ctrl+D. Rendered: #{rendered}"
+        :ok
+      end
+    end
+
+    scenario "Ctrl+D can be undone with Ctrl+U", context do
+      given_ "we have a buffer with known text", context do
+        close_buffers_until_one_remains()
+        press_escape()
+        Probes.send_keys("a", [:ctrl])
+        Process.sleep(100)
+        Probes.send_keys("backspace", [])
+        Process.sleep(100)
+        Probes.send_text("undo me")
+        Process.sleep(200)
+        {:ok, context}
+      end
+
+      when_ "we press Ctrl+D then Ctrl+U", context do
+        Probes.send_keys("d", [:ctrl])
+        Process.sleep(300)
+        Probes.send_keys("u", [:ctrl])
+        Process.sleep(300)
+        {:ok, context}
+      end
+
+      then_ "the deleted line is restored", _context do
+        rendered = Query.rendered_text()
+        assert String.contains?(rendered, "undo me"),
+               "Ctrl+U should restore the line deleted by Ctrl+D. Rendered: #{rendered}"
         :ok
       end
     end

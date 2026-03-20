@@ -347,6 +347,36 @@ defmodule Quillex.Buffer.Process.Reducer do
     BufferPane.Mutator.delete_selected_text(buf_with_undo)
   end
 
+  # Delete the entire line under the cursor (Ctrl+D).
+  # If there is only one line in the buffer, it is replaced with an empty string
+  # so the buffer always contains at least one line. Otherwise the current line
+  # is removed and the cursor stays on the same line number (the line that was
+  # below slides up), or moves to the new last line if the deleted line was at
+  # the bottom. The cursor column is reset to 1.
+  def process(%BufState{cursors: [c]} = buf, :delete_line) do
+    total_lines = length(buf.data)
+
+    buf_with_undo =
+      buf
+      |> Map.put(:selection, nil)
+      |> push_undo()
+
+    {new_data, new_line} =
+      if total_lines == 1 do
+        # Only one line — replace with empty string, stay at line 1
+        {[""], 1}
+      else
+        # Remove the current line (0-based index = c.line - 1)
+        reduced = List.delete_at(buf_with_undo.data, c.line - 1)
+        # Clamp the new line number to the new length
+        target = min(c.line, length(reduced))
+        {reduced, target}
+      end
+
+    %{buf_with_undo | data: new_data}
+    |> BufferPane.Mutator.move_cursor({new_line, 1})
+  end
+
   # Regular paste at cursor position (for both line and inline text)
   def process(%BufState{} = buf, {:paste, :at_cursor}) do
     clipboard_text = Clipboard.paste!()

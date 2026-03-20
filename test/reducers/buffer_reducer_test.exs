@@ -490,4 +490,63 @@ defmodule Quillex.Buffer.Process.ReducerTest do
       assert b2.source == %{filepath: "/new/different.ex"}
     end
   end
+
+  # ---------------------------------------------------------------------------
+  # process/2 :delete_line  (Ctrl+D)
+  # ---------------------------------------------------------------------------
+
+  describe "process/2 :delete_line" do
+    test "deletes the only line, replacing it with an empty string" do
+      b = buf(["hello world"], cursors: [Cursor.new(1, 5)])
+      b2 = Reducer.process(b, :delete_line)
+      assert b2.data == [""]
+      assert hd(b2.cursors).line == 1
+      assert hd(b2.cursors).col == 1
+    end
+
+    test "deletes a middle line and keeps cursor on the same line number" do
+      b = buf(["line 1", "line 2", "line 3"], cursors: [Cursor.new(2, 4)])
+      b2 = Reducer.process(b, :delete_line)
+      assert b2.data == ["line 1", "line 3"]
+      assert hd(b2.cursors).line == 2
+      assert hd(b2.cursors).col == 1
+    end
+
+    test "deletes the last line, moving cursor to the new last line" do
+      b = buf(["line 1", "line 2", "line 3"], cursors: [Cursor.new(3, 2)])
+      b2 = Reducer.process(b, :delete_line)
+      assert b2.data == ["line 1", "line 2"]
+      assert hd(b2.cursors).line == 2
+      assert hd(b2.cursors).col == 1
+    end
+
+    test "deletes the first line of a multi-line buffer" do
+      b = buf(["first", "second", "third"], cursors: [Cursor.new(1, 1)])
+      b2 = Reducer.process(b, :delete_line)
+      assert b2.data == ["second", "third"]
+      assert hd(b2.cursors).line == 1
+      assert hd(b2.cursors).col == 1
+    end
+
+    test "pushes an undo snapshot so the deletion can be undone" do
+      b = buf(["alpha", "beta"], cursors: [Cursor.new(1, 3)])
+      b2 = Reducer.process(b, :delete_line)
+      assert length(b2.undo_stack) == 1
+      {snapped_data, _cursors, _sel} = hd(b2.undo_stack)
+      assert snapped_data == ["alpha", "beta"]
+    end
+
+    test "clears any active selection before deleting" do
+      sel = %{start: {1, 1}, finish: {1, 4}}
+      b = %{buf(["hello", "world"], cursors: [Cursor.new(1, 1)]) | selection: sel}
+      b2 = Reducer.process(b, :delete_line)
+      assert b2.selection == nil
+    end
+
+    test "marks the buffer as dirty" do
+      b = %{buf(["text"]) | dirty?: false}
+      b2 = Reducer.process(b, :delete_line)
+      assert b2.dirty? == true
+    end
+  end
 end
