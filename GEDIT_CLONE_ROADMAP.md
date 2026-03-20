@@ -181,7 +181,7 @@ A comprehensive breakdown of current functionality vs target functionality for a
 1. ~~Find (Ctrl+F) with highlighting~~ ✓
 2. ~~Replace (Ctrl+H) with Replace All~~ ✓
 3. Go to line — not yet
-4. Word-wise cursor movement — not yet
+4. ~~Word-wise cursor movement~~ ✓ (Ctrl+Left/Right: prev_word / next_word; Ctrl+Home/End: start/end of document)
 5. Page up/down — not yet
 
 ### Phase 4: Polish (Nice to Have)
