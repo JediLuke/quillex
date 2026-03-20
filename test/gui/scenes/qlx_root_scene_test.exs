@@ -63,51 +63,39 @@ defmodule QuillEx.RootSceneTest do
   end
 
   # ---------------------------------------------------------------------------
-  # Ctrl+H / Find & Replace
+  # Ctrl+H / Find & Replace  and  Ctrl+F / Find
   # ---------------------------------------------------------------------------
   #
-  # The handle_input clause for Ctrl+H calls show_search_bar/2 which relies on
-  # live Scenic.Scene internals (fetch_child, push_graph, etc.) and cannot be
-  # exercised in a pure unit test without a running scene process.  Full UI
-  # behaviour is covered by test/spex/quillex/12_replace_spex.exs.
+  # Ctrl+H and Ctrl+F are intentionally NOT handled in handle_input.
+  # They reach the root scene via the TextField → cast_parent → handle_event
+  # path.  Adding them to handle_input caused double-firing (handle_input AND
+  # handle_event both called show_search_bar for the same keystroke), which
+  # crashed the root scene process.
   #
-  # What we CAN unit-test here is:
-  #   1. The Ctrl+H clause is defined (not swallowed by the catch-all).
-  #   2. The reducer's :open_replace / :close_replace actions — these are pure
-  #      state transforms and carry zero Scenic dependencies.
+  # Both Ctrl+H and Ctrl+F therefore fall through to the catch-all handler,
+  # which returns {:noreply, scene}.  Full UI behaviour is covered by:
+  #   - test/spex/quillex/12_replace_spex.exs (Ctrl+H → replace bar)
+  #   - test/spex/quillex/06_find_spex.exs    (Ctrl+F → search bar)
+  #   - test/spex/quillex/13_menu_close_outside_click_spex.exs
+  #
+  # The reducer's :open_replace / :close_replace actions are pure state
+  # transforms and are tested below.
 
-  describe "Ctrl+H handle_input clause" do
-    test "Ctrl+H is NOT routed to the catch-all handler" do
-      # The catch-all returns {:noreply, scene} without touching Scenic.
-      # The Ctrl+H clause calls show_search_bar, which tries to call
-      # Scenic.Scene.fetch_child/2 with a non-Scene struct and therefore
-      # raises FunctionClauseError.  That proves the *correct* clause fired.
-      # Scenic 0.12 uses atom-based key format: {:key_h, 1, [:ctrl]}.
+  describe "Ctrl+H handle_input — routed to catch-all (not handled at scene level)" do
+    test "Ctrl+H returns {:noreply, scene} via catch-all" do
+      # Ctrl+H is not handled by handle_input; it reaches root via handle_event.
       scene = bare_scene()
-
-      assert_raise FunctionClauseError, fn ->
-        RootScene.handle_input({:key, {:key_h, 1, [:ctrl]}}, nil, scene)
-      end
+      result = RootScene.handle_input({:key, {:key_h, 1, [:ctrl]}}, nil, scene)
+      assert match?({:noreply, _}, result)
     end
   end
 
-  # ---------------------------------------------------------------------------
-  # Ctrl+F — Find (search-only)
-  # ---------------------------------------------------------------------------
-  #
-  # The Ctrl+F handler calls show_search_bar/1 (no replace_mode: true), which
-  # also calls Scenic.Scene.fetch_child/2 and raises FunctionClauseError on a
-  # bare map — proving the correct clause fired.
-  # Full UI behaviour is covered by test/spex/quillex/06_find_spex.exs and
-  # test/spex/quillex/13_menu_close_outside_click_spex.exs.
-
-  describe "Ctrl+F handle_input clause" do
-    test "Ctrl+F is NOT routed to the catch-all handler" do
-      # Scenic 0.12 atom-based key format: {:key_f, 1, [:ctrl]}.
+  describe "Ctrl+F handle_input — routed to catch-all (not handled at scene level)" do
+    test "Ctrl+F returns {:noreply, scene} via catch-all" do
+      # Ctrl+F is not handled by handle_input; it reaches root via handle_event.
       scene = bare_scene()
-      assert_raise FunctionClauseError, fn ->
-        RootScene.handle_input({:key, {:key_f, 1, [:ctrl]}}, nil, scene)
-      end
+      result = RootScene.handle_input({:key, {:key_f, 1, [:ctrl]}}, nil, scene)
+      assert match?({:noreply, _}, result)
     end
   end
 

@@ -61,9 +61,15 @@ defmodule QuillEx.RootScene do
     # - :cursor_pos — cursor tracking for scroll routing and close-on-outside-click
     # - :cursor_scroll — routing scroll events to the right child component
     # - :cursor_button — close-on-outside-click for menus and the search bar
-    # - :key  — keyboard shortcuts (Ctrl+N, Ctrl+O, Ctrl+W, Ctrl+F, Ctrl+H)
+    # - :key  — keyboard shortcuts (Ctrl+N, Ctrl+O, Ctrl+W, Ctrl+D)
     #           fired at root scene level so shortcuts work regardless of which
-    #           child has focus (e.g. search bar open, file picker open, etc.)
+    #           child has focus.
+    #
+    # NOTE: Ctrl+H (Find & Replace) and Ctrl+F (Find) are intentionally NOT
+    # handled here. They reach the root scene via the TextField → cast_parent
+    # → handle_event path. Adding them to handle_input causes double-firing
+    # (both handle_input AND handle_event fire for the same keystroke) which
+    # crashes the root scene. The handle_event path alone is sufficient.
     #
     # TextField (child component) also independently requests :cursor_button for
     # cursor positioning and :key for text editing. Both can coexist: they are
@@ -80,23 +86,6 @@ defmodule QuillEx.RootScene do
   # never delivers (Scenic uses atom keys like :key_f, not strings like "f").
   # Additionally, "v" is not a GLFW modifier key, so the chord cannot be
   # expressed as a simultaneous modifier combination. Access via File menu only.
-
-  # Handle Ctrl+H keyboard shortcut for Find & Replace
-  # Opens the search bar in replace mode (show_replace: true).
-  # This fires at the root scene level so it works even when the TextField
-  # does not have focus (e.g. the search bar itself is focused).
-  # Scenic 0.12 delivers key events as {:key, {atom_key, action, [modifier_atoms]}}.
-  def handle_input({:key, {:key_h, 1, [:ctrl]}}, _context, scene) do
-    show_search_bar(scene, replace_mode: true)
-  end
-
-  # Handle Ctrl+F keyboard shortcut for Find (search-only, no replace row)
-  # Opens the search bar in search-only mode (show_replace stays false).
-  # This fires at the root scene level so it works even when the TextField
-  # does not have focus (e.g. the search bar itself is focused).
-  def handle_input({:key, {:key_f, 1, [:ctrl]}}, _context, scene) do
-    show_search_bar(scene)
-  end
 
   # Handle Ctrl+N keyboard shortcut for New Buffer
   # Creates a new empty buffer, equivalent to File → New Buffer.
