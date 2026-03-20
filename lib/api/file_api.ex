@@ -234,6 +234,56 @@ defmodule Quillex.API.FileAPI do
   end
 
   @doc """
+  Reloads the current active buffer's content from disk.
+
+  Reads the file associated with the active buffer and replaces the buffer's
+  in-memory content with the file's current content on disk. Resets the cursor
+  to the start of the document and marks the buffer as clean (not dirty).
+
+  This is the complement to `verify_file_integrity/0`: once verification reports
+  that the file has been modified on disk, `reload/0` fetches the new version.
+
+  ## Returns
+  - `{:ok, %{file_path: path, lines: count, bytes: count}}` on success
+  - `{:error, reason}` on failure (no file path, file deleted, I/O error)
+  """
+  def reload() do
+    case get_active_buffer_data() do
+      {:ok, %{file_path: nil}} ->
+        {:error, "Buffer has no associated file path"}
+
+      {:ok, %{file_path: file_path, buffer_ref: buf_ref}} ->
+        case File.read(file_path) do
+          {:ok, content} ->
+            new_lines = String.split(content, "\n")
+            # Send three actions as a list so the buffer process applies them atomically:
+            #   {:set_data, lines}    — replace buffer content
+            #   {:set_cursor, {1,1}}  — reset cursor to start of document
+            #   :mark_clean           — clear dirty flag (reload from disk is not a user edit)
+            Quillex.Buffer.BufferManager.call_buffer(
+              buf_ref,
+              {:action, [{:set_data, new_lines}, {:set_cursor, {1, 1}}, :mark_clean]}
+            )
+
+            {:ok, %{
+              file_path: file_path,
+              lines: length(new_lines),
+              bytes: byte_size(content)
+            }}
+
+          {:error, :enoent} ->
+            {:error, "File has been deleted from disk"}
+
+          {:error, reason} ->
+            {:error, "Failed to read #{file_path}: #{reason}"}
+        end
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  @doc """
   Verifies if the current buffer's file has been modified on disk.
 
   Compares the current buffer content with the file on disk to detect

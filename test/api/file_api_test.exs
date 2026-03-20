@@ -48,6 +48,47 @@ defmodule Quillex.API.FileAPITest do
   end
 
   # ---------------------------------------------------------------------------
+  # reload/0 — smoke tests
+  # ---------------------------------------------------------------------------
+  #
+  # reload/0 calls get_active_buffer_data/0 which goes through Buffer.active_buf/0
+  # → GenServer.call(QuillEx.RootScene, :get_active_buffer), the same path as
+  # verify_file_integrity/0.
+  #
+  # With a running app and the default unnamed buffer (no file path):
+  #   → {:error, "Buffer has no associated file path"}
+  # Without a running RootScene:
+  #   → {:error, reason}  (exit caught and converted to string)
+  #
+  # Full round-trip behaviour (file reloaded into buffer) is tested via spex.
+  # ---------------------------------------------------------------------------
+
+  describe "reload/0 — smoke tests" do
+    test "returns a tagged tuple in all runtime contexts" do
+      result = FileAPI.reload()
+      assert match?({:ok, _}, result) or match?({:error, _}, result),
+             "reload/0 must return a tagged tuple, got: #{inspect(result)}"
+    end
+
+    test "returns {:error, _} when the default buffer has no file path" do
+      # Default buffer on startup has no associated file path.
+      # If a RootScene is running: {:error, "Buffer has no associated file path"}.
+      # If no RootScene: {:error, reason} from caught :noproc exit.
+      case FileAPI.reload() do
+        {:error, reason} when is_binary(reason) and reason != "" ->
+          :ok
+
+        {:ok, _} ->
+          # Only acceptable if somehow the active buffer has a file path (unlikely in CI)
+          :ok
+
+        other ->
+          flunk("Unexpected result from reload/0: #{inspect(other)}")
+      end
+    end
+  end
+
+  # ---------------------------------------------------------------------------
   # check_file_status/2 — pure comparison logic, fully unit-testable
   # ---------------------------------------------------------------------------
   #

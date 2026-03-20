@@ -84,7 +84,7 @@ A comprehensive breakdown of current functionality vs target functionality for a
 - [x] **Close Tab** (Ctrl+W) - Close buffer (prompt if unsaved)
 - [x] **File Verification** (File menu → Verify File; no keyboard shortcut) - Check if file modified on disk
 - [ ] **Recent Files** - List of recently opened files
-- [ ] **File changed on disk detection** - Prompt to reload
+- [x] **Reload from Disk** (File menu → Reload from Disk) - Reload buffer content from file on disk
 
 ### Edit Operations
 - [x] **Undo** (Ctrl+U) - Undo last change

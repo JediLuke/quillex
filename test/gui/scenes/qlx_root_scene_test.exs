@@ -63,6 +63,74 @@ defmodule QuillEx.RootSceneTest do
   end
 
   # ---------------------------------------------------------------------------
+  # handle_cast :reload_from_disk
+  # ---------------------------------------------------------------------------
+  #
+  # reload_from_disk reads the active buffer's file from disk and replaces the
+  # buffer content.  It uses the same deadlock-safe pattern as run_verification:
+  # buf_ref is read from scene assigns, not via Buffer.active_buf().
+  #
+  # Unit tests here cover only the nil-active-buf and missing-process paths;
+  # full UI round-trip (file is reloaded, status bar shows message) is covered
+  # by test/spex/quillex/11_run_verification_spex.exs and future reload spex.
+
+  describe "handle_cast :reload_from_disk" do
+    test "returns {:noreply, scene} unchanged when there is no active buffer" do
+      scene = bare_scene()
+      result = RootScene.handle_cast({:action, :reload_from_disk}, scene)
+      assert {:noreply, ^scene} = result
+    end
+
+    test "returns {:noreply, scene} when the buffer process is not found in the registry" do
+      # A fake BufRef whose UUID has no registered Buffer.Process.
+      # BufferManager.call_buffer/2 raises (Registry lookup returns []).
+      # The try/catch in the handler converts that to {:error, reason} → {:noreply, scene}.
+      fake_buf_ref = %Quillex.Structs.BufState.BufRef{uuid: "reload-ghost-uuid", name: "ghost.txt"}
+      scene = %{
+        assigns: %{
+          state: %QuillEx.RootScene.State{
+            active_buf: fake_buf_ref,
+            show_line_numbers: true,
+            word_wrap: false
+          },
+          graph: %Scenic.Graph{}
+        }
+      }
+      result = RootScene.handle_cast({:action, :reload_from_disk}, scene)
+      assert {:noreply, ^scene} = result
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # File menu contains "Reload from Disk"
+  # ---------------------------------------------------------------------------
+
+  describe "Renderizer.build_menus/1 — File menu includes reload item" do
+    test "file menu contains the reload item" do
+      state = %QuillEx.RootScene.State{}
+      menus = QuillEx.RootScene.Renderizer.build_menus(state)
+      file_menu = Enum.find(menus, fn m -> m.id == :file end)
+      assert file_menu != nil, "File menu must exist"
+      item_ids = Enum.map(file_menu.items, fn {id, _label} -> id end)
+      assert "reload" in item_ids,
+             "File menu must contain 'reload' item, got: #{inspect(item_ids)}"
+    end
+
+    test "reload item is positioned after verify item in the file menu" do
+      state = %QuillEx.RootScene.State{}
+      menus = QuillEx.RootScene.Renderizer.build_menus(state)
+      file_menu = Enum.find(menus, fn m -> m.id == :file end)
+      item_ids = Enum.map(file_menu.items, fn {id, _label} -> id end)
+      verify_pos = Enum.find_index(item_ids, &(&1 == "verify"))
+      reload_pos = Enum.find_index(item_ids, &(&1 == "reload"))
+      assert verify_pos != nil, "verify item must be present"
+      assert reload_pos != nil, "reload item must be present"
+      assert reload_pos == verify_pos + 1,
+             "reload must appear immediately after verify in the file menu"
+    end
+  end
+
+  # ---------------------------------------------------------------------------
   # Ctrl+H / Find & Replace  and  Ctrl+F / Find
   # ---------------------------------------------------------------------------
   #

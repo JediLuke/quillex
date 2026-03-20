@@ -519,6 +519,62 @@ defmodule QuillEx.RootScene do
     end
   end
 
+  def handle_cast({:action, :reload_from_disk}, scene) do
+    # Reload the active buffer's content from its associated file on disk.
+    #
+    # Uses the same deadlock-safe pattern as run_verification: read buf_ref
+    # directly from scene assigns rather than calling Buffer.active_buf(), which
+    # routes through RootScene GenServer and would cause a self-call deadlock.
+    case scene.assigns.state.active_buf do
+      nil ->
+        Logger.info("[reload_from_disk] No active buffer")
+        {:noreply, scene}
+
+      buf_ref ->
+        buf_result =
+          try do
+            Quillex.Buffer.Process.fetch_buf(buf_ref)
+          rescue
+            e -> {:error, Exception.message(e)}
+          catch
+            :exit, reason -> {:error, "buffer process exited: #{inspect(reason)}"}
+          end
+
+        case buf_result do
+          {:ok, %Quillex.Structs.BufState{source: %{filepath: file_path}}}
+              when is_binary(file_path) ->
+            case File.read(file_path) do
+              {:ok, content} ->
+                new_lines = String.split(content, "\n")
+                # Apply set_data + set_cursor + mark_clean as a single atomic list
+                # so the buffer process broadcasts one :buf_state_changes event.
+                Quillex.Buffer.BufferManager.call_buffer(
+                  buf_ref,
+                  {:action, [{:set_data, new_lines}, {:set_cursor, {1, 1}}, :mark_clean]}
+                )
+                Logger.info("[reload_from_disk] Reloaded #{length(new_lines)} lines from #{file_path}")
+                show_status(scene, "File reloaded from disk", :info)
+
+              {:error, :enoent} ->
+                Logger.warning("[reload_from_disk] File has been deleted from disk")
+                show_status(scene, "Cannot reload: file has been deleted from disk", :warning)
+
+              {:error, reason} ->
+                Logger.warning("[reload_from_disk] Failed to read file: #{reason}")
+                show_status(scene, "Failed to reload file: #{reason}", :warning)
+            end
+
+          {:ok, %Quillex.Structs.BufState{}} ->
+            Logger.info("[reload_from_disk] Buffer has no associated file path")
+            show_status(scene, "Buffer has no associated file path", :info)
+
+          {:error, reason} ->
+            Logger.debug("[reload_from_disk] Skipped (failed to fetch buffer state): #{inspect(reason)}")
+            {:noreply, scene}
+        end
+    end
+  end
+
   def handle_cast({:action, actions}, scene) when is_list(actions) do
     # With buffer_backed mode, no need to sync - Buffer.Process is source of truth
     # Processing actions from RadixReducer
@@ -751,6 +807,10 @@ defmodule QuillEx.RootScene do
       "verify" ->
         # Run file verification
         handle_cast({:action, :run_verification}, scene)
+
+      "reload" ->
+        # Reload buffer content from disk
+        handle_cast({:action, :reload_from_disk}, scene)
 
       "close" ->
         # Close the active buffer (no sync needed - buffer_backed mode)
