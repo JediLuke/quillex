@@ -113,7 +113,7 @@ defmodule Quillex.KeyboardShortcutsSpex do
         :ok
       end
 
-      then_ "the app is still rendering normally", _context do
+      then_ "the app is still rendering normally" do
         rendered = Query.rendered_text()
         assert is_binary(rendered) and rendered != "",
                "App should keep rendering after Ctrl+N"
@@ -169,13 +169,13 @@ defmodule Quillex.KeyboardShortcutsSpex do
         {:ok, context}
       end
 
-      then_ "the file picker overlay should be visible", _context do
+      then_ "the file picker overlay should be visible" do
         assert file_picker_visible?(),
                "File picker should be visible after Ctrl+O. Rendered: #{Query.rendered_text()}"
         :ok
       end
 
-      then_ "pressing Escape dismisses the picker", _context do
+      then_ "pressing Escape dismisses the picker" do
         press_escape()
         refute file_picker_visible?(),
                "File picker should close after Escape. Rendered: #{Query.rendered_text()}"
@@ -196,7 +196,7 @@ defmodule Quillex.KeyboardShortcutsSpex do
         {:ok, context}
       end
 
-      then_ "the overlay shows 'Open' (not 'Save')", _context do
+      then_ "the overlay shows 'Open' (not 'Save')" do
         rendered = Query.rendered_text()
         assert String.contains?(rendered, "Open"),
                "File picker in open mode should show 'Open' button. Rendered: #{rendered}"
@@ -206,7 +206,7 @@ defmodule Quillex.KeyboardShortcutsSpex do
       end
 
       # Cleanup
-      then_ "we dismiss the picker", _context do
+      then_ "we dismiss the picker" do
         press_escape()
         :ok
       end
@@ -244,13 +244,13 @@ defmodule Quillex.KeyboardShortcutsSpex do
         :ok
       end
 
-      then_ "another tab is still selected", _context do
+      then_ "another tab is still selected" do
         selected = SemanticHelpers.get_selected_tab_label()
         assert selected != nil, "A tab should still be selected after Ctrl+W"
         :ok
       end
 
-      then_ "the app is still rendering normally", _context do
+      then_ "the app is still rendering normally" do
         rendered = Query.rendered_text()
         assert is_binary(rendered) and rendered != "",
                "App should keep rendering after Ctrl+W"
@@ -272,14 +272,14 @@ defmodule Quillex.KeyboardShortcutsSpex do
         {:ok, context}
       end
 
-      then_ "the tab count is still one (close is silently ignored)", _context do
+      then_ "the tab count is still one (close is silently ignored)" do
         count = tab_count()
         assert count == 1,
                "Ctrl+W on the last buffer should be a no-op; tab count should stay 1, got #{count}"
         :ok
       end
 
-      then_ "the app is still rendering normally", _context do
+      then_ "the app is still rendering normally" do
         rendered = Query.rendered_text()
         assert is_binary(rendered) and rendered != "",
                "App should keep rendering after Ctrl+W on last buffer"
@@ -316,14 +316,14 @@ defmodule Quillex.KeyboardShortcutsSpex do
         {:ok, context}
       end
 
-      then_ "the original text is gone", _context do
+      then_ "the original text is gone" do
         rendered = Query.rendered_text()
         refute String.contains?(rendered, "only line"),
                "Ctrl+D should have deleted the line. Rendered: #{rendered}"
         :ok
       end
 
-      then_ "the app is still rendering normally", _context do
+      then_ "the app is still rendering normally" do
         rendered = Query.rendered_text()
         assert is_binary(rendered),
                "App should keep rendering after Ctrl+D on single line"
@@ -356,14 +356,14 @@ defmodule Quillex.KeyboardShortcutsSpex do
         {:ok, context}
       end
 
-      then_ "the first line is gone", _context do
+      then_ "the first line is gone" do
         rendered = Query.rendered_text()
         refute String.contains?(rendered, "first line"),
                "Ctrl+D should have deleted the first line. Rendered: #{rendered}"
         :ok
       end
 
-      then_ "the second line is still present", _context do
+      then_ "the second line is still present" do
         rendered = Query.rendered_text()
         assert String.contains?(rendered, "second line"),
                "Second line should still be visible after Ctrl+D. Rendered: #{rendered}"
@@ -392,7 +392,7 @@ defmodule Quillex.KeyboardShortcutsSpex do
         {:ok, context}
       end
 
-      then_ "the deleted line is restored", _context do
+      then_ "the deleted line is restored" do
         rendered = Query.rendered_text()
         assert String.contains?(rendered, "undo me"),
                "Ctrl+U should restore the line deleted by Ctrl+D. Rendered: #{rendered}"
@@ -423,7 +423,7 @@ defmodule Quillex.KeyboardShortcutsSpex do
         {:ok, context}
       end
 
-      then_ "the Find & Replace bar is visible", _context do
+      then_ "the Find & Replace bar is visible" do
         rendered = Query.rendered_text()
         # The search/replace bar renders "Replace:" or "Find:" text
         has_replace = String.contains?(rendered, "Replace") or String.contains?(rendered, "Find")
@@ -433,7 +433,7 @@ defmodule Quillex.KeyboardShortcutsSpex do
       end
 
       # Cleanup: close search bar
-      then_ "we dismiss it with Escape", _context do
+      then_ "we dismiss it with Escape" do
         press_escape()
         :ok
       end

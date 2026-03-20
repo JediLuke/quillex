@@ -130,7 +130,7 @@ defmodule Quillex.WordNavigationSpex do
         {:ok, context}
       end
 
-      then_ "the cursor should be at col 7 (start of 'world')", _context do
+      then_ "the cursor should be at col 7 (start of 'world')" do
         {:ok, pos} = wait_for_cursor({1, 7})
         assert pos == {1, 7},
                "Ctrl+Right from col 1 on 'hello world' should land at col 7, got #{inspect(pos)}"
@@ -155,8 +155,7 @@ defmodule Quillex.WordNavigationSpex do
         {:ok, context}
       end
 
-      then_ "the cursor should be at or past col 11 (end of 'world')", _context do
-        pos = SemanticHelpers.get_cursor_position()
+      then_ "the cursor should be at or past col 11 (end of 'world')" do
         Process.sleep(200)
         pos = SemanticHelpers.get_cursor_position()
 
@@ -191,7 +190,7 @@ defmodule Quillex.WordNavigationSpex do
         {:ok, context}
       end
 
-      then_ "cursor should land on col 3 (the 'f' of 'foo')", _context do
+      then_ "cursor should land on col 3 (the 'f' of 'foo')" do
         # next_word_coords skips spaces first, then the word.
         # But from col 1 (a space), it first skips over the spaces, then over 'foo'.
         # So actually it lands at col 8 (the 'b' of 'bar').
@@ -239,7 +238,7 @@ defmodule Quillex.WordNavigationSpex do
         {:ok, context}
       end
 
-      then_ "cursor should be at col 1 (start of 'hello')", _context do
+      then_ "cursor should be at col 1 (start of 'hello')" do
         {:ok, pos} = wait_for_cursor({1, 1})
         assert pos == {1, 1},
                "Ctrl+Left from col 7 should land at col 1 (start of 'hello'), got #{inspect(pos)}"
@@ -262,7 +261,7 @@ defmodule Quillex.WordNavigationSpex do
         {:ok, context}
       end
 
-      then_ "cursor remains at col 1 (no crash, no underflow)", _context do
+      then_ "cursor remains at col 1 (no crash, no underflow)" do
         Process.sleep(300)
         pos = SemanticHelpers.get_cursor_position()
 
@@ -304,7 +303,7 @@ defmodule Quillex.WordNavigationSpex do
         {:ok, context}
       end
 
-      then_ "cursor should be back at col 1", _context do
+      then_ "cursor should be back at col 1" do
         {:ok, pos} = wait_for_cursor({1, 1})
         assert pos == {1, 1},
                "Round-trip Ctrl+Right→Ctrl+Left should return to col 1, got #{inspect(pos)}"
@@ -339,7 +338,7 @@ defmodule Quillex.WordNavigationSpex do
         {:ok, context}
       end
 
-      then_ "cursor should be at col 3", _context do
+      then_ "cursor should be at col 3" do
         {:ok, pos} = wait_for_cursor({1, 3})
         assert pos == {1, 3},
                "Two plain Right presses should reach col 3, got #{inspect(pos)}"
@@ -362,7 +361,7 @@ defmodule Quillex.WordNavigationSpex do
         {:ok, context}
       end
 
-      then_ "cursor should be at col 3 (on 'c')", _context do
+      then_ "cursor should be at col 3 (on 'c')" do
         Process.sleep(200)
         pos = SemanticHelpers.get_cursor_position()
 

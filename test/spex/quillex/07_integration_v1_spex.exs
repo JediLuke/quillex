@@ -1629,7 +1629,7 @@ defmodule Quillex.IntegrationV1Spex do
       end
     end
 
-    scenario "Click and drag selects text on a single line", context do
+    scenario "Click and drag selects text on a single line", _context do
       given_ "we have a buffer with known text", context do
         trigger_action(:new_buffer)
         Process.sleep(500)
@@ -1679,7 +1679,7 @@ defmodule Quillex.IntegrationV1Spex do
       end
     end
 
-    scenario "Double-click selects a word", context do
+    scenario "Double-click selects a word", _context do
       given_ "we have a buffer with words", context do
         trigger_action(:new_buffer)
         Process.sleep(500)
@@ -1720,7 +1720,7 @@ defmodule Quillex.IntegrationV1Spex do
       end
     end
 
-    scenario "Single click after drag selection clears the selection", context do
+    scenario "Single click after drag selection clears the selection", _context do
       given_ "we have a drag selection active", context do
         trigger_action(:new_buffer)
         Process.sleep(500)

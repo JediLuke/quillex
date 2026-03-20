@@ -17,9 +17,6 @@ defmodule Quillex.PropertyTestsSpex do
   alias ScenicMcp.Probes
   alias Quillex.TestHelpers.SemanticHelpers
 
-  # Maximum operations per test to keep runtime reasonable
-  @max_ops 20
-
   setup_all do
     # Start Quillex application
     case Application.ensure_all_started(:quillex) do
