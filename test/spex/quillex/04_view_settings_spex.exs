@@ -67,7 +67,12 @@ defmodule Quillex.ViewSettingsSpex do
     Probes.click_element("icon_menu_file")
     Process.sleep(200)
     Probes.click_element("icon_menu_file_close")
-    Process.sleep(300)
+    Process.sleep(400)
+    # If the buffer was dirty, a dialog appeared — discard changes and close.
+    if Query.text_visible?("Unsaved Changes") do
+      Probes.send_keys("d", [])
+      Process.sleep(400)
+    end
   end
 
   # Close buffers until only one remains

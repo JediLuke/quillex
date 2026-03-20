@@ -76,6 +76,11 @@ defmodule Quillex.RunVerificationSpex do
       Process.sleep(300)
       Probes.click_element("icon_menu_file_close")
       Process.sleep(400)
+      # If the buffer was dirty, a dialog appeared — discard changes and close.
+      if Query.text_visible?("Unsaved Changes") do
+        Probes.send_keys("d", [])
+        Process.sleep(400)
+      end
       close_all_but_one()
     end
   end

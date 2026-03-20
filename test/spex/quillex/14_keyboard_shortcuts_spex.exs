@@ -47,11 +47,17 @@ defmodule Quillex.KeyboardShortcutsSpex do
   end
 
   # Close the active buffer via the File menu (used as setup/cleanup helper).
+  # If the buffer has unsaved changes, the dialog is automatically dismissed
+  # by pressing 'd' (Discard) — test cleanup should never block on a dialog.
   defp close_active_buffer_via_menu do
     Probes.click_element("icon_menu_file")
     Process.sleep(300)
     Probes.click_element("icon_menu_file_close")
-    Process.sleep(300)
+    Process.sleep(400)
+    if ScenicMcp.Query.text_visible?("Unsaved Changes") do
+      Probes.send_keys("d", [])
+      Process.sleep(400)
+    end
   end
 
   # Close extra buffers until exactly one remains.
