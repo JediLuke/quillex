@@ -81,7 +81,7 @@ A comprehensive breakdown of current functionality vs target functionality for a
 - [x] **Save** (Ctrl+S) - Save to current path (prompt if new)
 - [x] **Save As** (Ctrl+Shift+S) - Save to new path
 - [x] **Close Tab** (Ctrl+W) - Close buffer (prompt if unsaved)
-- [x] **File Verification** (Ctrl+V+F) - Check if file modified on disk
+- [x] **File Verification** (File menu → Verify File; no keyboard shortcut) - Check if file modified on disk
 - [ ] **Recent Files** - List of recently opened files
 - [ ] **File changed on disk detection** - Prompt to reload
 
@@ -92,7 +92,7 @@ A comprehensive breakdown of current functionality vs target functionality for a
 - [x] **Copy** (Ctrl+C) - Copy selection to clipboard
 - [x] **Paste** (Ctrl+V) - Paste from clipboard
 - [x] **Select All** (Ctrl+A) - Select entire document
-- [ ] **Delete Line** (Ctrl+D) - Delete current line
+- [x] **Delete Line** (Ctrl+D) - Delete current line
 - [ ] **Duplicate Line** (Ctrl+Shift+D) - Duplicate current line
 - [ ] **Move Line Up/Down** (Alt+Up/Down) - Reorder lines
 

@@ -2,20 +2,16 @@
 
 ## Discussed / In Queue
 - [ ] **Mouse controls** - click to position cursor, drag to select text
-- [ ] **Replace** - Ctrl+H find and replace dialog
 
 ## Core Editing (Missing)
 - [ ] **Select All** - Ctrl+A (works at buffer level, may need TextField integration)
 - [ ] **Go to line** - Ctrl+G jump to line number (Ctrl+G currently mapped to Find Next)
-- [ ] **Delete line** - Ctrl+Shift+K or similar
-- [ ] **Duplicate line** - Ctrl+D
+- [ ] **Duplicate line** - Ctrl+Shift+D
 - [ ] **Move line up/down** - Alt+Up/Down
 - [ ] **Indent/Dedent** - Tab/Shift+Tab on selection
 - [ ] **Auto-indent** - maintain indentation on newline
 
 ## Search & Replace
-- [ ] **Replace** - Ctrl+H
-- [ ] **Replace all**
 - [ ] **Case sensitive toggle**
 - [ ] **Regex search** (advanced)
 
@@ -64,4 +60,6 @@
 - [x] Modified/dirty indicator (" *" on tab labels)
 - [x] Tab rendering — configurable tab width (2/3/4/8 spaces)
 - [x] Toggle sidebar (File Navigator)
-- [x] File integrity verification (Ctrl+V+F) — detect external file modifications
+- [x] File integrity verification (File menu → Verify File) — detect external file modifications
+- [x] Delete line (Ctrl+D) — deletes current line
+- [x] Replace / Replace All (Ctrl+H) — find and replace dialog
