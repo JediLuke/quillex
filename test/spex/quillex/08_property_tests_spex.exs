@@ -171,9 +171,13 @@ defmodule Quillex.PropertyTestsSpex do
       end
 
       then_ "cursor should still be visible", context do
+        # Allow scroll to settle after rapid navigation sequence
+        # Ctrl+Home was the last operation; the scroll update may lag the cursor move.
+        Process.sleep(400)
+
         # Type a marker to verify cursor is usable
         Probes.send_text("MARKER")
-        Process.sleep(100)
+        Process.sleep(200)
 
         # The marker should be visible if cursor is in viewport
         assert Query.text_visible?("MARKER"),

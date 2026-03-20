@@ -82,9 +82,12 @@ defmodule Quillex.MenuCloseOutsideClickSpex do
 
     scenario "Search bar is dismissed when the user clicks in the buffer area", context do
       given_ "the search bar is open", context do
-        # Clean slate
+        # Clean slate — escape closes any open menu/picker, then click the
+        # editor area to guarantee focus is on the buffer pane before typing.
         Probes.send_keys("escape", [])
         Process.sleep(200)
+        Probes.click(400, 200)
+        Process.sleep(100)
         Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
         Probes.send_keys("backspace", [])
@@ -92,9 +95,14 @@ defmodule Quillex.MenuCloseOutsideClickSpex do
         Probes.send_text("outside click test content")
         Process.sleep(100)
 
+        # Click editor area again to ensure buffer pane focus before Ctrl+F,
+        # so the key event reaches the TextField (which sends {:find_requested}).
+        Probes.click(400, 200)
+        Process.sleep(100)
+
         # Open the search bar
         Probes.send_keys("f", [:ctrl])
-        Process.sleep(400)
+        Process.sleep(500)
 
         # Verify the search bar is open
         visible = Query.text_visible?("<") or Query.text_visible?(">") or
