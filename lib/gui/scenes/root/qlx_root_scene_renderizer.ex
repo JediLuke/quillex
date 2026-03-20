@@ -24,9 +24,17 @@ defmodule QuillEx.RootScene.Renderizer do
   #   1. buffer_pane (bottom)
   #   2. search_bar (middle, when visible)
   #   3. tab_bar + icon_menu (top - dropdowns render above everything)
+
+  # Guard: no frame means we cannot lay out components yet.  This happens during
+  # process startup or in unit-test contexts where a bare state struct (frame: nil)
+  # is passed.  Return the graph unchanged so callers don't crash.
+  def render(%Scenic.Graph{} = graph, _scene, _old_state, %QuillEx.RootScene.State{frame: nil}) do
+    graph
+  end
+
   def render(
     %Scenic.Graph{} = graph,
-    %Scenic.Scene{} = _scene,
+    _scene,
     old_state,
     %QuillEx.RootScene.State{} = state
   ) do
