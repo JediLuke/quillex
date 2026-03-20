@@ -131,8 +131,14 @@ defmodule Quillex.RunVerificationSpex do
 
     scenario "Verify File on a new unsaved buffer completes without crashing", context do
       given_ "we have one open buffer with no saved file path", context do
-        close_all_but_one()
-        clear_buffer()
+        # Use Ctrl+N to open a fresh untitled buffer — this guarantees the active
+        # buffer has no file path association, regardless of what prior tests left.
+        # close_all_but_one() + clear_buffer() is insufficient: the remaining buffer
+        # may carry a filepath from a prior Save As test (e.g. file 09).
+        Probes.send_keys("escape", [])
+        Process.sleep(100)
+        Probes.send_keys("n", [:ctrl])
+        Process.sleep(400)
         type_text("some unsaved content")
         {:ok, context}
       end
@@ -169,8 +175,9 @@ defmodule Quillex.RunVerificationSpex do
         :ok
       end
 
-      then_ "cleanup: clear the buffer", context do
-        clear_buffer()
+      then_ "cleanup: close the new buffer", context do
+        # Close the Ctrl+N buffer we opened — return to prior state
+        close_all_but_one()
         :ok
       end
     end

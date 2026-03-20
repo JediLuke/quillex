@@ -36,7 +36,7 @@ defmodule QuillEx.MixProject do
     [
       {:scenic, git: "https://github.com/JediLuke/scenic.git", branch: "main", override: true},
       {:scenic_driver_local, git: "https://github.com/JediLuke/scenic_driver_local.git", branch: "main", override: true},
-      {:scenic_widget_contrib, git: "https://github.com/JediLuke/scenic-widget-contrib.git", branch: "main"},
+      {:scenic_widget_contrib, path: "../scenic-widget-contrib"},
       {:elixir_uuid, "~> 1.2"},
       {:font_metrics, "~> 0.5"},
       {:truetype_metrics, "~> 0.6"},
