@@ -259,6 +259,8 @@ Quillex.Buffer.Process
 - [x] Menu close on outside click — `13_menu_close_outside_click_spex.exs`
 - [x] Keyboard shortcuts (Ctrl+N/O/W/S/etc.) — `14_keyboard_shortcuts_spex.exs`
 - [x] Word navigation (Ctrl+Left/Right) — `15_word_navigation_spex.exs`
+- [x] Unsaved-changes confirmation dialog — `16_unsaved_close_prompt_spex.exs`
+- [x] Page Up/Down navigation — `17_page_navigation_spex.exs`
 
 ### Visual/E2E Tests (via ScenicMCP)
 - [x] Menu opens on click
