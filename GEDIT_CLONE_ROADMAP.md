@@ -108,7 +108,7 @@ A comprehensive breakdown of current functionality vs target functionality for a
 ### Navigation
 - [ ] **Go to Line** (Ctrl+G) - Jump to specific line number (Ctrl+G currently mapped to Find Next)
 - [x] **Home/End** - Go to start/end of line
-- [ ] **Ctrl+Home/End** - Go to start/end of document
+- [x] **Ctrl+Home/End** - Go to start/end of document
 - [ ] **Page Up/Down** - Scroll by page
 - [ ] **Ctrl+Left/Right** - Move by word
 - [x] **Scroll with mouse wheel** - Vertical scrolling

@@ -115,6 +115,20 @@ defmodule QuillEx.RootScene do
     dispatch_to_active_buffer(scene, :delete_line)
   end
 
+  # Handle Ctrl+Home — move cursor to the very start of the document (line 1, col 1).
+  # Mirrors GEdit behaviour: jumps to the beginning of the file regardless of current
+  # position, clearing any active selection.
+  def handle_input({:key, {:key_home, 1, [:ctrl]}}, _context, scene) do
+    dispatch_to_active_buffer(scene, {:move_cursor, :doc_start})
+  end
+
+  # Handle Ctrl+End — move cursor to the end of the last line in the document.
+  # Mirrors GEdit behaviour: jumps to the end of the file regardless of current
+  # position, clearing any active selection.
+  def handle_input({:key, {:key_end, 1, [:ctrl]}}, _context, scene) do
+    dispatch_to_active_buffer(scene, {:move_cursor, :doc_end})
+  end
+
   def handle_input({:viewport, {input, _coords}}, _context, scene)
     when input in [:enter, :exit] do
       # don't do anything when the mouse enters/leaves the viewport
