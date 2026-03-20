@@ -899,4 +899,334 @@ defmodule Quillex.Buffer.Process.ReducerTest do
       assert b2.data == ["first"]
     end
   end
+
+  # ---------------------------------------------------------------------------
+  # process/2 {:delete, :before_cursor}  (backspace key)
+  # ---------------------------------------------------------------------------
+
+  describe "process/2 {:delete, :before_cursor}" do
+    test "deletes the character immediately before the cursor" do
+      # cursor at col 6 (one-past-end of "hello"), backspace removes 'o'
+      b = buf(["hello"], cursors: [Cursor.new(1, 6)])
+      b2 = Reducer.process(b, {:delete, :before_cursor})
+      assert b2.data == ["hell"]
+      [c] = b2.cursors
+      assert c.col == 5
+    end
+
+    test "deletes a middle character, shifting the cursor left by one" do
+      # "hello" — cursor at col 3 (on 'l'), backspace removes 'e'
+      b = buf(["hello"], cursors: [Cursor.new(1, 3)])
+      b2 = Reducer.process(b, {:delete, :before_cursor})
+      assert b2.data == ["hllo"]
+      [c] = b2.cursors
+      assert c.col == 2
+    end
+
+    test "at the start of a non-first line, merges the line with the previous one" do
+      # cursor at col 1 of line 2: backspace joins "world" onto "hello"
+      b = buf(["hello", "world"], cursors: [Cursor.new(2, 1)])
+      b2 = Reducer.process(b, {:delete, :before_cursor})
+      assert b2.data == ["helloworld"]
+      assert length(b2.data) == 1
+      [c] = b2.cursors
+      # cursor lands at String.length("hello") + 1 = 6
+      assert c.line == 1
+      assert c.col == 6
+    end
+
+    test "at the very start of the buffer (line 1, col 1) leaves data unchanged" do
+      b = buf(["hello"], cursors: [Cursor.new(1, 1)])
+      b2 = Reducer.process(b, {:delete, :before_cursor})
+      assert b2.data == ["hello"]
+      [c] = b2.cursors
+      assert c.line == 1
+      assert c.col == 1
+    end
+
+    test "pushes an undo snapshot before deletion" do
+      b = buf(["hello"], cursors: [Cursor.new(1, 6)])
+      b2 = Reducer.process(b, {:delete, :before_cursor})
+      assert length(b2.undo_stack) == 1
+      {prev_data, _, _} = hd(b2.undo_stack)
+      assert prev_data == ["hello"]
+    end
+
+    test "with selection active, deletes the selected text instead of one character" do
+      # "hello world" — selection from col 1 to col 6 covers "hello"
+      selection = %{start: {1, 1}, end: {1, 6}}
+      b = %{buf(["hello world"]) | selection: selection}
+      b2 = Reducer.process(b, {:delete, :before_cursor})
+      assert b2.data == [" world"]
+      assert b2.selection == nil
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # process/2 {:delete, :at_cursor}  (delete key)
+  # ---------------------------------------------------------------------------
+
+  describe "process/2 {:delete, :at_cursor}" do
+    test "deletes the character at the cursor position (cursor stays put)" do
+      # cursor at col 1 on "hello", delete removes 'h'
+      b = buf(["hello"], cursors: [Cursor.new(1, 1)])
+      b2 = Reducer.process(b, {:delete, :at_cursor})
+      assert b2.data == ["ello"]
+      [c] = b2.cursors
+      assert c.line == 1
+      assert c.col == 1
+    end
+
+    test "deletes a middle character without moving the cursor" do
+      # cursor at col 3 on "hello", delete removes second 'l'
+      b = buf(["hello"], cursors: [Cursor.new(1, 3)])
+      b2 = Reducer.process(b, {:delete, :at_cursor})
+      assert b2.data == ["helo"]
+      [c] = b2.cursors
+      assert c.col == 3
+    end
+
+    test "at the end of a non-last line, merges the next line onto the current one" do
+      # cursor at col 6 (one-past-end of "hello"), delete merges "world"
+      b = buf(["hello", "world"], cursors: [Cursor.new(1, 6)])
+      b2 = Reducer.process(b, {:delete, :at_cursor})
+      assert b2.data == ["helloworld"]
+      assert length(b2.data) == 1
+    end
+
+    test "at the very end of the buffer is a no-op" do
+      # "hello" is 5 chars → col 6 is the end; last line → no-op
+      b = buf(["hello"], cursors: [Cursor.new(1, 6)])
+      b2 = Reducer.process(b, {:delete, :at_cursor})
+      assert b2.data == ["hello"]
+    end
+
+    test "pushes an undo snapshot before deletion" do
+      b = buf(["hello"], cursors: [Cursor.new(1, 1)])
+      b2 = Reducer.process(b, {:delete, :at_cursor})
+      assert length(b2.undo_stack) == 1
+      {prev_data, _, _} = hd(b2.undo_stack)
+      assert prev_data == ["hello"]
+    end
+
+    test "with selection active, deletes the selected text instead" do
+      # "hello world" — selection from col 7 to col 12 covers "world"
+      selection = %{start: {1, 7}, end: {1, 12}}
+      b = %{buf(["hello world"]) | selection: selection}
+      b2 = Reducer.process(b, {:delete, :at_cursor})
+      assert b2.data == ["hello "]
+      assert b2.selection == nil
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # process/2 {:move_cursor, direction, count}  (arrow keys)
+  # ---------------------------------------------------------------------------
+
+  describe "process/2 {:move_cursor, direction, count}" do
+    test "moves cursor left by the given count" do
+      b = buf(["hello world"], cursors: [Cursor.new(1, 6)])
+      b2 = Reducer.process(b, {:move_cursor, :left, 3})
+      [c] = b2.cursors
+      assert c.line == 1
+      assert c.col == 3
+    end
+
+    test "moves cursor right by the given count" do
+      b = buf(["hello world"], cursors: [Cursor.new(1, 1)])
+      b2 = Reducer.process(b, {:move_cursor, :right, 5})
+      [c] = b2.cursors
+      assert c.line == 1
+      assert c.col == 6
+    end
+
+    test "moves cursor up by the given count" do
+      b = buf(["first", "second", "third"], cursors: [Cursor.new(3, 1)])
+      b2 = Reducer.process(b, {:move_cursor, :up, 2})
+      [c] = b2.cursors
+      assert c.line == 1
+    end
+
+    test "moves cursor down by the given count" do
+      b = buf(["first", "second", "third"], cursors: [Cursor.new(1, 1)])
+      b2 = Reducer.process(b, {:move_cursor, :down, 2})
+      [c] = b2.cursors
+      assert c.line == 3
+    end
+
+    test "moving left clamps at column 1" do
+      b = buf(["hello"], cursors: [Cursor.new(1, 1)])
+      b2 = Reducer.process(b, {:move_cursor, :left, 100})
+      [c] = b2.cursors
+      assert c.col == 1
+    end
+
+    test "moving right clamps at end of line (length + 1)" do
+      # "hello" = 5 chars → max col = 6
+      b = buf(["hello"], cursors: [Cursor.new(1, 1)])
+      b2 = Reducer.process(b, {:move_cursor, :right, 100})
+      [c] = b2.cursors
+      assert c.col == 6
+    end
+
+    test "moving up clamps at line 1" do
+      b = buf(["first", "second"], cursors: [Cursor.new(1, 1)])
+      b2 = Reducer.process(b, {:move_cursor, :up, 100})
+      [c] = b2.cursors
+      assert c.line == 1
+    end
+
+    test "moving down clamps at the last line" do
+      b = buf(["first", "second"], cursors: [Cursor.new(1, 1)])
+      b2 = Reducer.process(b, {:move_cursor, :down, 100})
+      [c] = b2.cursors
+      assert c.line == 2
+    end
+
+    test "moving up to a shorter line clamps the column within the new line" do
+      # line 1 = "hi" (2 chars), line 2 = "a longer line" (13 chars)
+      # cursor at {2, 10}; moving up puts us on "hi" → col clamped to 3
+      b = buf(["hi", "a longer line"], cursors: [Cursor.new(2, 10)])
+      b2 = Reducer.process(b, {:move_cursor, :up, 1})
+      [c] = b2.cursors
+      assert c.line == 1
+      # "hi" is 2 chars → max col = 3
+      assert c.col == 3
+    end
+
+    test "does not modify buffer data" do
+      b = buf(["unchanged"], cursors: [Cursor.new(1, 1)])
+      b2 = Reducer.process(b, {:move_cursor, :right, 3})
+      assert b2.data == ["unchanged"]
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # process/2 {:move_cursor, :line_start}  (Home key)
+  # ---------------------------------------------------------------------------
+
+  describe "process/2 {:move_cursor, :line_start}" do
+    test "moves cursor to column 1 of the current line" do
+      b = buf(["hello world"], cursors: [Cursor.new(1, 7)])
+      b2 = Reducer.process(b, {:move_cursor, :line_start})
+      [c] = b2.cursors
+      assert c.line == 1
+      assert c.col == 1
+    end
+
+    test "does not change the line number" do
+      b = buf(["first", "second", "third"], cursors: [Cursor.new(2, 5)])
+      b2 = Reducer.process(b, {:move_cursor, :line_start})
+      [c] = b2.cursors
+      assert c.line == 2
+      assert c.col == 1
+    end
+
+    test "is a no-op when cursor is already at column 1" do
+      b = buf(["hello"], cursors: [Cursor.new(1, 1)])
+      b2 = Reducer.process(b, {:move_cursor, :line_start})
+      [c] = b2.cursors
+      assert c.col == 1
+    end
+
+    test "does not modify buffer data" do
+      b = buf(["unchanged"], cursors: [Cursor.new(1, 5)])
+      b2 = Reducer.process(b, {:move_cursor, :line_start})
+      assert b2.data == ["unchanged"]
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # process/2 {:move_cursor, :line_end}  (End key)
+  # ---------------------------------------------------------------------------
+
+  describe "process/2 {:move_cursor, :line_end}" do
+    test "moves cursor to one past the last character on the current line" do
+      # "hello" = 5 chars → col 6
+      b = buf(["hello"], cursors: [Cursor.new(1, 1)])
+      b2 = Reducer.process(b, {:move_cursor, :line_end})
+      [c] = b2.cursors
+      assert c.line == 1
+      assert c.col == 6
+    end
+
+    test "does not change the line number" do
+      b = buf(["first", "second"], cursors: [Cursor.new(2, 1)])
+      b2 = Reducer.process(b, {:move_cursor, :line_end})
+      [c] = b2.cursors
+      assert c.line == 2
+      # "second" = 6 chars → col 7
+      assert c.col == 7
+    end
+
+    test "on an empty line, moves cursor to column 1" do
+      b = buf(["", "content"], cursors: [Cursor.new(1, 1)])
+      b2 = Reducer.process(b, {:move_cursor, :line_end})
+      [c] = b2.cursors
+      assert c.line == 1
+      # "" is 0 chars → String.length("") + 1 = 1
+      assert c.col == 1
+    end
+
+    test "does not modify buffer data" do
+      b = buf(["unchanged"], cursors: [Cursor.new(1, 1)])
+      b2 = Reducer.process(b, {:move_cursor, :line_end})
+      assert b2.data == ["unchanged"]
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # process/2 {:newline, :at_cursor}  (Enter key)
+  # ---------------------------------------------------------------------------
+
+  describe "process/2 {:newline, :at_cursor}" do
+    test "splits the current line at the cursor position" do
+      # cursor at col 6 on "hello world" → ["hello", " world"]
+      b = buf(["hello world"], cursors: [Cursor.new(1, 6)])
+      b2 = Reducer.process(b, {:newline, :at_cursor})
+      assert b2.data == ["hello", " world"]
+    end
+
+    test "at end of line appends a new empty line" do
+      # cursor at col 6 (one-past-end of "hello") → ["hello", ""]
+      b = buf(["hello"], cursors: [Cursor.new(1, 6)])
+      b2 = Reducer.process(b, {:newline, :at_cursor})
+      assert b2.data == ["hello", ""]
+    end
+
+    test "cursor moves to the first non-indent column of the new line" do
+      # no indent → col 1
+      b = buf(["hello world"], cursors: [Cursor.new(1, 6)])
+      b2 = Reducer.process(b, {:newline, :at_cursor})
+      [c] = b2.cursors
+      assert c.line == 2
+      assert c.col == 1
+    end
+
+    test "auto-indents the new line to match the leading whitespace of the current line" do
+      # "  indented text" has 2 leading spaces; cursor at end of line
+      b = buf(["  indented"], cursors: [Cursor.new(1, 11)])
+      b2 = Reducer.process(b, {:newline, :at_cursor})
+      assert length(b2.data) == 2
+      [_first, new_line] = b2.data
+      assert String.starts_with?(new_line, "  ")
+      [c] = b2.cursors
+      # 2 spaces of indent → cursor at col 3
+      assert c.col == 3
+    end
+
+    test "pushes an undo snapshot before inserting the new line" do
+      b = buf(["hello world"], cursors: [Cursor.new(1, 6)])
+      b2 = Reducer.process(b, {:newline, :at_cursor})
+      assert length(b2.undo_stack) == 1
+      {prev_data, _, _} = hd(b2.undo_stack)
+      assert prev_data == ["hello world"]
+    end
+
+    test "inserting a newline in a multi-line buffer increases the line count by one" do
+      b = buf(["line one", "line two"], cursors: [Cursor.new(1, 9)])
+      b2 = Reducer.process(b, {:newline, :at_cursor})
+      assert length(b2.data) == 3
+    end
+  end
 end
