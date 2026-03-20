@@ -75,16 +75,11 @@ defmodule QuillEx.RootScene do
     {:ok, scene}
   end
 
-  # Handle Ctrl+V+F keyboard shortcut for file verification
-  def handle_input({:key, {"f", 1, ["ctrl", "v"]}}, _context, scene) do
-    # Trigger file verification action
-    handle_cast({:action, :run_verification}, scene)
-  end
-
-  # Handle alternative Ctrl+V+F pattern (different platforms may send different modifier order)
-  def handle_input({:key, {"f", 1, ["v", "ctrl"]}}, _context, scene) do
-    handle_cast({:action, :run_verification}, scene)
-  end
+  # NOTE: "Verify File" (run_verification) has no keyboard shortcut.
+  # The original Ctrl+V+F design used string-format patterns that Scenic 0.12
+  # never delivers (Scenic uses atom keys like :key_f, not strings like "f").
+  # Additionally, "v" is not a GLFW modifier key, so the chord cannot be
+  # expressed as a simultaneous modifier combination. Access via File menu only.
 
   # Handle Ctrl+H keyboard shortcut for Find & Replace
   # Opens the search bar in replace mode (show_replace: true).

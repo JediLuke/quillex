@@ -18,19 +18,22 @@ defmodule QuillEx.RootSceneTest do
     }
   end
 
-  describe "run_verification keyboard shortcut" do
-    test "Ctrl+V+F returns {:noreply, scene} unchanged" do
-      scene = bare_scene()
-      result = RootScene.handle_input({:key, {"f", 1, ["ctrl", "v"]}}, nil, scene)
-      assert {:noreply, ^scene} = result
-    end
-
-    test "alternative modifier order Ctrl+V+F returns {:noreply, scene} unchanged" do
-      scene = bare_scene()
-      result = RootScene.handle_input({:key, {"f", 1, ["v", "ctrl"]}}, nil, scene)
-      assert {:noreply, ^scene} = result
-    end
-  end
+  # ---------------------------------------------------------------------------
+  # run_verification — keyboard shortcut
+  # ---------------------------------------------------------------------------
+  #
+  # There is intentionally NO keyboard shortcut for run_verification.
+  # The original Ctrl+V+F design used string-format patterns such as
+  # {:key, {"f", 1, ["ctrl", "v"]}}, but Scenic 0.12 delivers all key events
+  # in atom format (e.g. {:key, {:key_f, 1, [:ctrl]}}).  Those string patterns
+  # could never match real Scenic events, so the handlers were dead code.
+  #
+  # Additionally, "v" is not a GLFW modifier key and cannot appear alongside
+  # :ctrl in an actual modifier list.  The chord Ctrl+V+F is not achievable.
+  #
+  # run_verification is accessible via File → Verify File (menu only).
+  # A proper keyboard shortcut can be added in a future commit once a valid
+  # atom-format pattern is confirmed against a live Scenic session.
 
   describe "handle_cast :run_verification" do
     test "returns {:noreply, scene} when no buffer process is running" do

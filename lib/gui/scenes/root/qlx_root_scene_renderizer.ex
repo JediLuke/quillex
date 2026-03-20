@@ -277,7 +277,7 @@ defmodule QuillEx.RootScene.Renderizer do
         {"open", "Open File..."},
         {"save", "Save (Ctrl+S)"},
         {"save_as", "Save As..."},
-        {"verify", "Verify File (Ctrl+V+F)"},
+        {"verify", "Verify File"},
         {"close", "Close Buffer"}
       ]},
       %{id: :edit, icon: "E", items: [
