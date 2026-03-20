@@ -645,14 +645,20 @@ defmodule Quillex.IntegrationV1Spex do
     scenario "Close search bar", context do
       when_ "we press Escape", context do
         Probes.send_keys("escape", [])
-        Process.sleep(300)
+        # Wait long enough for the search bar process to die and the TextField
+        # to receive its :focus restore message before we type.
+        Process.sleep(600)
         {:ok, context}
       end
 
       then_ "search bar should be closed", context do
-        # Verify search bar is closed by typing and checking it goes to buffer
-        Probes.send_text("Z")
+        # Click in the editor area to guarantee the buffer pane has OS-level
+        # focus before typing (belt-and-suspenders alongside :focus put_child).
+        Probes.click(400, 200)
         Process.sleep(200)
+
+        Probes.send_text("Z")
+        Process.sleep(400)
 
         content = active_buffer_content()
         assert String.contains?(content || "", "Z"),

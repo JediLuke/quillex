@@ -384,14 +384,16 @@ defmodule Quillex.ViewSettingsSpex do
 
         # Move cursor to a specific position (middle of line 1)
         Probes.send_keys("up", [])
-        Process.sleep(50)
+        Process.sleep(100)
         Probes.send_keys("home", [])
-        Process.sleep(50)
-        # Move to column 5 (after "Line")
+        Process.sleep(100)
+        # Move to column 5 (after "Line") — 80ms per key to avoid dropped events
         for _ <- 1..4 do
           Probes.send_keys("right", [])
-          Process.sleep(30)
+          Process.sleep(80)
         end
+        # Extra settle time to ensure cursor position is committed to Buffer.Process
+        Process.sleep(200)
 
         {:ok, context}
       end
