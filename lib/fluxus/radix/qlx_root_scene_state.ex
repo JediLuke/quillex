@@ -27,7 +27,11 @@ defmodule QuillEx.RootScene.State do
     # Replace mode (Ctrl+H)
     show_replace: false,
     # Cursor position tracking for scroll routing
-    cursor_pos: {0, 0}
+    cursor_pos: {0, 0},
+    # Transient status notification (shown briefly at bottom of viewport)
+    # Set by actions like run_verification; cleared by :clear_status_message after a timeout.
+    status_message: nil,   # string or nil
+    status_severity: :info # :info | :warning | :error
   ]
 
   def new(%{frame: %Widgex.Frame{} = frame, buffers: buffers}) when is_list(buffers) do

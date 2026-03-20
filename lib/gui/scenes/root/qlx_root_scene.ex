@@ -457,6 +457,7 @@ defmodule QuillEx.RootScene do
     case scene.assigns.state.active_buf do
       nil ->
         Logger.info("[run_verification] No active buffer")
+        {:noreply, scene}
 
       buf_ref ->
         # Wrap fetch_buf in try/catch: call_buffer/2 raises (rather than returning
@@ -480,26 +481,30 @@ defmodule QuillEx.RootScene do
             case Quillex.API.FileAPI.check_file_status(buf_data, file_path) do
               {:ok, :unchanged} ->
                 Logger.info("[run_verification] File is unchanged on disk")
+                show_status(scene, "File is unchanged on disk", :info)
 
               {:ok, :modified} ->
                 Logger.warning("[run_verification] File has been modified on disk since last save")
+                show_status(scene, "File has been modified on disk since last save", :warning)
 
               {:ok, :deleted} ->
                 Logger.warning("[run_verification] File has been deleted from disk")
+                show_status(scene, "File has been deleted from disk", :warning)
 
               {:error, reason} ->
                 Logger.warning("[run_verification] Failed to read file: #{reason}")
+                show_status(scene, "Failed to read file: #{reason}", :warning)
             end
 
           {:ok, %Quillex.Structs.BufState{}} ->
             Logger.info("[run_verification] Buffer has no associated file path")
+            show_status(scene, "Buffer has no associated file path", :info)
 
           {:error, reason} ->
             Logger.debug("[run_verification] Skipped (failed to fetch buffer state): #{inspect(reason)}")
+            {:noreply, scene}
         end
     end
-
-    {:noreply, scene}
   end
 
   def handle_cast({:action, actions}, scene) when is_list(actions) do
@@ -638,6 +643,25 @@ defmodule QuillEx.RootScene do
   def handle_cast({:replace_all_requested, _id, replacement}, scene) do
     Scenic.Scene.put_child(scene, :buffer_pane, {:action, {:replace_all, replacement}})
     {:noreply, scene}
+  end
+
+  # Clear the transient status notification (fired by Process.send_after from show_status/3).
+  # If the message was already cleared (e.g., replaced by a newer notification), this is a no-op.
+  def handle_info(:clear_status_message, scene) do
+    state = scene.assigns.state
+    if state.status_message != nil do
+      new_state = %{state | status_message: nil}
+      old_state = state
+      new_graph = QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+      new_scene =
+        scene
+        |> assign(state: new_state)
+        |> assign(graph: new_graph)
+        |> push_graph(new_graph)
+      {:noreply, new_scene}
+    else
+      {:noreply, scene}
+    end
   end
 
   # if actions come in via PubSub they come in via handle_info, just convert to handle_cast
@@ -1000,6 +1024,30 @@ defmodule QuillEx.RootScene do
     else
       scene
     end
+  end
+
+  # ===========================================================================
+  # Private Helpers - Status Notification
+  # ===========================================================================
+
+  # Display a transient notification message at the bottom of the viewport.
+  # `severity` is :info | :warning | :error — controls background colour.
+  # The message auto-clears after 5 seconds via a :clear_status_message timer.
+  #
+  # Multiple rapid calls replace the previous message; the most recent 5-second
+  # timer wins (earlier timers are harmless no-ops because handle_info guards on
+  # `status_message != nil` and returns early once the message is already nil).
+  defp show_status(scene, message, severity) when is_binary(message) do
+    Process.send_after(self(), :clear_status_message, 5_000)
+    old_state = scene.assigns.state
+    new_state = %{old_state | status_message: message, status_severity: severity}
+    new_graph = QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+    new_scene =
+      scene
+      |> assign(state: new_state)
+      |> assign(graph: new_graph)
+      |> push_graph(new_graph)
+    {:noreply, new_scene}
   end
 
   # ===========================================================================
