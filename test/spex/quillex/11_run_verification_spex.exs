@@ -347,25 +347,32 @@ defmodule Quillex.RunVerificationSpex do
   end
 
   # ===========================================================================
-  # SPEX: Keyboard shortcut Ctrl+V+F reaches the handler
+  # SPEX: App remains stable when Ctrl+V and Ctrl+F are pressed sequentially
   # ===========================================================================
+  #
+  # NOTE: run_verification has NO keyboard shortcut. The original Ctrl+V+F
+  # design was removed because Scenic 0.12 uses atom key format (:key_f, :ctrl)
+  # and "v" is not a GLFW modifier key — the chord cannot be expressed.
+  # run_verification is accessible via File → Verify File only.
+  #
+  # This spex verifies that pressing Ctrl+V (paste) then Ctrl+F (find) in
+  # sequence does not crash the running app — a basic stability check.
 
-  spex "RunVerification - Keyboard shortcut Ctrl+V+F is routed (unit-level smoke)",
-    description: "The handle_input clause for Ctrl+V+F dispatches to run_verification",
-    tags: [:run_verification, :keyboard] do
+  spex "RunVerification - App stable after Ctrl+V then Ctrl+F key sequence",
+    description: "Pressing Ctrl+V (paste) followed by Ctrl+F (find) does not crash the app",
+    tags: [:run_verification, :stability] do
 
-    scenario "Pressing Ctrl+V+F does not crash the running app", context do
+    scenario "Ctrl+V then Ctrl+F sequence leaves app alive and rendering", context do
       given_ "we have one buffer open with some content", context do
         close_all_but_one()
         clear_buffer()
-        type_text("keyboard shortcut test")
+        type_text("stability test content")
         {:ok, context}
       end
 
-      when_ "we press Ctrl+V+F (the run_verification keyboard shortcut)", context do
-        # The shortcut is handled by RootScene.handle_input/3 as
-        # {:key, {"f", 1, ["ctrl", "v"]}}
-        # ScenicMcp delivers this by sending v-modifier + f key
+      when_ "we press Ctrl+V (paste) then Ctrl+F (find)", context do
+        # Ctrl+V triggers paste; Ctrl+F opens the find bar.
+        # Neither should crash the app.
         Probes.send_keys("v", [:ctrl])
         Process.sleep(50)
         Probes.send_keys("f", [:ctrl])
@@ -376,11 +383,13 @@ defmodule Quillex.RunVerificationSpex do
       then_ "the app is still responsive and rendering", context do
         rendered = Query.rendered_text()
         assert is_binary(rendered) and rendered != "",
-               "App should still render after Ctrl+V+F"
+               "App should still render after Ctrl+V + Ctrl+F"
         :ok
       end
 
-      then_ "cleanup: clear the buffer", context do
+      then_ "cleanup: close search bar and clear the buffer", context do
+        Probes.send_keys("escape", [])
+        Process.sleep(100)
         clear_buffer()
         :ok
       end
