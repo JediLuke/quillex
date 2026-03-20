@@ -627,4 +627,149 @@ defmodule Quillex.Buffer.Process.ReducerTest do
       assert b2.dirty? == true
     end
   end
+
+  # ---------------------------------------------------------------------------
+  # process/2 {:select_range, start_pos, end_pos}  (mouse drag selection)
+  # ---------------------------------------------------------------------------
+
+  describe "process/2 {:select_range, start_pos, end_pos}" do
+    test "stores selection as map with :start and :end tuple positions" do
+      b = buf(["Hello world"])
+      b2 = Reducer.process(b, {:select_range, {1, 1}, {1, 6}})
+      assert b2.selection == %{start: {1, 1}, end: {1, 6}}
+    end
+
+    test "selection format is a map (not a tuple pair)" do
+      b = buf(["Hello world"])
+      b2 = Reducer.process(b, {:select_range, {1, 1}, {1, 6}})
+      assert is_map(b2.selection)
+      assert Map.has_key?(b2.selection, :start)
+      assert Map.has_key?(b2.selection, :end)
+    end
+
+    test "cursor moves to end position" do
+      b = buf(["Hello world"])
+      b2 = Reducer.process(b, {:select_range, {1, 1}, {1, 6}})
+      [cursor] = b2.cursors
+      assert cursor.line == 1
+      assert cursor.col == 6
+    end
+
+    test "reverse selection (right-to-left drag) preserves start/end as given" do
+      # Mouse drag from col 10 back to col 3 — start and end are preserved as-given
+      # (TextField normalises when rendering; the buffer stores the raw drag positions)
+      b = buf(["Hello world"])
+      b2 = Reducer.process(b, {:select_range, {1, 10}, {1, 3}})
+      assert b2.selection == %{start: {1, 10}, end: {1, 3}}
+      [cursor] = b2.cursors
+      assert cursor.col == 3
+    end
+
+    test "multi-line selection stores correct start and end" do
+      b = buf(["first line", "second line", "third line"])
+      b2 = Reducer.process(b, {:select_range, {1, 5}, {3, 7}})
+      assert b2.selection == %{start: {1, 5}, end: {3, 7}}
+      [cursor] = b2.cursors
+      assert cursor.line == 3
+      assert cursor.col == 7
+    end
+
+    test "does not modify buffer data" do
+      b = buf(["unchanged content"])
+      b2 = Reducer.process(b, {:select_range, {1, 1}, {1, 9}})
+      assert b2.data == ["unchanged content"]
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # process/2 {:select_text, direction, count}  (keyboard Shift+arrow selection)
+  # ---------------------------------------------------------------------------
+
+  describe "process/2 {:select_text, direction, count}" do
+    test "produces selection in map format (not a tuple pair)" do
+      b = buf(["Hello world"], cursors: [Cursor.new(1, 1)])
+      b2 = Reducer.process(b, {:select_text, :right, 5})
+      assert is_map(b2.selection)
+      assert Map.has_key?(b2.selection, :start)
+      assert Map.has_key?(b2.selection, :end)
+    end
+
+    test "selection :start matches the cursor position before movement" do
+      b = buf(["Hello world"], cursors: [Cursor.new(1, 3)])
+      b2 = Reducer.process(b, {:select_text, :right, 4})
+      assert b2.selection.start == {1, 3}
+    end
+
+    test "selection :end matches the cursor position after movement" do
+      b = buf(["Hello world"], cursors: [Cursor.new(1, 1)])
+      b2 = Reducer.process(b, {:select_text, :right, 5})
+      [cursor] = b2.cursors
+      assert b2.selection.end == {cursor.line, cursor.col}
+    end
+
+    test "Shift+Right from col 1 by 5 produces %{start: {1,1}, end: {1,6}}" do
+      b = buf(["Hello world"], cursors: [Cursor.new(1, 1)])
+      b2 = Reducer.process(b, {:select_text, :right, 5})
+      assert b2.selection == %{start: {1, 1}, end: {1, 6}}
+    end
+
+    test "does not modify buffer data" do
+      b = buf(["unchanged"], cursors: [Cursor.new(1, 1)])
+      b2 = Reducer.process(b, {:select_text, :right, 3})
+      assert b2.data == ["unchanged"]
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # process/2 {:delete, :selection}
+  # ---------------------------------------------------------------------------
+
+  describe "process/2 {:delete, :selection}" do
+    test "deletes selected text and clears selection to nil" do
+      # "Hello world": cols 7-12 = "world" (w=7,o=8,r=9,l=10,d=11, end-col=12)
+      selection = %{start: {1, 7}, end: {1, 12}}
+      b = %{buf(["Hello world"]) | selection: selection}
+      b2 = Reducer.process(b, {:delete, :selection})
+      assert b2.selection == nil
+      assert b2.data == ["Hello "]
+    end
+
+    test "nil selection is a no-op" do
+      b = buf(["Hello world"])
+      b2 = Reducer.process(b, {:delete, :selection})
+      assert b2.data == ["Hello world"]
+      assert b2.selection == nil
+    end
+
+    test "cursor is placed at the start of deleted selection after deletion" do
+      selection = %{start: {1, 7}, end: {1, 12}}
+      b = %{buf(["Hello world"]) | selection: selection}
+      b2 = Reducer.process(b, {:delete, :selection})
+      [cursor] = b2.cursors
+      assert cursor.line == 1
+      assert cursor.col == 7
+    end
+
+    test "pushes undo snapshot before deletion" do
+      selection = %{start: {1, 7}, end: {1, 12}}
+      b = %{buf(["Hello world"]) | selection: selection}
+      b2 = Reducer.process(b, {:delete, :selection})
+      assert length(b2.undo_stack) == 1
+      {prev_data, _, _} = hd(b2.undo_stack)
+      assert prev_data == ["Hello world"]
+    end
+
+    test "deletes multi-line selection correctly" do
+      # Line 1: "first line" (10 chars), line 2: "second" (6 chars)
+      # selection from {1, 6} to {2, 7}:
+      #   left_text  = String.split_at("first line", 5) -> "first"
+      #   right_text = String.split_at("second", 6)     -> "" (col 7 = one-past-end)
+      #   combined   = "first" <> "" = "first"
+      selection = %{start: {1, 6}, end: {2, 7}}
+      b = %{buf(["first line", "second"]) | selection: selection}
+      b2 = Reducer.process(b, {:delete, :selection})
+      assert b2.selection == nil
+      assert b2.data == ["first"]
+    end
+  end
 end
