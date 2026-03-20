@@ -70,6 +70,7 @@ A comprehensive breakdown of current functionality vs target functionality for a
 - [x] ~~**No word wrap**~~ — FIXED (toggle in View menu)
 - [x] ~~**No find/replace**~~ — DONE: Find (Ctrl+F) and Replace (Ctrl+H) both work
 - [ ] **No syntax highlighting** - all text is same color
+- [ ] **click_to_cursor broken in word-wrap mode** — `State.click_to_cursor/2` maps Y→line by assuming 1 logical line = 1 `line_height` px, which is wrong when word-wrap is active (a long line occupies multiple visual lines). Mouse click/drag positioning is incorrect when word-wrap is enabled. Default mode (`:none`) is unaffected.
 
 ---
 
@@ -97,9 +98,9 @@ A comprehensive breakdown of current functionality vs target functionality for a
 - [ ] **Move Line Up/Down** (Alt+Up/Down) - Reorder lines
 
 ### Text Selection
-- [ ] **Click to position cursor** - Mouse click places cursor
-- [ ] **Click and drag to select** - Mouse drag selects text
-- [ ] **Double-click to select word** - Word selection
+- [x] **Click to position cursor** - Mouse click places cursor (verified WS7: click_to_cursor accounts for scroll + gutter)
+- [x] **Click and drag to select** - Mouse drag selects text (verified WS7: full pipeline, {select_range,...} format compatible; no-wrap mode)
+- [x] **Double-click to select word** - Word selection (verified WS7: word_boundaries_at exists and dispatches {:select_range,...})
 - [ ] **Triple-click to select line** - Line selection
 - [x] **Shift+Arrow selection** - Keyboard text selection
 - [ ] **Shift+Click selection** - Extend selection with mouse
@@ -110,7 +111,7 @@ A comprehensive breakdown of current functionality vs target functionality for a
 - [x] **Home/End** - Go to start/end of line
 - [x] **Ctrl+Home/End** - Go to start/end of document
 - [ ] **Page Up/Down** - Scroll by page
-- [ ] **Ctrl+Left/Right** - Move by word
+- [x] **Ctrl+Left/Right** - Move by word (prev_word / next_word in buffer_reducer)
 - [x] **Scroll with mouse wheel** - Vertical scrolling
 - [x] **Horizontal scroll** - For long lines (if no word wrap)
 
