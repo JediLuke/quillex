@@ -27,7 +27,7 @@ defmodule Quillex.Utils.FileTree do
     end
   end
 
-  defp build_tree(path, name) do
+  defp build_tree(path, _name) do
     entries =
       path
       |> File.ls!()

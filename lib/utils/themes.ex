@@ -50,20 +50,11 @@ defmodule QuillEx.GUI.Themes do
     accent_green: {133, 153, 0}
   }
 
-  @dracula %{
-    background: {40, 42, 54},
-    current_line: {68, 71, 90},
-    selection: {68, 71, 90},
-    foreground: {248, 248, 242},
-    comment: {98, 114, 164},
-    cyan: {139, 233, 253},
-    green: {80, 250, 123},
-    orange: {255, 184, 108},
-    pink: {255, 121, 198},
-    purple: {189, 147, 249},
-    red: {255, 85, 85},
-    yellow: {241, 250, 140}
-  }
+  # Dracula palette (reserved for future theme implementation)
+  # background: {40, 42, 54}, current_line: {68, 71, 90}, selection: {68, 71, 90},
+  # foreground: {248, 248, 242}, comment: {98, 114, 164}, cyan: {139, 233, 253},
+  # green: {80, 250, 123}, orange: {255, 184, 108}, pink: {255, 121, 198},
+  # purple: {189, 147, 249}, red: {255, 85, 85}, yellow: {241, 250, 140}
 
   def theme(:solarized_light) do
     %{

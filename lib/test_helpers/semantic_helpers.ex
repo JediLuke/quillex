@@ -502,9 +502,6 @@ defmodule Quillex.TestHelpers.SemanticHelpers do
            },
            clickable: false
          }}
-
-      {:error, _} ->
-        {:error, :not_found}
     end
   end
 

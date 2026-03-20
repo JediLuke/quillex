@@ -68,7 +68,7 @@ A comprehensive breakdown of current functionality vs target functionality for a
 - [x] ~~**No copy/paste**~~ — FIXED (Ctrl+C/X/V)
 - [x] ~~**No undo/redo**~~ — FIXED (Ctrl+U/R)
 - [x] ~~**No word wrap**~~ — FIXED (toggle in View menu)
-- [x] ~~**No find/replace**~~ — PARTIAL: Find works (Ctrl+F), no Replace yet
+- [x] ~~**No find/replace**~~ — DONE: Find (Ctrl+F) and Replace (Ctrl+H) both work
 - [ ] **No syntax highlighting** - all text is same color
 
 ---
@@ -117,8 +117,8 @@ A comprehensive breakdown of current functionality vs target functionality for a
 ### Find & Replace
 - [x] **Find** (Ctrl+F) - Search bar with highlighting
 - [x] **Find Next/Previous** (Ctrl+G) - Navigate matches
-- [ ] **Replace** (Ctrl+H) - Find and replace dialog
-- [ ] **Replace All** - Replace all occurrences
+- [x] **Replace** (Ctrl+H) - Find and replace dialog
+- [x] **Replace All** - Replace all occurrences
 - [ ] **Case sensitive toggle** - Match case option
 - [ ] **Regex search** - Regular expression support
 - [ ] **Highlight all matches** - Visual indication of matches
@@ -178,7 +178,7 @@ A comprehensive breakdown of current functionality vs target functionality for a
 
 ### Phase 3: Navigation & Search (Should Have) — PARTIALLY COMPLETE
 1. ~~Find (Ctrl+F) with highlighting~~ ✓
-2. Replace — not yet
+2. ~~Replace (Ctrl+H) with Replace All~~ ✓
 3. Go to line — not yet
 4. Word-wise cursor movement — not yet
 5. Page up/down — not yet
@@ -253,8 +253,10 @@ Quillex.Buffer.Process
 - [x] Property tests — `08_property_tests_spex.exs`
 - [x] File operations — `09_file_operations_spex.exs`
 - [x] File navigator — `10_file_navigator_spex.exs`
-- [x] Dirty indicator — `11_dirty_indicator_spex.exs`
-- [x] Cursor preservation — `12_cursor_preservation_spex.exs`
+- [x] Run verification (file integrity check) — `11_run_verification_spex.exs`
+- [x] Find & Replace (Ctrl+H) — `12_replace_spex.exs`
+- [x] Menu close on outside click — `13_menu_close_outside_click_spex.exs`
+- [x] Keyboard shortcuts (Ctrl+N/O/W/S/etc.) — `14_keyboard_shortcuts_spex.exs`
 
 ### Visual/E2E Tests (via ScenicMCP)
 - [x] Menu opens on click

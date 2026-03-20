@@ -169,38 +169,6 @@ defmodule QuillEx.RootScene do
     end
   end
 
-  # Get the cursor position from the active buffer (Buffer.Process is source of truth)
-  defp get_buffer_cursor(scene) do
-    with buf_ref when not is_nil(buf_ref) <- scene.assigns.state.active_buf,
-         {:ok, buf_state} <- Quillex.Buffer.Process.fetch_buf(buf_ref),
-         [%{line: line, col: col} | _] <- buf_state.cursors do
-      {line, col}
-    else
-      _ -> nil
-    end
-  end
-
-  # Get the first visible line from the TextField (for scroll preservation during word wrap toggle)
-  defp get_first_visible_line(scene) do
-    alias ScenicWidgets.TextField.State, as: TFState
-
-    try do
-      case Scenic.Scene.fetch_child(scene, :buffer_pane) do
-        {:ok, [%TFState{scroll: scroll, font: font} = _tf_state]} ->
-          line_height = font.size
-          # Calculate which source line is at the top of the viewport
-          # offset_y is how far we've scrolled down in pixels
-          first_line = max(1, trunc(scroll.offset_y / line_height) + 1)
-          first_line
-
-        _ ->
-          nil
-      end
-    catch
-      :exit, _ -> nil
-    end
-  end
-
   # Track cursor position for scroll routing
   def handle_input({:cursor_pos, coords}, _context, scene) do
     state = scene.assigns.state
@@ -273,6 +241,38 @@ defmodule QuillEx.RootScene do
   # request_input registrations.  This catch-all handles any remaining events.
   def handle_input(_input, _context, scene) do
     {:noreply, scene}
+  end
+
+  # Get the cursor position from the active buffer (Buffer.Process is source of truth)
+  defp get_buffer_cursor(scene) do
+    with buf_ref when not is_nil(buf_ref) <- scene.assigns.state.active_buf,
+         {:ok, buf_state} <- Quillex.Buffer.Process.fetch_buf(buf_ref),
+         [%{line: line, col: col} | _] <- buf_state.cursors do
+      {line, col}
+    else
+      _ -> nil
+    end
+  end
+
+  # Get the first visible line from the TextField (for scroll preservation during word wrap toggle)
+  defp get_first_visible_line(scene) do
+    alias ScenicWidgets.TextField.State, as: TFState
+
+    try do
+      case Scenic.Scene.fetch_child(scene, :buffer_pane) do
+        {:ok, [%TFState{scroll: scroll, font: font} = _tf_state]} ->
+          line_height = font.size
+          # Calculate which source line is at the top of the viewport
+          # offset_y is how far we've scrolled down in pixels
+          first_line = max(1, trunc(scroll.offset_y / line_height) + 1)
+          first_line
+
+        _ ->
+          nil
+      end
+    catch
+      :exit, _ -> nil
+    end
   end
 
   def handle_call(:get_active_buffer, _from, scene) do
@@ -361,6 +361,36 @@ defmodule QuillEx.RootScene do
   def handle_call({:action, a}, _from, scene) do
     # wrap singular actions in a list and push through the multi-action pipeline anyway
     handle_call({:action, [a]}, nil, scene)
+  end
+
+  defp process_actions(scene, actions) do
+    # wormhole will wrap this function in an ok/error tuple even if it crashes
+    Wormhole.capture(fn ->
+      old_state = scene.assigns.state
+
+      new_state =
+        Enum.reduce(actions, old_state, fn action, acc_state ->
+          RootScene.Reducer.process(acc_state, action)
+          |> case do
+            :ignore ->
+              acc_state
+
+            # :cast_to_children ->
+            #   Scenic.Scene.cast_children(scene, action)
+            #   acc_state
+
+            new_acc_state ->
+              new_acc_state
+          end
+        end)
+
+      # Reuse existing graph to preserve component PIDs and avoid race conditions
+      # during rapid buffer switches. Pass old_state to enable smart component updates
+      # (only recreate when truly necessary, like switching buffers).
+      new_graph = QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+
+      {new_state, new_graph}
+    end)
   end
 
   # Handle editor settings toggle actions specially - they need update_editor_settings flow
@@ -515,36 +545,6 @@ defmodule QuillEx.RootScene do
     scene = maybe_update_dirty_state(scene, new_buf)
 
     {:noreply, scene}
-  end
-
-  defp process_actions(scene, actions) do
-    # wormhole will wrap this function in an ok/error tuple even if it crashes
-    Wormhole.capture(fn ->
-      old_state = scene.assigns.state
-
-      new_state =
-        Enum.reduce(actions, old_state, fn action, acc_state ->
-          RootScene.Reducer.process(acc_state, action)
-          |> case do
-            :ignore ->
-              acc_state
-
-            # :cast_to_children ->
-            #   Scenic.Scene.cast_children(scene, action)
-            #   acc_state
-
-            new_acc_state ->
-              new_acc_state
-          end
-        end)
-
-      # Reuse existing graph to preserve component PIDs and avoid race conditions
-      # during rapid buffer switches. Pass old_state to enable smart component updates
-      # (only recreate when truly necessary, like switching buffers).
-      new_graph = QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
-
-      {new_state, new_graph}
-    end)
   end
 
   # Handle file picker events

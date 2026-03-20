@@ -14,8 +14,9 @@ defmodule QuillEx.RootScene.Renderizer do
   defp tab_width_label(width, current) when width == current, do: "#{width} Spaces  ✓"
   defp tab_width_label(width, _current), do: "#{width} Spaces"
 
-  # it has to take in a scene here cause we need to cast to the scene's children
-  # old_state is nil on init, or the previous state on updates
+  # `_scene` is kept in the signature for API stability (callers pass the scene struct);
+  # it is currently unused because rendering is pure graph-state transformation.
+  # old_state is nil on init, or the previous state on updates.
   #
   # Z-ORDER STRATEGY:
   # When any component needs recreation that could affect z-order, we delete
@@ -25,7 +26,7 @@ defmodule QuillEx.RootScene.Renderizer do
   #   3. tab_bar + icon_menu (top - dropdowns render above everything)
   def render(
     %Scenic.Graph{} = graph,
-    %Scenic.Scene{} = scene,
+    %Scenic.Scene{} = _scene,
     old_state,
     %QuillEx.RootScene.State{} = state
   ) do

@@ -144,16 +144,20 @@ defmodule QuillEx.RootSceneTest do
   # Ctrl+O — Open File
   # ---------------------------------------------------------------------------
   #
-  # The Ctrl+O handler calls show_file_picker/1 which immediately calls
-  # Scenic.Scene.assign/2.  With a bare map (not a real %Scenic.Scene{}),
-  # assign/2 raises FunctionClauseError — the same proof-of-clause-fired
-  # technique used for the Ctrl+H test above.
+  # The Ctrl+O handler calls show_file_picker/1, which calls
+  # ScenicWidgets.FilePicker.add_to_graph/3 with %{frame: nil, ...}.
+  # FilePicker validates its args and raises RuntimeError when :frame is nil —
+  # this happens before Scenic.Scene.assign/2 is ever reached.
+  # Either way, any exception proves the *correct* clause fired (not the
+  # catch-all, which returns {:noreply, scene} without raising).
   # Full UI behaviour is covered by test/spex/quillex/14_keyboard_shortcuts_spex.exs.
 
   describe "Ctrl+O handle_input clause" do
     test "Ctrl+O is NOT routed to the catch-all handler" do
       scene = bare_scene()
-      assert_raise FunctionClauseError, fn ->
+      # FilePicker.add_to_graph raises RuntimeError when :frame is nil —
+      # proves show_file_picker/1 was called, not the catch-all.
+      assert_raise RuntimeError, fn ->
         RootScene.handle_input({:key, {"o", 1, ["ctrl"]}}, nil, scene)
       end
     end

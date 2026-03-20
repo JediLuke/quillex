@@ -53,7 +53,7 @@ defmodule Quillex.TestHelpers.SemanticHelpersTest do
   describe "find_tab_bar/1 via build_tab_bar_from_tab_entries fallback" do
     test "returns error when semantic table has no tab entries" do
       table = :ets.new(:test_empty_semantic_table, [:set, :public])
-      on_exit(fn -> :ets.delete(table) end)
+      on_exit(fn -> if :ets.info(table) != :undefined, do: :ets.delete(table) end)
 
       viewport = %{semantic_table: table}
 
@@ -66,7 +66,7 @@ defmodule Quillex.TestHelpers.SemanticHelpersTest do
           {"uuid-abc", "untitled", :selected_tab}
         ])
 
-      on_exit(fn -> :ets.delete(table) end)
+      on_exit(fn -> if :ets.info(table) != :undefined, do: :ets.delete(table) end)
 
       assert {:ok, tab_bar} = SemanticHelpers.find_tab_bar(viewport)
       assert tab_bar.semantic[:tab_count] == 1
@@ -83,7 +83,7 @@ defmodule Quillex.TestHelpers.SemanticHelpersTest do
           {"uuid-2", "second.ex", :selected_tab}
         ])
 
-      on_exit(fn -> :ets.delete(table) end)
+      on_exit(fn -> if :ets.info(table) != :undefined, do: :ets.delete(table) end)
 
       assert {:ok, tab_bar} = SemanticHelpers.find_tab_bar(viewport)
       assert tab_bar.semantic[:tab_count] == 2
@@ -97,7 +97,7 @@ defmodule Quillex.TestHelpers.SemanticHelpersTest do
           {"uuid-y", "bar.ex", :tab}
         ])
 
-      on_exit(fn -> :ets.delete(table) end)
+      on_exit(fn -> if :ets.info(table) != :undefined, do: :ets.delete(table) end)
 
       assert {:ok, tab_bar} = SemanticHelpers.find_tab_bar(viewport)
       tabs = tab_bar.semantic[:tabs]
@@ -115,7 +115,7 @@ defmodule Quillex.TestHelpers.SemanticHelpersTest do
   describe "get_tab_count/1" do
     test "returns 0-equivalent (nil) when no tabs" do
       table = :ets.new(:test_tab_count_empty, [:set, :public])
-      on_exit(fn -> :ets.delete(table) end)
+      on_exit(fn -> if :ets.info(table) != :undefined, do: :ets.delete(table) end)
 
       viewport = %{semantic_table: table}
       # get_tab_count returns nil when find_tab_bar fails, tests use || 0
@@ -130,7 +130,7 @@ defmodule Quillex.TestHelpers.SemanticHelpersTest do
           {"uuid-3", "c.ex", :tab}
         ])
 
-      on_exit(fn -> :ets.delete(table) end)
+      on_exit(fn -> if :ets.info(table) != :undefined, do: :ets.delete(table) end)
 
       assert SemanticHelpers.get_tab_count(viewport) == 3
     end
@@ -139,7 +139,7 @@ defmodule Quillex.TestHelpers.SemanticHelpersTest do
   describe "get_tab_labels/1" do
     test "returns empty list when no tabs" do
       table = :ets.new(:test_labels_empty, [:set, :public])
-      on_exit(fn -> :ets.delete(table) end)
+      on_exit(fn -> if :ets.info(table) != :undefined, do: :ets.delete(table) end)
 
       viewport = %{semantic_table: table}
       assert SemanticHelpers.get_tab_labels(viewport) == []
@@ -152,7 +152,7 @@ defmodule Quillex.TestHelpers.SemanticHelpersTest do
           {"uuid-2", "README.md", :tab}
         ])
 
-      on_exit(fn -> :ets.delete(table) end)
+      on_exit(fn -> if :ets.info(table) != :undefined, do: :ets.delete(table) end)
 
       labels = SemanticHelpers.get_tab_labels(viewport) |> Enum.sort()
       assert labels == ["README.md", "main.ex"]
@@ -162,7 +162,7 @@ defmodule Quillex.TestHelpers.SemanticHelpersTest do
   describe "get_selected_tab_label/1" do
     test "returns nil when no tabs" do
       table = :ets.new(:test_selected_empty, [:set, :public])
-      on_exit(fn -> :ets.delete(table) end)
+      on_exit(fn -> if :ets.info(table) != :undefined, do: :ets.delete(table) end)
 
       viewport = %{semantic_table: table}
       assert SemanticHelpers.get_selected_tab_label(viewport) == nil
@@ -175,7 +175,7 @@ defmodule Quillex.TestHelpers.SemanticHelpersTest do
           {"uuid-2", "other_file.ex", :tab}
         ])
 
-      on_exit(fn -> :ets.delete(table) end)
+      on_exit(fn -> if :ets.info(table) != :undefined, do: :ets.delete(table) end)
 
       assert SemanticHelpers.get_selected_tab_label(viewport) == "active_file.ex"
     end
@@ -187,7 +187,7 @@ defmodule Quillex.TestHelpers.SemanticHelpersTest do
           {"uuid-2", "b.ex", :tab}
         ])
 
-      on_exit(fn -> :ets.delete(table) end)
+      on_exit(fn -> if :ets.info(table) != :undefined, do: :ets.delete(table) end)
 
       # No selected_tab → selected_id is nil → Enum.find returns nil → returns nil
       assert SemanticHelpers.get_selected_tab_label(viewport) == nil
@@ -231,7 +231,7 @@ defmodule Quillex.TestHelpers.SemanticHelpersTest do
       }
 
       {viewport, table} = viewport_with_format2_entry(:buffer_semantic, entry)
-      on_exit(fn -> :ets.delete(table) end)
+      on_exit(fn -> if :ets.info(table) != :undefined, do: :ets.delete(table) end)
 
       {:ok, elements} = SemanticHelpers.find_by_type_all_graphs(viewport, :text_buffer)
       assert length(elements) == 1
@@ -261,7 +261,7 @@ defmodule Quillex.TestHelpers.SemanticHelpersTest do
       }
 
       {viewport, table} = viewport_with_format2_entry(:text_buf_entry, entry)
-      on_exit(fn -> :ets.delete(table) end)
+      on_exit(fn -> if :ets.info(table) != :undefined, do: :ets.delete(table) end)
 
       {:ok, elements} = SemanticHelpers.find_by_type_all_graphs(viewport, :text_buffer)
       elem = List.first(elements)
@@ -298,7 +298,7 @@ defmodule Quillex.TestHelpers.SemanticHelpersTest do
       }
 
       {viewport, table} = viewport_with_format2_entry(:conflict_entry, entry)
-      on_exit(fn -> :ets.delete(table) end)
+      on_exit(fn -> if :ets.info(table) != :undefined, do: :ets.delete(table) end)
 
       {:ok, elements} = SemanticHelpers.find_by_type_all_graphs(viewport, :text_buffer)
       elem = List.first(elements)
@@ -330,7 +330,7 @@ defmodule Quillex.TestHelpers.SemanticHelpersTest do
       }
 
       {viewport, table} = viewport_with_format2_entry(:"tab_bar_some-uuid", entry)
-      on_exit(fn -> :ets.delete(table) end)
+      on_exit(fn -> if :ets.info(table) != :undefined, do: :ets.delete(table) end)
 
       {:ok, elements} = SemanticHelpers.find_by_type_all_graphs(viewport, :tab)
       elem = List.first(elements)
@@ -358,7 +358,7 @@ defmodule Quillex.TestHelpers.SemanticHelpersTest do
           {uuid, "some_file.ex", :selected_tab}
         ])
 
-      on_exit(fn -> :ets.delete(table) end)
+      on_exit(fn -> if :ets.info(table) != :undefined, do: :ets.delete(table) end)
 
       assert {:ok, tab_bar} = SemanticHelpers.find_tab_bar(viewport)
       tab = List.first(tab_bar.semantic[:tabs])
@@ -401,7 +401,7 @@ defmodule Quillex.TestHelpers.SemanticHelpersTest do
     test "returns buffer_id from semantic when present" do
       uuid = "abc-123-def-456"
       {viewport, table} = viewport_with_text_buffer(buffer_id: uuid)
-      on_exit(fn -> :ets.delete(table) end)
+      on_exit(fn -> if :ets.info(table) != :undefined, do: :ets.delete(table) end)
 
       assert {:ok, buffer} = SemanticHelpers.find_text_buffer(viewport)
       assert get_in(buffer, [:semantic, :buffer_id]) == uuid
@@ -409,7 +409,7 @@ defmodule Quillex.TestHelpers.SemanticHelpersTest do
 
     test "returns nil buffer_id when not set (backwards compat)" do
       {viewport, table} = viewport_with_text_buffer()
-      on_exit(fn -> :ets.delete(table) end)
+      on_exit(fn -> if :ets.info(table) != :undefined, do: :ets.delete(table) end)
 
       assert {:ok, buffer} = SemanticHelpers.find_text_buffer(viewport)
       assert get_in(buffer, [:semantic, :buffer_id]) == nil
@@ -418,7 +418,7 @@ defmodule Quillex.TestHelpers.SemanticHelpersTest do
     test "find_text_buffer/2 with matching buffer_id finds the right buffer" do
       uuid = "match-this-uuid"
       {viewport, table} = viewport_with_text_buffer(buffer_id: uuid, content: "Correct buffer")
-      on_exit(fn -> :ets.delete(table) end)
+      on_exit(fn -> if :ets.info(table) != :undefined, do: :ets.delete(table) end)
 
       assert {:ok, buffer} = SemanticHelpers.find_text_buffer(viewport, uuid)
       assert buffer.content == "Correct buffer"
@@ -434,7 +434,7 @@ defmodule Quillex.TestHelpers.SemanticHelpersTest do
     test "find_text_buffer returns buffer with selection when selection present" do
       selection = %{start: {1, 1}, end: {1, 6}}
       {viewport, table} = viewport_with_text_buffer(selection: selection, content: "Hello World")
-      on_exit(fn -> :ets.delete(table) end)
+      on_exit(fn -> if :ets.info(table) != :undefined, do: :ets.delete(table) end)
 
       assert {:ok, buffer} = SemanticHelpers.find_text_buffer(viewport)
       assert get_in(buffer, [:semantic, :selection]) == selection
@@ -442,7 +442,7 @@ defmodule Quillex.TestHelpers.SemanticHelpersTest do
 
     test "find_text_buffer returns buffer with nil selection when no selection" do
       {viewport, table} = viewport_with_text_buffer()
-      on_exit(fn -> :ets.delete(table) end)
+      on_exit(fn -> if :ets.info(table) != :undefined, do: :ets.delete(table) end)
 
       assert {:ok, buffer} = SemanticHelpers.find_text_buffer(viewport)
       assert get_in(buffer, [:semantic, :selection]) == nil
@@ -452,7 +452,7 @@ defmodule Quillex.TestHelpers.SemanticHelpersTest do
       selection = %{start: {1, 3}, end: {1, 8}}
       content = "Sphinx of black quartz"
       {viewport, table} = viewport_with_text_buffer(selection: selection, content: content)
-      on_exit(fn -> :ets.delete(table) end)
+      on_exit(fn -> if :ets.info(table) != :undefined, do: :ets.delete(table) end)
 
       assert {:ok, buffer} = SemanticHelpers.find_text_buffer(viewport)
       assert buffer.content == content

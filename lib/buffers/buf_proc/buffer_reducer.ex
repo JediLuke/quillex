@@ -41,9 +41,7 @@ defmodule Quillex.Buffer.Process.Reducer do
     }
   end
 
-  @doc """
-  Process redo action - restore state from redo stack.
-  """
+  # Process redo action - restore state from redo stack.
   def process(%BufState{redo_stack: []} = buf, :redo) do
     # Nothing to redo
     buf
@@ -67,9 +65,7 @@ defmodule Quillex.Buffer.Process.Reducer do
   # SEARCH ACTIONS
   # ===========================================================================
 
-  @doc """
-  Set search query and find all matches.
-  """
+  # Set search query and find all matches.
   def process(%BufState{} = buf, {:search, query}) when is_binary(query) and query != "" do
     matches = find_all_matches(buf.data, query)
     %{buf |
@@ -84,27 +80,21 @@ defmodule Quillex.Buffer.Process.Reducer do
     %{buf | search_query: nil, search_matches: [], search_current_index: 0}
   end
 
-  @doc """
-  Navigate to next search match.
-  """
+  # Navigate to next search match.
   def process(%BufState{search_matches: []} = buf, :find_next), do: buf
   def process(%BufState{search_matches: matches, search_current_index: idx} = buf, :find_next) do
     new_idx = rem(idx + 1, length(matches))
     move_cursor_to_match(buf, new_idx)
   end
 
-  @doc """
-  Navigate to previous search match.
-  """
+  # Navigate to previous search match.
   def process(%BufState{search_matches: []} = buf, :find_prev), do: buf
   def process(%BufState{search_matches: matches, search_current_index: idx} = buf, :find_prev) do
     new_idx = if idx == 0, do: length(matches) - 1, else: idx - 1
     move_cursor_to_match(buf, new_idx)
   end
 
-  @doc """
-  Clear search state.
-  """
+  # Clear search state.
   def process(%BufState{} = buf, :clear_search) do
     %{buf | search_query: nil, search_matches: [], search_current_index: 0}
   end
@@ -113,10 +103,8 @@ defmodule Quillex.Buffer.Process.Reducer do
   # REPLACE ACTIONS
   # ===========================================================================
 
-  @doc """
-  Replace the current search match with replacement text.
-  After replacing, re-searches and moves to the next match.
-  """
+  # Replace the current search match with replacement text.
+  # After replacing, re-searches and moves to the next match.
   def process(%BufState{search_matches: []} = buf, {:replace, _replacement}), do: buf
   def process(%BufState{search_matches: matches, search_current_index: idx, search_query: query} = buf,
               {:replace, replacement}) when is_binary(replacement) do
@@ -131,10 +119,8 @@ defmodule Quillex.Buffer.Process.Reducer do
     end
   end
 
-  @doc """
-  Replace all search matches with replacement text.
-  Replaces from last match to first to preserve positions.
-  """
+  # Replace all search matches with replacement text.
+  # Replaces from last match to first to preserve positions.
   def process(%BufState{search_matches: []} = buf, {:replace_all, _replacement}), do: buf
   def process(%BufState{search_matches: matches, search_query: query} = buf,
               {:replace_all, replacement}) when is_binary(replacement) do
@@ -149,150 +135,9 @@ defmodule Quillex.Buffer.Process.Reducer do
     re_search_after_replace(buf_after, query, 0)
   end
 
-  # Replace a single match in the buffer data
-  defp replace_match_at(%BufState{} = buf, line, col, match_text, replacement) do
-    line_idx = line - 1
-    current_line = Enum.at(buf.data, line_idx) || ""
-
-    # Split the line at the match position and reconstruct
-    col_idx = col - 1
-    before = String.slice(current_line, 0, col_idx)
-    after_match = String.slice(current_line, col_idx + String.length(match_text), String.length(current_line))
-    new_line = before <> replacement <> after_match
-
-    new_data = List.replace_at(buf.data, line_idx, new_line)
-    %{buf | data: new_data, dirty?: true}
-  end
-
-  # Re-search after a replace and position the cursor at the appropriate match
-  defp re_search_after_replace(%BufState{} = buf, query, desired_idx) do
-    new_matches = find_all_matches(buf.data, query)
-    new_idx = if new_matches == [] do
-      0
-    else
-      min(desired_idx, length(new_matches) - 1)
-    end
-
-    buf = %{buf | search_matches: new_matches, search_current_index: new_idx}
-
-    if new_matches != [] do
-      move_cursor_to_match(buf, new_idx)
-    else
-      buf
-    end
-  end
-
-  # Move cursor to match at given index
-  defp move_cursor_to_match(%BufState{search_matches: matches} = buf, idx) do
-    case Enum.at(matches, idx) do
-      {line, col, _text} ->
-        buf
-        |> BufferPane.Mutator.move_cursor({line, col})
-        |> Map.put(:search_current_index, idx)
-      nil ->
-        buf
-    end
-  end
-
-  # Find all occurrences of query in lines
-  defp find_all_matches(lines, query) when is_list(lines) and is_binary(query) do
-    query_len = String.length(query)
-    query_lower = String.downcase(query)
-    lines
-    |> Enum.with_index(1)
-    |> Enum.flat_map(fn {line, line_num} ->
-      find_matches_in_line(line, query, query_lower, query_len, line_num, 1, [])
-    end)
-  end
-
-  # Case-insensitive search - match against lowercase but preserve original match text
-  defp find_matches_in_line(line, _original_query, query_lower, query_len, line_num, col, acc) do
-    line_lower = String.downcase(line)
-    case :binary.match(line_lower, query_lower) do
-      {pos, _len} ->
-        match_col = col + pos
-        # Extract the actual matched text from original line (preserving case)
-        match_text = String.slice(line, pos, query_len)
-        remaining = String.slice(line, pos + query_len, String.length(line))
-        # Recursively search in remaining part of line
-        find_matches_in_line(remaining, match_text, query_lower, query_len, line_num, match_col + query_len,
-          [{line_num, match_col, match_text} | acc])
-      :nomatch ->
-        Enum.reverse(acc)
-    end
-  end
-
-  # ---------------------------------------------------------------------------
-  # AUTO-INDENT HELPERS
-  # ---------------------------------------------------------------------------
-
-  # Extract leading whitespace (spaces and tabs) from a line string.
-  # Returns the whitespace prefix, or empty string if none.
-  defp extract_leading_whitespace(line) do
-    case Regex.run(~r/^([\t ]+)/, line) do
-      [_, indent] -> indent
-      _ -> ""
-    end
-  end
-
-  # Apply an indent prefix to a newly inserted line. If indent is empty, returns
-  # buf unchanged. Otherwise replaces any existing leading whitespace on the
-  # target line with the given indent string.
-  defp apply_indent_to_new_line(buf, _line_number, ""), do: buf
-
-  defp apply_indent_to_new_line(%BufState{} = buf, line_number, indent) do
-    line = Enum.at(buf.data, line_number - 1) || ""
-    stripped = String.replace(line, ~r/^[\t ]+/, "")
-    new_line = indent <> stripped
-    new_data = List.replace_at(buf.data, line_number - 1, new_line)
-    %{buf | data: new_data}
-  end
-
   # ===========================================================================
   # EXISTING BUFFER ACTIONS (with undo support)
   # ===========================================================================
-
-  # Helper function to extract selected text from buffer
-  defp extract_selected_text(buf, %{start: {start_line, start_col} = start_pos, end: {end_line, end_col} = end_pos}) do
-    # Normalize selection - ensure start is before end
-    {{sel_start_line, sel_start_col}, {sel_end_line, sel_end_col}} =
-      if start_line < end_line or (start_line == end_line and start_col <= end_col) do
-        {start_pos, end_pos}
-      else
-        {end_pos, start_pos}
-      end
-
-    # Extract text from selection
-    cond do
-      sel_start_line == sel_end_line ->
-        # Selection within same line
-        current_line = Enum.at(buf.data, sel_start_line - 1)
-        String.slice(current_line, sel_start_col - 1, sel_end_col - sel_start_col)
-
-      true ->
-        # Selection across multiple lines
-        lines = buf.data
-
-        # Get partial first line
-        first_line = Enum.at(lines, sel_start_line - 1)
-        first_part = String.slice(first_line, sel_start_col - 1, String.length(first_line))
-
-        # Get full middle lines
-        middle_lines = if sel_end_line - sel_start_line > 1 do
-          Enum.slice(lines, sel_start_line, sel_end_line - sel_start_line - 1)
-        else
-          []
-        end
-
-        # Get partial last line
-        last_line = Enum.at(lines, sel_end_line - 1)
-        last_part = String.slice(last_line, 0, sel_end_col - 1)
-
-        # Combine all parts with newlines
-        ([first_part] ++ middle_lines ++ [last_part])
-        |> Enum.join("\n")
-    end
-  end
 
   def process(%Quillex.Structs.BufState{} = buf, {:set_mode, m}) do
     # do we need to change this here in the buffer itself?
@@ -608,5 +453,154 @@ defmodule Quillex.Buffer.Process.Reducer do
   def process(%Quillex.Structs.BufState{} = _buf, action) do
     Logger.warning("Unhandled buffer action: #{inspect(action)}")
     :ignore
+  end
+
+  # ---------------------------------------------------------------------------
+  # SEARCH / REPLACE HELPERS
+  # ---------------------------------------------------------------------------
+
+  # Replace a single match in the buffer data
+  defp replace_match_at(%BufState{} = buf, line, col, match_text, replacement) do
+    line_idx = line - 1
+    current_line = Enum.at(buf.data, line_idx) || ""
+
+    # Split the line at the match position and reconstruct
+    col_idx = col - 1
+    before = String.slice(current_line, 0, col_idx)
+    after_match = String.slice(current_line, (col_idx + String.length(match_text))..-1//1)
+    new_line = before <> replacement <> after_match
+
+    new_data = List.replace_at(buf.data, line_idx, new_line)
+    %{buf | data: new_data, dirty?: true}
+  end
+
+  # Re-search after a replace and position the cursor at the appropriate match
+  defp re_search_after_replace(%BufState{} = buf, query, desired_idx) do
+    new_matches = find_all_matches(buf.data, query)
+    new_idx = if new_matches == [] do
+      0
+    else
+      min(desired_idx, length(new_matches) - 1)
+    end
+
+    buf = %{buf | search_matches: new_matches, search_current_index: new_idx}
+
+    if new_matches != [] do
+      move_cursor_to_match(buf, new_idx)
+    else
+      buf
+    end
+  end
+
+  # Move cursor to match at given index
+  defp move_cursor_to_match(%BufState{search_matches: matches} = buf, idx) do
+    case Enum.at(matches, idx) do
+      {line, col, _text} ->
+        buf
+        |> BufferPane.Mutator.move_cursor({line, col})
+        |> Map.put(:search_current_index, idx)
+      nil ->
+        buf
+    end
+  end
+
+  # Find all occurrences of query in lines
+  defp find_all_matches(lines, query) when is_list(lines) and is_binary(query) do
+    query_len = String.length(query)
+    query_lower = String.downcase(query)
+    lines
+    |> Enum.with_index(1)
+    |> Enum.flat_map(fn {line, line_num} ->
+      # Pre-compute the lowercase version once per line rather than re-downcasing
+      # the ever-shrinking tail on every recursive step.
+      line_lower = String.downcase(line)
+      find_matches_in_line(line, line_lower, query_lower, query_len, line_num, 1, [])
+    end)
+  end
+
+  # Case-insensitive search - match against lowercase but preserve original match text.
+  # Both `line` and `line_lower` are kept in sync: `line` is the original (case-preserved)
+  # suffix for extracting match_text; `line_lower` is used for :binary.match comparisons.
+  defp find_matches_in_line(line, line_lower, query_lower, query_len, line_num, col, acc) do
+    case :binary.match(line_lower, query_lower) do
+      {pos, _len} ->
+        match_col = col + pos
+        # Extract the actual matched text from original line (preserving case)
+        match_text = String.slice(line, pos, query_len)
+        remaining       = String.slice(line,       (pos + query_len)..-1//1)
+        remaining_lower = String.slice(line_lower, (pos + query_len)..-1//1)
+        find_matches_in_line(remaining, remaining_lower, query_lower, query_len, line_num,
+          match_col + query_len, [{line_num, match_col, match_text} | acc])
+      :nomatch ->
+        Enum.reverse(acc)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # AUTO-INDENT HELPERS
+  # ---------------------------------------------------------------------------
+
+  # Extract leading whitespace (spaces and tabs) from a line string.
+  # Returns the whitespace prefix, or empty string if none.
+  defp extract_leading_whitespace(line) do
+    case Regex.run(~r/^([\t ]+)/, line) do
+      [_, indent] -> indent
+      _ -> ""
+    end
+  end
+
+  # Apply an indent prefix to a newly inserted line. If indent is empty, returns
+  # buf unchanged. Otherwise replaces any existing leading whitespace on the
+  # target line with the given indent string.
+  defp apply_indent_to_new_line(buf, _line_number, ""), do: buf
+
+  defp apply_indent_to_new_line(%BufState{} = buf, line_number, indent) do
+    line = Enum.at(buf.data, line_number - 1) || ""
+    stripped = String.replace(line, ~r/^[\t ]+/, "")
+    new_line = indent <> stripped
+    new_data = List.replace_at(buf.data, line_number - 1, new_line)
+    %{buf | data: new_data}
+  end
+
+  # Helper function to extract selected text from buffer
+  defp extract_selected_text(buf, %{start: {start_line, start_col} = start_pos, end: {end_line, end_col} = end_pos}) do
+    # Normalize selection - ensure start is before end
+    {{sel_start_line, sel_start_col}, {sel_end_line, sel_end_col}} =
+      if start_line < end_line or (start_line == end_line and start_col <= end_col) do
+        {start_pos, end_pos}
+      else
+        {end_pos, start_pos}
+      end
+
+    # Extract text from selection
+    cond do
+      sel_start_line == sel_end_line ->
+        # Selection within same line
+        current_line = Enum.at(buf.data, sel_start_line - 1)
+        String.slice(current_line, sel_start_col - 1, sel_end_col - sel_start_col)
+
+      true ->
+        # Selection across multiple lines
+        lines = buf.data
+
+        # Get partial first line
+        first_line = Enum.at(lines, sel_start_line - 1)
+        first_part = String.slice(first_line, sel_start_col - 1, String.length(first_line))
+
+        # Get full middle lines
+        middle_lines = if sel_end_line - sel_start_line > 1 do
+          Enum.slice(lines, sel_start_line, sel_end_line - sel_start_line - 1)
+        else
+          []
+        end
+
+        # Get partial last line
+        last_line = Enum.at(lines, sel_end_line - 1)
+        last_part = String.slice(last_line, 0, sel_end_col - 1)
+
+        # Combine all parts with newlines
+        ([first_part] ++ middle_lines ++ [last_part])
+        |> Enum.join("\n")
+    end
   end
 end

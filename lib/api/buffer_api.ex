@@ -53,7 +53,7 @@ defmodule Quillex.Buffer do
     GenServer.cast(QuillEx.RootScene, {:action, {:activate_buffer, n}})
   end
 
-  @doc "Switch to the given buffer reference."
+  # Switch to the given buffer reference.
   @spec switch(Quillex.Structs.BufState.BufRef.t()) :: :ok
   def switch(buf_ref) do
     GenServer.cast(QuillEx.RootScene, {:action, {:activate_buffer, buf_ref}})
