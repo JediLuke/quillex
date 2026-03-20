@@ -7,6 +7,11 @@ defmodule Mix.Tasks.RunSpex do
   `SCENIC_LOCAL_TARGET` environment variable is set to `"glfw"`, which is
   required for the Scenic GUI to open a window and render on a desktop.
 
+  It also starts `tools/window_pinner` before the tests and stops it
+  afterward, pinning Quillex windows to the current X11 desktop so that
+  test windows do not appear on other workspaces. The pinner is skipped
+  gracefully if the binary is absent or `DISPLAY` is unset (headless/CI).
+
   ## Usage
 
       mix run_spex
@@ -55,9 +60,14 @@ defmodule Mix.Tasks.RunSpex do
   @impl true
   def run(args) do
     maybe_set_scenic_target()
+    pinner_port = maybe_start_window_pinner()
 
-    # Delegate to mix spex, passing through all CLI arguments unchanged.
-    Mix.Task.run("spex", args)
+    try do
+      # Delegate to mix spex, passing through all CLI arguments unchanged.
+      Mix.Task.run("spex", args)
+    after
+      stop_window_pinner(pinner_port)
+    end
   end
 
   @doc """
@@ -71,5 +81,74 @@ defmodule Mix.Tasks.RunSpex do
     unless System.get_env("SCENIC_LOCAL_TARGET") do
       System.put_env("SCENIC_LOCAL_TARGET", "glfw")
     end
+  end
+
+  @doc """
+  Starts `tools/window_pinner` if the binary exists and `DISPLAY` is set.
+
+  Returns an open `Port` on success, or `nil` if the binary is missing or
+  the environment is headless (no `DISPLAY`). Pass the result to
+  `stop_window_pinner/1` when tests complete.
+
+  The pinner is an event-driven X11 daemon that watches for Quillex windows
+  and moves them to whichever desktop was active when it started. This keeps
+  spex test windows from popping up on the wrong workspace during
+  multi-desktop development sessions.
+  """
+  def maybe_start_window_pinner do
+    pinner_path = Path.join([File.cwd!(), "tools", "window_pinner"])
+
+    cond do
+      not File.exists?(pinner_path) ->
+        Mix.shell().info("  window_pinner not found at tools/window_pinner, skipping desktop pinning")
+        nil
+
+      System.get_env("DISPLAY") in [nil, ""] ->
+        Mix.shell().info("  No DISPLAY set, skipping window_pinner (headless environment)")
+        nil
+
+      true ->
+        Mix.shell().info("  Starting window_pinner (pinning Quillex windows to current desktop)...")
+        Port.open({:spawn_executable, pinner_path}, [:binary, :exit_status, :stderr_to_stdout])
+    end
+  end
+
+  @doc """
+  Stops the window_pinner port, if one is running.
+
+  Accepts `nil` (no-op) or an open `Port`. Retrieves the OS PID via
+  `Port.info/1`, closes the port, then sends SIGTERM to the OS process.
+  This is necessary because window_pinner blocks on `XNextEvent` and does
+  not notice when Erlang's pipe connections close — SIGTERM triggers its
+  cleanup handler, which sets `running = 0` and causes `XNextEvent` to
+  return on the next interrupt. Errors from an already-closed port are
+  silently swallowed.
+  """
+  def stop_window_pinner(nil), do: :ok
+
+  def stop_window_pinner(port) when is_port(port) do
+    try do
+      # Capture the OS PID before closing — Port.info returns nil afterward.
+      os_pid =
+        case Port.info(port) do
+          nil -> nil
+          info -> Keyword.get(info, :os_pid)
+        end
+
+      Port.close(port)
+
+      # Port.close closes Erlang's pipe connections but does not kill the OS
+      # process. window_pinner blocks on XNextEvent and won't notice closed
+      # pipes, so we send SIGTERM explicitly to trigger its cleanup handler.
+      if is_integer(os_pid) do
+        System.cmd("kill", ["-TERM", Integer.to_string(os_pid)], stderr_to_stdout: true)
+      end
+
+      Mix.shell().info("  window_pinner stopped")
+    catch
+      :error, :badarg -> :ok
+    end
+
+    :ok
   end
 end

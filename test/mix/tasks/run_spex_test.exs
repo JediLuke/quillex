@@ -130,4 +130,82 @@ defmodule Mix.Tasks.RunSpexTest do
       end
     end
   end
+
+  describe "window_pinner integration" do
+    test "maybe_start_window_pinner/0 is exported as a public function" do
+      assert function_exported?(Mix.Tasks.RunSpex, :maybe_start_window_pinner, 0),
+             "maybe_start_window_pinner/0 must be a public function"
+    end
+
+    test "stop_window_pinner/1 is exported as a public function" do
+      assert function_exported?(Mix.Tasks.RunSpex, :stop_window_pinner, 1),
+             "stop_window_pinner/1 must be a public function"
+    end
+
+    test "stop_window_pinner(nil) returns :ok without side effects" do
+      assert Mix.Tasks.RunSpex.stop_window_pinner(nil) == :ok
+    end
+
+    test "maybe_start_window_pinner/0 returns a port when binary exists and DISPLAY is set" do
+      pinner_path = Path.join([File.cwd!(), "tools", "window_pinner"])
+
+      if File.exists?(pinner_path) and is_binary(System.get_env("DISPLAY")) do
+        port = Mix.Tasks.RunSpex.maybe_start_window_pinner()
+        assert is_port(port), "Expected a port, got: #{inspect(port)}"
+        # Clean up: stop the port so we don't leave a running pinner.
+        Mix.Tasks.RunSpex.stop_window_pinner(port)
+      else
+        :ok
+      end
+    end
+
+    test "maybe_start_window_pinner/0 returns nil when DISPLAY is unset" do
+      original_display = System.get_env("DISPLAY")
+
+      try do
+        System.delete_env("DISPLAY")
+        result = Mix.Tasks.RunSpex.maybe_start_window_pinner()
+        assert result == nil, "Expected nil when DISPLAY is unset, got: #{inspect(result)}"
+      after
+        case original_display do
+          nil -> System.delete_env("DISPLAY")
+          val -> System.put_env("DISPLAY", val)
+        end
+      end
+    end
+
+    test "stop_window_pinner/1 closes a live port and returns :ok" do
+      pinner_path = Path.join([File.cwd!(), "tools", "window_pinner"])
+
+      if File.exists?(pinner_path) and is_binary(System.get_env("DISPLAY")) do
+        port = Mix.Tasks.RunSpex.maybe_start_window_pinner()
+        assert is_port(port), "Precondition: expected a live port"
+
+        result = Mix.Tasks.RunSpex.stop_window_pinner(port)
+        assert result == :ok
+
+        assert Port.info(port) == nil,
+               "Port should be closed after stop_window_pinner/1"
+      else
+        :ok
+      end
+    end
+
+    test "stop_window_pinner/1 handles an already-closed port gracefully" do
+      pinner_path = Path.join([File.cwd!(), "tools", "window_pinner"])
+
+      if File.exists?(pinner_path) and is_binary(System.get_env("DISPLAY")) do
+        port = Mix.Tasks.RunSpex.maybe_start_window_pinner()
+        assert is_port(port), "Precondition: expected a live port"
+
+        # First stop — normal path.
+        Mix.Tasks.RunSpex.stop_window_pinner(port)
+
+        # Second stop on already-closed port must not crash.
+        assert Mix.Tasks.RunSpex.stop_window_pinner(port) == :ok
+      else
+        :ok
+      end
+    end
+  end
 end
