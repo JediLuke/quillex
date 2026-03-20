@@ -212,6 +212,10 @@ defmodule Quillex.FileNavigatorSpex do
       given_ "we have content in the buffer", context do
         ensure_file_nav_hidden()
         close_buffers_until_one_remains()
+        # Click in editor area to ensure focus (menu interactions may leave focus
+        # on the icon menu or file nav; without this click typing goes nowhere)
+        Probes.click(400, 200)
+        Process.sleep(100)
         # Type some content
         Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
