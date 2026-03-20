@@ -79,10 +79,11 @@ defmodule QuillEx.RootSceneTest do
       # The Ctrl+H clause calls show_search_bar, which tries to call
       # Scenic.Scene.fetch_child/2 with a non-Scene struct and therefore
       # raises FunctionClauseError.  That proves the *correct* clause fired.
+      # Scenic 0.12 uses atom-based key format: {:key_h, 1, [:ctrl]}.
       scene = bare_scene()
 
       assert_raise FunctionClauseError, fn ->
-        RootScene.handle_input({:key, {"h", 1, ["ctrl"]}}, nil, scene)
+        RootScene.handle_input({:key, {:key_h, 1, [:ctrl]}}, nil, scene)
       end
     end
   end
@@ -99,9 +100,10 @@ defmodule QuillEx.RootSceneTest do
 
   describe "Ctrl+F handle_input clause" do
     test "Ctrl+F is NOT routed to the catch-all handler" do
+      # Scenic 0.12 atom-based key format: {:key_f, 1, [:ctrl]}.
       scene = bare_scene()
       assert_raise FunctionClauseError, fn ->
-        RootScene.handle_input({:key, {"f", 1, ["ctrl"]}}, nil, scene)
+        RootScene.handle_input({:key, {:key_f, 1, [:ctrl]}}, nil, scene)
       end
     end
   end
@@ -133,9 +135,10 @@ defmodule QuillEx.RootSceneTest do
 
   describe "Ctrl+N handle_input clause" do
     test "Ctrl+N fires the new_buffer handler without crashing (smoke test)" do
-      scene = bare_scene()
+      # Scenic 0.12 atom-based key format: {:key_n, 1, [:ctrl]}.
       # Wormhole absorbs the missing-GenServer exit; result mirrors the error path.
-      result = RootScene.handle_input({:key, {"n", 1, ["ctrl"]}}, nil, scene)
+      scene = bare_scene()
+      result = RootScene.handle_input({:key, {:key_n, 1, [:ctrl]}}, nil, scene)
       assert match?({:noreply, _}, result)
     end
   end
@@ -154,11 +157,12 @@ defmodule QuillEx.RootSceneTest do
 
   describe "Ctrl+O handle_input clause" do
     test "Ctrl+O is NOT routed to the catch-all handler" do
-      scene = bare_scene()
+      # Scenic 0.12 atom-based key format: {:key_o, 1, [:ctrl]}.
       # FilePicker.add_to_graph raises RuntimeError when :frame is nil —
       # proves show_file_picker/1 was called, not the catch-all.
+      scene = bare_scene()
       assert_raise RuntimeError, fn ->
-        RootScene.handle_input({:key, {"o", 1, ["ctrl"]}}, nil, scene)
+        RootScene.handle_input({:key, {:key_o, 1, [:ctrl]}}, nil, scene)
       end
     end
   end
@@ -177,9 +181,10 @@ defmodule QuillEx.RootSceneTest do
 
   describe "Ctrl+W handle_input clause" do
     test "Ctrl+W with nil active_buf does not crash the test process" do
+      # Scenic 0.12 atom-based key format: {:key_w, 1, [:ctrl]}.
       scene = bare_scene()
       try do
-        result = RootScene.handle_input({:key, {"w", 1, ["ctrl"]}}, nil, scene)
+        result = RootScene.handle_input({:key, {:key_w, 1, [:ctrl]}}, nil, scene)
         assert match?({:noreply, _}, result)
       rescue
         FunctionClauseError -> :ok  # push_graph on bare map — correct clause fired

@@ -61,13 +61,16 @@ defmodule QuillEx.RootScene do
     # - :cursor_pos — cursor tracking for scroll routing and close-on-outside-click
     # - :cursor_scroll — routing scroll events to the right child component
     # - :cursor_button — close-on-outside-click for menus and the search bar
+    # - :key  — keyboard shortcuts (Ctrl+N, Ctrl+O, Ctrl+W, Ctrl+F, Ctrl+H)
+    #           fired at root scene level so shortcuts work regardless of which
+    #           child has focus (e.g. search bar open, file picker open, etc.)
     #
     # TextField (child component) also independently requests :cursor_button for
-    # cursor positioning.  Both can coexist because they are separate GenServer
-    # processes that each receive their own copy of the event from Scenic.
-    # The root scene handler only acts when a menu/overlay is open, so there is
-    # no meaningful conflict with TextField's normal click handling.
-    request_input(scene, [:viewport, :cursor_pos, :cursor_scroll, :cursor_button])
+    # cursor positioning and :key for text editing. Both can coexist: they are
+    # separate GenServer processes and each receives its own copy of the event.
+    # The root scene handlers guard on specific Ctrl+key combos, so regular
+    # keystrokes fall through to the catch-all with no side effects.
+    request_input(scene, [:viewport, :cursor_pos, :cursor_scroll, :cursor_button, :key])
 
     {:ok, scene}
   end
@@ -87,7 +90,8 @@ defmodule QuillEx.RootScene do
   # Opens the search bar in replace mode (show_replace: true).
   # This fires at the root scene level so it works even when the TextField
   # does not have focus (e.g. the search bar itself is focused).
-  def handle_input({:key, {"h", 1, ["ctrl"]}}, _context, scene) do
+  # Scenic 0.12 delivers key events as {:key, {atom_key, action, [modifier_atoms]}}.
+  def handle_input({:key, {:key_h, 1, [:ctrl]}}, _context, scene) do
     show_search_bar(scene, replace_mode: true)
   end
 
@@ -95,26 +99,26 @@ defmodule QuillEx.RootScene do
   # Opens the search bar in search-only mode (show_replace stays false).
   # This fires at the root scene level so it works even when the TextField
   # does not have focus (e.g. the search bar itself is focused).
-  def handle_input({:key, {"f", 1, ["ctrl"]}}, _context, scene) do
+  def handle_input({:key, {:key_f, 1, [:ctrl]}}, _context, scene) do
     show_search_bar(scene)
   end
 
   # Handle Ctrl+N keyboard shortcut for New Buffer
   # Creates a new empty buffer, equivalent to File → New Buffer.
-  def handle_input({:key, {"n", 1, ["ctrl"]}}, _context, scene) do
+  def handle_input({:key, {:key_n, 1, [:ctrl]}}, _context, scene) do
     handle_cast({:action, :new_buffer}, scene)
   end
 
   # Handle Ctrl+O keyboard shortcut for Open File
   # Opens the file picker modal in open mode, equivalent to File → Open.
-  def handle_input({:key, {"o", 1, ["ctrl"]}}, _context, scene) do
+  def handle_input({:key, {:key_o, 1, [:ctrl]}}, _context, scene) do
     show_file_picker(scene)
   end
 
   # Handle Ctrl+W keyboard shortcut for Close Buffer
   # Closes the currently active buffer. If it is the last buffer, the close
   # is silently ignored (see Mutator.remove_buffer/2 — cannot close last buffer).
-  def handle_input({:key, {"w", 1, ["ctrl"]}}, _context, scene) do
+  def handle_input({:key, {:key_w, 1, [:ctrl]}}, _context, scene) do
     handle_cast({:action, :close_active_buffer}, scene)
   end
 
