@@ -721,6 +721,133 @@ defmodule Quillex.Buffer.Process.ReducerTest do
   end
 
   # ---------------------------------------------------------------------------
+  # process/2 {:copy, :selection}
+  # ---------------------------------------------------------------------------
+
+  describe "clipboard operations — copy" do
+    test "copy with no selection is a no-op" do
+      b = buf(["hello"])
+      b2 = Reducer.process(b, {:copy, :selection})
+      assert b2.data == ["hello"]
+      assert b2.selection == nil
+    end
+
+    test "copy with selection preserves buffer data and selection unchanged" do
+      b = buf(["Hello world"])
+      b_with_sel = Reducer.process(b, {:select_range, {1, 1}, {1, 6}})
+      b2 = Reducer.process(b_with_sel, {:copy, :selection})
+      assert b2.data == ["Hello world"]
+      assert b2.selection == %{start: {1, 1}, end: {1, 6}}
+    end
+
+    test "copy does not push onto the undo stack" do
+      b = buf(["hello"])
+      b_with_sel = Reducer.process(b, {:select_range, {1, 1}, {1, 6}})
+      b2 = Reducer.process(b_with_sel, {:copy, :selection})
+      assert b2.undo_stack == []
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # process/2 {:cut, :selection}
+  # ---------------------------------------------------------------------------
+
+  describe "clipboard operations — cut" do
+    test "cut with no selection is a no-op" do
+      b = buf(["hello"])
+      b2 = Reducer.process(b, {:cut, :selection})
+      assert b2.data == ["hello"]
+    end
+
+    test "cut with single-line selection removes the selected text" do
+      # selection {1,1}-{1,6} spans "hello" (5 chars), leaving " world"
+      b = buf(["hello world"])
+      b_with_sel = Reducer.process(b, {:select_range, {1, 1}, {1, 6}})
+      b2 = Reducer.process(b_with_sel, {:cut, :selection})
+      assert b2.data == [" world"]
+      assert b2.selection == nil
+    end
+
+    test "cut with multi-line selection merges remaining line fragments" do
+      # Select all of both lines: {1,1} through {2,6} (end of "world")
+      b = buf(["hello", "world"])
+      b_with_sel = Reducer.process(b, {:select_range, {1, 1}, {2, 6}})
+      b2 = Reducer.process(b_with_sel, {:cut, :selection})
+      assert length(b2.data) == 1
+      assert b2.selection == nil
+    end
+
+    test "cut pushes an undo snapshot capturing the pre-cut state" do
+      b = buf(["hello world"])
+      b_with_sel = Reducer.process(b, {:select_range, {1, 1}, {1, 6}})
+      b2 = Reducer.process(b_with_sel, {:cut, :selection})
+      assert length(b2.undo_stack) == 1
+      {prev_data, _, _} = hd(b2.undo_stack)
+      assert prev_data == ["hello world"]
+    end
+
+    test "cut can be undone to restore original buffer" do
+      b = buf(["hello world"])
+      b_with_sel = Reducer.process(b, {:select_range, {1, 1}, {1, 6}})
+      b_cut = Reducer.process(b_with_sel, {:cut, :selection})
+      assert b_cut.data == [" world"]
+      b_undone = Reducer.process(b_cut, :undo)
+      assert b_undone.data == ["hello world"]
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # process/2 {:paste, :at_cursor}
+  # ---------------------------------------------------------------------------
+
+  describe "clipboard operations — paste" do
+    # Each paste test uses a unique temp file (keyed on the test process PID) so
+    # that concurrent cut/copy tests — which also call Clipboard.copy and may
+    # write to a SHARED file — cannot clobber the clipboard content we set up.
+    # Application.put_env is called inline in each test (not in setup) so the
+    # file path for copy AND paste is consistent within a single test.
+
+    test "paste inserts clipboard text at cursor position" do
+      clip = "/tmp/quillex_clip_#{:erlang.phash2(self())}_ins"
+      Application.put_env(:clipboard, :unix,
+        copy: {"bash", ["-c", "cat > #{clip}"]},
+        paste: {"bash", ["-c", "cat #{clip} 2>/dev/null"]}
+      )
+      File.write!(clip, "xyz")
+      b = %{buf(["hello"]) | cursors: [Cursor.new(1, 6)]}
+      b2 = Reducer.process(b, {:paste, :at_cursor})
+      assert b2.data == ["helloxyz"]
+    end
+
+    test "paste can be undone to restore original buffer" do
+      clip = "/tmp/quillex_clip_#{:erlang.phash2(self())}_undo"
+      Application.put_env(:clipboard, :unix,
+        copy: {"bash", ["-c", "cat > #{clip}"]},
+        paste: {"bash", ["-c", "cat #{clip} 2>/dev/null"]}
+      )
+      File.write!(clip, "X")
+      b = %{buf(["hello"]) | cursors: [Cursor.new(1, 6)]}
+      b_pasted = Reducer.process(b, {:paste, :at_cursor})
+      b_undone = Reducer.process(b_pasted, :undo)
+      assert b_undone.data == ["hello"]
+    end
+
+    test "paste with active selection replaces the selected text" do
+      clip = "/tmp/quillex_clip_#{:erlang.phash2(self())}_sel"
+      Application.put_env(:clipboard, :unix,
+        copy: {"bash", ["-c", "cat > #{clip}"]},
+        paste: {"bash", ["-c", "cat #{clip} 2>/dev/null"]}
+      )
+      File.write!(clip, "NEW")
+      b = buf(["hello world"])
+      b_with_sel = Reducer.process(b, {:select_range, {1, 1}, {1, 6}})
+      b2 = Reducer.process(b_with_sel, {:paste, :at_cursor})
+      assert b2.data == ["NEW world"]
+      assert b2.selection == nil
+    end
+  end
+
+  # ---------------------------------------------------------------------------
   # process/2 {:delete, :selection}
   # ---------------------------------------------------------------------------
 
