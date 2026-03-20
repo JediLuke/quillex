@@ -31,7 +31,11 @@ defmodule QuillEx.RootScene.State do
     # Transient status notification (shown briefly at bottom of viewport)
     # Set by actions like run_verification; cleared by :clear_status_message after a timeout.
     status_message: nil,   # string or nil
-    status_severity: :info # :info | :warning | :error
+    status_severity: :info, # :info | :warning | :error
+    # Unique reference stamped when a status message is shown. The
+    # {:clear_status_message, ref} timer only clears the message if the ref
+    # still matches, so a stale timer cannot erase a newer message.
+    status_ref: nil
   ]
 
   def new(%{frame: %Widgex.Frame{} = frame, buffers: buffers}) when is_list(buffers) do

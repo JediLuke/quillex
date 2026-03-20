@@ -711,11 +711,15 @@ defmodule QuillEx.RootScene do
   end
 
   # Clear the transient status notification (fired by Process.send_after from show_status/3).
-  # If the message was already cleared (e.g., replaced by a newer notification), this is a no-op.
-  def handle_info(:clear_status_message, scene) do
+  #
+  # The ref-based match ensures only the timer for the *current* message can clear
+  # it.  If show_status/3 was called again before this timer fired, the state holds
+  # a different ref, so this is a no-op — the newer message is preserved for its
+  # full 5-second window.
+  def handle_info({:clear_status_message, ref}, scene) do
     state = scene.assigns.state
-    if state.status_message != nil do
-      new_state = %{state | status_message: nil}
+    if state.status_ref == ref do
+      new_state = %{state | status_message: nil, status_ref: nil}
       old_state = state
       new_graph = QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
       new_scene =
@@ -1101,15 +1105,16 @@ defmodule QuillEx.RootScene do
 
   # Display a transient notification message at the bottom of the viewport.
   # `severity` is :info | :warning | :error — controls background colour.
-  # The message auto-clears after 5 seconds via a :clear_status_message timer.
+  # The message auto-clears after 5 seconds via a {:clear_status_message, ref} timer.
   #
-  # Multiple rapid calls replace the previous message; the most recent 5-second
-  # timer wins (earlier timers are harmless no-ops because handle_info guards on
-  # `status_message != nil` and returns early once the message is already nil).
+  # Multiple rapid calls replace the previous message safely: each call stamps
+  # the state with a fresh ref, and only the matching timer can clear it.
+  # Stale timers (from earlier messages) see a different ref and are no-ops.
   defp show_status(scene, message, severity) when is_binary(message) do
-    Process.send_after(self(), :clear_status_message, 5_000)
+    ref = make_ref()
+    Process.send_after(self(), {:clear_status_message, ref}, 5_000)
     old_state = scene.assigns.state
-    new_state = %{old_state | status_message: message, status_severity: severity}
+    new_state = %{old_state | status_message: message, status_severity: severity, status_ref: ref}
     new_graph = QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
     new_scene =
       scene
