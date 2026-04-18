@@ -899,4 +899,54 @@ defmodule Quillex.TestHelpers.SemanticHelpers do
     Probes.send_keys("backspace", [])
     Process.sleep(100)
   end
+
+  # ===========================================================================
+  # Buffer Pane Focus Helpers
+  # ===========================================================================
+
+  @doc """
+  Return focus info for the buffer pane by reading the TextField scene's assigns
+  directly. Returns a map with `:focused?`, `:border`, `:focused_border`, and
+  `:current_border` (the color currently rendered given the focus state), or
+  `{:error, reason}` if the buffer pane cannot be located.
+  """
+  def buffer_pane_focus_info do
+    case Process.whereis(QuillEx.RootScene) do
+      nil ->
+        {:error, :root_scene_not_registered}
+
+      root_pid ->
+        # Scenic.Scene.child/2 in this fork expects a %Scenic.Scene{} struct, so
+        # fetch the scene state via :sys.get_state/1 and pass that.
+        root_scene = :sys.get_state(root_pid)
+
+        case Scenic.Scene.child(root_scene, :buffer_pane) do
+          {:ok, [buffer_pid | _]} ->
+            tf_state = :sys.get_state(buffer_pid).assigns.state
+
+            %{
+              focused?: tf_state.focused,
+              border: tf_state.colors.border,
+              focused_border: tf_state.colors.focused_border,
+              current_border:
+                if(tf_state.focused,
+                  do: tf_state.colors.focused_border,
+                  else: tf_state.colors.border
+                )
+            }
+
+          other ->
+            {:error, {:buffer_pane_not_found, other}}
+        end
+    end
+  end
+
+  @doc """
+  Returns true when the buffer pane TextField currently reports focus.
+  Raises if the buffer pane cannot be located.
+  """
+  def buffer_pane_focused? do
+    %{focused?: focused?} = buffer_pane_focus_info()
+    focused?
+  end
 end

@@ -88,8 +88,8 @@ defmodule Quillex.GUI.Components.BufferPane do
         background: :medium_slate_blue,
         cursor: :white,
         line_numbers: {255, 255, 255, 85},
-        border: :clear,
-        focused_border: :clear
+        border: {80, 80, 100, 180},
+        focused_border: {255, 215, 0}
       },
       cursor_mode: :cursor,
       viewport_buffer_lines: 5,
