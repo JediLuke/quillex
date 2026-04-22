@@ -30,5 +30,8 @@ foo-*.tar
 # Spex integration test screenshot artifacts
 /test/spex/screenshots/
 
+# Spex runner failure log — regenerated on every run
+spex_failures.jsonl
+
 # Compiled binary — source + Makefile are tracked, binary is not.
 tools/window_pinner
