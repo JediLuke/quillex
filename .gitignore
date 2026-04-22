@@ -29,3 +29,6 @@ foo-*.tar
 
 # Spex integration test screenshot artifacts
 /test/spex/screenshots/
+
+# Compiled binary — source + Makefile are tracked, binary is not.
+tools/window_pinner

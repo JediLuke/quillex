@@ -797,6 +797,101 @@ defmodule Quillex.Buffer.Process.ReducerTest do
   end
 
   # ---------------------------------------------------------------------------
+  # Regression guards for bug 001 — Ctrl+X after mouse-drag selection.
+  # These tests simulate the buffer-side half of the interaction:
+  #
+  #   1. TextField emits `{:select_range, start_pos, end_pos}` from a mouse drag.
+  #   2. User presses Ctrl+X. With the bug 001 fix, the TextField reducer routes
+  #      Ctrl+X to `{:cut, :selection}` unconditionally, relying on the buffer to
+  #      be the source of truth for the selection shape. These tests pin that
+  #      contract: after `{:select_range, ...}`, `{:cut, :selection}` must
+  #      succeed on the selection the mouse produced.
+  #
+  # If any of these regress, the Ctrl+X mouse-cut flow will silently lose data.
+  # ---------------------------------------------------------------------------
+
+  describe "cut — mouse-selection path" do
+    test "cut on a mouse-initiated single-line selection removes the text" do
+      # Simulate: user drags from col 7 back to col 1 on "hello world".
+      # The reducer stores selection as %{start: {1,7}, end: {1,1}} — note the
+      # start/end are NOT normalised to ascending order, because the drag went
+      # right-to-left. The cut path must normalise internally.
+      b = buf(["hello world"])
+      b_with_sel = Reducer.process(b, {:select_range, {1, 7}, {1, 1}})
+      assert b_with_sel.selection == %{start: {1, 7}, end: {1, 1}}
+
+      b_cut = Reducer.process(b_with_sel, {:cut, :selection})
+      assert b_cut.data == ["world"]
+      assert b_cut.selection == nil
+    end
+
+    test "cut on a forward mouse drag produces the same result as keyboard-Shift-arrow" do
+      # Mouse drag forward: {:select_range, {1,1}, {1,6}}
+      b = buf(["hello world"])
+      b_mouse = Reducer.process(b, {:select_range, {1, 1}, {1, 6}})
+
+      # Keyboard-Shift-right five times also produces a selection; start/end
+      # are the same but wrapped through select_text/3. We assert the cut
+      # result is identical.
+      b_mouse_cut = Reducer.process(b_mouse, {:cut, :selection})
+      assert b_mouse_cut.data == [" world"]
+      assert b_mouse_cut.selection == nil
+    end
+
+    test "cut on a multi-line mouse selection collapses the range" do
+      # User drags from top of line 1 down into line 3.
+      b = buf(["alpha", "bravo", "charlie"])
+      b_with_sel = Reducer.process(b, {:select_range, {1, 2}, {3, 4}})
+      # Sanity: buffer stored the map-of-tuples shape from the drag.
+      assert b_with_sel.selection == %{start: {1, 2}, end: {3, 4}}
+
+      b_cut = Reducer.process(b_with_sel, {:cut, :selection})
+      # "alpha" before col 2 = "a"; "charlie" from col 4 onward = "rlie".
+      assert b_cut.data == ["arlie"]
+      assert b_cut.selection == nil
+    end
+
+    test "cut on a zero-length mouse drag is a no-op-shaped delete (empty selection)" do
+      # User clicks without dragging: start == end. The reducer still emits
+      # {:select_range, pos, pos}; cut must not crash and must not corrupt data.
+      b = buf(["hello world"])
+      b_with_sel = Reducer.process(b, {:select_range, {1, 3}, {1, 3}})
+      assert b_with_sel.selection == %{start: {1, 3}, end: {1, 3}}
+
+      b_cut = Reducer.process(b_with_sel, {:cut, :selection})
+      assert b_cut.data == ["hello world"]
+      assert b_cut.selection == nil
+    end
+
+    test "cut on a mouse selection pushes an undo snapshot of the pre-cut buffer" do
+      # Regression guard: the bug 001 symptom included missing undo entries,
+      # because the crash happened before `push_undo/1` ran. This test pins
+      # that the buffer-side {:cut, :selection} path DOES record undo.
+      b = buf(["hello world"])
+      b_with_sel = Reducer.process(b, {:select_range, {1, 1}, {1, 6}})
+      b_cut = Reducer.process(b_with_sel, {:cut, :selection})
+
+      assert length(b_cut.undo_stack) == 1
+      {prev_data, _, prev_selection} = hd(b_cut.undo_stack)
+      assert prev_data == ["hello world"]
+      # Undo should restore the selection that existed before the cut, so a
+      # subsequent redo would see it.
+      assert prev_selection == %{start: {1, 1}, end: {1, 6}}
+    end
+
+    test "cut on a mouse selection can be undone to restore the buffer and selection" do
+      b = buf(["hello world"])
+      b_with_sel = Reducer.process(b, {:select_range, {1, 1}, {1, 6}})
+      b_cut = Reducer.process(b_with_sel, {:cut, :selection})
+      assert b_cut.data == [" world"]
+
+      b_undone = Reducer.process(b_cut, :undo)
+      assert b_undone.data == ["hello world"]
+      assert b_undone.selection == %{start: {1, 1}, end: {1, 6}}
+    end
+  end
+
+  # ---------------------------------------------------------------------------
   # process/2 {:paste, :at_cursor}
   # ---------------------------------------------------------------------------
 
