@@ -1488,12 +1488,25 @@ defmodule QuillEx.RootScene do
   # Try to close a specific buffer. If it has unsaved changes, show the
   # Save/Discard/Cancel dialog and wait for a response before acting.
   # Clean buffers are closed immediately (no dialog shown).
-  defp try_close_buffer(scene, %Quillex.Structs.BufState.BufRef{dirty?: true} = buf_ref) do
-    show_unsaved_prompt(scene, buf_ref)
-  end
+  #
+  # The BufRef stored in scene state is a cached snapshot and can be stale:
+  # in buffer_backed mode the TextField writes directly to Buffer.Process and
+  # RootScene is NOT subscribed to {:buffers, uuid} updates, so dirty? flips
+  # in Buffer.Process without the cache being refreshed. Fresh-read here so
+  # the decision uses the authoritative dirty state.
+  defp try_close_buffer(scene, %Quillex.Structs.BufState.BufRef{} = buf_ref) do
+    fresh_buf_ref = refresh_buf_ref(buf_ref)
 
-  defp try_close_buffer(scene, buf_ref) do
-    handle_cast({:action, {:close_buffer, buf_ref}}, scene)
+    case decide_close(scene.assigns.state, fresh_buf_ref) do
+      :noop ->
+        {:noreply, scene}
+
+      {:close, br} ->
+        handle_cast({:action, {:close_buffer, br}}, scene)
+
+      {:show_prompt, br, _new_state} ->
+        show_unsaved_prompt(scene, br)
+    end
   end
 
   # Try to close the currently active buffer.
@@ -1502,6 +1515,35 @@ defmodule QuillEx.RootScene do
     case scene.assigns.state.active_buf do
       nil -> {:noreply, scene}
       buf_ref -> try_close_buffer(scene, buf_ref)
+    end
+  end
+
+  # Fresh-read the BufRef from Buffer.Process. The authoritative dirty? flag
+  # lives in the buffer's own GenServer state — the copy in scene.assigns is a
+  # cached snapshot from the last time RootScene actively applied an action.
+  defp refresh_buf_ref(%Quillex.Structs.BufState.BufRef{} = buf_ref) do
+    {:ok, buf_state} = Quillex.Buffer.Process.fetch_buf(buf_ref)
+    Quillex.Structs.BufState.BufRef.generate(buf_state)
+  end
+
+  @doc false
+  # Pure decision function for the close-buffer workflow. Public so unit tests
+  # can exercise it without a live Scenic.Scene.
+  #
+  #   nil            → :noop (nothing to close)
+  #   dirty? = true  → {:show_prompt, buf_ref, new_state} (state marks the prompt open)
+  #   dirty? = false → {:close, buf_ref}
+  def decide_close(%QuillEx.RootScene.State{} = state, active_buf) do
+    case active_buf do
+      nil ->
+        :noop
+
+      %Quillex.Structs.BufState.BufRef{dirty?: true} = buf_ref ->
+        new_state = %{state | show_unsaved_prompt: true, pending_close_buf_ref: buf_ref}
+        {:show_prompt, buf_ref, new_state}
+
+      %Quillex.Structs.BufState.BufRef{} = buf_ref ->
+        {:close, buf_ref}
     end
   end
 
