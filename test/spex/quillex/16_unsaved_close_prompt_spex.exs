@@ -137,6 +137,90 @@ defmodule Quillex.UnsavedClosePromptSpex do
   end
 
   # ===========================================================================
+  # SPEX 1b: Stale-cache regression — dirty flip happens inside Buffer.Process
+  # only, with no intervening RootScene action that would refresh its cached
+  # BufRef. RootScene must consult the live buffer (not its stale dirty? cache)
+  # when deciding whether to show the unsaved-changes dialog on Ctrl+W.
+  # ===========================================================================
+
+  spex "UnsavedClosePrompt - Ctrl+W on file-backed buffer with stale RootScene cache",
+    description: "Ctrl+W shows dialog even when dirty flag was set only inside Buffer.Process (stale cache regression)",
+    tags: [:unsaved_close_prompt, :ctrl_w, :dirty, :regression, :stale_cache] do
+
+    scenario "Ctrl+W shows dialog even when dirty flag was set only inside Buffer.Process (stale cache regression)", context do
+      given_ "the app is open and other tabs are closed", context do
+        Probes.send_keys("escape", [])
+        Process.sleep(200)
+        force_close_all_but_one()
+        {:ok, context}
+      end
+
+      given_ "a file-backed buffer is open (buffer_backed mode, TextField writes to Buffer.Process)", context do
+        stale_file = tmp_file_path("stale_cache_regression.txt")
+        File.write!(stale_file, "original content\n")
+
+        case FileOpener.open_file(stale_file) do
+          :ok ->
+            Process.sleep(500)
+            tab_name = Path.basename(stale_file)
+            SemanticHelpers.wait_for_tab(tab_name, 3000)
+
+          {:error, reason} ->
+            flunk("Could not open temp file via FileOpener: #{inspect(reason)}")
+        end
+
+        {:ok, Map.put(context, :stale_file, stale_file)}
+      end
+
+      when_ "we type directly into the buffer (dirties Buffer.Process; RootScene cache stays stale)", context do
+        # Direct typing through TextField → Buffer.Process. RootScene is not
+        # subscribed to {:buffers, uuid} PubSub, so its cached BufRef remains
+        # dirty?: false. We deliberately do NOT switch tabs, save, or open a
+        # menu before pressing Ctrl+W — those would refresh RootScene's cache
+        # and mask the regression.
+        type_text("stale cache regression")
+        {:ok, context}
+      end
+
+      when_ "we press Ctrl+W with no intervening RootScene action", context do
+        Probes.send_keys("w", [:ctrl])
+        Process.sleep(400)
+        {:ok, context}
+      end
+
+      then_ "the unsaved-changes dialog is visible", context do
+        rendered = Query.rendered_text()
+        assert String.contains?(rendered, "Unsaved Changes"),
+               "Dialog must appear even though only Buffer.Process knew the buffer was dirty. Got: #{inspect(rendered)}"
+        :ok
+      end
+
+      then_ "the file-backed tab is still present while dialog is shown", context do
+        count = SemanticHelpers.get_tab_count() || 0
+        assert count >= 1,
+               "File-backed tab should still be present while dialog is shown. Tab count: #{count}"
+        :ok
+      end
+
+      then_ "cleanup: discard the dirty buffer and remove temp file", context do
+        # Dialog is open — pressing D discards changes and closes the buffer
+        Probes.send_keys("d", [])
+        Process.sleep(500)
+
+        # Defensive: if the dialog somehow remained, escape it so subsequent
+        # spex don't inherit a modal.
+        if Query.text_visible?("Unsaved Changes") do
+          Probes.send_keys("escape", [])
+          Process.sleep(300)
+        end
+
+        File.rm(context.stale_file)
+        :ok
+      end
+    end
+  end
+
+  # ===========================================================================
   # SPEX 2: Clean buffer closes immediately on Ctrl+W
   # ===========================================================================
 
