@@ -11,7 +11,6 @@ NOT listed here — it is being fixed in the current cycle.
 
 | File | Line | One-line description |
 |------|------|----------------------|
-| `test/spex/quillex/04_view_settings_spex.exs` | 418 | Cursor preservation on buffer switch |
 | `test/spex/quillex/07_integration_v1_spex.exs` | 430 | Large-file line count 338 vs 339 (may resolve when test-loosening revert lands) |
 | `test/spex/quillex/07_integration_v1_spex.exs` | 686 | Close search bar → typing goes to buffer |
 | `test/spex/quillex/07_integration_v1_spex.exs` | 1213 | Shift+Scroll horizontal scroll |
@@ -48,6 +47,50 @@ the same fresh-read path. Unit coverage in
 `test/reducers/unsaved_prompt_test.exs` exercises all three branches
 (dirty, clean, nil). All 6 scenarios in
 `test/spex/quillex/16_unsaved_close_prompt_spex.exs` pass.
+
+## Cycle retro — Cursor preservation on buffer switch (2026-05-02)
+
+**Root cause: Candidate B (refined) — sibling-overlay click bleeds into the
+buffer-pane TextField.** In `:buffer_backed` mode the buffer-pane TextField
+calls `request_input(scene, [:cursor_button, :cursor_pos, ...])`, which
+delivers EVERY click in the viewport to its `handle_input/3` regardless of
+where the click visually lands. The frame-only `State.point_inside?/2` guard
+admits clicks that fall inside the buffer-pane rectangle even when a sibling
+overlay (here, the IconMenu File-dropdown's "New" item at viewport y≈18) is
+the click's intended recipient. The handler then calls
+`State.click_to_cursor/2`, which clamps far-past-EOL coordinates to end-of-
+line and dispatches `{:set_cursor, {1, 17}}` to `Buffer.Process` — silently
+overwriting the user's keyboard-positioned cursor at col 5. When the user
+switches away and back, the TextField faithfully reads the now-corrupted
+buffer cursor and types `X` at col 17 instead of col 5. (Candidate A —
+TextField re-init drops cursor — was ruled out: probes showed the new
+TextField reads `buf_cursors=[col: 17]` from `Buffer.Process` and renders
+exactly that. The buffer already held the wrong value before the re-init.
+Candidate C — one-way cursor sync — was ruled out: every keyboard cursor
+edit reaches `Buffer.Process` via `handle_buffer_backed_input` and the arrow
+keys persist correctly; only the spurious click between key-input and the
+spex assertion mutated the cursor.)
+
+**Fix:** In
+`/home/luke/workbench/flx/scenic-widget-contrib/lib/components/text_field/reducer.ex`,
+`input_to_buffer_action/2` for `{:cursor_button, {:btn_left, 1, _, coords}}`
+now gates the `point_inside?` branch on a new
+`buffer_backed_overlay_click?/2` predicate. In `:buffer_backed` mode only,
+clicks whose local x falls more than 4× font-size past the rendered text
+content of the targeted line are treated as overlay-class noise and the
+reducer returns `nil` — no `:set_cursor` dispatched, no cursor mutation.
+`:direct` mode keeps its existing past-EOL → place-at-EOL affordance
+unchanged (the new clause's second head returns `false`). The change is one
+predicate plus one `if` guard — no other call sites touched.
+
+**Tests:** `test/buffers/buffer_switch_preserves_cursor_test.exs` pins the
+reducer-layer contract directly with two ExUnit cases — far-past-EOL click
+in `:buffer_backed` mode produces no `:set_cursor`, and the same click in
+`:direct` mode still does. Both spex scenarios in
+`test/spex/quillex/04_view_settings_spex.exs` (line 370 "Cursor position is
+preserved when switching buffers" and line 428 "Cursor preserved across
+multiple buffer switches") now pass; the surrounding line-numbers / word-
+wrap scenarios in the same file remain green. (this commit)
 
 ## Triage principles
 
