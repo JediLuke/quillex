@@ -52,47 +52,72 @@ A typical development session might involve:
 3. Using that new capability in Quillex
 4. Testing the integrated behavior with spex tests
 
-## Architecture Overview
+## Architecture Overview — RadixCache (redux-style stores on Scenic.PubSub)
 
-### Layer Architecture
+Quillex uses the **RadixCache pattern** (shared with the sibling merlinex
+app): GenServer stores organized by *data domain*, publishing full state
+snapshots on retained `Scenic.PubSub` sources. Components hydrate instantly
+from ETS (`get/1`) and self-update on publishes (`subscribe/1` delivers the
+retained value, so a late subscriber can never miss state).
+
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    GUI Layer (Scenic)                    │
-│  RootScene → BufferPane → ScenicWidgets.TextField       │
-└─────────────────────────────────────────────────────────┘
-                            ↓ Actions ↑ State
-┌─────────────────────────────────────────────────────────┐
-│               State Management (Flux/Redux)              │
-│  State → Reducer → Mutator → Renderizer                 │
-└─────────────────────────────────────────────────────────┘
-                            ↓ Actions ↑ PubSub
-┌─────────────────────────────────────────────────────────┐
-│                    Buffer Layer                          │
-│  BufferManager → Buffer.Process → BufState              │
-└─────────────────────────────────────────────────────────┘
+             dispatch (cast action fns)                    snapshots (Scenic.PubSub)
+  GUI ────────────────────────────────────▶ Stores ────────────────────────────────▶ GUI
+                                              │
+   Quillex.Buffer.Process (one per buffer)    │  :"radix_buf_<uuid>"  → TextField
+   Quillex.Buffer.BufferManager               │  :radix_buffers       → RootScene (tabs, active)
+   Quillex.RadixCache.ViewStore               │  :radix_view          → RootScene (chrome)
 ```
+
+- **Store = GenServer per data domain.** Public selector fns wrap
+  `Scenic.PubSub.get`; public action fns are casts (never block the GUI);
+  the `handle_cast`/`handle_info` clauses ARE the reducers; every mutation
+  funnels through one `publish` commit point.
+- **Boot order**: `Quillex.RadixCache.Supervisor` starts `Scenic.PubSub`
+  *before* the buffer tree and before Scenic (the scenic fork skips its own
+  PubSub start when one is running). Source atoms are minted only in
+  `Quillex.RadixCache.Sources`.
+- **The typing path never touches RootScene**: TextField (`:buffer_backed`)
+  casts actions straight to `Buffer.Process` (addressed by via-tuple) and
+  re-renders itself from that buffer's published snapshots.
+- **Edge-triggered metadata**: `Buffer.Process` casts `{:buffer_meta, ...}`
+  to BufferManager only when `dirty?`/`name` transition, so tab-bar dirty
+  dots are reactive without per-keystroke list publishes. No store debounces
+  — an editor publishes every reduce immediately.
+- **Never a catch-all above `{{Scenic.PubSub, :data}, ...}` clauses** — it
+  silently swallows store updates (known merlinex footgun).
 
 ### Key Modules
 
 | Module | Location | Purpose |
 |--------|----------|---------|
 | `QuillEx.App` | `lib/app.ex` | Application entry, supervision tree |
-| `QuillEx.RootScene` | `lib/gui/scenes/root/qlx_root_scene.ex` | Main Scenic scene, input handling |
-| `BufferPane` | `lib/gui/components/buffer_pane/buffer_pane.ex` | TextField wrapper component |
-| `BufferManager` | `lib/buffers/exec/buffer_manager.ex` | Central buffer registry (GenServer) |
-| `Buffer.Process` | `lib/buffers/buf_proc/buffer_process.ex` | Individual buffer (GenServer) |
+| `Quillex.RadixCache.Supervisor` | `lib/radix_cache/supervisor.ex` | Starts Scenic.PubSub + stores |
+| `Quillex.RadixCache.Sources` | `lib/radix_cache/sources.ex` | Mints all store source atoms |
+| `Quillex.RadixCache.ViewStore` | `lib/radix_cache/view_store.ex` | UI-chrome store (:radix_view) |
+| `BufferManager` | `lib/buffers/exec/buffer_manager.ex` | Buffer lifecycle + buffer-list store (:radix_buffers) |
+| `Buffer.Process` | `lib/buffers/buf_proc/buffer_process.ex` | Per-buffer store (action reduce loop) |
 | `BufState` | `lib/buffers/buf_proc/buf_state.ex` | Buffer data structure |
+| `QuillEx.RootScene` | `lib/gui/scenes/root/qlx_root_scene.ex` | Root scene: input routing, snapshot rendering, dialog choreography |
+| `Renderizer` | `lib/gui/scenes/root/qlx_root_scene_renderizer.ex` | State-diff → graph (delete+recreate z-order) |
+| `Quillex.PerfMonitor` | `lib/utils/perf_monitor.ex` | Render/handler timing telemetry |
 
-### State Management Pattern
-- **State structs**: Define shape of state
-- **Reducers**: Pure functions that process actions → new state
-- **Mutators**: Helper functions for common state transformations
-- **Renderizers**: Convert state to Scenic graphs
+### State Ownership
+- **Per-buffer text state** (lines, cursors, selection, undo/redo, search):
+  `Buffer.Process`, published on `:"radix_buf_<uuid>"`.
+- **Buffer list + active buffer + dirty flags**: `BufferManager`, published
+  on `:radix_buffers`. Lifecycle and list-state share one process on purpose
+  — open/close IS a list change; splitting them would race.
+- **Editor settings, file-nav flags, status message**: `ViewStore`,
+  published on `:radix_view` (the status auto-clear timer lives in the store).
+- **Search-bar/dialog flags**: scene-owned transient interaction state (see
+  `QuillEx.RootScene.State` moduledoc for the doctrine).
 
 ### Process Model
-- One `BufferManager` GenServer coordinates all buffers
-- One `Buffer.Process` GenServer per open buffer
-- Changes broadcast via PubSub → GUI re-renders
+- One `BufferManager` GenServer: lifecycle + buffer-list store
+- One `Buffer.Process` GenServer per open buffer: the buffer's store
+- One `ViewStore` GenServer: UI chrome store
+- Stores publish → subscribed scenes/components re-render themselves
 
 ## Text Editor Features
 
@@ -113,9 +138,12 @@ A typical development session might involve:
 
 ### Input Flow
 ```
-User Input → Scenic Driver → RootScene → TextField (direct mode)
-    → BufferPane event → Action → BufferManager → Buffer.Process
-    → Reducer → new BufState → PubSub broadcast → RootScene re-render
+Typing:     Scenic input → TextField (:buffer_backed) → cast {:action, ...}
+              → Buffer.Process reduce → publish :"radix_buf_<uuid>"
+              → TextField handle_info → push_graph   (RootScene not involved)
+
+Shortcuts:  Scenic :key input → RootScene → store action fn (cast)
+              → store publishes → RootScene snapshot clause → Renderizer → push
 ```
 
 ## Testing

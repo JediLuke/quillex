@@ -11,7 +11,6 @@ defmodule QuillEx.App do
       # don't boot the GUI, Flamelex is managing Scenic
       if started_by_flamelex?() do
         [
-          {Registry, keys: :duplicate, name: QuillEx.PubSub},
           # RadixCache starts Scenic.PubSub before buffers register with it
           # (and before Scenic boots — the fork skips its own PubSub start)
           {Quillex.RadixCache.Supervisor, []},
@@ -19,7 +18,6 @@ defmodule QuillEx.App do
         ]
       else
         [
-          {Registry, keys: :duplicate, name: QuillEx.PubSub},
           {Quillex.PerfMonitor, []},
           {Quillex.RadixCache.Supervisor, []},
           {Quillex.Buffers.TopSupervisor, []},

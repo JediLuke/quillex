@@ -1,26 +1,48 @@
-# Franklin — Known Deferred Spex Failures (snapshot 2026-04-22)
+# Franklin — Known Deferred Spex Failures (snapshot 2026-07-29)
 
-These failures were surfaced by the spex suite during cycle of 2026-04-22 and
-are explicitly DEFERRED from that cycle's scope. One future cycle per entry,
-following Perceive → Plan → Act → Adapt.
+These failures are DEFERRED. One future cycle per entry, following
+Perceive → Plan → Act → Adapt.
 
-The unsaved-changes dialog cluster (`16_unsaved_close_prompt_spex.exs`) is
-NOT listed here — it is being fixed in the current cycle.
+Snapshot updated 2026-07-29 after the RadixCache store refactor (Phases 0–7,
+commits 15aaa25..HEAD): full-run totals moved 17 → 20 failures across the
+refactor, with churn in both directions — see the retro below. Several rows
+are full-run-only failures that pass when their file runs in isolation
+(`bash scripts/run_spex_quiet.sh <file>`); suspect cross-file interference
+and/or async render timing.
 
 ## Deferred failures
 
 | File | Line | One-line description |
 |------|------|----------------------|
-| `test/spex/quillex/07_integration_v1_spex.exs` | 430 | Large-file line count 338 vs 339 (may resolve when test-loosening revert lands) |
-| `test/spex/quillex/07_integration_v1_spex.exs` | 686 | Close search bar → typing goes to buffer |
-| `test/spex/quillex/07_integration_v1_spex.exs` | 1213 | Shift+Scroll horizontal scroll |
-| `test/spex/quillex/07_integration_v1_spex.exs` | 1603 | Mouse click positions cursor (possible regression) |
-| `test/spex/quillex/08_property_tests_spex.exs` | (2 failing) | Property-test failures — capture specific scenario names from next run |
-| `test/spex/quillex/10_file_navigator_spex.exs` | 235 | Buffer pane layout with file nav |
-| `test/spex/quillex/11_run_verification_spex.exs` | 243 | Status bar "unchanged on disk" message |
+| `test/spex/quillex/07_integration_v1_spex.exs` | 1213 | Shift+Scroll horizontal scroll ("Scrolling") |
+| `test/spex/quillex/07_integration_v1_spex.exs` | 480 | Tab Navigation: timeout selecting 'app.ex' tab (full-run only; NEW 2026-07-29 — buffer switching is store-driven since Phase 5, needs a diagnosis cycle) |
+| `test/spex/quillex/07_integration_v1_spex.exs` | 572 | Find in Spinoza: typing after search close (was register row "line 686") |
+| `test/spex/quillex/07_integration_v1_spex.exs` | 1555 | Mouse click positions cursor (line 2 click lands line 1) |
+| `test/spex/quillex/08_property_tests_spex.exs` | (1 failing) | Property: Cursor Visibility Invariant (Undo/Redo Consistency now PASSES) |
+| `test/spex/quillex/09_file_operations_spex.exs` | (1 failing) | Save Dialog Keyboard Navigation (NEW 2026-07-29, full-run only) |
+| `test/spex/quillex/10_file_navigator_spex.exs` | 235 | Buffer pane layout with file nav (full-run only — passed in isolation 2026-07-29) |
+| `test/spex/quillex/11_run_verification_spex.exs` | 312 | Status bar "deleted from disk" (NEW 2026-07-29, full-run only; status is async via ViewStore since Phase 6a — check whether the assertion window races the publish) |
+| `test/spex/quillex/11_run_verification_spex.exs` | 170 | Status bar "no associated file path" (NEW 2026-07-29, full-run only; same suspicion as above) |
 | `test/spex/quillex/13_menu_close_outside_click_spex.exs` | (race) | Scenic `[error]` logs during component init/shutdown — surfaced by `fail_on_error_logs: true` revert |
-| `test/spex/quillex/15_word_navigation_spex.exs` | 375 | Plain Left from end of 'abc' |
-| `test/spex/quillex/17_page_navigation_spex.exs` | (5 scenarios) | `wait_for_cursor_satisfying` timeouts |
+| `test/spex/quillex/15_word_navigation_spex.exs` | (1 failing) | Word navigation: flaky variant (Ctrl+Left this run; Ctrl+Right at baseline; "Plain Left" in April) |
+| `test/spex/quillex/17_page_navigation_spex.exs` | (6 scenarios) | `wait_for_cursor_satisfying` timeouts |
+| `test/spex/quillex/18_focus_indication_spex.exs` | (3 scenarios) | Focus border color assertions (failing since at least the 2026-07-28 baseline; predates the refactor, was never registered) |
+
+## Cycle retro — RadixCache refactor baseline shift (2026-07-29)
+
+Rows CLOSED by or during the refactor (passing in the 2026-07-29 full run):
+- 07:430 large-file line count — passing since the 2026-07-28 baseline.
+- 08 Undo/Redo Consistency property — passes post-refactor.
+- 11:243 status bar "unchanged on disk" — passes post-refactor.
+- 20 mouse-cut Bug 001 regression spex — failed at the 2026-07-28 baseline,
+  passes post-refactor.
+
+Rows OPENED: see NEW markers above. The 11_run_verification pair and 09 are
+full-run-only and status/dialog related; Phase 6a moved status messages into
+ViewStore (async publish → scene render), which is the first suspect. The
+07:480 tab-navigation timeout touches Phase 5's store-driven buffer
+switching. Each needs its own one-failure cycle with probes before assuming
+either refactor causality or plain full-run flakiness.
 
 ## Cycle retro — Unsaved Changes dialog regression (2026-05-01)
 

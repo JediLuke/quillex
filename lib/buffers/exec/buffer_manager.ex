@@ -95,11 +95,6 @@ defmodule Quillex.Buffer.BufferManager do
   def handle_call({:open_buffer, %Quillex.Structs.BufState.BufRef{} = buf_ref}, _from, state) do
     # check we're not trying to open the same buffer twice
     if Enum.any?(state.buffers, & &1.uuid == buf_ref.uuid) do
-      # Legacy broadcast retained for consumers not yet on the store (Phase 7 removes)
-      Quillex.Utils.PubSub.broadcast(
-          topic: :qlx_events,
-          msg: {:action, {:activate_buffer, buf_ref}}
-        )
       {:reply, {:ok, buf_ref}, publish(%{state | active_buf: buf_ref})}
     else
       raise "Could not find buffer: #{inspect buf_ref}"
@@ -264,12 +259,6 @@ defmodule Quillex.Buffer.BufferManager do
 
     case Quillex.BufferSupervisor.start_new_buffer_process(args) do
       {:ok, %Quillex.Structs.BufState.BufRef{} = buf_ref} ->
-        # Legacy broadcast retained for consumers not yet on the store (Phase 7 removes)
-        Quillex.Utils.PubSub.broadcast(
-          topic: :qlx_events,
-          msg: {:new_buffer_opened, buf_ref}
-        )
-
         new_state = publish(%{state | buffers: state.buffers ++ [buf_ref], active_buf: buf_ref})
         {:reply, {:ok, buf_ref}, new_state}
 

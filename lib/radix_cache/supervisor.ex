@@ -6,9 +6,8 @@ defmodule Quillex.RadixCache.Supervisor do
   domain (buffers, view), NOT by UI layout. Components read from RadixCache
   stores via Scenic.PubSub (ETS-backed, O(1) reads) and subscribe for pushes.
 
-  Store buses:
-  - `Scenic.PubSub` — stores → components: retained snapshots, instant `get/1`
-  - `Quillex.Utils.PubSub` (Registry) — inbound events → stores
+  Store bus: `Scenic.PubSub` — stores → components: retained snapshots,
+  instant `get/1`, retained value delivered on subscribe.
 
   If data isn't loaded yet, stores publish nil and components render loading
   states. The GUI thread never blocks.

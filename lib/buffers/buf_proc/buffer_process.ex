@@ -89,15 +89,7 @@ defmodule Quillex.Buffer.Process do
       })
     end
 
-    # Dual-publish during the store migration: Scenic.PubSub is the target bus,
-    # the Registry broadcast feeds consumers not yet cut over. The legacy
-    # broadcast dies with the last consumer.
     Scenic.PubSub.publish(Quillex.RadixCache.Sources.buffer(new_state.uuid), new_state)
-
-    Quillex.Utils.PubSub.broadcast(
-      topic: {:buffers, new_state.uuid},
-      msg: {:buf_state_changes, new_state}
-    )
 
     new_state
   end

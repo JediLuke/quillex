@@ -195,6 +195,14 @@ A comprehensive breakdown of current functionality vs target functionality for a
 
 ## Architecture Notes
 
+> **2026-07: RadixCache refactor.** State now lives in GenServer stores
+> publishing retained snapshots on Scenic.PubSub: `Buffer.Process` per
+> buffer (`:"radix_buf_<uuid>"`), `BufferManager` as the buffer-list store
+> (`:radix_buffers`), and `ViewStore` for UI chrome (`:radix_view`). The
+> authoritative architecture description is in `Quillex-BasePrompt.md`
+> (Architecture Overview) and `AGENTS.md` (State Architecture). The notes
+> below describe the component tree and remain accurate at that level.
+
 ### Current Component Structure
 ```
 QuillEx.RootScene
