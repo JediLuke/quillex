@@ -108,10 +108,10 @@ defmodule Quillex.KeyboardShortcutsSpex do
         {:ok, new_count} = SemanticHelpers.wait_for_tab_count(expected)
         assert new_count == expected,
                "Ctrl+N should add a tab. Expected #{expected}, got #{new_count}"
-        :ok
+        {:ok, context}
       end
 
-      then_ "the new tab should show an untitled buffer name", context do
+      then_ "the new tab should show an untitled buffer name" do
         labels = tab_labels()
         has_untitled = Enum.any?(labels, &String.contains?(&1, "untitled"))
         assert has_untitled,
@@ -148,7 +148,7 @@ defmodule Quillex.KeyboardShortcutsSpex do
         {:ok, new_count} = SemanticHelpers.wait_for_tab_count(expected)
         assert new_count == expected,
                "Two Ctrl+N presses should yield #{expected} tabs, got #{new_count}"
-        :ok
+        {:ok, context}
       end
     end
   end
@@ -247,7 +247,7 @@ defmodule Quillex.KeyboardShortcutsSpex do
         {:ok, new_count} = SemanticHelpers.wait_for_tab_count(expected)
         assert new_count == expected,
                "Ctrl+W should remove one tab. Expected #{expected}, got #{new_count}"
-        :ok
+        {:ok, context}
       end
 
       then_ "another tab is still selected" do

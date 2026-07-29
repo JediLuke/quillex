@@ -39,7 +39,7 @@ defmodule Quillex.ReplaceSpex do
     # 1. CTRL+H OPENS REPLACE BAR
     # =========================================================================
 
-    scenario "Ctrl+H opens the search bar with replace row", context do
+    scenario "Ctrl+H opens the search bar with replace row" do
       given_ "Quillex has launched with some text", context do
         Process.sleep(300)
         # Click in editor area to ensure focus
@@ -65,7 +65,7 @@ defmodule Quillex.ReplaceSpex do
         {:ok, context}
       end
 
-      then_ "the replace row should be visible in the search bar", context do
+      then_ "the replace row should be visible in the search bar" do
         # Take screenshot for debugging
         path = Probes.take_screenshot("12_replace_bar_open")
         IO.puts("Screenshot saved to: #{path}")
@@ -90,7 +90,7 @@ defmodule Quillex.ReplaceSpex do
     # 2. REPLACE SINGLE MATCH
     # =========================================================================
 
-    scenario "Enter in replace field replaces current match", context do
+    scenario "Enter in replace field replaces current match" do
       given_ "editor has text with a match and replace bar is open", context do
         Process.sleep(300)
         # Click in editor area
@@ -131,7 +131,7 @@ defmodule Quillex.ReplaceSpex do
         {:ok, context}
       end
 
-      then_ "the text 'orange' should be visible in the editor", context do
+      then_ "the text 'orange' should be visible in the editor" do
         # The replacement should have inserted "orange" somewhere in the buffer
         assert Query.text_visible?("orange"), "'orange' should be visible after replacement"
         :ok
@@ -147,7 +147,7 @@ defmodule Quillex.ReplaceSpex do
     # 3. REPLACE ALL
     # =========================================================================
 
-    scenario "Replace All replaces every occurrence in the buffer", context do
+    scenario "Replace All replaces every occurrence in the buffer" do
       given_ "editor has multiple occurrences of 'cat' and replace bar is open", context do
         Process.sleep(300)
         # Click in editor area
@@ -200,7 +200,7 @@ defmodule Quillex.ReplaceSpex do
         {:ok, context}
       end
 
-      then_ "the word 'bird' should be visible in the editor", context do
+      then_ "the word 'bird' should be visible in the editor" do
         assert Query.text_visible?("bird"), "'bird' should be visible after Replace All"
         :ok
       end
@@ -215,7 +215,7 @@ defmodule Quillex.ReplaceSpex do
     # 4. ESCAPE CLOSES REPLACE BAR
     # =========================================================================
 
-    scenario "Escape closes the replace bar and returns focus to editor", context do
+    scenario "Escape closes the replace bar and returns focus to editor" do
       given_ "the replace bar is open", context do
         Process.sleep(300)
         # Ensure replace bar is open
@@ -232,7 +232,7 @@ defmodule Quillex.ReplaceSpex do
         {:ok, context}
       end
 
-      then_ "the replace bar should close and typing goes to the editor", context do
+      then_ "the replace bar should close and typing goes to the editor" do
         # After closing, any typed character should go to the editor
         Probes.send_text("Z")
         Process.sleep(100)
@@ -250,7 +250,7 @@ defmodule Quillex.ReplaceSpex do
     # 5. REPLACE + UNDO
     # =========================================================================
 
-    scenario "Replace operation can be undone with Ctrl+Z", context do
+    scenario "Replace operation can be undone with Ctrl+Z" do
       given_ "editor has 'hello world' and we open the replace bar", context do
         Process.sleep(300)
         # Click in editor, escape overlays, clear content
@@ -290,7 +290,7 @@ defmodule Quillex.ReplaceSpex do
         {:ok, context}
       end
 
-      then_ "Ctrl+U should undo the replace and restore original text", context do
+      then_ "Ctrl+U should undo the replace and restore original text" do
         # First verify replacement occurred (goodbye or original hello visible)
         path = Probes.take_screenshot("12_replace_undo_after_replace")
         IO.puts("Screenshot saved to: #{path}")

@@ -118,7 +118,7 @@ defmodule Quillex.BufferManagementSpex do
     # 1. INITIAL STATE - AT LEAST ONE TAB
     # =========================================================================
 
-    scenario "App starts with at least one tab visible", context do
+    scenario "App starts with at least one tab visible" do
       given_ "Quillex has launched", context do
         Process.sleep(500)
         {:ok, context}
@@ -130,7 +130,7 @@ defmodule Quillex.BufferManagementSpex do
         {:ok, Map.put(context, :initial_tab_count, count)}
       end
 
-      then_ "the tab bar should show 'untitled' (possibly truncated)", context do
+      then_ "the tab bar should show 'untitled' (possibly truncated)" do
         labels = tab_labels()
         has_untitled = Enum.any?(labels, &String.contains?(&1, "untitled"))
         assert has_untitled or Query.text_visible?("unt"),
@@ -143,7 +143,7 @@ defmodule Quillex.BufferManagementSpex do
     # 2. CREATE NEW BUFFER VIA KEYBOARD
     # =========================================================================
 
-    scenario "Creating a new buffer adds a tab", context do
+    scenario "Creating a new buffer adds a tab" do
       given_ "we have at least one tab open", context do
         initial_count = tab_count()
         {:ok, Map.put(context, :initial_count, initial_count)}
@@ -158,10 +158,10 @@ defmodule Quillex.BufferManagementSpex do
         {:ok, new_count} = SemanticHelpers.wait_for_tab_count(context.initial_count + 1)
         assert new_count == context.initial_count + 1,
                "Expected #{context.initial_count + 1} tabs, got #{new_count}"
-        :ok
+        {:ok, context}
       end
 
-      then_ "the new tab should be visible in the UI", context do
+      then_ "the new tab should be visible in the UI" do
         labels = tab_labels()
         # New buffer gets a unique name like "untitled-2"
         has_untitled = Enum.any?(labels, &String.contains?(&1, "untitled"))
@@ -174,7 +174,7 @@ defmodule Quillex.BufferManagementSpex do
     # 3. NEW BUFFER HAS UNIQUE NAME
     # =========================================================================
 
-    scenario "Each new buffer gets a unique name in the tab bar", context do
+    scenario "Each new buffer gets a unique name in the tab bar" do
       given_ "we have created buffers", context do
         labels = tab_labels()
         {:ok, Map.put(context, :labels, labels)}
@@ -185,7 +185,7 @@ defmodule Quillex.BufferManagementSpex do
         unique_labels = Enum.uniq(labels)
         assert length(labels) == length(unique_labels),
                "Tab labels should be unique. Got: #{inspect(labels)}"
-        :ok
+        {:ok, context}
       end
     end
   end
@@ -198,7 +198,7 @@ defmodule Quillex.BufferManagementSpex do
     # 4. TYPE TEXT IN BUFFER 1
     # =========================================================================
 
-    scenario "Type text in the first buffer", context do
+    scenario "Type text in the first buffer" do
       given_ "we have multiple tabs open", context do
         # Ensure we have at least 2 tabs
         if tab_count() < 2 do
@@ -223,7 +223,7 @@ defmodule Quillex.BufferManagementSpex do
         {:ok, context}
       end
 
-      then_ "'BUFFER_ONE_TEXT' should be visible on screen", context do
+      then_ "'BUFFER_ONE_TEXT' should be visible on screen" do
         assert Query.text_visible?("BUFFER_ONE_TEXT"),
                "Text typed in buffer 1 should be visible"
         :ok
@@ -234,7 +234,7 @@ defmodule Quillex.BufferManagementSpex do
     # 5. SWITCH TO BUFFER 2 AND TYPE
     # =========================================================================
 
-    scenario "Switch to second tab and type different text", context do
+    scenario "Switch to second tab and type different text" do
       given_ "buffer 1 has text 'BUFFER_ONE_TEXT'", context do
         assert Query.text_visible?("BUFFER_ONE_TEXT"),
                "Buffer 1 should still have its text"
@@ -248,7 +248,7 @@ defmodule Quillex.BufferManagementSpex do
         {:ok, Map.put(context, :second_tab_label, second_label)}
       end
 
-      then_ "'BUFFER_ONE_TEXT' should no longer be visible", context do
+      then_ "'BUFFER_ONE_TEXT' should no longer be visible" do
         # Buffer 2's content is shown, not buffer 1's
         refute Query.text_visible?("BUFFER_ONE_TEXT"),
                "Buffer 1's text should not be visible when buffer 2 is active"
@@ -261,7 +261,7 @@ defmodule Quillex.BufferManagementSpex do
         {:ok, context}
       end
 
-      then_ "'BUFFER_TWO_TEXT' should be visible", context do
+      then_ "'BUFFER_TWO_TEXT' should be visible" do
         assert Query.text_visible?("BUFFER_TWO_TEXT"),
                "Text typed in buffer 2 should be visible"
         :ok
@@ -272,7 +272,7 @@ defmodule Quillex.BufferManagementSpex do
     # 6. SWITCH BACK AND VERIFY PRESERVATION
     # =========================================================================
 
-    scenario "Switching back to buffer 1 preserves its content", context do
+    scenario "Switching back to buffer 1 preserves its content" do
       given_ "buffer 2 has text 'BUFFER_TWO_TEXT'", context do
         assert Query.text_visible?("BUFFER_TWO_TEXT"),
                "Buffer 2 should have its text"
@@ -286,13 +286,13 @@ defmodule Quillex.BufferManagementSpex do
         {:ok, context}
       end
 
-      then_ "'BUFFER_ONE_TEXT' should be visible again", context do
+      then_ "'BUFFER_ONE_TEXT' should be visible again" do
         assert Query.text_visible?("BUFFER_ONE_TEXT"),
                "Buffer 1's content should be preserved after switching back"
         :ok
       end
 
-      then_ "'BUFFER_TWO_TEXT' should not be visible", context do
+      then_ "'BUFFER_TWO_TEXT' should not be visible" do
         refute Query.text_visible?("BUFFER_TWO_TEXT"),
                "Buffer 2's text should not show when buffer 1 is active"
         :ok
@@ -308,7 +308,7 @@ defmodule Quillex.BufferManagementSpex do
     # 7. CLOSE THE ACTIVE BUFFER
     # =========================================================================
 
-    scenario "Closing the active buffer removes its tab", context do
+    scenario "Closing the active buffer removes its tab" do
       given_ "we have multiple tabs open", context do
         # Ensure we have at least 2 tabs
         if tab_count() < 2 do
@@ -330,10 +330,10 @@ defmodule Quillex.BufferManagementSpex do
         {:ok, new_count} = SemanticHelpers.wait_for_tab_count(expected)
         assert new_count == expected,
                "Expected #{expected} tabs after closing, got #{new_count}"
-        :ok
+        {:ok, context}
       end
 
-      then_ "another tab should now be selected", context do
+      then_ "another tab should now be selected" do
         selected = selected_tab_label()
         assert selected != nil, "Should have a selected tab after closing"
         :ok
@@ -344,7 +344,7 @@ defmodule Quillex.BufferManagementSpex do
     # 8. CANNOT CLOSE LAST BUFFER
     # =========================================================================
 
-    scenario "Cannot close the last remaining buffer", context do
+    scenario "Cannot close the last remaining buffer" do
       given_ "we have exactly one tab", context do
         # Close tabs until only one remains
         close_buffers_until_one_remains()
@@ -359,14 +359,14 @@ defmodule Quillex.BufferManagementSpex do
         {:ok, context}
       end
 
-      then_ "there should still be one tab", context do
+      then_ "there should still be one tab" do
         count = tab_count()
         assert count == 1,
                "Should still have 1 tab (can't close last), got #{count}"
         :ok
       end
 
-      then_ "the tab should still be visible", context do
+      then_ "the tab should still be visible" do
         labels = tab_labels()
         assert length(labels) == 1, "Should still have one tab label visible"
         :ok
@@ -382,7 +382,7 @@ defmodule Quillex.BufferManagementSpex do
     # 9. TAB COUNT MATCHES VISIBLE TABS
     # =========================================================================
 
-    scenario "Tab bar shows correct number of tabs", context do
+    scenario "Tab bar shows correct number of tabs" do
       given_ "we have a known number of buffers", context do
         # Start fresh with 2 tabs
         close_buffers_until_one_remains()
@@ -397,7 +397,7 @@ defmodule Quillex.BufferManagementSpex do
         labels = tab_labels()
         assert length(labels) == context.tab_count,
                "Semantic tab count should match labels. Count: #{context.tab_count}, Labels: #{inspect(labels)}"
-        :ok
+        {:ok, context}
       end
     end
 
@@ -405,7 +405,7 @@ defmodule Quillex.BufferManagementSpex do
     # 10. CREATING BUFFER ADDS TAB TO UI
     # =========================================================================
 
-    scenario "Creating a buffer adds a new tab to the UI", context do
+    scenario "Creating a buffer adds a new tab to the UI" do
       given_ "we note the current tab labels", context do
         labels = tab_labels()
         {:ok, Map.put(context, :initial_labels, labels)}
@@ -422,10 +422,10 @@ defmodule Quillex.BufferManagementSpex do
 
         assert new_count == expected_count,
                "Expected #{expected_count} tabs, got #{new_count}"
-        :ok
+        {:ok, context}
       end
 
-      then_ "the new tab should be selected", context do
+      then_ "the new tab should be selected" do
         # After creating a new buffer, it should become active
         # The semantic layer should show this tab as selected
         selected = selected_tab_label()
@@ -438,7 +438,7 @@ defmodule Quillex.BufferManagementSpex do
     # 11. SELECTED TAB MATCHES VISIBLE CONTENT
     # =========================================================================
 
-    scenario "Selected tab reflects current buffer content", context do
+    scenario "Selected tab reflects current buffer content" do
       given_ "we have a buffer with specific content", context do
         close_buffers_until_one_remains()
         clear_buffer()
@@ -451,7 +451,7 @@ defmodule Quillex.BufferManagementSpex do
         {:ok, Map.put(context, :selected_label, selected)}
       end
 
-      then_ "the content matches the selected tab's buffer", context do
+      then_ "the content matches the selected tab's buffer" do
         # Verify the content is visible
         assert Query.text_visible?("UNIQUE_CONTENT_12345"),
                "Buffer content should be visible for selected tab"

@@ -22,8 +22,9 @@ defmodule Quillex.IntegrationV1Spex do
   alias Quillex.TestHelpers.SemanticHelpers
 
   # Test files
-  @spinoza_path "/home/luke/workbench/flx/quillex/biblio/spinozas_ethics_p1.txt"
-  @code_file_path "/home/luke/workbench/flx/quillex/lib/app.ex"
+  @project_root Path.expand("../../..", __DIR__)
+  @spinoza_path Path.join(@project_root, "biblio/spinozas_ethics_p1.txt")
+  @code_file_path Path.join(@project_root, "lib/app.ex")
 
   # Temp file for save/reopen test
   @temp_save_path "/tmp/quillex_v1_test_save.txt"
@@ -295,7 +296,7 @@ defmodule Quillex.IntegrationV1Spex do
     description: "Validates app can create empty untitled buffers",
     tags: [:v1, :integration, :boot] do
 
-    scenario "Creating a new buffer results in untitled buffer", context do
+    scenario "Creating a new buffer results in untitled buffer" do
       given_ "Quillex has launched", context do
         Process.sleep(500)
         {:ok, context}
@@ -326,7 +327,7 @@ defmodule Quillex.IntegrationV1Spex do
     description: "Validates typing produces correct output (no double characters)",
     tags: [:v1, :integration, :typing] do
 
-    scenario "Typing produces exactly the typed characters", context do
+    scenario "Typing produces exactly the typed characters" do
       given_ "we have an empty buffer", context do
         new_empty_buffer()
 
@@ -348,7 +349,7 @@ defmodule Quillex.IntegrationV1Spex do
       end
     end
 
-    scenario "Each character appears exactly once", context do
+    scenario "Each character appears exactly once" do
       given_ "we have an empty buffer", context do
         new_empty_buffer()
         {:ok, context}
@@ -378,7 +379,7 @@ defmodule Quillex.IntegrationV1Spex do
     description: "Validates opening and viewing a large text file",
     tags: [:v1, :integration, :file_open, :scroll] do
 
-    scenario "Open Spinoza's Ethics Part 1", context do
+    scenario "Open Spinoza's Ethics Part 1" do
       given_ "Spinoza's Ethics file exists", context do
         assert File.exists?(@spinoza_path), "Spinoza file not found at #{@spinoza_path}"
         {:ok, context}
@@ -412,7 +413,7 @@ defmodule Quillex.IntegrationV1Spex do
       end
     end
 
-    scenario "File has expected line count", context do
+    scenario "File has expected line count" do
       given_ "Spinoza's Ethics is open", context do
         switch_to_buffer("spinozas_ethics_p1.txt")
         Process.sleep(300)
@@ -442,7 +443,7 @@ defmodule Quillex.IntegrationV1Spex do
     description: "Validates opening an Elixir code file",
     tags: [:v1, :integration, :code_file] do
 
-    scenario "Open app.ex", context do
+    scenario "Open app.ex" do
       given_ "app.ex exists", context do
         assert File.exists?(@code_file_path), "Code file not found at #{@code_file_path}"
         {:ok, context}
@@ -484,7 +485,7 @@ defmodule Quillex.IntegrationV1Spex do
     # These are benign lifecycle events, not real failures.
     fail_on_error_logs: false do
 
-    scenario "Switch between buffers using tabs", context do
+    scenario "Switch between buffers using tabs" do
       given_ "we have multiple buffers open", context do
         # Set up our own buffers for this test
         # Create untitled buffer
@@ -533,7 +534,7 @@ defmodule Quillex.IntegrationV1Spex do
       end
     end
 
-    scenario "Navigate to next buffer by index", context do
+    scenario "Navigate to next buffer by index" do
       given_ "we have at least 2 buffers", context do
         # Ensure we have multiple buffers
         trigger_action(:new_buffer)
@@ -572,7 +573,7 @@ defmodule Quillex.IntegrationV1Spex do
     description: "Validates search functionality with famous philosophical passages",
     tags: [:v1, :integration, :find, :search] do
 
-    scenario "Search for 'God' in Spinoza's Ethics", context do
+    scenario "Search for 'God' in Spinoza's Ethics" do
       given_ "Spinoza's Ethics is the active buffer", context do
         # Close any existing search bar first
         Probes.send_keys("escape", [])
@@ -632,7 +633,7 @@ defmodule Quillex.IntegrationV1Spex do
       end
     end
 
-    scenario "Search for famous definition: 'absolutely infinite'", context do
+    scenario "Search for famous definition: 'absolutely infinite'" do
       given_ "search bar is open with new query", context do
         # Close and reopen search bar to start fresh
         Probes.send_keys("escape", [])
@@ -664,7 +665,7 @@ defmodule Quillex.IntegrationV1Spex do
       end
     end
 
-    scenario "Close search bar", context do
+    scenario "Close search bar" do
       when_ "we press Escape", context do
         Probes.send_keys("escape", [])
         # Wait long enough for the search bar process to die and the TextField
@@ -699,7 +700,7 @@ defmodule Quillex.IntegrationV1Spex do
     description: "Validates search bar has exclusive input focus when open",
     tags: [:v1, :integration, :find, :focus] do
 
-    scenario "Search bar input does NOT go to buffer", context do
+    scenario "Search bar input does NOT go to buffer" do
       given_ "we have a buffer with known content", context do
         new_empty_buffer()
 
@@ -742,7 +743,7 @@ defmodule Quillex.IntegrationV1Spex do
       end
     end
 
-    scenario "Buffer regains focus after search bar closes", context do
+    scenario "Buffer regains focus after search bar closes" do
       given_ "search bar is closed", context do
         # Ensure search bar is closed
         Probes.send_keys("escape", [])
@@ -778,7 +779,7 @@ defmodule Quillex.IntegrationV1Spex do
     description: "Validates search highlights appear at correct positions",
     tags: [:v1, :integration, :find, :highlight] do
 
-    scenario "Highlights appear at exact match positions", context do
+    scenario "Highlights appear at exact match positions" do
       given_ "we have a buffer with predictable content", context do
         new_empty_buffer()
 
@@ -818,7 +819,7 @@ defmodule Quillex.IntegrationV1Spex do
       end
     end
 
-    scenario "Highlights do NOT appear on empty lines", context do
+    scenario "Highlights do NOT appear on empty lines" do
       given_ "we have content with empty lines", context do
         new_empty_buffer()
 
@@ -870,7 +871,7 @@ defmodule Quillex.IntegrationV1Spex do
     description: "Validates undo and redo work correctly",
     tags: [:v1, :integration, :undo, :redo] do
 
-    scenario "Undo restores previous state", context do
+    scenario "Undo restores previous state" do
       given_ "we have a fresh buffer with some text", context do
         new_empty_buffer()
 
@@ -911,7 +912,7 @@ defmodule Quillex.IntegrationV1Spex do
       end
     end
 
-    scenario "Redo restores undone changes", context do
+    scenario "Redo restores undone changes" do
       given_ "we set up fresh state for redo test", context do
         new_empty_buffer()
 
@@ -959,7 +960,7 @@ defmodule Quillex.IntegrationV1Spex do
     description: "Validates saving a file and reopening it preserves content",
     tags: [:v1, :integration, :save, :file_io] do
 
-    scenario "Save buffer to temp file", context do
+    scenario "Save buffer to temp file" do
       given_ "we have a buffer with unique content", context do
         new_empty_buffer()
 
@@ -991,7 +992,7 @@ defmodule Quillex.IntegrationV1Spex do
       end
     end
 
-    scenario "Close and reopen the saved file", context do
+    scenario "Close and reopen the saved file" do
       given_ "we have saved a file with unique content", context do
         new_empty_buffer()
 
@@ -1044,7 +1045,7 @@ defmodule Quillex.IntegrationV1Spex do
     # These are benign lifecycle events — all scenario assertions pass.
     fail_on_error_logs: false do
 
-    scenario "Open 8 buffers with various states", context do
+    scenario "Open 8 buffers with various states" do
       given_ "we start with a clean slate", context do
         # Close all but one
         close_all_but_one_buffer()
@@ -1115,7 +1116,7 @@ defmodule Quillex.IntegrationV1Spex do
       end
     end
 
-    scenario "Close buffers cleanly", context do
+    scenario "Close buffers cleanly" do
       when_ "we close all but one buffer", context do
         close_all_but_one_buffer()
         Process.sleep(300)
@@ -1138,7 +1139,7 @@ defmodule Quillex.IntegrationV1Spex do
     description: "Validates scrolling works in large files",
     tags: [:v1, :integration, :scroll] do
 
-    scenario "Scroll down in large file", context do
+    scenario "Scroll down in large file" do
       given_ "Spinoza's Ethics is open (340 lines)", context do
         open_file(@spinoza_path)
         Process.sleep(500)
@@ -1166,7 +1167,7 @@ defmodule Quillex.IntegrationV1Spex do
       end
     end
 
-    scenario "Horizontal scroll with Shift+Scroll", context do
+    scenario "Horizontal scroll with Shift+Scroll" do
       given_ "buffer with long lines", context do
         new_empty_buffer()
 
@@ -1221,7 +1222,7 @@ defmodule Quillex.IntegrationV1Spex do
       end
     end
 
-    scenario "Drag vertical scrollbar to scroll", context do
+    scenario "Drag vertical scrollbar to scroll" do
       given_ "Spinoza's Ethics is open (large file)", context do
         open_file(@spinoza_path)
         Process.sleep(500)
@@ -1284,7 +1285,7 @@ defmodule Quillex.IntegrationV1Spex do
     description: "Validates scroll limits are recalculated when word wrap toggles",
     tags: [:v1, :integration, :scroll, :wordwrap] do
 
-    scenario "Word wrap ON allows scrolling to wrapped content", context do
+    scenario "Word wrap ON allows scrolling to wrapped content" do
       given_ "Spinoza's Ethics is open with word wrap OFF", context do
         open_file(@spinoza_path)
         Process.sleep(500)
@@ -1344,7 +1345,7 @@ defmodule Quillex.IntegrationV1Spex do
       end
     end
 
-    scenario "Scroll position adjusts when word wrap changes content height", context do
+    scenario "Scroll position adjusts when word wrap changes content height" do
       given_ "we have a buffer with very long lines", context do
         new_empty_buffer()
 
@@ -1399,7 +1400,7 @@ defmodule Quillex.IntegrationV1Spex do
     description: "Validates Shift+Arrow text selection",
     tags: [:v1, :integration, :selection] do
 
-    scenario "Select text with Shift+Right", context do
+    scenario "Select text with Shift+Right" do
       given_ "we have a buffer with text", context do
         new_empty_buffer()
 
@@ -1447,7 +1448,7 @@ defmodule Quillex.IntegrationV1Spex do
       end
     end
 
-    scenario "Select text with Shift+Left", context do
+    scenario "Select text with Shift+Left" do
       given_ "we have a buffer with text and cursor at end", context do
         new_empty_buffer()
 
@@ -1489,7 +1490,7 @@ defmodule Quillex.IntegrationV1Spex do
       end
     end
 
-    scenario "Copy selected text with Ctrl+C", context do
+    scenario "Copy selected text with Ctrl+C" do
       given_ "we have text selected", context do
         # Already in correct state from previous scenario
         {:ok, context}
@@ -1511,7 +1512,7 @@ defmodule Quillex.IntegrationV1Spex do
       end
     end
 
-    scenario "Cut removes selected text", context do
+    scenario "Cut removes selected text" do
       given_ "we have a fresh buffer with text and selection", context do
         new_empty_buffer()
 
@@ -1555,7 +1556,7 @@ defmodule Quillex.IntegrationV1Spex do
     description: "Validates mouse click cursor positioning",
     tags: [:v1, :integration, :mouse] do
 
-    scenario "Click positions cursor in text", context do
+    scenario "Click positions cursor in text" do
       given_ "we have a buffer with multiline text", context do
         trigger_action(:new_buffer)
         Process.sleep(500)

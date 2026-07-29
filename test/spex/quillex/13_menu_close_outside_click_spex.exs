@@ -37,7 +37,7 @@ defmodule Quillex.MenuCloseOutsideClickSpex do
     description: "Clicking in the editor while the File dropdown is open closes the dropdown",
     tags: [:phase_13, :icon_menu, :close_on_outside_click] do
 
-    scenario "File menu dropdown disappears after clicking in the editor", context do
+    scenario "File menu dropdown disappears after clicking in the editor" do
       given_ "the File dropdown is open", context do
         # Ensure a clean initial state
         Probes.send_keys("escape", [])
@@ -62,7 +62,7 @@ defmodule Quillex.MenuCloseOutsideClickSpex do
         {:ok, context}
       end
 
-      then_ "the File menu dropdown should be closed", context do
+      then_ "the File menu dropdown should be closed" do
         # Dropdown items are only in the Scenic graph when active_menu != nil.
         # After close, "New Buffer" text should no longer be visible.
         refute Query.text_visible?("New Buffer"),
@@ -80,7 +80,7 @@ defmodule Quillex.MenuCloseOutsideClickSpex do
     description: "Clicking below the search bar in the editor area closes it",
     tags: [:phase_13, :search_bar, :close_on_outside_click] do
 
-    scenario "Search bar is dismissed when the user clicks in the buffer area", context do
+    scenario "Search bar is dismissed when the user clicks in the buffer area" do
       given_ "the search bar is open", context do
         # Clean slate — escape closes any open menu/picker, then click the
         # editor area to guarantee focus is on the buffer pane before typing.
@@ -119,7 +119,7 @@ defmodule Quillex.MenuCloseOutsideClickSpex do
         {:ok, context}
       end
 
-      then_ "the search bar should be closed and keystrokes go to the editor", context do
+      then_ "the search bar should be closed and keystrokes go to the editor" do
         # If the search bar is closed, the buffer pane regains focus and
         # typing should insert text into the buffer, not the search field.
         Probes.send_text("Q")
@@ -139,7 +139,7 @@ defmodule Quillex.MenuCloseOutsideClickSpex do
     description: "Pressing Escape continues to close the search bar after this change",
     tags: [:phase_13, :search_bar, :regression, :escape] do
 
-    scenario "Escape closes the search bar as before", context do
+    scenario "Escape closes the search bar as before" do
       given_ "the search bar is open", context do
         Probes.send_keys("escape", [])
         Process.sleep(200)
@@ -154,7 +154,7 @@ defmodule Quillex.MenuCloseOutsideClickSpex do
         {:ok, context}
       end
 
-      then_ "the search bar should be closed", context do
+      then_ "the search bar should be closed" do
         Probes.send_text("R")
         Process.sleep(150)
         assert Query.text_visible?("R"),
@@ -172,7 +172,7 @@ defmodule Quillex.MenuCloseOutsideClickSpex do
     description: "Clicking the semi-transparent overlay outside the dialog cancels the file picker",
     tags: [:phase_13, :file_picker, :close_on_outside_click, :regression] do
 
-    scenario "File picker modal cancels when clicking the overlay", context do
+    scenario "File picker modal cancels when clicking the overlay" do
       given_ "the file picker is open", context do
         Probes.send_keys("escape", [])
         Process.sleep(200)
@@ -198,7 +198,7 @@ defmodule Quillex.MenuCloseOutsideClickSpex do
         {:ok, context}
       end
 
-      then_ "the file picker should be dismissed", context do
+      then_ "the file picker should be dismissed" do
         refute Query.text_visible?("Cancel"),
           "File picker should be closed — 'Cancel' button should no longer be visible"
         :ok

@@ -106,7 +106,7 @@ defmodule Quillex.FileNavigatorSpex do
     # 1. FILE NAVIGATOR INITIALLY HIDDEN
     # =========================================================================
 
-    scenario "File navigator is initially hidden", context do
+    scenario "File navigator is initially hidden" do
       given_ "Quillex has launched", context do
         close_buffers_until_one_remains()
         # Ensure file nav starts hidden
@@ -115,7 +115,7 @@ defmodule Quillex.FileNavigatorSpex do
         {:ok, context}
       end
 
-      then_ "file navigator should not be visible", context do
+      then_ "file navigator should not be visible" do
         refute file_nav_visible?(),
                "File navigator should be hidden by default"
         :ok
@@ -126,7 +126,7 @@ defmodule Quillex.FileNavigatorSpex do
     # 2. TOGGLING FILE NAVIGATOR SHOWS IT
     # =========================================================================
 
-    scenario "Toggling file navigator shows the file tree", context do
+    scenario "Toggling file navigator shows the file tree" do
       given_ "file navigator is hidden", context do
         ensure_file_nav_hidden()
         {:ok, context}
@@ -137,13 +137,13 @@ defmodule Quillex.FileNavigatorSpex do
         {:ok, context}
       end
 
-      then_ "file navigator should be visible", context do
+      then_ "file navigator should be visible" do
         assert file_nav_visible?(),
                "File navigator should be visible after toggle"
         :ok
       end
 
-      then_ "file tree should show project files", context do
+      then_ "file tree should show project files" do
         # Wait a moment for rendering
         Process.sleep(300)
         # The file tree should show some recognizable project structure
@@ -157,7 +157,7 @@ defmodule Quillex.FileNavigatorSpex do
     # 3. TOGGLING AGAIN HIDES FILE NAVIGATOR
     # =========================================================================
 
-    scenario "Toggling file navigator again hides it", context do
+    scenario "Toggling file navigator again hides it" do
       given_ "file navigator is visible", context do
         ensure_file_nav_visible()
         {:ok, context}
@@ -168,7 +168,7 @@ defmodule Quillex.FileNavigatorSpex do
         {:ok, context}
       end
 
-      then_ "file navigator should be hidden", context do
+      then_ "file navigator should be hidden" do
         refute file_nav_visible?(),
                "File navigator should be hidden after second toggle"
         :ok
@@ -184,14 +184,14 @@ defmodule Quillex.FileNavigatorSpex do
     # FILE NAVIGATOR MENU ITEM
     # =========================================================================
 
-    scenario "View menu shows File Navigator toggle", context do
+    scenario "View menu shows File Navigator toggle" do
       given_ "Quillex has launched", context do
         # Ensure we start fresh
         ensure_file_nav_hidden()
         {:ok, context}
       end
 
-      then_ "View menu should contain 'File Navigator' option", context do
+      then_ "View menu should contain 'File Navigator' option" do
         # Check rendered text for menu item
         # Note: The menu might not be visible until clicked
         # We verify by toggling via action which uses the menu system
@@ -213,7 +213,7 @@ defmodule Quillex.FileNavigatorSpex do
     # BUFFER PANE RESIZES WITH FILE NAV
     # =========================================================================
 
-    scenario "Buffer pane adjusts when file nav is shown", context do
+    scenario "Buffer pane adjusts when file nav is shown" do
       given_ "we have content in the buffer", context do
         ensure_file_nav_hidden()
         close_buffers_until_one_remains()
@@ -231,7 +231,7 @@ defmodule Quillex.FileNavigatorSpex do
         {:ok, context}
       end
 
-      then_ "buffer content should be visible", context do
+      then_ "buffer content should be visible" do
         assert Query.text_visible?("Hello from buffer"),
                "Buffer content should be visible"
         :ok
@@ -242,7 +242,7 @@ defmodule Quillex.FileNavigatorSpex do
         {:ok, context}
       end
 
-      then_ "buffer content should still be visible", context do
+      then_ "buffer content should still be visible" do
         Process.sleep(300)
         assert Query.text_visible?("Hello from buffer"),
                "Buffer content should remain visible when file nav is shown"
@@ -254,7 +254,7 @@ defmodule Quillex.FileNavigatorSpex do
         {:ok, context}
       end
 
-      then_ "buffer content should still be visible", context do
+      then_ "buffer content should still be visible" do
         Process.sleep(300)
         assert Query.text_visible?("Hello from buffer"),
                "Buffer content should remain visible when file nav is hidden"

@@ -41,7 +41,7 @@ defmodule Quillex.UndoRedoSpex do
     # 1. UNDO AFTER TYPING
     # =========================================================================
 
-    scenario "Undo after typing restores previous text", context do
+    scenario "Undo after typing restores previous text" do
       given_ "Quillex has launched with empty buffer", context do
         Process.sleep(300)
         # Clear any existing text
@@ -62,7 +62,7 @@ defmodule Quillex.UndoRedoSpex do
         {:ok, context}
       end
 
-      then_ "the last character should be undone", context do
+      then_ "the last character should be undone" do
         # Wait for render to complete
         Process.sleep(100)
         # After typing "Hello" (5 separate undo points), one undo should give "Hell"
@@ -75,7 +75,7 @@ defmodule Quillex.UndoRedoSpex do
     # 2. MULTIPLE UNDOS
     # =========================================================================
 
-    scenario "Multiple undos work in sequence", context do
+    scenario "Multiple undos work in sequence" do
       given_ "we have 'Hell' from previous undo", context do
         # State carries over from previous scenario
         {:ok, context}
@@ -91,7 +91,7 @@ defmodule Quillex.UndoRedoSpex do
         {:ok, context}
       end
 
-      then_ "we should have 'H' remaining", context do
+      then_ "we should have 'H' remaining" do
         # Hell -> Hel -> He -> H
         assert Query.text_visible?("H"), "'H' should be visible after multiple undos"
         refute Query.text_visible?("Hell"), "'Hell' should not be visible"
@@ -103,7 +103,7 @@ defmodule Quillex.UndoRedoSpex do
     # 3. UNDO TO EMPTY
     # =========================================================================
 
-    scenario "Undo can restore to empty state", context do
+    scenario "Undo can restore to empty state" do
       given_ "we have 'H' from previous undos", context do
         {:ok, context}
       end
@@ -114,7 +114,7 @@ defmodule Quillex.UndoRedoSpex do
         {:ok, context}
       end
 
-      then_ "the buffer should be empty", context do
+      then_ "the buffer should be empty" do
         # After undoing H, buffer should be empty
         refute Query.text_visible?("H"), "'H' should not be visible after final undo"
         :ok
@@ -130,7 +130,7 @@ defmodule Quillex.UndoRedoSpex do
     # 4. REDO AFTER UNDO
     # =========================================================================
 
-    scenario "Redo restores undone text", context do
+    scenario "Redo restores undone text" do
       given_ "we start fresh and type 'Test'", context do
         Process.sleep(300)
         Probes.send_keys("a", [:ctrl])
@@ -154,7 +154,7 @@ defmodule Quillex.UndoRedoSpex do
         {:ok, context}
       end
 
-      then_ "'Tes' should be visible", context do
+      then_ "'Tes' should be visible" do
         assert Query.text_visible?("Tes"), "'Tes' should be visible after redo"
         :ok
       end
@@ -164,7 +164,7 @@ defmodule Quillex.UndoRedoSpex do
     # 5. MULTIPLE REDOS
     # =========================================================================
 
-    scenario "Multiple redos work in sequence", context do
+    scenario "Multiple redos work in sequence" do
       given_ "we have 'Tes' from previous redo", context do
         {:ok, context}
       end
@@ -175,7 +175,7 @@ defmodule Quillex.UndoRedoSpex do
         {:ok, context}
       end
 
-      then_ "'Test' should be fully restored", context do
+      then_ "'Test' should be fully restored" do
         assert Query.text_visible?("Test"), "'Test' should be visible after second redo"
         :ok
       end
@@ -190,7 +190,7 @@ defmodule Quillex.UndoRedoSpex do
     # 6. NEW EDIT CLEARS REDO STACK
     # =========================================================================
 
-    scenario "Typing after undo clears redo stack", context do
+    scenario "Typing after undo clears redo stack" do
       given_ "we type 'ABC', undo to 'AB'", context do
         Process.sleep(300)
         Probes.send_keys("a", [:ctrl])
@@ -215,7 +215,7 @@ defmodule Quillex.UndoRedoSpex do
         {:ok, context}
       end
 
-      then_ "'ABX' should be visible (redo had no effect)", context do
+      then_ "'ABX' should be visible (redo had no effect)" do
         # We had AB, typed X to get ABX, redo should not bring back C
         assert Query.text_visible?("ABX"), "'ABX' should be visible"
         refute Query.text_visible?("ABC"), "'ABC' should not be visible (redo was cleared)"
@@ -232,7 +232,7 @@ defmodule Quillex.UndoRedoSpex do
     # 7. UNDO BACKSPACE
     # =========================================================================
 
-    scenario "Undo restores deleted character (backspace)", context do
+    scenario "Undo restores deleted character (backspace)" do
       given_ "we type 'Hello' then press Backspace", context do
         Process.sleep(300)
         Probes.send_keys("a", [:ctrl])
@@ -252,7 +252,7 @@ defmodule Quillex.UndoRedoSpex do
         {:ok, context}
       end
 
-      then_ "'Hello' should be restored", context do
+      then_ "'Hello' should be restored" do
         assert Query.text_visible?("Hello"), "'Hello' should be visible after undoing backspace"
         :ok
       end
@@ -262,7 +262,7 @@ defmodule Quillex.UndoRedoSpex do
     # 8. UNDO ENTER (NEWLINE)
     # =========================================================================
 
-    scenario "Undo restores merged lines (after Enter)", context do
+    scenario "Undo restores merged lines (after Enter)" do
       given_ "we type 'Line1', Enter, 'Line2'", context do
         Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
@@ -289,7 +289,7 @@ defmodule Quillex.UndoRedoSpex do
         {:ok, context}
       end
 
-      then_ "lines should be merged back to 'Line1'", context do
+      then_ "lines should be merged back to 'Line1'" do
         assert Query.text_visible?("Line1"), "'Line1' should be visible"
         refute Query.text_visible?("Line2"), "'Line2' should not be visible after undo"
         :ok
@@ -300,7 +300,7 @@ defmodule Quillex.UndoRedoSpex do
     # 9. UNDO TAB
     # =========================================================================
 
-    scenario "Undo removes inserted tab", context do
+    scenario "Undo removes inserted tab" do
       given_ "we type 'Prefix', Tab, 'Suffix'", context do
         Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
@@ -327,7 +327,7 @@ defmodule Quillex.UndoRedoSpex do
         {:ok, context}
       end
 
-      then_ "'Prefix' should be visible without tab gap", context do
+      then_ "'Prefix' should be visible without tab gap" do
         assert Query.text_visible?("Prefix"), "'Prefix' should be visible"
         refute Query.text_visible?("Suffix"), "'Suffix' should not be visible"
         :ok
@@ -343,7 +343,7 @@ defmodule Quillex.UndoRedoSpex do
     # 10. CURSOR POSITION ON UNDO
     # =========================================================================
 
-    scenario "Undo restores cursor to position before change", context do
+    scenario "Undo restores cursor to position before change" do
       given_ "we type 'Start', move left, insert 'X'", context do
         Process.sleep(300)
         Probes.send_keys("a", [:ctrl])
@@ -373,7 +373,7 @@ defmodule Quillex.UndoRedoSpex do
         {:ok, context}
       end
 
-      then_ "'StaYrt' should be visible (cursor was restored correctly)", context do
+      then_ "'StaYrt' should be visible (cursor was restored correctly)" do
         # If cursor was restored, Y goes in same spot X was
         assert Query.text_visible?("Sta"), "'Sta' should be visible"
         assert Query.text_visible?("Y"), "'Y' should be visible"
@@ -386,7 +386,7 @@ defmodule Quillex.UndoRedoSpex do
     # 11. CURSOR POSITION ON REDO
     # =========================================================================
 
-    scenario "Redo restores cursor to position after change", context do
+    scenario "Redo restores cursor to position after change" do
       given_ "we have text and undo it", context do
         Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
@@ -410,7 +410,7 @@ defmodule Quillex.UndoRedoSpex do
         {:ok, context}
       end
 
-      then_ "'Word!' should be visible", context do
+      then_ "'Word!' should be visible" do
         assert Query.text_visible?("Word!"), "'Word!' should be visible (cursor was at end after redo)"
         :ok
       end
@@ -425,7 +425,7 @@ defmodule Quillex.UndoRedoSpex do
     # 12. UNDO ON EMPTY STACK (NO-OP)
     # =========================================================================
 
-    scenario "Undo with empty stack does nothing", context do
+    scenario "Undo with empty stack does nothing" do
       given_ "we clear the buffer completely", context do
         Process.sleep(300)
         Probes.send_keys("a", [:ctrl])
@@ -451,7 +451,7 @@ defmodule Quillex.UndoRedoSpex do
         {:ok, context}
       end
 
-      then_ "buffer should be empty but not crash", context do
+      then_ "buffer should be empty but not crash" do
         # After all undos, buffer should be empty
         refute Query.text_visible?("Fresh"), "'Fresh' should not be visible"
         # App should still be responsive - type something
@@ -466,7 +466,7 @@ defmodule Quillex.UndoRedoSpex do
     # 13. REDO ON EMPTY STACK (NO-OP)
     # =========================================================================
 
-    scenario "Redo with empty stack does nothing", context do
+    scenario "Redo with empty stack does nothing" do
       given_ "we have text without any undos", context do
         Probes.send_keys("a", [:ctrl])
         Process.sleep(50)
@@ -483,7 +483,7 @@ defmodule Quillex.UndoRedoSpex do
         {:ok, context}
       end
 
-      then_ "text should remain unchanged", context do
+      then_ "text should remain unchanged" do
         assert Query.text_visible?("NoUndo"), "'NoUndo' should still be visible (redo was no-op)"
         :ok
       end
@@ -498,7 +498,7 @@ defmodule Quillex.UndoRedoSpex do
     # 14. UNDO DELETE KEY
     # =========================================================================
 
-    scenario "Undo restores character deleted with Delete key", context do
+    scenario "Undo restores character deleted with Delete key" do
       given_ "we type 'ABCD' and move cursor to middle", context do
         Process.sleep(300)
         Probes.send_keys("a", [:ctrl])
@@ -525,7 +525,7 @@ defmodule Quillex.UndoRedoSpex do
         {:ok, context}
       end
 
-      then_ "'ABCD' should be restored", context do
+      then_ "'ABCD' should be restored" do
         assert Query.text_visible?("ABCD"), "'ABCD' should be visible after undoing delete"
         :ok
       end

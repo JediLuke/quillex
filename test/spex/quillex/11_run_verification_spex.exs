@@ -95,7 +95,7 @@ defmodule Quillex.RunVerificationSpex do
     description: "File menu contains Verify File item",
     tags: [:run_verification, :menu, :smoke] do
 
-    scenario "Verify File appears in the File menu", context do
+    scenario "Verify File appears in the File menu" do
       given_ "the Quillex app is running", context do
         Process.sleep(300)
         {:ok, context}
@@ -106,7 +106,7 @@ defmodule Quillex.RunVerificationSpex do
         {:ok, context}
       end
 
-      then_ "the Verify File menu item is visible", context do
+      then_ "the Verify File menu item is visible" do
         rendered = Query.rendered_text()
         assert String.contains?(rendered, "Verify"),
                "File menu should contain a 'Verify' item. Got: #{inspect(rendered)}"
@@ -120,7 +120,7 @@ defmodule Quillex.RunVerificationSpex do
         {:ok, context}
       end
 
-      then_ "the menu is closed", context do
+      then_ "the menu is closed" do
         :ok
       end
     end
@@ -138,7 +138,7 @@ defmodule Quillex.RunVerificationSpex do
     # These are benign lifecycle events, not real failures.
     fail_on_error_logs: false do
 
-    scenario "Verify File on a new unsaved buffer completes without crashing", context do
+    scenario "Verify File on a new unsaved buffer completes without crashing" do
       given_ "we have one open buffer with no saved file path", context do
         # Use Ctrl+N to open a fresh untitled buffer — this guarantees the active
         # buffer has no file path association, regardless of what prior tests left.
@@ -158,21 +158,21 @@ defmodule Quillex.RunVerificationSpex do
         {:ok, context}
       end
 
-      then_ "the app is still rendering correctly", context do
+      then_ "the app is still rendering correctly" do
         rendered = Query.rendered_text()
         assert is_binary(rendered) and rendered != "",
                "App should still be rendering after verify on no-filepath buffer"
         :ok
       end
 
-      then_ "the status bar shows that the buffer has no associated file path", context do
+      then_ "the status bar shows that the buffer has no associated file path" do
         rendered = Query.rendered_text()
         assert String.contains?(rendered, "no associated file path"),
                "Status bar should show 'no associated file path'. Got: #{inspect(rendered)}"
         :ok
       end
 
-      then_ "the buffer is still editable", context do
+      then_ "the buffer is still editable" do
         # Type additional text — if the buffer process died, this would fail
         type_text("x")
         Process.sleep(100)
@@ -184,7 +184,7 @@ defmodule Quillex.RunVerificationSpex do
         :ok
       end
 
-      then_ "cleanup: close the new buffer", context do
+      then_ "cleanup: close the new buffer" do
         # Close the Ctrl+N buffer we opened — return to prior state
         close_all_but_one()
         :ok
@@ -200,7 +200,7 @@ defmodule Quillex.RunVerificationSpex do
     description: "Verify File on a saved file that has not changed on disk logs 'unchanged'",
     tags: [:run_verification, :file_unchanged] do
 
-    scenario "Verify File on a saved, unmodified file does not crash or disrupt editing", context do
+    scenario "Verify File on a saved, unmodified file does not crash or disrupt editing" do
       given_ "we create and save a temp file directly on disk", context do
         content = "Hello from Quillex verify test"
         File.write!(tmp_file_path(), content)
@@ -231,21 +231,21 @@ defmodule Quillex.RunVerificationSpex do
         {:ok, context}
       end
 
-      then_ "the app continues to render without errors", context do
+      then_ "the app continues to render without errors" do
         rendered = Query.rendered_text()
         assert is_binary(rendered) and rendered != "",
                "App should still render after verify of unchanged file"
         :ok
       end
 
-      then_ "the status bar shows that the file is unchanged on disk", context do
+      then_ "the status bar shows that the file is unchanged on disk" do
         rendered = Query.rendered_text()
         assert String.contains?(rendered, "unchanged on disk"),
                "Status bar should show 'unchanged on disk'. Got: #{inspect(rendered)}"
         :ok
       end
 
-      then_ "the buffer content is intact", context do
+      then_ "the buffer content is intact" do
         # The file content should still be visible in the editor
         rendered = Query.rendered_text()
         assert String.contains?(rendered, "Hello"),
@@ -253,7 +253,7 @@ defmodule Quillex.RunVerificationSpex do
         :ok
       end
 
-      then_ "cleanup: close the buffer and remove temp file", context do
+      then_ "cleanup: close the buffer and remove temp file" do
         close_all_but_one()
         File.rm(tmp_file_path())
         :ok
@@ -269,7 +269,7 @@ defmodule Quillex.RunVerificationSpex do
     description: "Verify File on a buffer whose file no longer exists logs a warning and does not crash",
     tags: [:run_verification, :file_deleted] do
 
-    scenario "Verify File with a deleted file logs warning without crashing", context do
+    scenario "Verify File with a deleted file logs warning without crashing" do
       given_ "we create a temp file and open it in Quillex", context do
         deleted_path = Path.join(@tmp_dir, "will_be_deleted.txt")
         File.write!(deleted_path, "Content before deletion")
@@ -299,7 +299,7 @@ defmodule Quillex.RunVerificationSpex do
         {:ok, context}
       end
 
-      then_ "the app does not crash", context do
+      then_ "the app does not crash" do
         # If the RootScene process crashed, we would not get a rendered viewport
         rendered = Query.rendered_text()
         assert is_binary(rendered) and rendered != "",
@@ -307,14 +307,14 @@ defmodule Quillex.RunVerificationSpex do
         :ok
       end
 
-      then_ "the status bar shows that the file was deleted from disk", context do
+      then_ "the status bar shows that the file was deleted from disk" do
         rendered = Query.rendered_text()
         assert String.contains?(rendered, "deleted from disk"),
                "Status bar should show 'deleted from disk'. Got: #{inspect(rendered)}"
         :ok
       end
 
-      then_ "cleanup: close extra buffer", context do
+      then_ "cleanup: close extra buffer" do
         close_all_but_one()
         :ok
       end
@@ -329,7 +329,7 @@ defmodule Quillex.RunVerificationSpex do
     description: "Verify File on a buffer whose file was changed externally logs a warning and does not crash",
     tags: [:run_verification, :file_modified] do
 
-    scenario "Verify File with a modified file does not crash the app", context do
+    scenario "Verify File with a modified file does not crash the app" do
       given_ "we create a temp file and open it in Quillex", context do
         modified_path = Path.join(@tmp_dir, "will_be_modified.txt")
         File.write!(modified_path, "Original content before external edit")
@@ -359,21 +359,21 @@ defmodule Quillex.RunVerificationSpex do
         {:ok, context}
       end
 
-      then_ "the app does not crash", context do
+      then_ "the app does not crash" do
         rendered = Query.rendered_text()
         assert is_binary(rendered) and rendered != "",
                "App should still be alive after verifying a modified file"
         :ok
       end
 
-      then_ "the status bar shows that the file was modified on disk", context do
+      then_ "the status bar shows that the file was modified on disk" do
         rendered = Query.rendered_text()
         assert String.contains?(rendered, "modified on disk"),
                "Status bar should show 'modified on disk'. Got: #{inspect(rendered)}"
         :ok
       end
 
-      then_ "the buffer is still editable after verification", context do
+      then_ "the buffer is still editable after verification" do
         type_text("x")
         Process.sleep(100)
         rendered = Query.rendered_text()
@@ -385,7 +385,7 @@ defmodule Quillex.RunVerificationSpex do
       then_ "cleanup: close extra buffer and remove temp file", context do
         close_all_but_one()
         File.rm(context.modified_path)
-        :ok
+        {:ok, context}
       end
     end
   end
@@ -406,7 +406,7 @@ defmodule Quillex.RunVerificationSpex do
     description: "Pressing Ctrl+V (paste) followed by Ctrl+F (find) does not crash the app",
     tags: [:run_verification, :stability] do
 
-    scenario "Ctrl+V then Ctrl+F sequence leaves app alive and rendering", context do
+    scenario "Ctrl+V then Ctrl+F sequence leaves app alive and rendering" do
       given_ "we have one buffer open with some content", context do
         close_all_but_one()
         clear_buffer()
@@ -424,14 +424,14 @@ defmodule Quillex.RunVerificationSpex do
         {:ok, context}
       end
 
-      then_ "the app is still responsive and rendering", context do
+      then_ "the app is still responsive and rendering" do
         rendered = Query.rendered_text()
         assert is_binary(rendered) and rendered != "",
                "App should still render after Ctrl+V + Ctrl+F"
         :ok
       end
 
-      then_ "cleanup: close search bar and clear the buffer", context do
+      then_ "cleanup: close search bar and clear the buffer" do
         Probes.send_keys("escape", [])
         Process.sleep(100)
         clear_buffer()

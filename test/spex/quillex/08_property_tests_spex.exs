@@ -107,7 +107,7 @@ defmodule Quillex.PropertyTestsSpex do
         {:ok, context}
       end
 
-      then_ "cursor should still be at a valid position", context do
+      then_ "cursor should still be at a valid position" do
         # Final verification
         cursor_pos = get_cursor_position()
 
@@ -170,7 +170,7 @@ defmodule Quillex.PropertyTestsSpex do
         {:ok, context}
       end
 
-      then_ "cursor should still be visible", context do
+      then_ "cursor should still be visible" do
         # Allow scroll to settle after rapid navigation sequence
         # Ctrl+Home was the last operation; the scroll update may lag the cursor move.
         Process.sleep(400)
@@ -222,7 +222,7 @@ defmodule Quillex.PropertyTestsSpex do
         {:ok, context}
       end
 
-      then_ "buffer should still be in consistent state", context do
+      then_ "buffer should still be in consistent state" do
         # Escape to clear selection
         Probes.send_keys("escape", [])
         Process.sleep(50)
@@ -265,7 +265,7 @@ defmodule Quillex.PropertyTestsSpex do
         {:ok, context}
       end
 
-      then_ "buffer should be in valid state", context do
+      then_ "buffer should be in valid state" do
         # Get rendered text - should not crash
         rendered = Query.rendered_text()
 
@@ -322,7 +322,7 @@ defmodule Quillex.PropertyTestsSpex do
         {:ok, context}
       end
 
-      then_ "buffer should be in valid state", context do
+      then_ "buffer should be in valid state" do
         rendered = Query.rendered_text()
 
         assert is_binary(rendered), "Rendered text should be a string"

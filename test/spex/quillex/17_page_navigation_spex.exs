@@ -349,7 +349,7 @@ defmodule Quillex.PageNavigationSpex do
         assert match?({line, _} when line < mid_line, pos),
                "Page Up from line #{mid_line} should retreat cursor, got #{inspect(pos)}"
 
-        :ok
+        {:ok, context}
       end
     end
   end
@@ -485,7 +485,7 @@ defmodule Quillex.PageNavigationSpex do
         assert match?({line, _} when line < mid_line, pos),
                "Page Up should move cursor backward and clear selection, got #{inspect(pos)}"
 
-        :ok
+        {:ok, context}
       end
     end
   end

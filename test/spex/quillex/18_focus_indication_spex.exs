@@ -35,7 +35,7 @@ defmodule Quillex.FocusIndicationSpex do
     description: "Buffer pane renders the focused border color when the app starts and no overlay is open",
     tags: [:phase_18, :focus, :startup] do
 
-    scenario "Buffer pane is focused on startup", context do
+    scenario "Buffer pane is focused on startup" do
       given_ "Quillex has just launched with no overlays", context do
         Process.sleep(300)
         # Dismiss anything that might have stolen focus (menus, search bar, etc.)
@@ -61,7 +61,7 @@ defmodule Quillex.FocusIndicationSpex do
         assert info.current_border == @focused_border,
           "Current border should be the focused amber color when focused, got: #{inspect(info.current_border)}"
 
-        :ok
+        {:ok, context}
       end
     end
   end
@@ -70,7 +70,7 @@ defmodule Quillex.FocusIndicationSpex do
     description: "Pressing Ctrl+F blurs the buffer pane and switches the border to the unfocused color",
     tags: [:phase_18, :focus, :search] do
 
-    scenario "Ctrl+F moves focus out of the buffer pane", context do
+    scenario "Ctrl+F moves focus out of the buffer pane" do
       given_ "Quillex is running and the buffer pane is focused", context do
         Process.sleep(300)
         Probes.send_keys("escape", [])
@@ -87,7 +87,7 @@ defmodule Quillex.FocusIndicationSpex do
         {:ok, context}
       end
 
-      then_ "buffer pane reports focused? == false, border is dim, and search bar is visible", context do
+      then_ "buffer pane reports focused? == false, border is dim, and search bar is visible" do
         info = SemanticHelpers.buffer_pane_focus_info()
 
         assert info.focused? == false,
@@ -116,7 +116,7 @@ defmodule Quillex.FocusIndicationSpex do
     description: "Dismissing the search bar returns focus (and the amber border) to the editor",
     tags: [:phase_18, :focus, :escape] do
 
-    scenario "Escape after Ctrl+F restores buffer focus", context do
+    scenario "Escape after Ctrl+F restores buffer focus" do
       given_ "the search bar is open and the buffer pane has lost focus", context do
         Process.sleep(300)
         Probes.send_keys("escape", [])
@@ -138,7 +138,7 @@ defmodule Quillex.FocusIndicationSpex do
         {:ok, context}
       end
 
-      then_ "buffer pane reports focused? == true and the amber border is restored", context do
+      then_ "buffer pane reports focused? == true and the amber border is restored" do
         info = SemanticHelpers.buffer_pane_focus_info()
 
         assert info.focused? == true,
