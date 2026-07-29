@@ -1,32 +1,27 @@
-# Franklin — Known Deferred Spex Failures (snapshot 2026-07-29)
+# Franklin — Known Deferred Spex Failures (snapshot 2026-07-29, post-PaneStore)
 
 These failures are DEFERRED. One future cycle per entry, following
 Perceive → Plan → Act → Adapt.
 
-Snapshot updated 2026-07-29 after the RadixCache store refactor (Phases 0–7,
-commits 15aaa25..HEAD): full-run totals moved 17 → 20 failures across the
-refactor, with churn in both directions — see the retro below. Several rows
-are full-run-only failures that pass when their file runs in isolation
-(`bash scripts/run_spex_quiet.sh <file>`); suspect cross-file interference
-and/or async render timing.
+Snapshot updated 2026-07-29 after the PaneStore commit (6029fc9 + contrib
+588e887): full-run totals dropped 17-20 → **4**, all in 07_integration_v1.
+The chronic "flaky" clusters (08 properties, 09 save dialog, 10 file nav,
+11 status bar, 13 menu-close error logs, 15 word nav, 17 page nav ×6,
+18 focus ×3) all passed once component recreation churn was eliminated —
+the TextField now survives buffer switches (pane store) and the TabBar is
+updated in place ({:set_tabs, ...}) instead of delete+recreated per
+snapshot. The recreation churn was the systemic flakiness source, not the
+scenarios. (Single full run; keep an eye on the next few runs before
+declaring the tail scenarios cured.)
 
 ## Deferred failures
 
 | File | Line | One-line description |
 |------|------|----------------------|
-| `test/spex/quillex/07_integration_v1_spex.exs` | 1213 | Shift+Scroll horizontal scroll ("Scrolling") |
-| `test/spex/quillex/07_integration_v1_spex.exs` | 480 | Tab Navigation: timeout selecting 'app.ex' tab (full-run only; NEW 2026-07-29 — buffer switching is store-driven since Phase 5, needs a diagnosis cycle) |
-| `test/spex/quillex/07_integration_v1_spex.exs` | 572 | Find in Spinoza: typing after search close (was register row "line 686") |
-| `test/spex/quillex/07_integration_v1_spex.exs` | 1555 | Mouse click positions cursor (line 2 click lands line 1) |
-| `test/spex/quillex/08_property_tests_spex.exs` | (1 failing) | Property: Cursor Visibility Invariant (Undo/Redo Consistency now PASSES) |
-| `test/spex/quillex/09_file_operations_spex.exs` | (1 failing) | Save Dialog Keyboard Navigation (NEW 2026-07-29, full-run only) |
-| `test/spex/quillex/10_file_navigator_spex.exs` | 235 | Buffer pane layout with file nav (full-run only — passed in isolation 2026-07-29) |
-| `test/spex/quillex/11_run_verification_spex.exs` | 312 | Status bar "deleted from disk" (NEW 2026-07-29, full-run only; status is async via ViewStore since Phase 6a — check whether the assertion window races the publish) |
-| `test/spex/quillex/11_run_verification_spex.exs` | 170 | Status bar "no associated file path" (NEW 2026-07-29, full-run only; same suspicion as above) |
-| `test/spex/quillex/13_menu_close_outside_click_spex.exs` | (race) | Scenic `[error]` logs during component init/shutdown — surfaced by `fail_on_error_logs: true` revert |
-| `test/spex/quillex/15_word_navigation_spex.exs` | (1 failing) | Word navigation: flaky variant (Ctrl+Left this run; Ctrl+Right at baseline; "Plain Left" in April) |
-| `test/spex/quillex/17_page_navigation_spex.exs` | (6 scenarios) | `wait_for_cursor_satisfying` timeouts |
-| `test/spex/quillex/18_focus_indication_spex.exs` | (3 scenarios) | Focus border color assertions (failing since at least the 2026-07-28 baseline; predates the refactor, was never registered) |
+| `test/spex/quillex/07_integration_v1_spex.exs` | 1213 | Shift+Scroll horizontal scroll ("Scrolling") — stable across every run |
+| `test/spex/quillex/07_integration_v1_spex.exs` | 572 | Find in Spinoza: typing after search close — stable across every run |
+| `test/spex/quillex/07_integration_v1_spex.exs` | 1555 | Mouse click positions cursor (line 2 click lands line 1) — stable across every run |
+| `test/spex/quillex/07_integration_v1_spex.exs` | (rotating) | One additional 07 scenario rotates per run (Multiple Tabs this run; Tab Navigation, Open Code File, Undo/Redo in prior runs) — 07-internal state interference, not app bugs until proven otherwise |
 
 ## Cycle retro — RadixCache refactor baseline shift (2026-07-29)
 
