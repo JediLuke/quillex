@@ -1,11 +1,22 @@
 
 defmodule QuillEx.RootScene.State do
+  @moduledoc """
+  RootScene's working state — a local view assembled from the RadixCache
+  stores plus scene-owned transient interaction state.
+
+  Ownership:
+  - `buffers` / `active_buf` mirror the `:radix_buffers` store (BufferManager)
+  - editor settings, file-nav flags and the status message mirror the
+    `:radix_view` store (ViewStore) — see @view_keys in the scene
+  - search-bar and dialog flags are scene-owned transient interaction state:
+    single-consumer chrome whose choreography (child blur/focus sequencing,
+    word-under-cursor prefill) lives in the scene process by design
+  - `frame` and `cursor_pos` are per-scene input/layout state
+  """
   use StructAccess
 
   defstruct [
     frame: nil,
-    tabs: [],
-    toolbar: nil,
     buffers: [],
     active_buf: nil,
     # Editor settings (synced with View menu toggles)
@@ -29,22 +40,16 @@ defmodule QuillEx.RootScene.State do
     show_replace: false,
     # Cursor position tracking for scroll routing
     cursor_pos: {0, 0},
-    # Transient status notification (shown briefly at bottom of viewport)
-    # Set by actions like run_verification; cleared by :clear_status_message after a timeout.
+    # Transient status notification, mirrored from ViewStore (:radix_view).
+    # The show/clear lifecycle — including the stale-timer guard — lives in
+    # Quillex.RadixCache.ViewStore.
     status_message: nil,   # string or nil
-    status_severity: :info, # :info | :warning | :error
-    # Unique reference stamped when a status message is shown. The
-    # {:clear_status_message, ref} timer only clears the message if the ref
-    # still matches, so a stale timer cannot erase a newer message.
-    status_ref: nil
+    status_severity: :info # :info | :warning | :error
   ]
 
   def new(%{frame: %Widgex.Frame{} = frame, buffers: buffers}) when is_list(buffers) do
     %__MODULE__{
       frame: frame,
-      toolbar: %{
-        height: 50
-      },
       buffers: buffers,
       active_buf: hd(buffers),
       file_nav_path: File.cwd!()
