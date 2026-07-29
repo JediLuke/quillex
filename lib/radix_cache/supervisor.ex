@@ -29,7 +29,8 @@ defmodule Quillex.RadixCache.Supervisor do
     # Buffer state is published by Quillex.Buffer.Process / BufferManager,
     # which live under the Buffers supervision tree.
     children = [
-      {Quillex.RadixCache.ViewStore, []}
+      {Quillex.RadixCache.ViewStore, []},
+      {Quillex.RadixCache.PaneStore, []}
     ]
 
     Supervisor.init(children, strategy: :one_for_one)

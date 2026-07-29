@@ -4,7 +4,7 @@ defmodule Quillex.Buffers.BufferSwitchPreservesCursorTest do
   `docs/claude_notes/cursor_preservation_diagnosis_2026_05_02.md`.
 
   Bug summary: clicks delivered to the buffer-pane TextField (in
-  `:buffer_backed` mode) via the non-positional
+  `:store_backed` mode) via the non-positional
   `request_input([:cursor_button, ...])` channel get translated into
   `{:set_cursor, ...}` actions even when the click visually targeted a
   sibling overlay (an IconMenu dropdown rendered on top of the buffer
@@ -15,7 +15,7 @@ defmodule Quillex.Buffers.BufferSwitchPreservesCursorTest do
 
   This test pins the reducer-layer contract that the fix introduces:
 
-    * In `:buffer_backed` mode, a `:cursor_button` event whose local
+    * In `:store_backed` mode, a `:cursor_button` event whose local
       coordinates land inside the frame BUT well past the rendered text
       content of the clicked line is treated as overlay-class noise — the
       reducer does NOT emit `{:set_cursor, _}`.
@@ -55,7 +55,7 @@ defmodule Quillex.Buffers.BufferSwitchPreservesCursorTest do
     end
   end
 
-  # Build a minimal :buffer_backed TextField State suitable for driving the
+  # Build a minimal :store_backed TextField State suitable for driving the
   # `:cursor_button` clause in the reducer. Frame size matches the diagnostic
   # trace (a full-viewport buffer pane). Scroll is sized so neither scrollbar
   # is hit (otherwise the reducer's scrollbar-drag clause would consume the
@@ -69,7 +69,7 @@ defmodule Quillex.Buffers.BufferSwitchPreservesCursorTest do
       lines: ["Line one content"],
       cursor: {1, 5},
       id: :test_text_field,
-      input_mode: :buffer_backed,
+      input_mode: :store_backed,
       mode: :multi_line,
       focused: true,
       editable: true,
@@ -114,7 +114,7 @@ defmodule Quillex.Buffers.BufferSwitchPreservesCursorTest do
     struct(State, Keyword.merge(defaults, overrides))
   end
 
-  describe ":buffer_backed cursor_button — overlay-class click suppression" do
+  describe ":store_backed cursor_button — overlay-class click suppression" do
     test "click far past end of line does NOT dispatch :set_cursor" do
       # Reproduces the diagnostic trace: local coords (1805, 18). The frame
       # is 2000 wide so `point_inside?` passes; without the fix
@@ -135,9 +135,9 @@ defmodule Quillex.Buffers.BufferSwitchPreservesCursorTest do
              "Click far past end of rendered text should not produce a :double_click_select — got #{inspect(action)}"
     end
 
-    test "the suppression applies only in :buffer_backed mode (no regression for :direct)" do
+    test "the suppression applies only in :store_backed mode (no regression for :direct)" do
       # Hard-scope guard from the change request: if the fix lives in
-      # scenic_widget_contrib it must narrow to :buffer_backed only, so
+      # scenic_widget_contrib it must narrow to :store_backed only, so
       # other TextField consumers (forms, single-line inputs in :direct
       # mode) keep their existing past-EOL click → set-to-EOL behaviour.
       state = build_state(input_mode: :direct)

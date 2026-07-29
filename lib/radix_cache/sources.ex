@@ -15,4 +15,7 @@ defmodule Quillex.RadixCache.Sources do
 
   @doc "Per-buffer store source: the full BufState snapshot for one buffer"
   def buffer(uuid) when is_binary(uuid), do: :"radix_buf_#{uuid}"
+
+  @doc "Per-pane source: what a pane's text surface displays (see PaneStore)"
+  def pane(pane_id) when is_atom(pane_id), do: :"radix_pane_#{pane_id}"
 end

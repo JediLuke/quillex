@@ -45,7 +45,7 @@ defmodule QuillEx.RootScene.Renderizer do
 
   def render(
     %Scenic.Graph{} = graph,
-    _scene,
+    scene,
     old_state,
     %QuillEx.RootScene.State{} = state
   ) do
@@ -100,14 +100,14 @@ defmodule QuillEx.RootScene.Renderizer do
       |> do_create_buffer_pane(state, actual_buffer_frame)
       |> maybe_create_status_bar(state, status_bar_frame)
       |> maybe_create_search_bar(state, search_bar_frame)
-      |> render_top_bar(old_state, state, top_bar_frame)
+      |> render_top_bar(scene, old_state, state, top_bar_frame)
     else
       # Incremental updates - z-order preserved
       graph
       |> maybe_update_file_nav(state, file_nav_frame)
       |> maybe_update_status_bar(state, status_bar_frame)
       |> maybe_update_search_bar(state, search_bar_frame)
-      |> render_top_bar(old_state, state, top_bar_frame)
+      |> render_top_bar(scene, old_state, state, top_bar_frame)
     end
   end
 
@@ -232,7 +232,7 @@ defmodule QuillEx.RootScene.Renderizer do
   defp status_color(_), do: @status_color_info
 
   # Render top bar (tab bar + icon menu)
-  defp render_top_bar(graph, old_state, state, frame) do
+  defp render_top_bar(graph, scene, old_state, state, frame) do
     icon_menu_width = 140
     tab_bar_width = frame.size.width - icon_menu_width
 
@@ -247,14 +247,14 @@ defmodule QuillEx.RootScene.Renderizer do
     )
 
     graph
-    |> render_tab_bar(old_state, state, tab_bar_frame)
+    |> render_tab_bar(scene, old_state, state, tab_bar_frame)
     |> render_icon_menu(state, icon_menu_frame)
   end
 
-  defp render_tab_bar(graph, old_state, state, frame) do
-    needs_recreation = needs_tab_bar_recreation?(old_state, state)
+  defp render_tab_bar(graph, scene, old_state, state, frame) do
+    needs_update = needs_tab_bar_recreation?(old_state, state)
 
-    case {Scenic.Graph.get(graph, :tab_bar), needs_recreation} do
+    case {Scenic.Graph.get(graph, :tab_bar), needs_update} do
       {[], _} ->
         do_create_tab_bar(graph, state, frame)
 
@@ -262,9 +262,12 @@ defmodule QuillEx.RootScene.Renderizer do
         graph
 
       {_existing, true} ->
+        # Message the surviving TabBar instead of delete+recreate: recreation
+        # churn under rapid successive snapshots (e.g. dirty-flip then close)
+        # can kill a TabBar mid-init.
+        {tabs, selected_id} = derive_tabs(state)
+        Scenic.Scene.put_child(scene, :tab_bar, {:set_tabs, tabs, selected_id})
         graph
-        |> Scenic.Graph.delete(:tab_bar)
-        |> do_create_tab_bar(state, frame)
     end
   end
 
@@ -313,8 +316,8 @@ defmodule QuillEx.RootScene.Renderizer do
   end
 
   # Helper to create tab bar
-  defp do_create_tab_bar(graph, state, frame) do
-    # Build tabs from open buffers, appending " *" for dirty (unsaved) buffers
+  # Build tabs from open buffers, appending " *" for dirty (unsaved) buffers
+  defp derive_tabs(state) do
     tabs = Enum.map(state.buffers, fn buf ->
       label = if buf.dirty?, do: buf.name <> " *", else: buf.name
       %{
@@ -326,6 +329,12 @@ defmodule QuillEx.RootScene.Renderizer do
 
     # Select the active buffer's tab
     selected_id = if state.active_buf, do: state.active_buf.uuid, else: nil
+
+    {tabs, selected_id}
+  end
+
+  defp do_create_tab_bar(graph, state, frame) do
+    {tabs, selected_id} = derive_tabs(state)
 
     tab_bar_data = %{
       frame: frame,
@@ -386,10 +395,10 @@ defmodule QuillEx.RootScene.Renderizer do
   # Check if buffer_pane needs to be recreated based on state changes
   defp needs_buffer_pane_recreation?(nil, _new_state), do: true  # Initial render
   defp needs_buffer_pane_recreation?(old_state, new_state) do
-    # Recreate if active buffer changed
-    old_uuid = old_state.active_buf && old_state.active_buf.uuid
-    new_uuid = new_state.active_buf && new_state.active_buf.uuid
-    buffer_changed = old_uuid != new_uuid
+    # NOTE: switching the active buffer does NOT recreate the buffer pane —
+    # the TextField is a view over the stable pane source and PaneStore just
+    # publishes a different document (same for buffer-process restarts: the
+    # pane dispatch target is the PaneStore, never a raw buffer pid).
 
     # Recreate if editor settings changed (these affect TextField rendering)
     settings_changed =
@@ -405,28 +414,14 @@ defmodule QuillEx.RootScene.Renderizer do
     # Recreate if status bar appears or disappears (carves @status_bar_height from content area)
     status_bar_changed = (old_state.status_message == nil) != (new_state.status_message == nil)
 
-    # Recreate if the buffer process PID changed (e.g., buffer was restarted by supervisor)
-    # This ensures the TextField always has a valid dispatch target
-    buffer_pid_changed = if new_state.active_buf do
-      old_pid = old_state.active_buf && get_buffer_pid(old_state.active_buf)
-      new_pid = get_buffer_pid(new_state.active_buf)
-      old_pid != new_pid
-    else
-      false
-    end
-
-    buffer_changed or settings_changed or layout_changed or status_bar_changed or buffer_pid_changed
+    settings_changed or layout_changed or status_bar_changed
   end
 
   # Helper to create the buffer_pane TextField
   defp do_create_buffer_pane(graph, state, frame) do
-    # Fetch buffer to get content
+    # Fetch buffer to get content for the initial render (the TextField
+    # hydrates from the pane's retained snapshot when one exists)
     {:ok, buf} = Quillex.Buffer.Process.fetch_buf(state.active_buf)
-
-    # Address the buffer process by via-tuple so the TextField's dispatch
-    # target survives a Buffer.Process restart (a raw pid would go stale)
-    buffer_via =
-      {:via, Registry, {Quillex.BufferRegistry, {state.active_buf.uuid, Quillex.Buffer.Process}}}
 
     # Create font
     buffer_pane_state = Quillex.GUI.Components.BufferPane.State.new(%{})
@@ -449,11 +444,14 @@ defmodule QuillEx.RootScene.Renderizer do
       frame: frame,
       initial_text: Enum.join(buf.data, "\n"),
       mode: :multi_line,
-      # STORE-BACKED: TextField is a pure view; the per-buffer store is the
-      # source of truth (see the store contract in ScenicWidgets.TextField docs)
+      # STORE-BACKED: TextField is a pure view over the PANE — a stable
+      # source/dispatch pair that never changes for the widget's life.
+      # PaneStore follows the active buffer behind this contract, so buffer
+      # switches are invisible here (see the store contract in
+      # ScenicWidgets.TextField docs).
       input_mode: :store_backed,
-      dispatch: buffer_via,
-      source: Quillex.RadixCache.Sources.buffer(buf.uuid),
+      dispatch: Quillex.RadixCache.PaneStore,
+      source: Quillex.RadixCache.PaneStore.source(),
       buffer_id: buf.uuid,
       show_line_numbers: state.show_line_numbers,
       wrap_mode: wrap_mode,
@@ -504,14 +502,4 @@ defmodule QuillEx.RootScene.Renderizer do
     {line, col}
   end
   defp get_buffer_cursor(_), do: nil
-
-  # Get the buffer process PID from a BufRef
-  defp get_buffer_pid(%Quillex.Structs.BufState.BufRef{uuid: uuid}) do
-    buf_tag = {uuid, Quillex.Buffer.Process}
-    case Registry.lookup(Quillex.BufferRegistry, buf_tag) do
-      [{pid, _}] -> pid
-      _ -> nil
-    end
-  end
-  defp get_buffer_pid(_), do: nil
 end

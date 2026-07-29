@@ -308,11 +308,10 @@ defmodule QuillEx.RootScene do
         {:noreply, scene}
 
       buf_ref ->
+        # Synchronous so keyboard-shortcut ordering is deterministic; the
+        # TextField updates via the buffer's publish -> PaneStore republish
+        # (no direct state push needed).
         {:ok, new_buf} = Quillex.Buffer.BufferManager.call_buffer(buf_ref, {:action, action})
-
-        # Push updated buffer state to the TextField component immediately.
-        {:ok, [pid]} = Scenic.Scene.child(scene, :buffer_pane)
-        GenServer.cast(pid, {:state_change, new_buf})
 
         # Reflect any dirty change in the tab bar.
         scene = maybe_update_dirty_state(scene, new_buf)
