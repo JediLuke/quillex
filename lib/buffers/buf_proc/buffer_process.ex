@@ -24,7 +24,6 @@ defmodule Quillex.Buffer.Process do
   end
 
   def init(%Quillex.Structs.BufState{} = buf) do
-    Quillex.Utils.PubSub.subscribe(topic: {:buffers, buf.uuid})
     {:ok, buf}
   end
 
@@ -33,29 +32,7 @@ defmodule Quillex.Buffer.Process do
   end
 
   def handle_call({:action, actions}, _from, state) when is_list(actions) do
-    new_state =
-      actions
-      |> Enum.reduce(state, fn action, state_acc ->
-        try do
-          case Quillex.Buffer.Process.Reducer.process(state_acc, action) do
-            :ignore ->
-              state_acc
-
-            %Quillex.Structs.BufState{} = new_state ->
-              new_state
-          end
-        rescue
-          error ->
-            Logger.warning("Buffer action failed: #{inspect(action)}, error: #{inspect(error)}")
-            state_acc
-        end
-      end)
-
-    Quillex.Utils.PubSub.broadcast(
-      topic: {:buffers, new_state.uuid},
-      msg: {:buf_state_changes, new_state}
-    )
-
+    new_state = apply_actions(state, actions)
     {:reply, {:ok, new_state}, new_state}
   end
 
@@ -65,30 +42,7 @@ defmodule Quillex.Buffer.Process do
 
   # Handle async action casts from TextField (buffer_backed mode)
   def handle_cast({:action, actions}, state) when is_list(actions) do
-    new_state =
-      actions
-      |> Enum.reduce(state, fn action, state_acc ->
-        try do
-          case Quillex.Buffer.Process.Reducer.process(state_acc, action) do
-            :ignore ->
-              state_acc
-
-            %Quillex.Structs.BufState{} = new_state ->
-              new_state
-          end
-        rescue
-          error ->
-            Logger.warning("Buffer action failed: #{inspect(action)}, error: #{inspect(error)}")
-            state_acc
-        end
-      end)
-
-    Quillex.Utils.PubSub.broadcast(
-      topic: {:buffers, new_state.uuid},
-      msg: {:buf_state_changes, new_state}
-    )
-
-    {:noreply, new_state}
+    {:noreply, apply_actions(state, actions)}
   end
 
   def handle_cast({:action, a}, state) when is_tuple(a) or is_atom(a) do
@@ -101,5 +55,32 @@ defmodule Quillex.Buffer.Process do
 
   def handle_info({:user_input, _input}, state) do
     {:noreply, state}
+  end
+
+  # The single reduce-and-broadcast path shared by call and cast entry points.
+  defp apply_actions(state, actions) do
+    new_state =
+      Enum.reduce(actions, state, fn action, state_acc ->
+        try do
+          case Quillex.Buffer.Process.Reducer.process(state_acc, action) do
+            :ignore ->
+              state_acc
+
+            %Quillex.Structs.BufState{} = new_state ->
+              new_state
+          end
+        rescue
+          error ->
+            Logger.warning("Buffer action failed: #{inspect(action)}, error: #{inspect(error)}")
+            state_acc
+        end
+      end)
+
+    Quillex.Utils.PubSub.broadcast(
+      topic: {:buffers, new_state.uuid},
+      msg: {:buf_state_changes, new_state}
+    )
+
+    new_state
   end
 end

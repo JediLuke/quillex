@@ -35,19 +35,9 @@ defmodule QuillEx.RootScene.Reducer do
     state
   end
 
-  def process(_state, {:new_color_schema, _colors}) do
-    :cast_to_children
-  end
-
-  # Toggle line numbers - returns special atom to signal RootScene to use update_editor_settings
-  def process(%QuillEx.RootScene.State{} = state, :toggle_line_numbers) do
-    {:editor_settings_change, %{state | show_line_numbers: not state.show_line_numbers}}
-  end
-
-  # Toggle word wrap - returns special atom to signal RootScene to use update_editor_settings
-  def process(%QuillEx.RootScene.State{} = state, :toggle_word_wrap) do
-    {:editor_settings_change, %{state | word_wrap: not state.word_wrap}}
-  end
+  # NOTE: :toggle_line_numbers / :toggle_word_wrap / :toggle_file_nav never reach
+  # this reducer — RootScene intercepts them in dedicated handle_call/handle_cast
+  # clauses because they need the update_editor_settings flow.
 
   # Open the find-and-replace bar (Ctrl+H).
   # Sets both show_search_bar and show_replace to true so the renderizer

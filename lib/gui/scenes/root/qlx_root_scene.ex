@@ -357,65 +357,37 @@ defmodule QuillEx.RootScene do
     {:reply, {:ok, scene.assigns.state}, scene}
   end
 
-  # Synchronous action processing for BufferPane actions
-  def handle_call({Quillex.GUI.Components.BufferPane, :action, buf_ref, actions}, _from, scene) do
-    # Processing BufferPane actions synchronously (same logic as handle_cast)
-    {:ok, new_buf} = Quillex.Buffer.BufferManager.call_buffer(buf_ref, {:action, actions})
-
-    # Update the GUI with new buffer state synchronously
-    {:ok, [pid]} = Scenic.Scene.child(scene, :buffer_pane)
-    GenServer.call(pid, {:state_change, new_buf})
-
-    # Update dirty state in BufRef so tab bar shows " *" indicator
-    scene = maybe_update_dirty_state(scene, new_buf)
-
-    {:reply, :ok, scene}
-  end
-
   # Handle editor settings toggle actions specially - they need update_editor_settings flow
-  def handle_call({:action, [:toggle_line_numbers]}, _from, scene) do
-    state = scene.assigns.state
-    new_state = %{state | show_line_numbers: not state.show_line_numbers}
-    {:noreply, new_scene} = update_editor_settings(scene, new_state)
+  def handle_call({:action, [toggle]}, _from, scene)
+      when toggle in [:toggle_line_numbers, :toggle_word_wrap, :toggle_file_nav] do
+    {:noreply, new_scene} = update_editor_settings(scene, toggle_setting(scene.assigns.state, toggle))
     {:reply, :ok, new_scene}
   end
 
-  def handle_call({:action, [:toggle_word_wrap]}, _from, scene) do
-    state = scene.assigns.state
-    new_state = %{state | word_wrap: not state.word_wrap}
-    {:noreply, new_scene} = update_editor_settings(scene, new_state)
-    {:reply, :ok, new_scene}
-  end
-
-  def handle_call({:action, [:toggle_file_nav]}, _from, scene) do
-    state = scene.assigns.state
-    new_state = %{state | show_file_nav: not state.show_file_nav}
-    {:noreply, new_scene} = update_editor_settings(scene, new_state)
-    {:reply, :ok, new_scene}
-  end
-
-  # Open a file - handled outside the action pipeline to avoid timing issues
-  # with PubSub-based buffer activation
-  def handle_call({:action, [{:open_file, path}]}, _from, scene) when is_binary(path) do
-    case File.read(path) do
-      {:ok, content} ->
-        {:ok, _buf_ref} = Quillex.Buffer.BufferManager.new_buffer(%{
-          name: Path.basename(path),
-          source: %{filepath: path},
-          data: String.split(content, "\n"),
-          dirty: false
-        })
-        {:reply, :ok, scene}
-
-      {:error, reason} ->
-        Logger.warning("Failed to open file: #{path}, reason: #{inspect(reason)}")
-        {:reply, {:error, reason}, scene}
+  # NOTE: file opening goes through Quillex.API.FileAPI.open/1 (see open_file/2
+  # below and Quillex.TestHelpers.FileOpener) — there is deliberately no
+  # {:open_file, path} action clause here.
+  def handle_call({:action, actions}, _from, scene) when is_list(actions) do
+    case apply_scene_actions(scene, actions) do
+      {:ok, new_scene} -> {:reply, :ok, new_scene}
+      {:error, reason} -> {:reply, {:error, reason}, scene}
     end
   end
 
-  def handle_call({:action, actions}, _from, scene) when is_list(actions) do
-    # With buffer_backed mode, no need to sync - Buffer.Process is source of truth
-    # Processing actions from RadixReducer (synchronous version)
+  def handle_call({:action, a}, _from, scene) do
+    # wrap singular actions in a list and push through the multi-action pipeline anyway
+    handle_call({:action, [a]}, nil, scene)
+  end
+
+  # The single reduce → render → push path shared by the call and cast
+  # {:action, actions} entry points.
+  #
+  # On {:error, _} the scene is left untouched rather than crashed. This can
+  # mask a race: e.g. an {:activate_buffer, ref} action arriving before the
+  # BufferManager's :new_buffer_opened broadcast has added the buffer to scene
+  # state. See the retry/acknowledgement ideas in the git history if this
+  # needs to become robust.
+  defp apply_scene_actions(scene, actions) do
     case process_actions(scene, actions) do
       {:ok, {new_state, new_graph}} ->
         new_scene =
@@ -424,17 +396,12 @@ defmodule QuillEx.RootScene do
           |> assign(graph: new_graph)
           |> push_graph(new_graph)
 
-        {:reply, :ok, new_scene}
+        {:ok, new_scene}
 
       {:error, reason} ->
         Logger.warning("Couldn't compute action #{inspect(actions)}. #{inspect(reason)}")
-        {:reply, {:error, reason}, scene}
+        {:error, reason}
     end
-  end
-
-  def handle_call({:action, a}, _from, scene) do
-    # wrap singular actions in a list and push through the multi-action pipeline anyway
-    handle_call({:action, [a]}, nil, scene)
   end
 
   defp process_actions(scene, actions) do
@@ -448,10 +415,6 @@ defmodule QuillEx.RootScene do
           |> case do
             :ignore ->
               acc_state
-
-            # :cast_to_children ->
-            #   Scenic.Scene.cast_children(scene, action)
-            #   acc_state
 
             new_acc_state ->
               new_acc_state
@@ -468,23 +431,19 @@ defmodule QuillEx.RootScene do
   end
 
   # Handle editor settings toggle actions specially - they need update_editor_settings flow
-  def handle_cast({:action, [:toggle_line_numbers]}, scene) do
-    state = scene.assigns.state
-    new_state = %{state | show_line_numbers: not state.show_line_numbers}
-    update_editor_settings(scene, new_state)
+  def handle_cast({:action, [toggle]}, scene)
+      when toggle in [:toggle_line_numbers, :toggle_word_wrap, :toggle_file_nav] do
+    update_editor_settings(scene, toggle_setting(scene.assigns.state, toggle))
   end
 
-  def handle_cast({:action, [:toggle_word_wrap]}, scene) do
-    state = scene.assigns.state
-    new_state = %{state | word_wrap: not state.word_wrap}
-    update_editor_settings(scene, new_state)
-  end
+  defp toggle_setting(state, :toggle_line_numbers),
+    do: %{state | show_line_numbers: not state.show_line_numbers}
 
-  def handle_cast({:action, [:toggle_file_nav]}, scene) do
-    state = scene.assigns.state
-    new_state = %{state | show_file_nav: not state.show_file_nav}
-    update_editor_settings(scene, new_state)
-  end
+  defp toggle_setting(state, :toggle_word_wrap),
+    do: %{state | word_wrap: not state.word_wrap}
+
+  defp toggle_setting(state, :toggle_file_nav),
+    do: %{state | show_file_nav: not state.show_file_nav}
 
   def handle_cast({:action, :run_verification}, scene) do
     # Access active buffer directly from scene state to avoid a GenServer.call deadlock.
@@ -603,83 +562,15 @@ defmodule QuillEx.RootScene do
   end
 
   def handle_cast({:action, actions}, scene) when is_list(actions) do
-    # With buffer_backed mode, no need to sync - Buffer.Process is source of truth
-    # Processing actions from RadixReducer
-    case process_actions(scene, actions) do
-      {:ok, {new_state, new_graph}} ->
-        new_scene =
-          scene
-          |> assign(state: new_state)
-          |> assign(graph: new_graph)
-          |> push_graph(new_graph)
-
-        {:noreply, new_scene}
-
-      {:error, reason} ->
-        # this is a big problem but we still dont want to crash the root scene over it (right ?)
-        Logger.warning("Couldn't compute action #{inspect(actions)}. #{inspect(reason)}")
-
-        #TODO recovery idea - there is a possibility that we sometimes have a race condition
-        # and that's why this happens, e.g. we open a buffer via BufferManager, BfrMgr is supposed
-        # to broadcast out changes like "buffer opened" when it's done, but what if between that
-        # happening someone came in here with an action like "open buffer x" which, technically
-        # has been opened, but the msg hasn't got back to the GUI process yet cause, race condition
-
-        # there's 2 ideas to make this more robust
-        # 1- we could have a repetition here, if it failed, send the action back to ourself 50ms
-        # from now, and try again. Then we need to keep track of state so we dont indefinitely keep retrying forever
-        # 2- we could also listen to the pubsub broadcast channel from the API, and make it
-        # wait for acknowledgement that way
-        {:noreply, scene}
+    case apply_scene_actions(scene, actions) do
+      {:ok, new_scene} -> {:noreply, new_scene}
+      {:error, _reason} -> {:noreply, scene}
     end
   end
-
-  #TODO differentiate between :gui_action
 
   def handle_cast({:action, a}, scene) do
     # wrap singular actions in a list and push through the multi-action pipeline anyway
     handle_cast({:action, [a]}, scene)
-  end
-
-  # these actions bubble up from the BufferPane component, we simply forward them to the Buffer process
-  # this is where we ought to simply fwd the actions, and await a callback - we're the GUI, we just react
-  def handle_cast(
-        {
-          Quillex.GUI.Components.BufferPane,
-          :action,
-          %Quillex.Structs.BufState.BufRef{} = buf_ref,
-          actions
-        },
-        scene
-      ) do
-    # Processing BufferPane actions
-    Logger.debug("[ROOT_SCENE] Received BufferPane actions: #{inspect(actions)}")
-
-    # Flamelex.Fluxus.action()
-
-    # interact with the Buffer state to apply the actions - thisd is equivalent to Fluxus
-    # Applying actions to buffer
-    {:ok, new_buf} = Quillex.Buffer.BufferManager.call_buffer(buf_ref, {:action, actions})
-    Logger.debug("[ROOT_SCENE] Buffer action processed, new cursors: #{inspect(new_buf.cursors)}")
-    # Buffer state updated
-
-    # # we normally would broadcast changesd from Fluxus, since RootScene _id_ fluxus here, here is where we broadcast from
-
-    # # alternativaly...
-    # # maybe root scene should listen to qlx_events, get that buffer updated, then in there, go fetch thye buffer & then push the updated down...
-    # # that would be more like how flamelex does it
-    # # and it allows us to proapagate changes up from quillex to flamelex in same mechanism
-
-    # # update the GUI
-    # Updating GUI with new buffer state
-    {:ok, [pid]} = Scenic.Scene.child(scene, :buffer_pane)
-    GenServer.cast(pid, {:state_change, new_buf})
-    # GUI update complete
-
-    # Update dirty state in BufRef so tab bar shows " *" indicator
-    scene = maybe_update_dirty_state(scene, new_buf)
-
-    {:noreply, scene}
   end
 
   # Handle file picker events
@@ -963,52 +854,9 @@ defmodule QuillEx.RootScene do
     show_search_bar(scene, replace_mode: true)
   end
 
-  # Search bar events - query changed
-  def handle_event({:search_query_changed, _id, query}, _from, scene) do
-    Logger.debug("[search] query changed: #{inspect(query)}")
-    # Update state with new query
-    new_state = %{scene.assigns.state | search_query: query}
-
-    # Perform the search if query is not empty
-    if String.length(query) > 0 do
-      perform_search(scene, query, new_state)
-    else
-      # Clear search results
-      new_state = %{new_state | search_current_match: 0, search_total_matches: 0}
-      Scenic.Scene.put_child(scene, :buffer_pane, {:action, :clear_search})
-      new_scene = scene |> assign(state: new_state)
-      {:noreply, new_scene}
-    end
-  end
-
-  # Search bar events - next match
-  def handle_event({:search_next, _id}, _from, scene) do
-    Scenic.Scene.put_child(scene, :buffer_pane, {:action, :find_next})
-    {:noreply, scene}
-  end
-
-  # Search bar events - previous match
-  def handle_event({:search_prev, _id}, _from, scene) do
-    Scenic.Scene.put_child(scene, :buffer_pane, {:action, :find_prev})
-    {:noreply, scene}
-  end
-
-  # Search bar events - close
-  def handle_event({:search_close, _id}, _from, scene) do
-    hide_search_bar(scene)
-  end
-
-  # Replace events - replace current match
-  def handle_event({:replace_requested, _id, replacement}, _from, scene) do
-    Scenic.Scene.put_child(scene, :buffer_pane, {:action, {:replace, replacement}})
-    {:noreply, scene}
-  end
-
-  # Replace events - replace all matches
-  def handle_event({:replace_all_requested, _id, replacement}, _from, scene) do
-    Scenic.Scene.put_child(scene, :buffer_pane, {:action, {:replace_all, replacement}})
-    {:noreply, scene}
-  end
+  # NOTE: SearchBar communicates via cast_parent/2, so search/replace UI events
+  # arrive as handle_cast — see the "Search bar" handle_cast clauses above.
+  # TextField communicates via send_parent_event, handled below.
 
   # Search complete (from TextField after parallel search)
   def handle_event({:search_complete, _id, query, match_count}, _from, scene) do
