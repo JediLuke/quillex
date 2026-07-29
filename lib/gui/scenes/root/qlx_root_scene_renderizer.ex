@@ -419,8 +419,10 @@ defmodule QuillEx.RootScene.Renderizer do
     # Fetch buffer to get content
     {:ok, buf} = Quillex.Buffer.Process.fetch_buf(state.active_buf)
 
-    # Get the buffer process PID for buffer_backed mode
-    buffer_pid = get_buffer_pid(state.active_buf)
+    # Address the buffer process by via-tuple so the TextField's dispatch
+    # target survives a Buffer.Process restart (a raw pid would go stale)
+    buffer_via =
+      {:via, Registry, {Quillex.BufferRegistry, {state.active_buf.uuid, Quillex.Buffer.Process}}}
 
     # Create font
     buffer_pane_state = Quillex.GUI.Components.BufferPane.State.new(%{})
@@ -445,8 +447,8 @@ defmodule QuillEx.RootScene.Renderizer do
       mode: :multi_line,
       # BUFFER-BACKED MODE: TextField is now a view, Buffer.Process is source of truth
       input_mode: :buffer_backed,
-      buffer_controller: buffer_pid,
-      buffer_topic: {:buffers, buf.uuid},
+      buffer_controller: buffer_via,
+      buffer_source: Quillex.RadixCache.Sources.buffer(buf.uuid),
       buffer_id: buf.uuid,
       show_line_numbers: state.show_line_numbers,
       wrap_mode: wrap_mode,
