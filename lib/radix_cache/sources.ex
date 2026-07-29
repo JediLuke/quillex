@@ -1,0 +1,18 @@
+defmodule Quillex.RadixCache.Sources do
+  @moduledoc """
+  The single place RadixCache Scenic.PubSub source ids are minted.
+
+  Scenic.PubSub sources must be atoms. Per-buffer sources are derived from the
+  buffer uuid — bounded by the number of open buffers, so dynamic atom
+  creation is safe here.
+  """
+
+  @doc "Buffer-list store source: `%{buffers: [BufRef], active_buf: BufRef | nil}`"
+  def buffers, do: :radix_buffers
+
+  @doc "UI chrome store source (ViewStore state map)"
+  def view, do: :radix_view
+
+  @doc "Per-buffer store source: the full BufState snapshot for one buffer"
+  def buffer(uuid) when is_binary(uuid), do: :"radix_buf_#{uuid}"
+end

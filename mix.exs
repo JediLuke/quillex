@@ -33,8 +33,10 @@ defmodule QuillEx.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:scenic, git: "https://github.com/JediLuke/scenic.git", branch: "main", override: true},
-      {:scenic_driver_local, git: "https://github.com/JediLuke/scenic_driver_local.git", branch: "main", override: true},
+      # Local path deps to match merlinex/scenic-widget-contrib — the fork's
+      # widget-v2 branch carries the Scenic.PubSub boot-skip + registration fixes
+      {:scenic, path: "../scenic", override: true},
+      {:scenic_driver_local, path: "../scenic_driver_local", override: true},
       {:scenic_widget_contrib, path: "../scenic-widget-contrib"},
       {:elixir_uuid, "~> 1.2"},
       {:font_metrics, "~> 0.5"},

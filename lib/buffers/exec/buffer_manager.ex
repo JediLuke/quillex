@@ -26,6 +26,15 @@ defmodule Quillex.Buffer.BufferManager do
     GenServer.call(__MODULE__, :list_buffers)
   end
 
+  @doc """
+  Synchronous heartbeat: returns after all casts queued before this call have
+  been processed (GenServer mailbox ordering). Lets tests/spex observe the
+  result of a burst of casts deterministically.
+  """
+  def sync do
+    GenServer.call(__MODULE__, :sync)
+  end
+
   def get_live_buffer(%{"uuid" => _buf_uuid} = args) do
     GenServer.call(__MODULE__, {:get_live_buffer, args})
   end
@@ -79,6 +88,10 @@ defmodule Quillex.Buffer.BufferManager do
 
   def handle_call(:list_buffers, _from, state) do
     {:reply, state.buffers, state}
+  end
+
+  def handle_call(:sync, _from, state) do
+    {:reply, :ok, state}
   end
 
   # call the actual buffer process

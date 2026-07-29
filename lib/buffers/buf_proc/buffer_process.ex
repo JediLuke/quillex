@@ -24,6 +24,10 @@ defmodule Quillex.Buffer.Process do
   end
 
   def init(%Quillex.Structs.BufState{} = buf) do
+    # Each buffer process IS a RadixCache store: it registers a retained
+    # Scenic.PubSub source and publishes its full BufState after every reduce.
+    Scenic.PubSub.register(Quillex.RadixCache.Sources.buffer(buf.uuid))
+    Scenic.PubSub.publish(Quillex.RadixCache.Sources.buffer(buf.uuid), buf)
     {:ok, buf}
   end
 
@@ -75,6 +79,11 @@ defmodule Quillex.Buffer.Process do
             state_acc
         end
       end)
+
+    # Dual-publish during the store migration: Scenic.PubSub is the target bus,
+    # the Registry broadcast feeds consumers not yet cut over. The legacy
+    # broadcast dies with the last consumer.
+    Scenic.PubSub.publish(Quillex.RadixCache.Sources.buffer(new_state.uuid), new_state)
 
     Quillex.Utils.PubSub.broadcast(
       topic: {:buffers, new_state.uuid},
