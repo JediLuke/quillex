@@ -274,7 +274,9 @@ defmodule QuillEx.RootScene.Renderizer do
         menus = build_menus(state)
         icon_menu_data = %{
           frame: frame,
-          menus: menus
+          menus: menus,
+          # the library's theme defaults to the built-in :roboto_mono; quillex ships IBM Plex
+          theme: %{font: :ibm_plex_mono}
         }
 
         graph
@@ -328,7 +330,9 @@ defmodule QuillEx.RootScene.Renderizer do
     tab_bar_data = %{
       frame: frame,
       tabs: tabs,
-      selected_id: selected_id
+      selected_id: selected_id,
+      # the library's theme defaults to the built-in :roboto_mono; quillex ships IBM Plex
+      theme: %{font: :ibm_plex_mono}
     }
 
     graph
