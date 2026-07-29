@@ -54,6 +54,8 @@ A typical development session might involve:
 
 ## Architecture Overview — RadixCache (redux-style stores on Scenic.PubSub)
 
+> Full topology + flow diagrams: **`ARCHITECTURE.md`** (repo root).
+
 Quillex uses the **RadixCache pattern** (shared with the sibling merlinex
 app): GenServer stores organized by *data domain*, publishing full state
 snapshots on retained `Scenic.PubSub` sources. Components hydrate instantly
@@ -95,6 +97,7 @@ retained value, so a late subscriber can never miss state).
 | `Quillex.RadixCache.Supervisor` | `lib/radix_cache/supervisor.ex` | Starts Scenic.PubSub + stores |
 | `Quillex.RadixCache.Sources` | `lib/radix_cache/sources.ex` | Mints all store source atoms |
 | `Quillex.RadixCache.ViewStore` | `lib/radix_cache/view_store.ex` | UI-chrome store (:radix_view) |
+| `Quillex.RadixCache.PaneStore` | `lib/radix_cache/pane_store.ex` | Pane store (:radix_pane_main): follows active buffer, forwards actions |
 | `BufferManager` | `lib/buffers/exec/buffer_manager.ex` | Buffer lifecycle + buffer-list store (:radix_buffers) |
 | `Buffer.Process` | `lib/buffers/buf_proc/buffer_process.ex` | Per-buffer store (action reduce loop) |
 | `BufState` | `lib/buffers/buf_proc/buf_state.ex` | Buffer data structure |

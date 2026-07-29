@@ -38,14 +38,17 @@
 
 ## State Architecture — RadixCache stores (READ FIRST)
 
+Diagrams: `ARCHITECTURE.md` (repo root).
+
 State lives in GenServer stores organized by data domain, publishing full
 snapshots on retained `Scenic.PubSub` sources (see the Architecture section
 of `Quillex-BasePrompt.md` for the full picture):
 
-- `Buffer.Process` → `:"radix_buf_<uuid>"` (per-buffer text state; the
-  TextField subscribes directly — typing never touches RootScene)
+- `Buffer.Process` → `:"radix_buf_<uuid>"` (per-buffer text state)
 - `BufferManager` → `:radix_buffers` (buffer list, active buffer, dirty flags)
 - `ViewStore` → `:radix_view` (editor settings, file nav, status message)
+- `PaneStore` → `:radix_pane_main` (what the pane displays; the TextField's
+  stable source + dispatch — typing and buffer switches never touch RootScene)
 
 Rules when touching state:
 - Mutate through the store's action fns (casts), never by writing scene

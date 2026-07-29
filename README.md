@@ -2,6 +2,10 @@
 
 A simple text editor (basically a [Gedit](https://wiki.gnome.org/Apps/Gedit) clone) written entirely in Elixir, powered by the [Scenic](https://github.com/ScenicFramework/scenic) GUI framework.
 
+Quillex is also a reference implementation of a state architecture for Scenic
+apps — redux-style stores on retained PubSub, with a hard frontend/backend
+line. See **[ARCHITECTURE.md](ARCHITECTURE.md)** for the diagrams.
+
 ![QuillEx demo](assets/demo.gif)
 
 ## Quick Start
