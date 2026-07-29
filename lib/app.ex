@@ -7,8 +7,6 @@ defmodule QuillEx.App do
   @start_tidewave? Mix.env() == :dev and Code.ensure_loaded?(Tidewave) and Code.ensure_loaded?(Bandit)
 
   def start(_type, _args) do
-    # QuillEx.Metrics.Instrumenter.setup()
-
     children =
       # don't boot the GUI, Flamelex is managing Scenic
       if started_by_flamelex?() do
@@ -18,7 +16,6 @@ defmodule QuillEx.App do
         ]
       else
         [
-          # QuillEx.Metrics.Stash,
           {Registry, keys: :duplicate, name: QuillEx.PubSub},
           {Quillex.Buffers.TopSupervisor, []},
           {Scenic, [scenic_config()]}

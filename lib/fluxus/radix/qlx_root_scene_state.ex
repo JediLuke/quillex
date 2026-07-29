@@ -8,7 +8,6 @@ defmodule QuillEx.RootScene.State do
     toolbar: nil,
     buffers: [],
     active_buf: nil,
-    show_ubuntu_bar: true,
     # Editor settings (synced with View menu toggles)
     show_line_numbers: true,
     word_wrap: false,

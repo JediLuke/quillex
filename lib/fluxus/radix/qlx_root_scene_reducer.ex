@@ -39,10 +39,6 @@ defmodule QuillEx.RootScene.Reducer do
     :cast_to_children
   end
 
-  def process(%QuillEx.RootScene.State{} = state, :toggle_ubuntu_bar) do
-    %{state | show_ubuntu_bar: not state.show_ubuntu_bar}
-  end
-
   # Toggle line numbers - returns special atom to signal RootScene to use update_editor_settings
   def process(%QuillEx.RootScene.State{} = state, :toggle_line_numbers) do
     {:editor_settings_change, %{state | show_line_numbers: not state.show_line_numbers}}

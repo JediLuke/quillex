@@ -787,34 +787,6 @@ defmodule QuillEx.RootScene do
     {:noreply, new_scene}
   end
 
-  def handle_info({:ubuntu_bar_button_clicked, button_id, _button}, scene) do
-    # UbuntuBar button clicked: #{button_id}"
-
-    # Handle different button actions
-    case button_id do
-      :new_file ->
-        # Create a new buffer
-        handle_cast({:action, :new_buffer}, scene)
-
-      :open_file ->
-        show_file_picker(scene)
-
-      :save_file ->
-        do_save(scene)
-
-      :search ->
-        show_search_bar(scene)
-
-      :settings ->
-        # Settings functionality not implemented yet
-        {:noreply, scene}
-
-      _other ->
-        Logger.warning("Unknown ubuntu bar button: #{inspect(button_id)}")
-        {:noreply, scene}
-    end
-  end
-
   # Handle events from child components (IconMenu, TabBar, etc.)
   def handle_event({:menu_item_clicked, item_id}, _from, scene) do
     Logger.debug("Menu item clicked: #{inspect(item_id)}")
