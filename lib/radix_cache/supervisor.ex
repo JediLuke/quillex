@@ -27,10 +27,11 @@ defmodule Quillex.RadixCache.Supervisor do
     # already running.
     ensure_scenic_pubsub()
 
-    # Store children land here as the refactor proceeds (ViewStore, ...).
     # Buffer state is published by Quillex.Buffer.Process / BufferManager,
     # which live under the Buffers supervision tree.
-    children = []
+    children = [
+      {Quillex.RadixCache.ViewStore, []}
+    ]
 
     Supervisor.init(children, strategy: :one_for_one)
   end

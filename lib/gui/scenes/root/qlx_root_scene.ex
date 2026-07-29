@@ -59,9 +59,10 @@ defmodule QuillEx.RootScene do
 
     Process.register(self(), __MODULE__)
 
-    # Subscribe to the buffer-list store AFTER the first push: the retained
-    # snapshot arrives as a normal update instead of racing init
+    # Subscribe to the stores AFTER the first push: the retained snapshots
+    # arrive as normal updates instead of racing init
     Scenic.PubSub.subscribe(Quillex.RadixCache.Sources.buffers())
+    Scenic.PubSub.subscribe(Quillex.RadixCache.Sources.view())
 
     # Request input types for the root scene:
     # - :viewport  — resize/reshape events
@@ -360,11 +361,12 @@ defmodule QuillEx.RootScene do
     {:reply, {:ok, scene.assigns.state}, scene}
   end
 
-  # Handle editor settings toggle actions specially - they need update_editor_settings flow
+  # Editor-settings toggles are ViewStore dispatches; the scene re-renders
+  # (via the update_editor_settings flow) when the :radix_view snapshot lands
   def handle_call({:action, [toggle]}, _from, scene)
       when toggle in [:toggle_line_numbers, :toggle_word_wrap, :toggle_file_nav] do
-    {:noreply, new_scene} = update_editor_settings(scene, toggle_setting(scene.assigns.state, toggle))
-    {:reply, :ok, new_scene}
+    dispatch_toggle(toggle)
+    {:reply, :ok, scene}
   end
 
   # NOTE: file opening goes through Quillex.API.FileAPI.open/1 (see open_file/2
@@ -433,11 +435,17 @@ defmodule QuillEx.RootScene do
     end)
   end
 
-  # Handle editor settings toggle actions specially - they need update_editor_settings flow
+  # Editor-settings toggles are ViewStore dispatches; the scene re-renders
+  # (via the update_editor_settings flow) when the :radix_view snapshot lands
   def handle_cast({:action, [toggle]}, scene)
       when toggle in [:toggle_line_numbers, :toggle_word_wrap, :toggle_file_nav] do
-    update_editor_settings(scene, toggle_setting(scene.assigns.state, toggle))
+    dispatch_toggle(toggle)
+    {:noreply, scene}
   end
+
+  defp dispatch_toggle(:toggle_line_numbers), do: Quillex.RadixCache.ViewStore.toggle_line_numbers()
+  defp dispatch_toggle(:toggle_word_wrap), do: Quillex.RadixCache.ViewStore.toggle_word_wrap()
+  defp dispatch_toggle(:toggle_file_nav), do: Quillex.RadixCache.ViewStore.toggle_file_nav()
 
   # Buffer-list actions are store dispatches: BufferManager owns that state,
   # and the scene re-renders when the :radix_buffers snapshot arrives.
@@ -450,15 +458,6 @@ defmodule QuillEx.RootScene do
     Quillex.Buffer.BufferManager.close_buffer(buf_ref)
     {:noreply, scene}
   end
-
-  defp toggle_setting(state, :toggle_line_numbers),
-    do: %{state | show_line_numbers: not state.show_line_numbers}
-
-  defp toggle_setting(state, :toggle_word_wrap),
-    do: %{state | word_wrap: not state.word_wrap}
-
-  defp toggle_setting(state, :toggle_file_nav),
-    do: %{state | show_file_nav: not state.show_file_nav}
 
   def handle_cast({:action, :run_verification}, scene) do
     # Access active buffer directly from scene state to avoid a GenServer.call deadlock.
@@ -646,54 +645,70 @@ defmodule QuillEx.RootScene do
     {:noreply, scene}
   end
 
-  # Clear the transient status notification (fired by Process.send_after from show_status/3).
-  #
-  # The ref-based match ensures only the timer for the *current* message can clear
-  # it.  If show_status/3 was called again before this timer fired, the state holds
-  # a different ref, so this is a no-op — the newer message is preserved for its
-  # full 5-second window.
-  def handle_info({:clear_status_message, ref}, scene) do
-    state = scene.assigns.state
-    if state.status_ref == ref do
-      new_state = %{state | status_message: nil, status_ref: nil}
-      old_state = state
-      new_graph = QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
-      new_scene =
-        scene
-        |> assign(state: new_state)
-        |> assign(graph: new_graph)
-        |> push_graph(new_graph)
-      {:noreply, new_scene}
-    else
-      {:noreply, scene}
-    end
-  end
-
   # Buffer-list store snapshots (:radix_buffers) — the single path by which
   # the open-buffers list, active buffer, and dirty flags reach the scene.
   def handle_info(
         {{Scenic.PubSub, :data}, {:radix_buffers, %{buffers: buffers, active_buf: active}, _ts}},
         scene
       ) do
+    new_state = %{scene.assigns.state | buffers: buffers, active_buf: active}
+    {:noreply, render_snapshot(scene, new_state)}
+  end
+
+  # View-chrome store snapshots (:radix_view) — editor settings, file nav and
+  # status message reach the scene here. Settings/layout changes route through
+  # the update_editor_settings flow (cursor + scroll preservation, menu
+  # checkmarks); everything else is a plain re-render.
+  def handle_info({{Scenic.PubSub, :data}, {:radix_view, view, _ts}}, scene) do
     old_state = scene.assigns.state
-    new_state = %{old_state | buffers: buffers, active_buf: active}
+    new_state = merge_view(old_state, view)
 
-    # Reuse existing graph to preserve component PIDs and avoid race conditions
-    new_graph = QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
-
-    new_scene =
-      scene
-      |> assign(state: new_state)
-      |> assign(graph: new_graph)
-      |> push_graph(new_graph)
-
-    {:noreply, new_scene}
+    if editor_layout_changed?(old_state, new_state) do
+      update_editor_settings(scene, new_state)
+    else
+      {:noreply, render_snapshot(scene, new_state)}
+    end
   end
 
   # Scenic.PubSub lifecycle notifications — deliberately specific clauses, a
   # catch-all on {{Scenic.PubSub, _}, _} would swallow :data updates.
   def handle_info({{Scenic.PubSub, :registered}, _}, scene), do: {:noreply, scene}
   def handle_info({{Scenic.PubSub, :unregistered}, _}, scene), do: {:noreply, scene}
+
+  # The single render path for store snapshots: diff-render against the
+  # previous state, preserving component PIDs where the Renderizer allows.
+  defp render_snapshot(scene, new_state) do
+    new_graph =
+      QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, scene.assigns.state, new_state)
+
+    scene
+    |> assign(state: new_state)
+    |> assign(graph: new_graph)
+    |> push_graph(new_graph)
+  end
+
+  # Keys the scene consumes from :radix_view snapshots. Search-bar and dialog
+  # flags stay scene-owned until Phase 6b — merging them here would clobber
+  # the scene's in-flight dialog state.
+  @view_keys [
+    :show_line_numbers,
+    :word_wrap,
+    :tab_width,
+    :show_file_nav,
+    :file_nav_path,
+    :file_nav_width,
+    :status_message,
+    :status_severity
+  ]
+
+  defp merge_view(state, view), do: struct(state, Map.take(view, @view_keys))
+
+  defp editor_layout_changed?(old_state, new_state) do
+    Enum.any?(
+      [:show_line_numbers, :word_wrap, :tab_width, :show_file_nav],
+      fn key -> Map.get(old_state, key) != Map.get(new_state, key) end
+    )
+  end
 
   # Handle events from child components (IconMenu, TabBar, etc.)
   def handle_event({:menu_item_clicked, item_id}, _from, scene) do
@@ -763,49 +778,20 @@ defmodule QuillEx.RootScene do
         {:noreply, scene}
 
       "file_nav" ->
-        # Toggle file navigator sidebar
-        state = scene.assigns.state
-        new_state = %{state | show_file_nav: not state.show_file_nav}
-        Logger.debug("Toggling file nav: #{new_state.show_file_nav}")
-        update_editor_settings(scene, new_state)
+        Quillex.RadixCache.ViewStore.toggle_file_nav()
+        {:noreply, scene}
 
       "line_numbers" ->
-        # Toggle line numbers
-        state = scene.assigns.state
-        new_state = %{state | show_line_numbers: not state.show_line_numbers}
-        Logger.debug("Toggling line numbers: #{new_state.show_line_numbers}")
-        update_editor_settings(scene, new_state)
+        Quillex.RadixCache.ViewStore.toggle_line_numbers()
+        {:noreply, scene}
 
       "word_wrap" ->
-        # Toggle word wrap
-        state = scene.assigns.state
-        new_state = %{state | word_wrap: not state.word_wrap}
-        Logger.debug("Toggling word wrap: #{new_state.word_wrap}")
-        update_editor_settings(scene, new_state)
+        Quillex.RadixCache.ViewStore.toggle_word_wrap()
+        {:noreply, scene}
 
-      "tab_width_2" ->
-        state = scene.assigns.state
-        new_state = %{state | tab_width: 2}
-        Logger.debug("Setting tab width: 2")
-        update_editor_settings(scene, new_state)
-
-      "tab_width_3" ->
-        state = scene.assigns.state
-        new_state = %{state | tab_width: 3}
-        Logger.debug("Setting tab width: 3")
-        update_editor_settings(scene, new_state)
-
-      "tab_width_4" ->
-        state = scene.assigns.state
-        new_state = %{state | tab_width: 4}
-        Logger.debug("Setting tab width: 4")
-        update_editor_settings(scene, new_state)
-
-      "tab_width_8" ->
-        state = scene.assigns.state
-        new_state = %{state | tab_width: 8}
-        Logger.debug("Setting tab width: 8")
-        update_editor_settings(scene, new_state)
+      "tab_width_" <> n when n in ["2", "3", "4", "8"] ->
+        Quillex.RadixCache.ViewStore.set_tab_width(String.to_integer(n))
+        {:noreply, scene}
 
       "about" ->
         # About dialog - not implemented yet
@@ -1013,18 +999,11 @@ defmodule QuillEx.RootScene do
   # Multiple rapid calls replace the previous message safely: each call stamps
   # the state with a fresh ref, and only the matching timer can clear it.
   # Stale timers (from earlier messages) see a different ref and are no-ops.
+  # Status messages are ViewStore state: the store stamps, times out, and
+  # clears them; the scene renders whatever the :radix_view snapshot carries.
   defp show_status(scene, message, severity) when is_binary(message) do
-    ref = make_ref()
-    Process.send_after(self(), {:clear_status_message, ref}, 5_000)
-    old_state = scene.assigns.state
-    new_state = %{old_state | status_message: message, status_severity: severity, status_ref: ref}
-    new_graph = QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
-    new_scene =
-      scene
-      |> assign(state: new_state)
-      |> assign(graph: new_graph)
-      |> push_graph(new_graph)
-    {:noreply, new_scene}
+    Quillex.RadixCache.ViewStore.show_status(message, severity)
+    {:noreply, scene}
   end
 
   # ===========================================================================

@@ -524,88 +524,54 @@ defmodule QuillEx.RootSceneTest do
   # {:clear_status_message, ref} is sent by Process.send_after/3 from show_status/3
   # (a private helper called from run_verification).  The handler:
   #
-  #   - When state.status_ref == ref → clears status_message and status_ref
-  #   - When state.status_ref != ref (stale timer) → no-op; returns scene unchanged
-  #
-  # The ref-based match prevents a stale timer from erasing a newer message:
-  # if show_status/3 is called twice quickly, only the timer for the *current*
-  # message can clear it — earlier timers see a different ref and are no-ops.
-  #
-  # The "clears it" path calls Renderizer.render/4 (nil-frame guard → no-op),
-  # then assign/push_graph which raise FunctionClauseError on a bare map (not
-  # a real %Scenic.Scene{}).  We verify the correct branch fired via try/rescue.
+  # The status-message timeout now lives in Quillex.RadixCache.ViewStore:
+  # show_status stamps a private status_ref and schedules {:clear_status, ref};
+  # only the timer carrying the *current* ref may clear the message, so a
+  # stale timer cannot erase a newer message. The stale paths are pure
+  # (no publish), so we drive ViewStore.handle_info/2 directly. The
+  # matching-ref clear path publishes to Scenic.PubSub and is exercised
+  # end-to-end by the run-verification spex (status message appears then
+  # auto-clears).
 
-  describe "handle_info {:clear_status_message, ref}" do
-    test "stale ref (no active message): returns {:noreply, scene} unchanged" do
-      # bare_scene has status_ref: nil; any ref != nil is stale → no-op
-      scene = bare_scene()
+  describe "ViewStore {:clear_status, ref} staleness guard" do
+    defp view_with_status(message, ref) do
+      %{
+        view: %{status_message: message, status_severity: :warning},
+        status_ref: ref
+      }
+    end
+
+    test "stale ref (no active message): state unchanged" do
+      state = view_with_status(nil, nil)
       stale_ref = make_ref()
-      result = RootScene.handle_info({:clear_status_message, stale_ref}, scene)
-      assert {:noreply, ^scene} = result
+
+      assert {:noreply, ^state} =
+               Quillex.RadixCache.ViewStore.handle_info({:clear_status, stale_ref}, state)
     end
 
     test "stale ref (different active message): does NOT clear the newer message" do
       # Two rapid show_status calls: the first timer (stale_ref) fires before
-      # the second.  It must leave the newer message (active_ref) in place.
+      # the second. It must leave the newer message (active_ref) in place.
       stale_ref = make_ref()
       active_ref = make_ref()
-      scene = %{
-        assigns: %{
-          state: %QuillEx.RootScene.State{
-            status_message: "File has been modified on disk since last save",
-            status_severity: :warning,
-            status_ref: active_ref,
-            frame: nil
-          },
-          graph: %Scenic.Graph{}
-        }
-      }
-      # Stale timer fires — must be a no-op
-      result = RootScene.handle_info({:clear_status_message, stale_ref}, scene)
-      assert {:noreply, ^scene} = result
-    end
+      state = view_with_status("File has been modified on disk since last save", active_ref)
 
-    test "matching ref: clears status_message and status_ref" do
-      # The timer for the *current* message fires with the correct ref.
-      # handler should clear the message (and raise FunctionClauseError on bare map).
-      ref = make_ref()
-      scene = %{
-        assigns: %{
-          state: %QuillEx.RootScene.State{
-            status_message: "File is unchanged on disk",
-            status_severity: :info,
-            status_ref: ref,
-            frame: nil
-          },
-          graph: %Scenic.Graph{}
-        }
-      }
-      # The handler will:
-      #   1. See status_ref == ref → enter the if branch
-      #   2. Set new_state = %{state | status_message: nil, status_ref: nil}
-      #   3. Call Renderizer.render/4 → nil-frame guard returns graph unchanged
-      #   4. Call assign/push_graph → raises FunctionClauseError on bare map
-      #
-      # Either {:noreply, _} (succeeds) or FunctionClauseError proves the
-      # clearing branch fired (not the stale-timer no-op branch).
-      try do
-        result = RootScene.handle_info({:clear_status_message, ref}, scene)
-        # If it succeeds, status_message and status_ref must both be nil
-        {:noreply, new_scene} = result
-        assert new_scene.assigns.state.status_message == nil
-        assert new_scene.assigns.state.status_ref == nil
-      rescue
-        FunctionClauseError -> :ok  # assign/push_graph on bare map — correct branch fired
-      end
+      assert {:noreply, ^state} =
+               Quillex.RadixCache.ViewStore.handle_info({:clear_status, stale_ref}, state)
     end
 
     test "multiple stale timers fired in sequence are all no-ops" do
-      scene = bare_scene()
-      # status_ref is nil; every ref != nil → all stale
-      {:noreply, scene2} = RootScene.handle_info({:clear_status_message, make_ref()}, scene)
-      assert scene2 == scene
-      {:noreply, scene3} = RootScene.handle_info({:clear_status_message, make_ref()}, scene2)
-      assert scene3 == scene
+      state = view_with_status(nil, nil)
+
+      {:noreply, state2} =
+        Quillex.RadixCache.ViewStore.handle_info({:clear_status, make_ref()}, state)
+
+      assert state2 == state
+
+      {:noreply, state3} =
+        Quillex.RadixCache.ViewStore.handle_info({:clear_status, make_ref()}, state2)
+
+      assert state3 == state
     end
   end
 
