@@ -406,7 +406,7 @@ defmodule QuillEx.RootScene.Renderizer do
     status_bar_changed = (old_state.status_message == nil) != (new_state.status_message == nil)
 
     # Recreate if the buffer process PID changed (e.g., buffer was restarted by supervisor)
-    # This ensures the TextField always has a valid buffer_controller reference
+    # This ensures the TextField always has a valid dispatch target
     buffer_pid_changed = if new_state.active_buf do
       old_pid = old_state.active_buf && get_buffer_pid(old_state.active_buf)
       new_pid = get_buffer_pid(new_state.active_buf)
@@ -449,10 +449,11 @@ defmodule QuillEx.RootScene.Renderizer do
       frame: frame,
       initial_text: Enum.join(buf.data, "\n"),
       mode: :multi_line,
-      # BUFFER-BACKED MODE: TextField is now a view, Buffer.Process is source of truth
-      input_mode: :buffer_backed,
-      buffer_controller: buffer_via,
-      buffer_source: Quillex.RadixCache.Sources.buffer(buf.uuid),
+      # STORE-BACKED: TextField is a pure view; the per-buffer store is the
+      # source of truth (see the store contract in ScenicWidgets.TextField docs)
+      input_mode: :store_backed,
+      dispatch: buffer_via,
+      source: Quillex.RadixCache.Sources.buffer(buf.uuid),
       buffer_id: buf.uuid,
       show_line_numbers: state.show_line_numbers,
       wrap_mode: wrap_mode,

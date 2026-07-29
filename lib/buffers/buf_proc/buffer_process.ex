@@ -44,7 +44,7 @@ defmodule Quillex.Buffer.Process do
     handle_call({:action, [a]}, from, state)
   end
 
-  # Handle async action casts from TextField (buffer_backed mode)
+  # Handle async action casts from TextField (store_backed mode)
   def handle_cast({:action, actions}, state) when is_list(actions) do
     {:noreply, apply_actions(state, actions)}
   end
@@ -53,11 +53,8 @@ defmodule Quillex.Buffer.Process do
     handle_cast({:action, [a]}, state)
   end
 
+  # Clipboard shell-outs leave port-closed messages behind
   def handle_info({_port, :closed}, state) do
-    {:noreply, state}
-  end
-
-  def handle_info({:user_input, _input}, state) do
     {:noreply, state}
   end
 

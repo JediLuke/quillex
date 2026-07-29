@@ -159,7 +159,7 @@ defmodule QuillEx.RootScene do
   # resulting in two actions sent to the buffer (e.g. :next_word then
   # :move_cursor :right 1), landing the cursor at the wrong position.
   # The TextField sends {:move_cursor, :prev_word} / {:move_cursor, :next_word}
-  # to the buffer controller in buffer_backed mode, which is the single
+  # to the buffer controller in store_backed mode, which is the single
   # correct code path.
 
   def handle_input({:viewport, {input, _coords}}, _context, scene)
@@ -180,7 +180,7 @@ defmodule QuillEx.RootScene do
     if current_size != new_vp_size do
       Logger.debug("#{__MODULE__} reshape: #{inspect(current_size)} -> #{inspect(new_vp_size)}")
 
-      # With buffer_backed mode, Buffer.Process is the source of truth.
+      # With store_backed mode, Buffer.Process is the source of truth.
       # TextField sends all changes directly to Buffer, so we don't need to sync.
       # Just get the current cursor position from the buffer for restoration.
       cursor_pos = get_buffer_cursor(scene)
@@ -231,7 +231,7 @@ defmodule QuillEx.RootScene do
       # Route scroll to file navigator
       Scenic.Scene.put_child(scene, :file_nav, %{scroll: scroll_data})
     end
-    # Note: buffer_pane (TextField in buffer_backed mode) handles its own scroll
+    # Note: buffer_pane (TextField in store_backed mode) handles its own scroll
     # via request_input/cursor_scroll - no need to forward via put_child
 
     {:noreply, scene}
@@ -816,7 +816,7 @@ defmodule QuillEx.RootScene do
     buf_ref = Enum.find(scene.assigns.state.buffers, fn buf -> buf.uuid == tab_id end)
 
     if buf_ref do
-      # With buffer_backed mode, Buffer.Process is source of truth - no sync needed
+      # With store_backed mode, Buffer.Process is source of truth - no sync needed
       handle_cast({:action, {:activate_buffer, buf_ref}}, scene)
     else
       Logger.warning("Could not find buffer for tab: #{inspect(tab_id)}")
@@ -832,7 +832,7 @@ defmodule QuillEx.RootScene do
     buf_ref = Enum.find(scene.assigns.state.buffers, fn buf -> buf.uuid == tab_id end)
 
     if buf_ref do
-      # With buffer_backed mode, Buffer.Process is source of truth — show
+      # With store_backed mode, Buffer.Process is source of truth — show
       # unsaved-changes dialog if dirty, otherwise close immediately.
       try_close_buffer(scene, buf_ref)
     else
@@ -843,7 +843,7 @@ defmodule QuillEx.RootScene do
 
   # Save file (Ctrl+S from TextField)
   def handle_event({:save_requested, _id, _text}, _from, scene) do
-    # With buffer_backed mode, Buffer.Process already has current content - no sync needed
+    # With store_backed mode, Buffer.Process already has current content - no sync needed
     do_save(scene)
   end
 
@@ -1030,7 +1030,7 @@ defmodule QuillEx.RootScene do
   # Updates editor settings (word wrap, line numbers) and re-renders.
   # This syncs the TextField to the buffer first, then rebuilds with new settings.
   defp update_editor_settings(scene, new_state) do
-    # With buffer_backed mode, just get cursor position from buffer (no sync needed)
+    # With store_backed mode, just get cursor position from buffer (no sync needed)
     cursor_pos = get_buffer_cursor(scene)
 
     # Get first visible line for scroll preservation during word wrap toggle
