@@ -80,6 +80,15 @@ defmodule Quillex.Buffer.Process do
         end
       end)
 
+    # Edge-cast display metadata to the buffer-list store only on transition,
+    # so the tab bar's BufRefs stay fresh without per-keystroke list publishes
+    if new_state.dirty? != state.dirty? or new_state.name != state.name do
+      Quillex.Buffer.BufferManager.update_buffer_meta(new_state.uuid, %{
+        dirty?: new_state.dirty?,
+        name: new_state.name
+      })
+    end
+
     # Dual-publish during the store migration: Scenic.PubSub is the target bus,
     # the Registry broadcast feeds consumers not yet cut over. The legacy
     # broadcast dies with the last consumer.

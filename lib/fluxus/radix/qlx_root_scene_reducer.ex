@@ -1,6 +1,4 @@
 defmodule QuillEx.RootScene.Reducer do
-  alias QuillEx.RootScene
-
   def process(%QuillEx.RootScene.State{} = state, :new_buffer) do
     # this is why we dont need to wait for a callback when opening a new buffer
     # via the _actions_, and it's why we should use actions for making a new buffer fvia the API
@@ -14,26 +12,10 @@ defmodule QuillEx.RootScene.Reducer do
     # |> RootScene.Mutator.activate_buffer(buf_ref)
   end
 
-  def process(state, {:activate_buffer, n}) when is_integer(n) do
-    RootScene.Mutator.activate_buffer(state, n)
-  end
-
-  def process(state, {:activate_buffer, %Quillex.Structs.BufState.BufRef{} = buf_ref}) do
-    RootScene.Mutator.activate_buffer(state, buf_ref)
-  end
-
-  def process(state, {:close_buffer, %Quillex.Structs.BufState.BufRef{} = buf_ref}) do
-    RootScene.Mutator.remove_buffer(state, buf_ref)
-  end
-
-  def process(%QuillEx.RootScene.State{active_buf: active_buf} = state, :close_active_buffer) when not is_nil(active_buf) do
-    RootScene.Mutator.remove_buffer(state, active_buf)
-  end
-
-  def process(state, :close_active_buffer) do
-    # No active buffer to close
-    state
-  end
+  # NOTE: {:activate_buffer, _} and {:close_buffer, _} never reach this
+  # reducer — RootScene intercepts them and dispatches to BufferManager, the
+  # buffer-list store; the scene updates when the :radix_buffers snapshot
+  # arrives.
 
   # NOTE: :toggle_line_numbers / :toggle_word_wrap / :toggle_file_nav never reach
   # this reducer — RootScene intercepts them in dedicated handle_call/handle_cast

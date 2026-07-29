@@ -58,7 +58,10 @@ defmodule QuillEx.RootScene do
       |> push_graph(graph)
 
     Process.register(self(), __MODULE__)
-    Quillex.Utils.PubSub.subscribe(topic: :qlx_events)
+
+    # Subscribe to the buffer-list store AFTER the first push: the retained
+    # snapshot arrives as a normal update instead of racing init
+    Scenic.PubSub.subscribe(Quillex.RadixCache.Sources.buffers())
 
     # Request input types for the root scene:
     # - :viewport  — resize/reshape events
@@ -436,6 +439,18 @@ defmodule QuillEx.RootScene do
     update_editor_settings(scene, toggle_setting(scene.assigns.state, toggle))
   end
 
+  # Buffer-list actions are store dispatches: BufferManager owns that state,
+  # and the scene re-renders when the :radix_buffers snapshot arrives.
+  def handle_cast({:action, {:activate_buffer, x}}, scene) do
+    Quillex.Buffer.BufferManager.activate_buffer(x)
+    {:noreply, scene}
+  end
+
+  def handle_cast({:action, {:close_buffer, %Quillex.Structs.BufState.BufRef{} = buf_ref}}, scene) do
+    Quillex.Buffer.BufferManager.close_buffer(buf_ref)
+    {:noreply, scene}
+  end
+
   defp toggle_setting(state, :toggle_line_numbers),
     do: %{state | show_line_numbers: not state.show_line_numbers}
 
@@ -654,19 +669,16 @@ defmodule QuillEx.RootScene do
     end
   end
 
-  # if actions come in via PubSub they come in via handle_info, just convert to handle_cast
-  def handle_info({:action, a}, scene) do
-    handle_cast({:action, a}, scene)
-  end
-
-  def handle_info({:new_buffer_opened, %Quillex.Structs.BufState.BufRef{} = buf_ref}, scene) do
-    new_state =
-      scene.assigns.state
-      |> RootScene.Mutator.add_buffer(buf_ref)
-      |> RootScene.Mutator.activate_buffer(buf_ref)
+  # Buffer-list store snapshots (:radix_buffers) — the single path by which
+  # the open-buffers list, active buffer, and dirty flags reach the scene.
+  def handle_info(
+        {{Scenic.PubSub, :data}, {:radix_buffers, %{buffers: buffers, active_buf: active}, _ts}},
+        scene
+      ) do
+    old_state = scene.assigns.state
+    new_state = %{old_state | buffers: buffers, active_buf: active}
 
     # Reuse existing graph to preserve component PIDs and avoid race conditions
-    old_state = scene.assigns.state
     new_graph = QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
     new_scene =
@@ -677,6 +689,11 @@ defmodule QuillEx.RootScene do
 
     {:noreply, new_scene}
   end
+
+  # Scenic.PubSub lifecycle notifications — deliberately specific clauses, a
+  # catch-all on {{Scenic.PubSub, _}, _} would swallow :data updates.
+  def handle_info({{Scenic.PubSub, :registered}, _}, scene), do: {:noreply, scene}
+  def handle_info({{Scenic.PubSub, :unregistered}, _}, scene), do: {:noreply, scene}
 
   # Handle events from child components (IconMenu, TabBar, etc.)
   def handle_event({:menu_item_clicked, item_id}, _from, scene) do
@@ -1309,11 +1326,11 @@ defmodule QuillEx.RootScene do
   # Save/Discard/Cancel dialog and wait for a response before acting.
   # Clean buffers are closed immediately (no dialog shown).
   #
-  # The BufRef stored in scene state is a cached snapshot and can be stale:
-  # in buffer_backed mode the TextField writes directly to Buffer.Process and
-  # RootScene is NOT subscribed to {:buffers, uuid} updates, so dirty? flips
-  # in Buffer.Process without the cache being refreshed. Fresh-read here so
-  # the decision uses the authoritative dirty state.
+  # The close decision needs the authoritative dirty? flag. The :radix_buffers
+  # snapshot keeps scene BufRefs fresh via edge-casts, but those hop through
+  # two mailboxes (Buffer.Process → BufferManager → publish) — a synchronous
+  # fresh-read from Buffer.Process is the race-free authority for a decision
+  # as consequential as discarding a buffer.
   defp try_close_buffer(scene, %Quillex.Structs.BufState.BufRef{} = buf_ref) do
     fresh_buf_ref = refresh_buf_ref(buf_ref)
 

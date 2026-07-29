@@ -406,100 +406,86 @@ defmodule QuillEx.RootSceneTest do
   end
 
   # ---------------------------------------------------------------------------
-  # Reducer :close_active_buffer — pure unit tests
-  # ---------------------------------------------------------------------------
-
-  describe "RootScene.Reducer :close_active_buffer action" do
-    test "with nil active_buf returns state unchanged (no-op)" do
-      state = %QuillEx.RootScene.State{active_buf: nil, buffers: []}
-      new_state = QuillEx.RootScene.Reducer.process(state, :close_active_buffer)
-      assert new_state == state
-    end
-
-    test "removes the active buffer from the buffers list" do
-      buf1 = %Quillex.Structs.BufState.BufRef{uuid: "buf-1", name: "file.txt"}
-      buf2 = %Quillex.Structs.BufState.BufRef{uuid: "buf-2", name: "other.txt"}
-      state = %QuillEx.RootScene.State{active_buf: buf1, buffers: [buf1, buf2]}
-      new_state = QuillEx.RootScene.Reducer.process(state, :close_active_buffer)
-      refute Enum.any?(new_state.buffers, &(&1.uuid == "buf-1"))
-      assert Enum.any?(new_state.buffers, &(&1.uuid == "buf-2"))
-    end
-
-    test "switches active_buf to another buffer after closing the active one" do
-      buf1 = %Quillex.Structs.BufState.BufRef{uuid: "buf-1", name: "first.txt"}
-      buf2 = %Quillex.Structs.BufState.BufRef{uuid: "buf-2", name: "second.txt"}
-      state = %QuillEx.RootScene.State{active_buf: buf1, buffers: [buf1, buf2]}
-      new_state = QuillEx.RootScene.Reducer.process(state, :close_active_buffer)
-      assert new_state.active_buf.uuid == "buf-2"
-    end
-
-    test "closing the only remaining buffer is a no-op (cannot close last buffer)" do
-      buf1 = %Quillex.Structs.BufState.BufRef{uuid: "only-buf", name: "last.txt"}
-      state = %QuillEx.RootScene.State{active_buf: buf1, buffers: [buf1]}
-      new_state = QuillEx.RootScene.Reducer.process(state, :close_active_buffer)
-      assert length(new_state.buffers) == 1
-      assert new_state.active_buf == buf1
-    end
-  end
-
-  # ---------------------------------------------------------------------------
-  # Close-buffer dirty check — Reducer and Mutator layer
+  # BufferManager pure state transitions — close_state/2, activate_state/2
   # ---------------------------------------------------------------------------
   #
-  # The scene's try_close_buffer/2 intercepts dirty buffers BEFORE they reach
-  # the Reducer: a dirty BufRef shows the ConfirmDialog and waits for a
-  # response.  Only after the user confirms (save or discard) does the action
-  # {:close_buffer, buf_ref} get forwarded to the Reducer.
-  #
-  # The Reducer itself has NO dirty? guard — it trusts the scene to have already
-  # obtained confirmation. These tests verify the Reducer and Mutator layer in
-  # isolation from the scene-level guard.
+  # The scene's try_close_buffer/2 intercepts dirty buffers BEFORE dispatching:
+  # a dirty BufRef shows the ConfirmDialog and waits for a response. Only after
+  # the user confirms (save or discard) does {:close_buffer, buf_ref} get cast
+  # to BufferManager, the buffer-list store. These tests pin the store's pure
+  # transition functions in isolation from the scene-level guard and from the
+  # GenServer/publish machinery.
 
-  describe "close buffer dirty check" do
-    test "Reducer.process({:close_buffer, dirty_ref}) removes the buffer regardless of dirty?" do
-      # The Reducer has no dirty guard — that is the scene's responsibility.
-      # A dirty BufRef that reaches the Reducer (after dialog confirmation) is
-      # simply removed, just like a clean one.
+  describe "BufferManager.close_state/2" do
+    test "removes the buffer regardless of dirty? (no dirty guard at store layer)" do
       dirty_buf = %Quillex.Structs.BufState.BufRef{uuid: "dirty-1", name: "modified.txt", dirty?: true}
       clean_buf = %Quillex.Structs.BufState.BufRef{uuid: "clean-1", name: "clean.txt",    dirty?: false}
-      state = %QuillEx.RootScene.State{active_buf: dirty_buf, buffers: [dirty_buf, clean_buf]}
+      state = %{active_buf: dirty_buf, buffers: [dirty_buf, clean_buf]}
 
-      new_state = QuillEx.RootScene.Reducer.process(state, {:close_buffer, dirty_buf})
+      {:ok, new_state} = Quillex.Buffer.BufferManager.close_state(state, dirty_buf)
 
       refute Enum.any?(new_state.buffers, &(&1.uuid == "dirty-1")),
-             "Reducer must remove the dirty buffer when explicitly told to close it"
+             "Store must remove the dirty buffer when explicitly told to close it"
       assert Enum.any?(new_state.buffers, &(&1.uuid == "clean-1")),
              "Other buffers must remain after close"
     end
 
-    test "Mutator.remove_buffer/2 is a no-op when only one buffer remains (last-buffer guard)" do
-      # The scene's try_close_buffer will still show the dialog for a sole
-      # dirty buffer (the user chose discard or save), but Mutator guards
-      # against removing the last buffer unconditionally, so even if
-      # {:close_buffer, sole} reaches the Reducer it is safe.
-      sole_buf = %Quillex.Structs.BufState.BufRef{uuid: "sole-1", name: "last.txt", dirty?: true}
-      state = %QuillEx.RootScene.State{active_buf: sole_buf, buffers: [sole_buf]}
-
-      new_state = QuillEx.RootScene.Mutator.remove_buffer(state, sole_buf)
-
-      assert length(new_state.buffers) == 1,
-             "Mutator must not remove the last remaining buffer"
-      assert new_state.active_buf == sole_buf,
-             "active_buf must remain unchanged when the last buffer cannot be closed"
-    end
-
-    test "Reducer.process({:close_buffer, clean_ref}) removes a clean buffer normally" do
-      # Sanity check: clean buffers still close via the same Reducer path.
+    test "switches active_buf to another buffer after closing the active one" do
       buf_a = %Quillex.Structs.BufState.BufRef{uuid: "a", name: "a.txt", dirty?: false}
       buf_b = %Quillex.Structs.BufState.BufRef{uuid: "b", name: "b.txt", dirty?: false}
-      state = %QuillEx.RootScene.State{active_buf: buf_a, buffers: [buf_a, buf_b]}
+      state = %{active_buf: buf_a, buffers: [buf_a, buf_b]}
 
-      new_state = QuillEx.RootScene.Reducer.process(state, {:close_buffer, buf_a})
+      {:ok, new_state} = Quillex.Buffer.BufferManager.close_state(state, buf_a)
 
-      refute Enum.any?(new_state.buffers, &(&1.uuid == "a")),
-             "Clean buffer must be removed by Reducer"
+      refute Enum.any?(new_state.buffers, &(&1.uuid == "a"))
       assert new_state.active_buf.uuid == "b",
              "active_buf must switch to the remaining buffer"
+    end
+
+    test "returns :last_buffer when only one buffer remains (last-buffer guard)" do
+      sole_buf = %Quillex.Structs.BufState.BufRef{uuid: "sole-1", name: "last.txt", dirty?: true}
+      state = %{active_buf: sole_buf, buffers: [sole_buf]}
+
+      assert :last_buffer = Quillex.Buffer.BufferManager.close_state(state, sole_buf),
+             "Store must refuse to remove the last remaining buffer"
+    end
+
+    test "returns :not_found for a buffer not in the list" do
+      buf_a = %Quillex.Structs.BufState.BufRef{uuid: "a", name: "a.txt"}
+      buf_b = %Quillex.Structs.BufState.BufRef{uuid: "b", name: "b.txt"}
+      ghost = %Quillex.Structs.BufState.BufRef{uuid: "ghost", name: "ghost.txt"}
+      state = %{active_buf: buf_a, buffers: [buf_a, buf_b]}
+
+      assert :not_found = Quillex.Buffer.BufferManager.close_state(state, ghost)
+    end
+  end
+
+  describe "BufferManager.activate_state/2" do
+    test "activates a buffer by BufRef" do
+      buf_a = %Quillex.Structs.BufState.BufRef{uuid: "a", name: "a.txt"}
+      buf_b = %Quillex.Structs.BufState.BufRef{uuid: "b", name: "b.txt"}
+      state = %{active_buf: buf_a, buffers: [buf_a, buf_b]}
+
+      {:ok, new_state} = Quillex.Buffer.BufferManager.activate_state(state, buf_b)
+      assert new_state.active_buf.uuid == "b"
+    end
+
+    test "activates a buffer by 1-based index" do
+      buf_a = %Quillex.Structs.BufState.BufRef{uuid: "a", name: "a.txt"}
+      buf_b = %Quillex.Structs.BufState.BufRef{uuid: "b", name: "b.txt"}
+      state = %{active_buf: buf_a, buffers: [buf_a, buf_b]}
+
+      {:ok, new_state} = Quillex.Buffer.BufferManager.activate_state(state, 2)
+      assert new_state.active_buf.uuid == "b"
+    end
+
+    test "returns :not_found for an index or ref outside the list" do
+      buf_a = %Quillex.Structs.BufState.BufRef{uuid: "a", name: "a.txt"}
+      ghost = %Quillex.Structs.BufState.BufRef{uuid: "ghost", name: "ghost.txt"}
+      state = %{active_buf: buf_a, buffers: [buf_a]}
+
+      assert :not_found = Quillex.Buffer.BufferManager.activate_state(state, 5)
+      assert :not_found = Quillex.Buffer.BufferManager.activate_state(state, ghost)
     end
   end
 
