@@ -40,6 +40,31 @@ defmodule Quillex.API.FileAPI do
   - `{:error, reason}` on failure
   """
   def open(file_path) when is_binary(file_path) do
+    # Opening an already-open file ACTIVATES its existing buffer instead of
+    # duplicating it. (Duplicates also produce identical tab labels, which
+    # breaks anything addressing tabs by name — found via a Tab Navigation
+    # spex flake where "app.ex" appeared twice in the tab bar.)
+    existing =
+      Quillex.Buffer.BufferManager.list_buffers()
+      |> Enum.find(fn b -> match?(%{source: %{filepath: ^file_path}}, b) end)
+
+    if existing do
+      buf_ref = struct(Quillex.Structs.BufState.BufRef, uuid: existing.uuid, name: existing.name)
+      :ok = Quillex.Buffer.switch(buf_ref)
+
+      {:ok,
+       %{
+         buffer_ref: buf_ref,
+         file_path: file_path,
+         lines: length(existing.data),
+         bytes: existing.data |> Enum.join("\n") |> byte_size()
+       }}
+    else
+      do_open_new(file_path)
+    end
+  end
+
+  defp do_open_new(file_path) do
     case File.read(file_path) do
       {:ok, content} ->
         # File exists, create buffer with content.

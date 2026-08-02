@@ -27,6 +27,11 @@ defmodule Quillex.KeyboardShortcutsSpex do
     end
 
     Process.sleep(2000)
+
+    # Known LAYOUT to start from (overlays dismissed, file navigator
+    # closed) without touching buffers — an open navigator shifts the
+    # editor pane 250px right and makes fixed-x clicks miss it.
+    Quillex.TestHelpers.AppReset.reset_layout!()
     :ok
   end
 

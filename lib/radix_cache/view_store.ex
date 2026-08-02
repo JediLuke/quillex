@@ -50,6 +50,11 @@ defmodule Quillex.RadixCache.ViewStore do
   def toggle_word_wrap, do: GenServer.cast(__MODULE__, :toggle_word_wrap)
   def toggle_file_nav, do: GenServer.cast(__MODULE__, :toggle_file_nav)
 
+  @doc "Show the file-navigator sidebar. Idempotent, unlike `toggle_file_nav/0`."
+  def open_file_nav, do: GenServer.cast(__MODULE__, :open_file_nav)
+  @doc "Close the file navigator. The counterpart to open_file_nav/0 — toggling is not the same thing when you need a known state."
+  def close_file_nav, do: GenServer.cast(__MODULE__, :close_file_nav)
+
   def set_tab_width(n) when n in [2, 3, 4, 8] do
     GenServer.cast(__MODULE__, {:set_tab_width, n})
   end
@@ -88,6 +93,14 @@ defmodule Quillex.RadixCache.ViewStore do
 
   def handle_cast(:toggle_file_nav, state) do
     {:noreply, publish(state, %{state.view | show_file_nav: not state.view.show_file_nav})}
+  end
+
+  def handle_cast(:close_file_nav, state) do
+    {:noreply, publish(state, %{state.view | show_file_nav: false})}
+  end
+
+  def handle_cast(:open_file_nav, state) do
+    {:noreply, publish(state, %{state.view | show_file_nav: true})}
   end
 
   def handle_cast({:set_tab_width, n}, state) do

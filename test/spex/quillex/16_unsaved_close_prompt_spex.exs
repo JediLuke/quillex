@@ -36,6 +36,11 @@ defmodule Quillex.UnsavedClosePromptSpex do
 
     File.mkdir_p!(@tmp_dir)
     Process.sleep(2000)
+
+    # Known LAYOUT to start from (overlays dismissed, file navigator
+    # closed) without touching buffers — an open navigator shifts the
+    # editor pane 250px right and makes fixed-x clicks miss it.
+    Quillex.TestHelpers.AppReset.reset_layout!()
     :ok
   end
 

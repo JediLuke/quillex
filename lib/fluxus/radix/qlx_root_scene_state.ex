@@ -30,6 +30,7 @@ defmodule QuillEx.RootScene.State do
     # Modal dialogs
     show_file_picker: false,
     show_unsaved_prompt: false,
+    show_about: false,
     pending_close_buf_ref: nil,
     # Search bar
     show_search_bar: false,

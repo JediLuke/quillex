@@ -26,6 +26,11 @@ defmodule Quillex.ViewSettingsSpex do
     # Wait for scene to fully initialize
     Process.sleep(2000)
 
+
+    # Known LAYOUT to start from (overlays dismissed, file navigator
+    # closed) without touching buffers — an open navigator shifts the
+    # editor pane 250px right and makes fixed-x clicks miss it.
+    Quillex.TestHelpers.AppReset.reset_layout!()
     :ok
   end
 
@@ -42,6 +47,31 @@ defmodule Quillex.ViewSettingsSpex do
   end
 
   # Toggle word wrap via View menu
+
+  # Poll until the semantic cursor moves past column 1 (or time out and
+  # return whatever it reads, so the assertion reports reality).
+  defp await_cursor_past_col1(timeout_ms) do
+    deadline = System.monotonic_time(:millisecond) + timeout_ms
+    do_await_cursor_past_col1(deadline)
+  end
+
+  defp do_await_cursor_past_col1(deadline) do
+    cursor = SemanticHelpers.get_cursor_position()
+
+    case cursor do
+      {_line, col} when col > 1 ->
+        cursor
+
+      _ ->
+        if System.monotonic_time(:millisecond) >= deadline do
+          cursor
+        else
+          Process.sleep(100)
+          do_await_cursor_past_col1(deadline)
+        end
+    end
+  end
+
   defp toggle_word_wrap do
     Probes.click_element("icon_menu_view")
     Process.sleep(200)
@@ -511,7 +541,11 @@ defmodule Quillex.ViewSettingsSpex do
       end
 
       then_ "cursor column should have increased" do
-        cursor = SemanticHelpers.get_cursor_position()
+        # Poll rather than read once: the keystroke has to reach the buffer,
+        # be published, and be re-rendered into the semantic table before it
+        # is observable, and a fixed sleep races that under load.
+        cursor = await_cursor_past_col1(2_000)
+
         if cursor do
           {_line, col} = cursor
           # After "Hello World" (11 chars), cursor should be at column 12

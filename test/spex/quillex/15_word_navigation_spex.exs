@@ -31,6 +31,11 @@ defmodule Quillex.WordNavigationSpex do
     end
 
     Process.sleep(2000)
+
+    # Start from a known-clean editor rather than inheriting whatever
+    # the previous spex file left behind (buffers, open nav, scroll).
+    Quillex.TestHelpers.AppReset.reset!()
+
     :ok
   end
 

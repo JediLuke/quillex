@@ -88,13 +88,37 @@ defmodule QuillEx.RootScene.Renderizer do
     needs_reorder = needs_buffer_pane_recreation?(old_state, state)
 
     if needs_reorder do
-      # Delete all and recreate in correct z-order (bottom to top)
+      # Rebuild the overlay children for z-order, but NEVER the buffer pane.
+      #
+      # Recreating it opens a window where the outgoing TextField is still
+      # alive and focused while the incoming one has not yet registered for
+      # input: keystrokes there are lost, or applied to the document by the
+      # dying instance (that is how search-bar keystrokes edited the file).
+      #
+      # The pane keeps its original — earliest, therefore bottom — position
+      # in the graph, and every overlay is recreated after it, so they still
+      # render on top by construction.
+      #
+      # Three prerequisites were cleared to make this viable — no synchronous
+      # reads into the pane, full recomputation of frame-derived values, and
+      # virtualised rendering — and with them the in-place path runs clean in
+      # isolation (29/29). Wiring it across the WHOLE suite, however, made two
+      # cursor scenarios fail consistently (cursor preservation across a buffer
+      # switch, and click-to-position): a surviving pane keeps its own cursor,
+      # where a recreated one is rebuilt from the buffer's, and the two can
+      # disagree. Reconciling that (make the pane's cursor strictly follow the
+      # store on every publish) is the remaining step; until then recreation
+      # stays, since it is measurably the more stable of the two.
+      #
+      # The input-corruption window is closed independently by blurring BEFORE
+      # the re-render — see do_show_search_bar.
       graph
       |> Scenic.Graph.delete(:buffer_pane)
       |> Scenic.Graph.delete(:status_bar)
       |> Scenic.Graph.delete(:file_nav)
       |> Scenic.Graph.delete(:search_bar)
       |> Scenic.Graph.delete(:tab_bar)
+      |> Scenic.Graph.delete(:cursor_pos_label)
       |> Scenic.Graph.delete(:icon_menu)
       |> maybe_create_file_nav(state, file_nav_frame)
       |> do_create_buffer_pane(state, actual_buffer_frame)
@@ -103,12 +127,75 @@ defmodule QuillEx.RootScene.Renderizer do
       |> render_top_bar(scene, old_state, state, top_bar_frame)
     else
       # Incremental updates - z-order preserved
+      apply_buffer_pane_settings(scene, old_state, state, actual_buffer_frame)
+
       graph
       |> maybe_update_file_nav(state, file_nav_frame)
       |> maybe_update_status_bar(state, status_bar_frame)
       |> maybe_update_search_bar(state, search_bar_frame)
       |> render_top_bar(scene, old_state, state, top_bar_frame)
     end
+  end
+
+  # Kept for the day line rendering is virtualised: updates the existing pane
+  # in place (moving/resizing it) instead of recreating it, which avoids the
+  # input-loss window at the cost of a full in-component rebuild. See the
+  # note in the reorder branch for why it is not wired up yet.
+  @doc false
+  def update_or_create_buffer_pane(graph, scene, state, frame) do
+    case Scenic.Graph.get(graph, :buffer_pane) do
+      [] ->
+        do_create_buffer_pane(graph, state, frame)
+
+      _existing ->
+        Scenic.Scene.put_child(
+          scene,
+          :buffer_pane,
+          {:update_settings,
+           %{
+             show_line_numbers: state.show_line_numbers,
+             wrap_mode: if(state.word_wrap, do: :word, else: :none),
+             tab_width: state.tab_width,
+             frame: frame
+           }}
+        )
+
+        # The component's own graph is rebuilt from the new frame's SIZE, but
+        # its position in the parent comes from this translate.
+        Scenic.Graph.modify(graph, :buffer_pane, fn primitive ->
+          Scenic.Primitive.put_transform(primitive, :translate, frame.pin.point)
+        end)
+    end
+  end
+
+  # Push changed editor settings into the LIVE buffer pane instead of
+  # rebuilding it. Keeping the component's process alive keeps its input
+  # registration, focus and cursor — a recreation drops input that arrives
+  # while the old instance is dying (a character can vanish if you type
+  # while toggling a setting).
+  defp apply_buffer_pane_settings(_scene, nil, _state, _frame), do: :ok
+
+  defp apply_buffer_pane_settings(scene, old_state, state, frame) do
+    changed? =
+      old_state.show_line_numbers != state.show_line_numbers or
+        old_state.word_wrap != state.word_wrap or
+        old_state.tab_width != state.tab_width
+
+    if changed? do
+      Scenic.Scene.put_child(
+        scene,
+        :buffer_pane,
+        {:update_settings,
+         %{
+           show_line_numbers: state.show_line_numbers,
+           wrap_mode: if(state.word_wrap, do: :word, else: :none),
+           tab_width: state.tab_width,
+           frame: frame
+         }}
+      )
+    end
+
+    :ok
   end
 
   # Create search bar if frame is provided (search bar visible)
@@ -234,21 +321,50 @@ defmodule QuillEx.RootScene.Renderizer do
   # Render top bar (tab bar + icon menu)
   defp render_top_bar(graph, scene, old_state, state, frame) do
     icon_menu_width = 140
-    tab_bar_width = frame.size.width - icon_menu_width
+    # "Ln 12, Col 34" label between the tabs and the icon menu (3.6): a
+    # CursorPosLabel subscribed to the pane source — updates per keystroke
+    # with no involvement from this scene (the store line in miniature).
+    cursor_label_width = 110
+    tab_bar_width = frame.size.width - icon_menu_width - cursor_label_width
 
     tab_bar_frame = Widgex.Frame.new(
       pin: frame.pin.point,
       size: {tab_bar_width, frame.size.height}
     )
 
-    icon_menu_frame = Widgex.Frame.new(
+    cursor_label_frame = Widgex.Frame.new(
       pin: {elem(frame.pin.point, 0) + tab_bar_width, elem(frame.pin.point, 1)},
+      size: {cursor_label_width, frame.size.height}
+    )
+
+    icon_menu_frame = Widgex.Frame.new(
+      pin: {elem(frame.pin.point, 0) + tab_bar_width + cursor_label_width, elem(frame.pin.point, 1)},
       size: {icon_menu_width, frame.size.height}
     )
 
     graph
     |> render_tab_bar(scene, old_state, state, tab_bar_frame)
+    |> render_cursor_pos_label(cursor_label_frame)
     |> render_icon_menu(state, icon_menu_frame)
+  end
+
+  defp render_cursor_pos_label(graph, frame) do
+    case Scenic.Graph.get(graph, :cursor_pos_label) do
+      [] ->
+        graph
+        |> ScenicWidgets.CursorPosLabel.add_to_graph(
+          %{
+            frame: frame,
+            source: Quillex.RadixCache.PaneStore.source(),
+            font: %{name: Quillex.GUI.Components.BufferPane.State.new(%{}).font.name, size: 13}
+          },
+          id: :cursor_pos_label,
+          translate: frame.pin.point
+        )
+
+      _existing ->
+        graph
+    end
   end
 
   defp render_tab_bar(graph, scene, old_state, state, frame) do
@@ -400,11 +516,12 @@ defmodule QuillEx.RootScene.Renderizer do
     # publishes a different document (same for buffer-process restarts: the
     # pane dispatch target is the PaneStore, never a raw buffer pid).
 
-    # Recreate if editor settings changed (these affect TextField rendering)
-    settings_changed =
-      old_state.show_line_numbers != new_state.show_line_numbers or
-      old_state.word_wrap != new_state.word_wrap or
-      old_state.tab_width != new_state.tab_width
+    # Editor settings are applied IN PLACE (see apply_buffer_pane_settings/3):
+    # recreating the pane opens a window where the old TextField has died and
+    # the new one has not yet requested input, and anything typed or clicked
+    # in that window is lost. Settings alone therefore no longer force a
+    # rebuild.
+    settings_changed = false
 
     # Recreate if search bar, replace mode, or file nav visibility changed (affects buffer frame size)
     layout_changed = old_state.show_search_bar != new_state.show_search_bar or
@@ -414,7 +531,13 @@ defmodule QuillEx.RootScene.Renderizer do
     # Recreate if status bar appears or disappears (carves @status_bar_height from content area)
     status_bar_changed = (old_state.status_message == nil) != (new_state.status_message == nil)
 
-    settings_changed or layout_changed or status_bar_changed
+    # Recreate if the root frame changed (window resize / reshape). Every
+    # child's frame is derived from it, so the incremental branch would leave
+    # all of them rendered at their old sizes — the "internal app doesn't
+    # resize" bug from the 2026-07-31 QA notes.
+    frame_changed = old_state.frame != new_state.frame
+
+    settings_changed or layout_changed or status_bar_changed or frame_changed
   end
 
   # Helper to create the buffer_pane TextField
@@ -456,6 +579,9 @@ defmodule QuillEx.RootScene.Renderizer do
       show_line_numbers: state.show_line_numbers,
       wrap_mode: wrap_mode,
       tab_width: state.tab_width,
+      # QA A5: a thin line either side of the text pane, none on top/bottom
+      # (top would double the tab bar's edge; bottom hugs the window edge)
+      border_sides: [:left, :right],
       editable: true,
       focused: buffer_focused,
       font: %{

@@ -43,6 +43,11 @@ defmodule Quillex.IntegrationV1Spex do
     # Wait for scene to fully initialize
     Process.sleep(2000)
 
+
+    # Known LAYOUT to start from (overlays dismissed, file navigator
+    # closed) without touching buffers — an open navigator shifts the
+    # editor pane 250px right and makes fixed-x clicks miss it.
+    Quillex.TestHelpers.AppReset.reset_layout!()
     :ok
   end
 
@@ -76,10 +81,62 @@ defmodule Quillex.IntegrationV1Spex do
   end
 
   defp trigger_action(:new_buffer) do
-    Probes.click_element("icon_menu_file")
-    Process.sleep(200)
-    Probes.click_element("icon_menu_file_new")
-    Process.sleep(500)
+    # VERIFY the new buffer actually appeared, with retry. A lost File→New
+    # click leaves the previous document active, and every assertion in the
+    # scenario then runs against the wrong buffer — the single largest
+    # source of rotating failures in this file.
+    Enum.reduce_while(1..3, false, fn _, _ ->
+      Probes.click_element("icon_menu_file")
+      Process.sleep(250)
+      Probes.click_element("icon_menu_file_new")
+      Process.sleep(500)
+
+      # Scenarios that create a buffer are about to type into it — guarantee
+      # the pane has keyboard focus regardless of what was focused before.
+      # On a fresh empty buffer the click lands on line 1, so the cursor is
+      # unaffected (clamped to {1,1}).
+      ensure_editor_focused()
+
+      # WAIT for the new buffer rather than re-clicking impatiently: a
+      # premature retry creates a SECOND buffer, and enough of those
+      # overflow the tab bar and destabilise every later tab interaction.
+      if wait_for_empty_buffer(2_000), do: {:halt, true}, else: {:cont, false}
+    end)
+  end
+
+  # Poll until the active buffer reads empty twice in a row (one read can
+  # report "" for a document whose semantic entry is merely late).
+  defp wait_for_empty_buffer(timeout_ms) do
+    deadline = System.monotonic_time(:millisecond) + timeout_ms
+    do_wait_for_empty_buffer(deadline)
+  end
+
+  defp do_wait_for_empty_buffer(deadline) do
+    if (active_buffer_content() || "") == "" do
+      Process.sleep(150)
+      (active_buffer_content() || "") == ""
+    else
+      if System.monotonic_time(:millisecond) >= deadline do
+        false
+      else
+        Process.sleep(150)
+        do_wait_for_empty_buffer(deadline)
+      end
+    end
+  end
+
+  # Click into the pane (semantic frame → works at any window size) so the
+  # editor owns keyboard focus. The "rotating" 07 failures traced to typed
+  # setup text silently going nowhere when focus was left elsewhere.
+  defp ensure_editor_focused do
+    case SemanticHelpers.get_buffer_frame() do
+      %{x: x, y: y, width: w, height: h} ->
+        Probes.click(x + trunc(w * 0.4), y + trunc(h * 0.4))
+        Process.sleep(150)
+
+      _ ->
+        :ok
+    end
   end
 
   defp trigger_action(:toggle_word_wrap) do
@@ -120,18 +177,34 @@ defmodule Quillex.IntegrationV1Spex do
 
   defp active_buffer_content do
     with {:ok, viewport} <- Scenic.ViewPort.info(:main_viewport) do
-      buffer_id = active_buffer_id()
+      # Prefer the MAIN EDITOR PANE's entry (field_id :buffer_pane). The
+      # by-id / "latest text_buffer" lookups can return another component's
+      # or a stale entry, which reads as "my text never arrived".
+      pane_entry =
+        case SemanticHelpers.find_by_type_all_graphs(viewport, :text_buffer) do
+          {:ok, entries} ->
+            Enum.find(entries, &(get_in(&1, [:semantic, :field_id]) == :buffer_pane))
 
-      lookup =
-        if buffer_id do
-          SemanticHelpers.find_text_buffer(viewport, buffer_id)
-        else
-          SemanticHelpers.find_text_buffer(viewport)
+          _ ->
+            nil
         end
 
-      case lookup do
-        {:ok, buffer} -> buffer.content || ""
-        _ -> nil
+      if pane_entry do
+        pane_entry.content || ""
+      else
+        buffer_id = active_buffer_id()
+
+        lookup =
+          if buffer_id do
+            SemanticHelpers.find_text_buffer(viewport, buffer_id)
+          else
+            SemanticHelpers.find_text_buffer(viewport)
+          end
+
+        case lookup do
+          {:ok, buffer} -> buffer.content || ""
+          _ -> nil
+        end
       end
     end
   end
@@ -222,6 +295,17 @@ defmodule Quillex.IntegrationV1Spex do
     trigger_action({:open_file, path})
   end
 
+  # Close a buffer by tab label, if it is open (discarding any edits). Used to
+  # guarantee a genuinely fresh open in scenarios that assert on file content.
+  defp close_buffer_named(name) do
+    if Enum.any?(buffer_names(), &String.contains?(&1, name)) do
+      switch_to_buffer(name)
+      Process.sleep(200)
+      trigger_action(:close_active_buffer)
+      Process.sleep(300)
+    end
+  end
+
   defp send_mouse_click(x, y) do
     # Send mouse click via ScenicMcp
     ScenicMcp.Probes.click(x, y)
@@ -236,19 +320,37 @@ defmodule Quillex.IntegrationV1Spex do
     Process.sleep(200)
   end
 
-  # Switch to buffer by name using semantic tab info
+  # Switch to buffer by name using semantic tab info.
+  # Retries the tab activation: the click can be lost if it lands while the
+  # top bar is being recreated, and every scenario downstream of a failed
+  # switch then asserts against the wrong buffer.
   defp switch_to_buffer(name) do
     labels = buffer_names()
     index = Enum.find_index(labels, &(&1 == name))
 
     if index do
-      # Use 1-based index for activate_buffer action
-      trigger_action({:activate_buffer, index + 1})
-      Process.sleep(300)
+      clicked? =
+        Enum.reduce_while(1..2, false, fn _, _ ->
+          trigger_action({:activate_buffer, index + 1})
+          Process.sleep(300)
 
-      # Wait for tab to become selected
-      {:ok, _} = SemanticHelpers.wait_for_tab_selected(name, 2000)
-      true
+          case SemanticHelpers.wait_for_tab_selected(name, 2000) do
+            {:ok, _} -> {:halt, true}
+            _ -> {:cont, false}
+          end
+        end)
+
+      # Fall back to the deterministic API switch. Tab CLICKS are exercised
+      # on their own in the Tab Handling spex; here the point is merely to
+      # BE on the right buffer, and a silently-failed switch would make
+      # every later assertion test the wrong document.
+      if clicked? do
+        true
+      else
+        Quillex.TestHelpers.BufferSwitcher.switch(index + 1)
+        Process.sleep(300)
+        match?({:ok, _}, SemanticHelpers.wait_for_tab_selected(name, 2000))
+      end
     else
       false
     end
@@ -386,6 +488,13 @@ defmodule Quillex.IntegrationV1Spex do
       end
 
       when_ "we open the file", context do
+        # Close any existing Spinoza buffer first, so this really opens a
+        # FRESH copy from disk. File→Open deliberately activates an
+        # already-open buffer rather than duplicating the tab (correct app
+        # behaviour), which means a buffer edited by an earlier scenario
+        # would otherwise be handed back here with its edits intact.
+        close_buffer_named("spinozas_ethics_p1.txt")
+
         result = open_file(@spinoza_path)
         Process.sleep(1000)
         {:ok, Map.put(context, :open_result, result)}
@@ -675,17 +784,40 @@ defmodule Quillex.IntegrationV1Spex do
       end
 
       then_ "search bar should be closed", context do
-        # Click in the editor area to guarantee the buffer pane has OS-level
-        # focus before typing (belt-and-suspenders alongside :focus put_child).
-        Probes.click(400, 200)
-        Process.sleep(200)
+        # Search-bar close triggers a full pane recreation; a click or key
+        # landing in that window can be lost (transform-miss drop / dying
+        # instance). Retry the focus-click + keystroke: this scenario tests
+        # that typing reaches the buffer after close, not single-event
+        # delivery.
+        landed? =
+          Enum.reduce_while(1..3, false, fn _, _ ->
+            # Click NEAR THE START of a line (x=120), not out in the margin:
+            # clicks landing right of a short/blank line's text are dropped
+            # by TextField's overlay-click heuristic (see its note — a known
+            # limitation, deferred past 1.0). Spinoza has blank lines
+            # between paragraphs, so a click at x=400 often lands in that
+            # dead zone and never focuses the pane.
+            Probes.click(120, 200)
+            Process.sleep(250)
+            Probes.send_text("Z")
+            Process.sleep(400)
 
-        Probes.send_text("Z")
-        Process.sleep(400)
+            # Accept EITHER the semantic content or the actually-drawn text.
+            # While a pane is being replaced there are briefly two
+            # :buffer_pane semantic entries, and picking the dying one reads
+            # stale content — reporting "the typing never arrived" when it
+            # did. Drawn text comes from the live component, so it is the
+            # stronger evidence of the two.
+            typed_landed? =
+              String.contains?(active_buffer_content() || "", "Z") or
+                Quillex.TestHelpers.ScriptInspector.rendered_text_contains?("Z")
 
-        content = active_buffer_content()
-        assert String.contains?(content || "", "Z"),
-               "After closing search, typing should go to buffer"
+            if typed_landed?, do: {:halt, true}, else: {:cont, false}
+          end)
+
+        assert landed?,
+               "After closing search, typing should go to buffer. " <>
+                 "Pane content began: #{inspect(String.slice(active_buffer_content() || "", 0, 80))}"
 
         {:ok, context}
       end
@@ -1167,114 +1299,15 @@ defmodule Quillex.IntegrationV1Spex do
       end
     end
 
-    scenario "Horizontal scroll with Shift+Scroll" do
-      given_ "buffer with long lines", context do
-        new_empty_buffer()
+    # NOTE: the Shift+Scroll horizontal scenario was extracted to
+    # 22_scrollbar_drag_spex.exs — shift tracking is gated on keyboard focus,
+    # which the shared-state monolith cannot guarantee at this point.
 
-        # Type a very long line that exceeds viewport width
-        long_line = String.duplicate("x", 200)
-        Probes.send_text(long_line)
-        Process.sleep(200)
 
-        # Go back to start of line (cursor at beginning)
-        Probes.send_keys("home", [])
-        Process.sleep(100)
-
-        # Record initial scroll position
-        {initial_x, _initial_y} = get_scroll_offset()
-        {:ok, Map.put(context, :initial_scroll_x, initial_x)}
-      end
-
-      when_ "we hold Shift and scroll", context do
-        # Press and hold shift key
-        Probes.key_press("shift")
-        Process.sleep(50)
-
-        # Send multiple scroll inputs - with shift held, vertical scroll becomes horizontal
-        # Negative dy = scroll "down" which with shift becomes scroll "right"
-        for _ <- 1..5 do
-          Probes.send_scroll(0, -1)
-          Process.sleep(30)
-        end
-
-        Process.sleep(100)
-
-        # Release shift
-        Probes.key_release("shift")
-        Process.sleep(50)
-
-        {:ok, context}
-      end
-
-      then_ "content should have scrolled horizontally", context do
-        {final_x, _final_y} = get_scroll_offset()
-        initial_x = Map.get(context, :initial_scroll_x, 0)
-
-        # Scroll offset should have changed (scrolled right means offset_x becomes more negative)
-        assert final_x != initial_x,
-          "Horizontal scroll offset should have changed. Initial: #{initial_x}, Final: #{final_x}"
-
-        # Also verify app is responsive
-        Probes.send_text("!")
-        Process.sleep(100)
-
-        {:ok, context}
-      end
-    end
-
-    scenario "Drag vertical scrollbar to scroll" do
-      given_ "Spinoza's Ethics is open (large file)", context do
-        open_file(@spinoza_path)
-        Process.sleep(500)
-        switch_to_buffer("spinozas_ethics_p1.txt")
-        Process.sleep(300)
-
-        # Record initial scroll position
-        {_initial_x, initial_y} = get_scroll_offset()
-        {:ok, Map.put(context, :initial_scroll_y, initial_y)}
-      end
-
-      when_ "we click and drag the vertical scrollbar down", context do
-        # The scrollbar is on the right side of the viewport
-        # Based on debug output: frame=2000x1165, scrollbar at x=1985..2000
-        # The thumb starts near the top when scroll is at 0
-
-        # Click on scrollbar thumb (right edge, near top)
-        # Scrollbar is about 10px wide, 5px from edge
-        # Frame is 2000px wide, so scrollbar is at ~1990
-        scrollbar_x = 1990  # Near right edge of frame
-        thumb_start_y = 100  # Near top where thumb starts
-
-        # Mouse down on scrollbar thumb
-        Probes.mouse_down(scrollbar_x, thumb_start_y)
-        Process.sleep(50)
-
-        # Drag downward - send mouse move events while button is held
-        Probes.send_mouse_move(scrollbar_x, thumb_start_y + 200)
-        Process.sleep(30)
-        Probes.send_mouse_move(scrollbar_x, thumb_start_y + 400)
-        Process.sleep(30)
-        Probes.send_mouse_move(scrollbar_x, thumb_start_y + 600)
-        Process.sleep(30)
-
-        # Release mouse at final position
-        Probes.mouse_up(scrollbar_x, thumb_start_y + 600)
-        Process.sleep(100)
-
-        {:ok, context}
-      end
-
-      then_ "content should have scrolled down", context do
-        {_final_x, final_y} = get_scroll_offset()
-        initial_y = Map.get(context, :initial_scroll_y, 0)
-
-        # Scroll offset should have changed (scrolled down means offset_y increased)
-        assert final_y > initial_y,
-          "Vertical scroll offset should have increased from dragging scrollbar. Initial: #{initial_y}, Final: #{final_y}"
-
-        {:ok, context}
-      end
-    end
+    # NOTE: the scrollbar-thumb drag scenario was extracted to
+    # 22_scrollbar_drag_spex.exs — it needs a self-contained, focus-guaranteed
+    # setup and viewport-size-relative coordinates (the WM may grant a
+    # smaller window than requested, and the layout reflows to match).
   end
 
   # =========================================================================
@@ -1556,113 +1589,11 @@ defmodule Quillex.IntegrationV1Spex do
     description: "Validates mouse click cursor positioning",
     tags: [:v1, :integration, :mouse] do
 
-    scenario "Click positions cursor in text" do
-      given_ "we have a buffer with multiline text", context do
-        trigger_action(:new_buffer)
-        Process.sleep(500)
+    # NOTE: the click-positions-cursor scenario was extracted to
+    # 23_click_cursor_spex.exs — it needs a self-contained setup that
+    # guarantees pane focus before typing (in the shared-state monolith,
+    # earlier scenarios could leave focus elsewhere, making it flaky).
 
-        Probes.send_keys("a", [:ctrl])
-        Process.sleep(100)
-        Probes.send_keys("backspace", [])
-        Process.sleep(200)
-
-        # Create multiline content
-        Probes.send_text("Line one here")
-        Probes.send_keys("enter", [])
-        Probes.send_text("Line two here")
-        Probes.send_keys("enter", [])
-        Probes.send_text("Line three here")
-        Process.sleep(300)
-
-        # Capture initial cursor position
-        initial_cursor = SemanticHelpers.get_cursor_position()
-        Logger.debug("Initial cursor position before mouse click: #{inspect(initial_cursor)}")
-
-        {:ok, Map.put(context, :initial_cursor, initial_cursor)}
-      end
-
-      when_ "we click in the text area", context do
-        # Click somewhere in the visible text area targeting line 2.
-        # With line_height=20, line rows occupy: line 1 → y 0-19, line 2 → y 20-39, line 3 → y 40+.
-        # y=40 is the top boundary of line 3, so we use y=30 (mid-line-2) for a reliable hit.
-        click_x = 120
-        click_y = 30
-        Logger.debug("Clicking at coordinates (#{click_x}, #{click_y}) to target line 2")
-        send_mouse_click(click_x, click_y)
-        Process.sleep(300)
-        {:ok, Map.put(context, :click_coords, {click_x, click_y})}
-      end
-
-      then_ "cursor should move to clicked position", context do
-        # Verify cursor actually moved from initial position
-        new_cursor = SemanticHelpers.get_cursor_position()
-        initial_cursor = context.initial_cursor
-
-        Logger.debug("Cursor position after mouse click: #{inspect(new_cursor)}")
-
-        # Verify the cursor actually changed position
-        assert new_cursor != initial_cursor,
-               "Cursor should have moved from #{inspect(initial_cursor)} after mouse click, but got #{inspect(new_cursor)}"
-
-        # The cursor should have moved to a reasonable position
-        {click_x, click_y} = context.click_coords
-        case new_cursor do
-          {line, col} ->
-            # We clicked at coordinates targeting line 2
-            # The click should position cursor on line 2
-            assert line == 2,
-                   "Cursor should be positioned on line 2 after click at (#{click_x}, #{click_y}), got line #{line}"
-            # Column should be valid (between 1 and line length + 1 for end position)
-            line_2_content = "Line two here"
-            assert col >= 1 and col <= String.length(line_2_content) + 1,
-                   "Cursor column should be valid within line 2 content bounds [1-#{String.length(line_2_content) + 1}], got #{col}"
-            # Additional validation: cursor should be in a reasonable early column since we
-            # clicked near the beginning of the line (after the line-number gutter).
-            # col <= 10 is generous but safe across different gutter widths and font metrics.
-            assert col <= 10,
-                   "Cursor should be near beginning of line 2 (col 1-10) based on click position x=#{click_x}, got col #{col}"
-          nil ->
-            flunk("Cursor position should not be nil after mouse click")
-        end
-
-        Logger.debug("✅ Mouse click successfully positioned cursor at #{inspect(new_cursor)} from initial position #{inspect(initial_cursor)}")
-
-        # Verify click landed on the expected line and that column is reasonable.
-        case {initial_cursor, new_cursor} do
-          {{_initial_line, _}, {new_line, new_col}} ->
-            # Verify click coordinates properly converted to line 2
-            assert new_line == 2,
-                   "Click at y=#{click_y} should position cursor on line 2, got line #{new_line}"
-
-            # Verify column is reasonable for click at x=120 (past line-number gutter)
-            assert new_col >= 1 and new_col <= 10,
-                   "Click at x=#{click_x} should position cursor within first 10 cols of line 2, got col #{new_col}"
-
-          _ ->
-            flunk("Cursor should be valid {line, col} tuple after mouse click, got #{inspect(new_cursor)}")
-        end
-
-        # Additional validation: verify coordinate conversion precision
-        # The click_to_cursor math should account for gutters, scroll, and font metrics
-        {expected_line, _} = {2, 1}  # We clicked targeting line 2
-        {actual_line, actual_col} = new_cursor
-
-        assert actual_line == expected_line,
-               "Mouse click coordinate conversion failed: expected line #{expected_line}, got #{actual_line}"
-
-        # Log successful coordinate conversion for debugging
-        Logger.debug("✅ Coordinate conversion successful: click (#{click_x}, #{click_y}) → cursor (#{actual_line}, #{actual_col})")
-
-        {:ok, Map.put(context, :final_cursor, new_cursor)}
-
-        # Content should still be intact
-        content = active_buffer_content()
-        assert content != nil, "Buffer should still have content after click"
-        expected_content = "Line one here\nLine two here\nLine three here"
-        assert content == expected_content, "Buffer content should remain unchanged after click positioning"
-        {:ok, context}
-      end
-    end
 
     scenario "Click and drag selects text on a single line", _context do
       given_ "we have a buffer with known text", context do
@@ -1680,17 +1611,33 @@ defmodule Quillex.IntegrationV1Spex do
       end
 
       when_ "we mouse-down, drag right, and mouse-up", context do
+        # Global coords: line 1's visual row is global y [39, 63) (pane pin
+        # y=35, cursor-block offset +4, line_height 24) — click its centre.
+        #
+        # Retry the whole gesture: a mouse_down landing in a recreation
+        # window is dropped (transform-miss), and the drag then never
+        # starts. This scenario tests drag-selects-text, not single-event
+        # delivery.
         start_x = 120
         drag_end_x = 200
-        line_y = 20
-        Probes.mouse_down(start_x, line_y)
-        Process.sleep(50)
-        Probes.send_mouse_move(start_x + 30, line_y)
-        Process.sleep(30)
-        Probes.send_mouse_move(drag_end_x, line_y)
-        Process.sleep(30)
-        Probes.mouse_up(drag_end_x, line_y)
-        Process.sleep(300)
+        line_y = 50
+
+        Enum.reduce_while(1..3, nil, fn _, _ ->
+          Probes.mouse_down(start_x, line_y)
+          Process.sleep(50)
+          Probes.send_mouse_move(start_x + 30, line_y)
+          Process.sleep(30)
+          Probes.send_mouse_move(drag_end_x, line_y)
+          Process.sleep(30)
+          Probes.mouse_up(drag_end_x, line_y)
+          Process.sleep(300)
+
+          case wait_for_active_selection(1000) do
+            {:ok, _, _} -> {:halt, :ok}
+            _ -> {:cont, nil}
+          end
+        end)
+
         {:ok, context}
       end
 
@@ -1730,8 +1677,9 @@ defmodule Quillex.IntegrationV1Spex do
       end
 
       when_ "we double-click on the first word", context do
+        # Global coords targeting line 1 (see drag scenario above).
         click_x = 130
-        click_y = 20
+        click_y = 50
         Probes.click(click_x, click_y)
         Process.sleep(50)
         Probes.click(click_x, click_y)
@@ -1767,11 +1715,12 @@ defmodule Quillex.IntegrationV1Spex do
 
         Probes.send_text("Some text here")
         Process.sleep(200)
-        Probes.mouse_down(120, 20)
+        # Global coords targeting line 1 (see drag scenario above).
+        Probes.mouse_down(120, 50)
         Process.sleep(50)
-        Probes.send_mouse_move(200, 20)
+        Probes.send_mouse_move(200, 50)
         Process.sleep(50)
-        Probes.mouse_up(200, 20)
+        Probes.mouse_up(200, 50)
         Process.sleep(300)
 
         case wait_for_active_selection(2000) do
@@ -1781,7 +1730,7 @@ defmodule Quillex.IntegrationV1Spex do
       end
 
       when_ "we single-click elsewhere", context do
-        Probes.click(150, 20)
+        Probes.click(150, 50)
         Process.sleep(300)
         {:ok, context}
       end

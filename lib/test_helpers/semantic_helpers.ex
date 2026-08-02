@@ -294,6 +294,26 @@ defmodule Quillex.TestHelpers.SemanticHelpers do
   Get the current cursor position from the buffer's semantic data.
   Returns {line, column} or nil if not found.
   """
+  @doc """
+  The buffer pane's actual frame `%{x:, y:, width:, height:}` in window
+  coords, from the TextField's semantic metadata. Spex must derive
+  window-size-dependent click coordinates (scrollbars, right-edge UI) from
+  this — the WM may grant a smaller window than configured, and
+  `Scenic.ViewPort.info/1` reports only the configured size.
+  """
+  def get_buffer_frame do
+    case Scenic.ViewPort.info(:main_viewport) do
+      {:ok, viewport} ->
+        case find_text_buffer(viewport) do
+          {:ok, buffer} -> get_in(buffer, [:semantic, :frame])
+          _ -> nil
+        end
+
+      _ ->
+        nil
+    end
+  end
+
   def get_cursor_position do
     case Scenic.ViewPort.info(:main_viewport) do
       {:ok, viewport} ->

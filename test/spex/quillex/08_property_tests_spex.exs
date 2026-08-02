@@ -26,6 +26,11 @@ defmodule Quillex.PropertyTestsSpex do
     end
 
     Process.sleep(2000)
+
+    # Known LAYOUT to start from (overlays dismissed, file navigator
+    # closed) without touching buffers — an open navigator shifts the
+    # editor pane 250px right and makes fixed-x clicks miss it.
+    Quillex.TestHelpers.AppReset.reset_layout!()
     :ok
   end
 
@@ -177,11 +182,21 @@ defmodule Quillex.PropertyTestsSpex do
 
         # Type a marker to verify cursor is usable
         Probes.send_text("MARKER")
-        Process.sleep(200)
 
-        # The marker should be visible if cursor is in viewport
-        assert Query.text_visible?("MARKER"),
-               "Marker should be visible - cursor should be in viewport"
+        # Bounded poll: under suite load the insert's publish → semantic
+        # sync can lag a few hundred ms (see the roadmap's dispatch-latency
+        # notes) — a single fixed-delay read races it.
+        visible? =
+          Enum.reduce_while(1..20, false, fn _, _ ->
+            if Query.text_visible?("MARKER") do
+              {:halt, true}
+            else
+              Process.sleep(100)
+              {:cont, false}
+            end
+          end)
+
+        assert visible?, "Marker should be visible - cursor should be in viewport"
 
         :ok
       end

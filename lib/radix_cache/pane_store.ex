@@ -45,7 +45,7 @@ defmodule Quillex.RadixCache.PaneStore do
     # Subscribe before the buffer tree boots; the first :radix_buffers
     # publish tells us which buffer to follow.
     Scenic.PubSub.subscribe(Sources.buffers())
-    {:ok, %{buffer_uuid: nil}}
+    {:ok, %{buffer_uuid: nil, last_action_at: nil}}
   end
 
   # Action dispatch from the TextField — forward to the active buffer's store.
@@ -56,7 +56,10 @@ defmodule Quillex.RadixCache.PaneStore do
 
   def handle_cast({:action, actions}, %{buffer_uuid: uuid} = state) do
     GenServer.cast(buffer_via(uuid), {:action, actions})
-    {:noreply, state}
+    # Dispatch-latency telemetry: stamp the forward; the next republish
+    # closes the loop (see handle_info below). Costs one Map.put when
+    # healthy; logs only when the pipeline stalls.
+    {:noreply, %{state | last_action_at: System.monotonic_time(:millisecond)}}
   end
 
   # Buffer-list snapshots: retarget when the active buffer changes.
@@ -99,6 +102,25 @@ defmodule Quillex.RadixCache.PaneStore do
     if uuid && source == Sources.buffer(uuid) do
       Scenic.PubSub.publish(Sources.pane(@pane), buf)
     end
+
+    # Dispatch-latency telemetry: how long from the last action forward to
+    # this republish? Intermittent multi-hundred-ms stalls here are the
+    # prime suspect for both the shifting spex-timing failures and the
+    # "pane updating very slowly" QA report (A8). Log only on stall.
+    state =
+      case state.last_action_at do
+        nil ->
+          state
+
+        t0 ->
+          delta = System.monotonic_time(:millisecond) - t0
+
+          if delta > 100 do
+            Logger.warning("[pane-latency] action -> republish took #{delta}ms (stall)")
+          end
+
+          %{state | last_action_at: nil}
+      end
 
     {:noreply, state}
   end

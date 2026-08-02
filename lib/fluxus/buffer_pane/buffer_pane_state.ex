@@ -36,9 +36,20 @@ defmodule Quillex.GUI.Components.BufferPane.State do
     })
   end
 
+  @doc """
+  Metrics for the font Scenic is already rendering with.
+
+  Read out of the compiled asset library rather than off disk. A path — even an
+  absolute one — assumes the source tree is still sitting where it was at
+  compile time, which is false the moment `qlx` adopts the shell's working
+  directory, and false again inside a release that has been copied elsewhere.
+  The library travels in the app's own priv directory, so it is always there.
+  """
   def ibm_plex_mono do
-    # Load fonts from file
-    TruetypeMetrics.load("./assets/fonts/IBM_Plex_Mono/IBMPlexMono-Regular.ttf")
+    {:ok, {Scenic.Assets.Static.Font, %FontMetrics{} = metrics}} =
+      Scenic.Assets.Static.meta(:ibm_plex_mono)
+
+    {:ok, metrics}
   end
 
   def default_colors, do: @cauldron

@@ -185,6 +185,10 @@ defmodule QuillEx.RootScene do
       # Just get the current cursor position from the buffer for restoration.
       cursor_pos = get_buffer_cursor(scene)
 
+      # The pane IS recreated on reshape, so save the scroll position to
+      # restore into the new instance.
+      first_visible_line = get_first_visible_line(scene)
+
       # Create new frame with the resized dimensions
       new_frame = Widgex.Frame.new(pin: {0, 0}, size: new_vp_size)
 
@@ -193,12 +197,16 @@ defmodule QuillEx.RootScene do
       new_state = old_state
         |> Map.put(:frame, new_frame)
         |> Map.put(:_restore_cursor, cursor_pos)
+        |> Map.put(:_restore_first_visible_line, first_visible_line)
 
       # Reuse existing graph to preserve component PIDs and avoid race conditions
       new_graph = QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
-      # Remove the temporary cursor restore key from state
-      final_state = Map.delete(new_state, :_restore_cursor)
+      # Remove the temporary restore keys from state
+      final_state =
+        new_state
+        |> Map.delete(:_restore_cursor)
+        |> Map.delete(:_restore_first_visible_line)
 
       new_scene =
         scene
@@ -267,6 +275,25 @@ defmodule QuillEx.RootScene do
 
     if click_y > @top_bar_height and click_x < dropdown_safe_threshold_x do
       Scenic.Scene.put_child(scene, :icon_menu, {:close_menu})
+      # This click is provably outside every dropdown, so no overlay owns
+      # the pointer — clear the flag as well, so a lost :dropdown_closed
+      # event cannot leave the editor permanently ignoring clicks.
+      Scenic.Scene.put_child(scene, :buffer_pane, {:set_overlay_open, false})
+    end
+
+    # --- Focus routing between the file nav and the buffer pane ---
+    # SideNav and TextField both gate keyboard input on a focus flag; a click
+    # decides which of them holds it. Skipped while a dialog is open so a
+    # stray click can't pull keyboard focus out from under the dialog.
+    if state.show_file_nav and click_y > @top_bar_height and
+         not state.show_unsaved_prompt and not state.show_about do
+      if click_x < state.file_nav_width do
+        Scenic.Scene.put_child(scene, :file_nav, :focus)
+        Scenic.Scene.put_child(scene, :buffer_pane, :blur)
+      else
+        Scenic.Scene.put_child(scene, :file_nav, :blur)
+        Scenic.Scene.put_child(scene, :buffer_pane, :focus)
+      end
     end
 
     # --- Search bar ---
@@ -303,6 +330,23 @@ defmodule QuillEx.RootScene do
   end
 
   defp dispatch_to_active_buffer(scene, action) do
+    state = scene.assigns.state
+
+    cond do
+      # An overlay owns the keyboard: these shortcuts edit/move within the
+      # DOCUMENT, and firing them while the user is typing in the search bar
+      # or answering a dialog mutates the file behind their back (Ctrl+D
+      # would delete a line of the document mid-search).
+      state.show_search_bar or state.show_unsaved_prompt or
+        Map.get(state, :show_about, false) or state.show_file_picker ->
+        {:noreply, scene}
+
+      true ->
+        do_dispatch_to_active_buffer(scene, action)
+    end
+  end
+
+  defp do_dispatch_to_active_buffer(scene, action) do
     case scene.assigns.state.active_buf do
       nil ->
         {:noreply, scene}
@@ -331,7 +375,13 @@ defmodule QuillEx.RootScene do
     end
   end
 
-  # Get the first visible line from the TextField (for scroll preservation during word wrap toggle)
+  # Scroll position is now preserved by the pane itself (it survives layout
+  # changes instead of being recreated), so nothing needs to read it back
+  # out of the component. Kept only for the initial-creation path.
+  #
+  # It must NOT be called on the hot path: fetch_child blocks on whatever
+  # the component is currently rendering, and on a large document that is
+  # long enough to time out and crash the scene.
   defp get_first_visible_line(scene) do
     alias ScenicWidgets.TextField.State, as: TFState
 
@@ -713,6 +763,12 @@ defmodule QuillEx.RootScene do
   def handle_event({:menu_item_clicked, item_id}, _from, scene) do
     Logger.debug("Menu item clicked: #{inspect(item_id)}")
 
+    # Choosing an item always dismisses the dropdown, so clear the pane's
+    # "an overlay owns the pointer" flag here too. Relying solely on the
+    # separate :dropdown_closed event makes a single lost message latch the
+    # flag on — and while it is on, EVERY click on the editor is ignored.
+    Scenic.Scene.put_child(scene, :buffer_pane, {:set_overlay_open, false})
+
     case item_id do
       "new" ->
         # Create a new buffer
@@ -793,9 +849,7 @@ defmodule QuillEx.RootScene do
         {:noreply, scene}
 
       "about" ->
-        # About dialog - not implemented yet
-        Logger.info("Quillex - A simple text editor built with Scenic")
-        {:noreply, scene}
+        show_about_dialog(scene)
 
       "shortcuts" ->
         # Keyboard shortcuts - not implemented yet
@@ -894,6 +948,10 @@ defmodule QuillEx.RootScene do
     # item_id is the file path
     if File.regular?(item_id) do
       Logger.info("File nav: opening file #{item_id}")
+      # Opening a file moves the user's attention to the editor: hand keyboard
+      # focus back so they can type immediately (and the nav stops eating keys).
+      Scenic.Scene.put_child(scene, :file_nav, :blur)
+      Scenic.Scene.put_child(scene, :buffer_pane, :focus)
       open_file(scene, item_id)
     else
       Logger.debug("File nav: not a regular file: #{item_id}")
@@ -923,6 +981,22 @@ defmodule QuillEx.RootScene do
   # :discard — close without saving (changes are lost).
   # :cancel  — leave the buffer open with its unsaved changes intact.
 
+  # --- About dialog ---
+  # Any response (OK button, Enter, Escape) just dismisses.
+  def handle_event({:popup_modal_response, :about_dialog, _action}, _from, scene) do
+    state = scene.assigns.state
+    graph = Scenic.Graph.delete(scene.assigns.graph, :about_dialog)
+
+    new_scene =
+      scene
+      |> assign(state: %{state | show_about: false})
+      |> assign(graph: graph)
+      |> push_graph(graph)
+
+    Scenic.Scene.put_child(new_scene, :buffer_pane, :focus)
+    {:noreply, new_scene}
+  end
+
   def handle_event({:confirm_dialog_response, _id, :save}, _from, scene) do
     buf_ref = scene.assigns.state.pending_close_buf_ref
     new_scene = hide_unsaved_prompt(scene)
@@ -941,10 +1015,82 @@ defmodule QuillEx.RootScene do
     {:noreply, new_scene}
   end
 
+  # --- Overlay ownership of the pointer ---
+  # An IconMenu dropdown renders above the buffer pane, but the pane also
+  # receives those clicks (it requests :cursor_button non-positionally).
+  # Telling it explicitly beats making it guess from geometry — the old
+  # guess also swallowed legitimate clicks on short and blank lines.
+  # Uses the cheap flag-only message: this fires on every menu open/close
+  # (including hover-switching between menus), and a full re-render per
+  # transition is slow enough on a large document to stall the pane.
+  # IconMenu also reports the dropdown's bounds, but in ITS coordinate space;
+  # the pane compares against its own. Until that conversion exists, send the
+  # boolean — a rect in the wrong space matches nothing, and the menu clicks
+  # it should suppress end up moving the document cursor.
+  def handle_event({:dropdown_opened, _menu_id, _bounds}, _from, scene) do
+    Scenic.Scene.put_child(scene, :buffer_pane, {:set_overlay_open, true})
+    {:noreply, scene}
+  end
+
+  def handle_event({:dropdown_opened, _menu_id}, _from, scene) do
+    Scenic.Scene.put_child(scene, :buffer_pane, {:set_overlay_open, true})
+    {:noreply, scene}
+  end
+
+  def handle_event({:dropdown_closed}, _from, scene) do
+    Scenic.Scene.put_child(scene, :buffer_pane, {:set_overlay_open, false})
+    {:noreply, scene}
+  end
+
   # Catch-all for unhandled events
   def handle_event(event, _from, scene) do
     Logger.debug("Unhandled event: #{inspect(event)}")
     {:noreply, scene}
+  end
+
+  # ===========================================================================
+  # About dialog (Help → About)
+  # ===========================================================================
+  # The quote is the full text of the first commit in this repository
+  # (2021-05-05) — the closest thing Quillex has to a design document.
+  defp show_about_dialog(%{assigns: %{state: %{show_about: true}}} = scene) do
+    {:noreply, scene}
+  end
+
+  defp show_about_dialog(scene) do
+    state = scene.assigns.state
+    vsn = Application.spec(:quillex, :vsn) |> to_string()
+
+    graph =
+      scene.assigns.graph
+      |> ScenicWidgets.PopupModal.add_to_graph(
+        %{
+          frame: state.frame,
+          title: "Quillex",
+          body: [
+            "v#{vsn} — a text editor written in Elixir, rendered by Scenic",
+            "",
+            "\"Simplicity is the highest goal, achievable when you have",
+            "overcome all difficulties. After one has played a vast quantity",
+            "of notes and more notes, it is simplicity that emerges as the",
+            "crowning reward of art.\"",
+            "— Frédéric Chopin (commit #1, 2021-05-05)",
+            "",
+            "github.com/JediLuke/quillex"
+          ]
+        },
+        id: :about_dialog
+      )
+
+    new_scene =
+      scene
+      |> assign(state: %{state | show_about: true})
+      |> assign(graph: graph)
+      |> push_graph(graph)
+
+    # Blur the editor so Enter/Escape talk to the modal, not the buffer.
+    Scenic.Scene.put_child(new_scene, :buffer_pane, :blur)
+    {:noreply, new_scene}
   end
 
   # ===========================================================================
@@ -1082,13 +1228,18 @@ defmodule QuillEx.RootScene do
     alias ScenicWidgets.TextField.State, as: TFState
     replace_mode = Keyword.get(opts, :replace_mode, false)
 
-    # Get the word under cursor from TextField to pre-fill search
-    initial_query = case Scenic.Scene.fetch_child(scene, :buffer_pane) do
-      {:ok, [%TFState{} = tf_state]} ->
-        TFState.word_at_cursor(tf_state) || ""
-      _ ->
-        ""
-    end
+    # Pre-fill the search with the word under the cursor — read from the
+    # BUFFER (the source of truth), not by calling synchronously into the
+    # live TextField. That call blocks on whatever the component is
+    # rendering; on a large document it timed out and crashed the scene.
+    initial_query =
+      with buf_ref when not is_nil(buf_ref) <- scene.assigns.state.active_buf,
+           {:ok, buf_state} <- Quillex.Buffer.Process.fetch_buf(buf_ref),
+           [%{line: line, col: col} | _] <- buf_state.cursors do
+        TFState.word_at(buf_state.data, {line, col}) || ""
+      else
+        _ -> ""
+      end
 
     old_state = scene.assigns.state
 
@@ -1117,6 +1268,19 @@ defmodule QuillEx.RootScene do
       show_replace: replace_mode
     }
 
+    # Blur the buffer pane BEFORE re-rendering. Showing the search bar
+    # changes the layout, which recreates the pane — and the OUTGOING
+    # instance stays alive, and focused, for a short window afterwards.
+    # Blurring after the render leaves that dying instance eligible for
+    # keystrokes, so the first characters of a search query get inserted
+    # into the document (observed corrupting line 1 of an open file).
+    Scenic.Scene.put_child(scene, :buffer_pane, :blur)
+
+    # Belt and braces: mark that an overlay owns the keyboard. Focus is
+    # granted/revoked by async messages, so blur alone leaves a window; the
+    # overlay flag gates key input independently of the focus flag.
+    Scenic.Scene.put_child(scene, :buffer_pane, {:set_overlay_open, true})
+
     # Reuse existing graph to preserve component PIDs and avoid race conditions
     new_graph = QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
@@ -1126,7 +1290,8 @@ defmodule QuillEx.RootScene do
       |> assign(graph: new_graph)
       |> push_graph(new_graph)
 
-    # Blur the buffer pane so keystrokes go to SearchBar, not TextField
+    # Belt-and-braces: the freshly created pane is built unfocused, but say
+    # so explicitly in case it was created before this state landed.
     Scenic.Scene.put_child(new_scene, :buffer_pane, :blur)
 
     # If we have an initial query, perform search
@@ -1161,7 +1326,8 @@ defmodule QuillEx.RootScene do
       |> assign(graph: new_graph)
       |> push_graph(new_graph)
 
-    # Refocus the buffer pane
+    # The overlay is gone: release the keyboard gate, then refocus.
+    Scenic.Scene.put_child(new_scene, :buffer_pane, {:set_overlay_open, false})
     Scenic.Scene.put_child(new_scene, :buffer_pane, :focus)
 
     {:noreply, new_scene}

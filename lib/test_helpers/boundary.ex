@@ -16,6 +16,12 @@ defmodule Quillex.TestHelpers do
       TextAssertions,
       SceneHelpers,
       ScriptInspector,
-      FileOpener
+      FileOpener,
+      BufferSwitcher,
+      AppReset,
+      ViewportResizer,
+      Perf,
+      Invariants,
+      Oracle
     ]
 end

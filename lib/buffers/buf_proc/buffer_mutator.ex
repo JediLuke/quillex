@@ -27,9 +27,23 @@ defmodule Quillex.GUI.Components.BufferPane.Mutator do
     %{buf | mode: mode}
   end
 
-  def move_cursor(%{cursors: [c]} = buf, {line, col} = coords)
+  def move_cursor(%{cursors: [c]} = buf, {line, col})
       when is_integer(line) and is_integer(col) and line >= 1 and col >= 1 do
-    %{buf | cursors: [c |> Cursor.move(coords)]}
+    # Clamp into the document. A cursor outside the buffer is not a
+    # meaningful state: it crashed the next edit (String.split_at on the
+    # nil line), and it is reachable in normal use — click below the last
+    # line, or carry a line-26 cursor onto a 3-line buffer during a switch.
+    # Clamping is also the behaviour users expect from every editor.
+    %{buf | cursors: [c |> Cursor.move(clamp_coords(buf, {line, col}))]}
+  end
+
+  # Clamp {line, col} to a position that exists in `data`.
+  defp clamp_coords(%{data: data}, {line, col}) do
+    line_count = max(length(data), 1)
+    clamped_line = min(line, line_count)
+    line_text = Enum.at(data, clamped_line - 1) || ""
+    clamped_col = min(col, String.length(line_text) + 1)
+    {clamped_line, clamped_col}
   end
 
   def move_cursor(%{cursors: [_c]} = buf, {line, _col} = coords) when is_integer(line) do

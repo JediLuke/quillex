@@ -40,6 +40,11 @@ defmodule Quillex.RunVerificationSpex do
 
     File.mkdir_p!(@tmp_dir)
     Process.sleep(2000)
+
+    # Start from a known-clean editor rather than inheriting whatever
+    # the previous spex file left behind (buffers, open nav, scroll).
+    Quillex.TestHelpers.AppReset.reset!()
+
     :ok
   end
 
@@ -53,8 +58,73 @@ defmodule Quillex.RunVerificationSpex do
   end
 
   defp click_verify_menu_item do
-    Probes.click_element("icon_menu_file_verify")
-    Process.sleep(300)
+    # The File dropdown must actually be rendered before the item click can
+    # land. Under momentary load either click in the open-then-pick flow can
+    # misfire, so retry the WHOLE flow (re-open the menu if the item never
+    # appeared) up to 3 times.
+    Enum.reduce_while(1..3, :ok, fn _, _ ->
+      if wait_for_verify_item(System.monotonic_time(:millisecond) + 1_500) == :visible do
+        Probes.click_element("icon_menu_file_verify")
+        Process.sleep(300)
+        {:halt, :ok}
+      else
+        # Dropdown not open (or closed itself) — open it and try again
+        Probes.click_element("icon_menu_file")
+        Process.sleep(300)
+        {:cont, :ok}
+      end
+    end)
+  end
+
+  defp wait_for_verify_item(deadline) do
+    cond do
+      String.contains?(Query.rendered_text(), "Verify File") -> :visible
+      System.monotonic_time(:millisecond) >= deadline -> :absent
+      true ->
+        Process.sleep(100)
+        wait_for_verify_item(deadline)
+    end
+  end
+
+
+  # Poll for a transient status-bar message with a bounded window. The status
+  # message auto-clears after 5s and takes a render cycle to appear, so a
+  # single immediate read races BOTH edges — under suite load (pipeline
+  # stalls, see roadmap perf notes) that race was this file's flake source.
+  # Wait for a transient status message, RE-TRIGGERING the verify action if
+  # it never appears. The message auto-clears after 5s, so the whole
+  # open-menu → click-verify → read sequence races its own expiry; and if
+  # the verify click was lost there is nothing to find at all. Verify is
+  # idempotent (it only re-inspects the file), so re-running it is safe.
+  defp await_status(text, timeout_ms \\ 3000) do
+    Enum.reduce_while(1..3, {:timeout, ""}, fn attempt, _acc ->
+      deadline = System.monotonic_time(:millisecond) + timeout_ms
+
+      case poll_status(text, deadline) do
+        :ok ->
+          {:halt, :ok}
+
+        {:timeout, rendered} ->
+          if attempt < 3 do
+            click_verify_menu_item()
+            {:cont, {:timeout, rendered}}
+          else
+            {:halt, {:timeout, rendered}}
+          end
+      end
+    end)
+  end
+
+  defp poll_status(text, deadline) do
+    rendered = Query.rendered_text()
+
+    cond do
+      String.contains?(rendered, text) -> :ok
+      System.monotonic_time(:millisecond) >= deadline -> {:timeout, rendered}
+      true ->
+        Process.sleep(100)
+        poll_status(text, deadline)
+    end
   end
 
   defp type_text(text) do
@@ -166,8 +236,9 @@ defmodule Quillex.RunVerificationSpex do
       end
 
       then_ "the status bar shows that the buffer has no associated file path" do
-        rendered = Query.rendered_text()
-        assert String.contains?(rendered, "no associated file path"),
+        result = await_status("no associated file path")
+        rendered = with {:timeout, r} <- result, do: r
+        assert result == :ok,
                "Status bar should show 'no associated file path'. Got: #{inspect(rendered)}"
         :ok
       end
@@ -239,8 +310,9 @@ defmodule Quillex.RunVerificationSpex do
       end
 
       then_ "the status bar shows that the file is unchanged on disk" do
-        rendered = Query.rendered_text()
-        assert String.contains?(rendered, "unchanged on disk"),
+        result = await_status("unchanged on disk")
+        rendered = with {:timeout, r} <- result, do: r
+        assert result == :ok,
                "Status bar should show 'unchanged on disk'. Got: #{inspect(rendered)}"
         :ok
       end
@@ -308,8 +380,9 @@ defmodule Quillex.RunVerificationSpex do
       end
 
       then_ "the status bar shows that the file was deleted from disk" do
-        rendered = Query.rendered_text()
-        assert String.contains?(rendered, "deleted from disk"),
+        result = await_status("deleted from disk")
+        rendered = with {:timeout, r} <- result, do: r
+        assert result == :ok,
                "Status bar should show 'deleted from disk'. Got: #{inspect(rendered)}"
         :ok
       end
@@ -367,8 +440,9 @@ defmodule Quillex.RunVerificationSpex do
       end
 
       then_ "the status bar shows that the file was modified on disk" do
-        rendered = Query.rendered_text()
-        assert String.contains?(rendered, "modified on disk"),
+        result = await_status("modified on disk")
+        rendered = with {:timeout, r} <- result, do: r
+        assert result == :ok,
                "Status bar should show 'modified on disk'. Got: #{inspect(rendered)}"
         :ok
       end
