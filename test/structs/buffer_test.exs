@@ -9,9 +9,7 @@ defmodule Quillex.Structs.BufStateStructTest do
       buf = BufState.new(%{})
 
       assert buf.name == "unnamed"
-      assert buf.type == :text
       assert buf.data == [""]
-      assert buf.mode == :edit
       assert buf.source == nil
       assert buf.read_only? == false
       assert buf.dirty? == false
@@ -30,12 +28,6 @@ defmodule Quillex.Structs.BufStateStructTest do
       assert is_binary(buf1.uuid)
       assert is_binary(buf2.uuid)
       assert buf1.uuid != buf2.uuid
-    end
-
-    test "sets the opened timestamp" do
-      buf = BufState.new(%{})
-
-      assert %DateTime{} = buf.timestamps.opened
     end
 
     test "accepts a custom name" do
@@ -67,7 +59,7 @@ defmodule Quillex.Structs.BufStateStructTest do
     test "creates a default cursor at line 1, column 1" do
       buf = BufState.new(%{})
 
-      assert [%Cursor{line: 1, col: 1}] = buf.cursors
+      assert %Cursor{line: 1, col: 1} = buf.cursor
     end
 
     test "accepts a custom undo_max_size" do
@@ -94,12 +86,6 @@ defmodule Quillex.Structs.BufStateStructTest do
       buf = BufState.new(%{})
 
       assert buf.selection == nil
-    end
-
-    test "has an empty history by default" do
-      buf = BufState.new(%{})
-
-      assert buf.history == []
     end
   end
 end

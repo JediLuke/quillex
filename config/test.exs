@@ -2,6 +2,12 @@ import Config
 
 config :logger, level: :warn
 
+config :quillex, :clipboard_commands,
+  unix: [
+    copy: {"tee", ["/tmp/quillex_test_clipboard"]},
+    paste: {"cat", ["/tmp/quillex_test_clipboard"]}
+  ]
+
 # Use a wider window for tests to prevent text wrapping
 # Use :edit mode (notepad-style) for comprehensive text editing tests
 config :quillex,

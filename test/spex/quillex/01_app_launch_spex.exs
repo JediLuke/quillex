@@ -31,7 +31,6 @@ defmodule Quillex.AppLaunchSpex do
   spex "App Launch & Basic UI - Core Components",
     description: "Validates that Quillex launches and displays all essential UI components",
     tags: [:phase_1, :app_launch, :ui] do
-
     # =========================================================================
     # 1. APP LAUNCHES SUCCESSFULLY
     # =========================================================================
@@ -46,8 +45,10 @@ defmodule Quillex.AppLaunchSpex do
 
       then_ "the app is rendering content" do
         rendered = Query.rendered_text()
+
         assert is_binary(rendered) and rendered != "",
                "App should be rendering content after launch"
+
         :ok
       end
     end
@@ -71,14 +72,15 @@ defmodule Quillex.AppLaunchSpex do
         # The initial buffer should be named "untitled" or similar
         # Note: Tab names may be truncated to "unt..." in the UI
         assert Query.text_visible?("unt") or
-               Query.text_visible?("untitled"),
+                 Query.text_visible?("untitled"),
                "Initial buffer tab should show untitled. Got: #{String.slice(context.rendered_content, 0, 200)}"
+
         {:ok, context}
       end
     end
 
     # =========================================================================
-    # 3. ICONMENU RENDERS WITH F/E/V/? BUTTONS
+    # 3. ICONMENU RENDERS WITH ACCESSIBLE VECTOR BUTTONS
     # =========================================================================
 
     scenario "IconMenu displays with File/Edit/View/Help icons" do
@@ -91,12 +93,11 @@ defmodule Quillex.AppLaunchSpex do
         {:ok, Map.put(context, :rendered_content, rendered_content)}
       end
 
-      then_ "F/E/V/? icons are visible" do
-        # IconMenu shows single-letter icons for File, Edit, View, Help
-        assert Query.text_visible?("F"), "File menu icon (F) should be visible"
-        assert Query.text_visible?("E"), "Edit menu icon (E) should be visible"
-        assert Query.text_visible?("V"), "View menu icon (V) should be visible"
-        assert Query.text_visible?("?"), "Help menu icon (?) should be visible"
+      then_ "File/Edit/View/Help vector icons are registered as buttons" do
+        for id <- [:icon_menu_file, :icon_menu_edit, :icon_menu_view, :icon_menu_help] do
+          assert semantic_element_registered?(id), "#{id} should be a registered toolbar button"
+        end
+
         :ok
       end
     end
@@ -119,6 +120,7 @@ defmodule Quillex.AppLaunchSpex do
         # At minimum, line 1 should be visible in an empty buffer
         assert Query.text_visible?("1"),
                "Line number 1 should be visible in the empty buffer"
+
         :ok
       end
     end
@@ -177,7 +179,6 @@ defmodule Quillex.AppLaunchSpex do
   spex "App Launch & Basic UI - Window Resize",
     description: "Validates that window resize works without crashing",
     tags: [:phase_1, :app_launch, :resize] do
-
     # =========================================================================
     # 7. WINDOW RESIZE HANDLING
     # =========================================================================
@@ -203,12 +204,14 @@ defmodule Quillex.AppLaunchSpex do
         # App should still render content after the wait
         assert is_binary(context.post_resize_content),
                "App should still render content (not crash)"
+
         assert String.length(context.post_resize_content) > 0,
                "Rendered content should not be empty"
 
         # Core UI elements should still be visible
-        assert Query.text_visible?("F"),
+        assert semantic_element_registered?(:icon_menu_file),
                "Menu icons should still be visible after potential resize"
+
         {:ok, context}
       end
     end
@@ -232,11 +235,12 @@ defmodule Quillex.AppLaunchSpex do
         # Verify all major UI elements are present
         # TabBar (may show truncated name like "unt...")
         assert Query.text_visible?("unt") or
-               Query.text_visible?("untitled"),
+                 Query.text_visible?("untitled"),
                "TabBar with buffer name should be visible"
 
-        # IconMenu (at least some icons)
-        assert Query.text_visible?("F") or Query.text_visible?("E"),
+        # IconMenu (vector icons are semantic buttons, not text glyphs)
+        assert semantic_element_registered?(:icon_menu_file) and
+                 semantic_element_registered?(:icon_menu_edit),
                "IconMenu icons should be visible"
 
         # Line numbers (indicating TextField is rendered)
@@ -244,6 +248,14 @@ defmodule Quillex.AppLaunchSpex do
 
         :ok
       end
+    end
+  end
+
+  defp semantic_element_registered?(id) do
+    with {:ok, viewport} <- Scenic.ViewPort.info(:main_viewport) do
+      :ets.lookup(viewport.semantic_index, id) != []
+    else
+      _ -> false
     end
   end
 end

@@ -4,7 +4,7 @@ defmodule QuillEx.MixProject do
   def project do
     [
       app: :quillex,
-      version: "0.7.2",
+      version: "0.7.3",
       elixir: "~> 1.12",
       build_embedded: true,
       start_permanent: Mix.env() == :prod,
@@ -13,9 +13,6 @@ defmodule QuillEx.MixProject do
       spex: [pattern: "test/spex/**/*_spex.exs", boundary: Quillex.Spex],
       preferred_cli_env: [spex: :test, run_spex: :test],
       releases: releases(),
-      # With two releases defined, a bare `mix release` errors — default to
-      # the real one (the spike must be asked for by name).
-      default_release: :quillex,
       deps: deps()
     ]
   end
@@ -29,18 +26,6 @@ defmodule QuillEx.MixProject do
         include_executables_for: [:unix],
         # rel/env.sh.eex switches distribution off; see the note there
         quiet: true
-      ],
-      # SPIKE — not load-bearing. Wraps the same release into a single
-      # executable via Burrito. Separate entry so `mix release quillex` keeps
-      # producing the plain directory release that bin/qlx runs.
-      quillex_burrito: [
-        include_executables_for: [:unix],
-        steps: [:assemble, &Burrito.wrap/1],
-        burrito: [
-          targets: [
-            linux: [os: :linux, cpu: :x86_64]
-          ]
-        ]
       ]
     ]
   end
@@ -59,20 +44,33 @@ defmodule QuillEx.MixProject do
   def application do
     [
       mod: {QuillEx.App, []},
-
-      extra_applications:
-        if(Mix.env() in [:dev, :test], do: [:scenic_mcp], else: [])
+      extra_applications: if(Mix.env() in [:dev, :test], do: [:scenic_mcp], else: [])
     ]
   end
 
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      # Local path deps to match merlinex/scenic-widget-contrib — the fork's
-      # widget-v2 branch carries the Scenic.PubSub boot-skip + registration fixes
-      {:scenic, path: "../scenic", override: true},
-      {:scenic_driver_local, path: "../scenic_driver_local", override: true},
-      {:scenic_widget_contrib, path: "../scenic-widget-contrib"},
+      constellation_dep(
+        :scenic,
+        "../scenic",
+        "https://github.com/Jediluke/scenic.git",
+        "bc2854bceb943e70247dcbe50167aff08cc7147e",
+        override: true
+      ),
+      constellation_dep(
+        :scenic_driver_local,
+        "../scenic_driver_local",
+        "https://github.com/JediLuke/scenic_driver_local.git",
+        "35de351b5bd2075e7651e9f8bef37e9f3659a85d",
+        override: true
+      ),
+      constellation_dep(
+        :scenic_widget_contrib,
+        "../scenic-widget-contrib",
+        "https://github.com/JediLuke/scenic-widget-contrib.git",
+        "e0bc98d6b67025d3b9c052598a4c6584b1624a15"
+      ),
       {:elixir_uuid, "~> 1.2"},
       {:font_metrics, "~> 0.5"},
       {:truetype_metrics, "~> 0.6"},
@@ -82,16 +80,36 @@ defmodule QuillEx.MixProject do
       {:elixir_make, "~> 0.6", override: true},
       {:boundary, "~> 0.10", runtime: false},
       {:jason, "~> 1.4"},
-      # SPIKE — single-binary packaging experiment, see releases/1
-      {:burrito, "~> 1.0"},
 
       # dev tools
-      # {:sexy_spex, git: "https://github.com/JediLuke/spex.git", branch: "main", only: [:test, :dev], override: true},
-      {:sexy_spex, path: "../spex", only: [:test, :dev], override: true},
-      {:scenic_mcp, git: "https://github.com/scenic-contrib/scenic_mcp_experimental.git", branch: "main", only: [:dev, :test], override: true},
+      constellation_dep(
+        :sexy_spex,
+        "../spex",
+        "https://github.com/JediLuke/spex.git",
+        "fc1c21f74913c9d6899821b8265b1607c505b48b",
+        only: [:test, :dev],
+        override: true
+      ),
+      {:scenic_mcp,
+       git: "https://github.com/scenic-contrib/scenic_mcp_experimental.git",
+       ref: "b3e0cb9b1a17dae2b645cb67a75531c503bc960d",
+       only: [:dev, :test],
+       override: true},
       {:stream_data, "~> 0.6", only: [:test, :dev]},
       {:tidewave, "~> 0.1", only: :dev},
-      {:bandit, "~> 1.0", only: :dev},
+      {:bandit, "~> 1.0", only: :dev}
     ]
+  end
+
+  # Published/release builds resolve immutable Git revisions. A constellation
+  # checkout opts into sibling paths explicitly to iterate across repositories:
+  # QUILLEX_LOCAL_DEPS=1 mix test
+  defp constellation_dep(name, path, git, ref, opts \\ []) do
+    source =
+      if System.get_env("QUILLEX_LOCAL_DEPS") in ["1", "true"],
+        do: [path: path],
+        else: [git: git, ref: ref]
+
+    {name, Keyword.merge(source, opts)}
   end
 end

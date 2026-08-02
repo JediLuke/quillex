@@ -11,13 +11,16 @@ set -u
 export PATH="$HOME/.asdf/shims:$HOME/.asdf/bin:$PATH"
 
 LOG="${SPEX_LOG:-/tmp/spex_run_$(date +%Y%m%d_%H%M%S).log}"
+JSONL="${SPEX_JSONL:-${LOG%.log}.failures.jsonl}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-"$SCRIPT_DIR/run_spex.sh" "$@" > "$LOG" 2>&1
+rm -f "$JSONL"
+SPEX_JSONL="$JSONL" "$SCRIPT_DIR/run_spex.sh" "$@" > "$LOG" 2>&1
 EXIT=$?
 
 echo "exit: $EXIT"
 echo "log:  $LOG"
+echo "jsonl: $JSONL"
 echo "--- failures ---"
 grep -nE "^\s+[0-9]+\) " "$LOG" | head -40
 echo "--- summary ---"

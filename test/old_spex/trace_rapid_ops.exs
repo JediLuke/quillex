@@ -12,7 +12,8 @@ defmodule TraceRapidOps do
     IO.puts("\n=== Starting traced rapid operations test ===\n")
 
     # Connect to Quillex
-    Process.sleep(1000)  # Give app time to start
+    # Give app time to start
+    Process.sleep(1000)
 
     # Trace the rapid sequence
     trace_point("Starting rapid sequence")
@@ -26,6 +27,7 @@ defmodule TraceRapidOps do
 
     # Select "Rapid" with shift+right
     trace_point("Starting selection")
+
     for i <- 1..5 do
       trace_point("Sending shift+right #{i}")
       ScenicMcp.Probes.send_keys("right", ["shift"])
@@ -73,8 +75,17 @@ defmodule TraceRapidOps do
     :erlang.trace_pattern({ViewPort, :handle_cast, 2}, [{:_, [], [{:return_trace}]}], [])
 
     # Trace Quillex buffer operations
-    :erlang.trace_pattern({Quillex.Buffer.Process.Reducer, :process, 2}, [{:_, [], [{:return_trace}]}], [])
-    :erlang.trace_pattern({Quillex.GUI.Components.BufferPane.Mutator, :_, :_}, [{:_, [], [{:return_trace}]}], [])
+    :erlang.trace_pattern(
+      {Quillex.Buffer.Process.Reducer, :process, 2},
+      [{:_, [], [{:return_trace}]}],
+      []
+    )
+
+    :erlang.trace_pattern(
+      {Quillex.Buffer.Core.Navigation, :_, :_},
+      [{:_, [], [{:return_trace}]}],
+      []
+    )
 
     # Trace clipboard operations
     :erlang.trace_pattern({Clipboard, :copy, 1}, [{:_, [], [{:return_trace}]}], [])
@@ -104,12 +115,18 @@ defmodule TraceRapidOps do
 
   defp log_trace(:call, pid, module, function, args, {mega, secs, micro}) do
     time = mega * 1_000_000 + secs + micro / 1_000_000
-    IO.puts("[#{format_time(time)}] CALL #{inspect(pid)} #{module}.#{function}(#{inspect_args(args)})")
+
+    IO.puts(
+      "[#{format_time(time)}] CALL #{inspect(pid)} #{module}.#{function}(#{inspect_args(args)})"
+    )
   end
 
   defp log_trace(:return, pid, module, function, arity, {mega, secs, micro}, return_value) do
     time = mega * 1_000_000 + secs + micro / 1_000_000
-    IO.puts("[#{format_time(time)}] RETURN #{inspect(pid)} #{module}.#{function}/#{arity} => #{inspect(return_value)}")
+
+    IO.puts(
+      "[#{format_time(time)}] RETURN #{inspect(pid)} #{module}.#{function}/#{arity} => #{inspect(return_value)}"
+    )
   end
 
   defp inspect_args(args) do

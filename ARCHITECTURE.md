@@ -10,6 +10,17 @@ Architecture section) and `Quillex-BasePrompt.md`; the store contract that
 makes the TextField reusable is documented in `ScenicWidgets.TextField`'s
 moduledoc (in `../scenic-widget-contrib`).
 
+## Runtime ownership and public buffer contract
+
+`config :quillex, runtime_mode:` selects `:standalone`, `:embedded`, or
+`:headless`. Only standalone owns the Scenic viewport and its deferred-close
+coordinator. Embedded and headless modes keep VM lifetime with the host.
+
+External consumers use `Quillex.Buffer.Ref` for identity and
+`Quillex.Buffer.Snapshot` for immutable document reads. Scroll offsets and
+folds are pane-view state; they never dirty a document snapshot. BufferManager
+alone owns canonical path identity, open-buffer lifecycle, and activation.
+
 ## The topology
 
 ```

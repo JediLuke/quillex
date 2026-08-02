@@ -45,7 +45,7 @@ defmodule Quillex.RadixCache.PaneStore do
     # Subscribe before the buffer tree boots; the first :radix_buffers
     # publish tells us which buffer to follow.
     Scenic.PubSub.subscribe(Sources.buffers())
-    {:ok, %{buffer_uuid: nil, last_action_at: nil}}
+    {:ok, %{buffer_uuid: nil, last_action_at: nil, views: %{}}}
   end
 
   # Action dispatch from the TextField — forward to the active buffer's store.
@@ -60,6 +60,12 @@ defmodule Quillex.RadixCache.PaneStore do
     # closes the loop (see handle_info below). Costs one Map.put when
     # healthy; logs only when the pipeline stalls.
     {:noreply, %{state | last_action_at: System.monotonic_time(:millisecond)}}
+  end
+
+  def handle_cast({:view_state, view}, %{buffer_uuid: uuid} = state)
+      when not is_nil(uuid) and is_map(view) do
+    views = Map.put(state.views, uuid, Map.take(view, [:offset_x, :offset_y, :folds]))
+    {:noreply, %{state | views: views}}
   end
 
   # Buffer-list snapshots: retarget when the active buffer changes.
@@ -88,7 +94,7 @@ defmodule Quillex.RadixCache.PaneStore do
         # same snapshot twice is an idempotent render).
         case Scenic.PubSub.get(Sources.buffer(new_uuid)) do
           nil -> :ok
-          buf -> Scenic.PubSub.publish(Sources.pane(@pane), buf)
+          buf -> Scenic.PubSub.publish(Sources.pane(@pane), pane_snapshot(buf, state, new_uuid))
         end
 
         Scenic.PubSub.subscribe(Sources.buffer(new_uuid))
@@ -100,7 +106,7 @@ defmodule Quillex.RadixCache.PaneStore do
   # from a source we already switched away from are dropped.
   def handle_info({{Scenic.PubSub, :data}, {source, buf, _ts}}, %{buffer_uuid: uuid} = state) do
     if uuid && source == Sources.buffer(uuid) do
-      Scenic.PubSub.publish(Sources.pane(@pane), buf)
+      Scenic.PubSub.publish(Sources.pane(@pane), pane_snapshot(buf, state, uuid))
     end
 
     # Dispatch-latency telemetry: how long from the last action forward to
@@ -132,6 +138,10 @@ defmodule Quillex.RadixCache.PaneStore do
 
   defp unsubscribe_buffer(nil), do: :ok
   defp unsubscribe_buffer(uuid), do: Scenic.PubSub.unsubscribe(Sources.buffer(uuid))
+
+  defp pane_snapshot(buf, state, uuid) do
+    Map.put(buf, :pane_view, Map.get(state.views, uuid, %{offset_x: 0, offset_y: 0, folds: []}))
+  end
 
   defp buffer_via(uuid),
     do: {:via, Registry, {Quillex.BufferRegistry, {uuid, Quillex.Buffer.Process}}}

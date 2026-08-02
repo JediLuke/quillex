@@ -118,10 +118,6 @@ defmodule Quillex.ClickCursorSpex do
         # Line 2's visual row: global y [63, 87) — click its centre.
         # x=120 lands a few characters into the text (gutter 48 + padding 10).
         #
-        # Click-with-retry: the ViewPort drops positional input it cannot
-        # localize (rare transform-miss window after recreations — see the
-        # scenic fork's do_requested_input). This spex tests that clicking
-        # positions the cursor, not single-event delivery, so retry up to 3x.
         # Derive the click point from the pane's ACTUAL frame rather than
         # assuming pin y=35: a status bar or search bar left open by an
         # earlier spex shifts the pane's origin, and a hardcoded y then
@@ -138,15 +134,8 @@ defmodule Quillex.ClickCursorSpex do
             _ -> {120, 75}
           end
 
-        Enum.reduce_while(1..3, nil, fn _attempt, _ ->
-          Probes.click(click_x, click_y)
-          Process.sleep(400)
-
-          case our_buffer_cursor() do
-            {2, _} -> {:halt, :ok}
-            _ -> {:cont, nil}
-          end
-        end)
+        Probes.click(click_x, click_y)
+        Process.sleep(400)
 
         {:ok, context}
       end

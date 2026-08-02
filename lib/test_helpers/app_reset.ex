@@ -62,15 +62,12 @@ defmodule Quillex.TestHelpers.AppReset do
 
   defp close_extra_buffers do
     Enum.reduce_while(1..20, :ok, fn _, _ ->
-      case Quillex.Buffer.BufferManager.list_buffers() do
+      case Quillex.Buffer.list() do
         buffers when length(buffers) <= 1 ->
           {:halt, :ok}
 
         [_keep | rest] ->
-          Enum.each(rest, fn buf ->
-            buf_ref = struct(Quillex.Structs.BufState.BufRef, uuid: buf.uuid, name: buf.name)
-            Quillex.Buffer.BufferManager.close_buffer(buf_ref)
-          end)
+          Enum.each(rest, &Quillex.Buffer.close(&1, :discard))
 
           Process.sleep(200)
           {:cont, :ok}
@@ -79,14 +76,15 @@ defmodule Quillex.TestHelpers.AppReset do
   end
 
   defp clear_active_buffer do
-    case Quillex.Buffer.BufferManager.list_buffers() do
-      [buf | _] ->
-        buf_ref = struct(Quillex.Structs.BufState.BufRef, uuid: buf.uuid, name: buf.name)
-
+    case Quillex.Buffer.list() do
+      [buf_ref | _] ->
         # Select everything and delete it, then park the cursor at the top.
-        Quillex.Buffer.BufferManager.call_buffer(buf_ref, {:action, :select_all})
-        Quillex.Buffer.BufferManager.call_buffer(buf_ref, {:action, {:delete, :selection}})
-        Quillex.Buffer.BufferManager.call_buffer(buf_ref, {:action, {:set_cursor, {1, 1}}})
+        Quillex.Buffer.dispatch(buf_ref, [
+          :select_all,
+          {:delete, :selection},
+          {:set_cursor, {1, 1}}
+        ])
+
         Process.sleep(150)
         :ok
 

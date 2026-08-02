@@ -291,3 +291,22 @@ than imply that a public article was the source if it was not.
 - Confirm John Davenport's preferred name, links, and attribution.
 - Decide whether to mention the coding model/product by name and accurately
   describe which decisions were suggested by it versus directed by a person.
+
+## 0.7.3 convergence notes — 2026-08-02
+
+The release made the Boundary lesson concrete: tests now observe immutable
+public snapshots, while an architecture regression rejects exports of the
+manager, reducer, and mutable buffer state. The model-conformance oracle was
+also rewritten independently instead of delegating expected behavior back to
+the production reducer.
+
+The UI work followed the same observability-to-product-quality path as the
+`Ln x, Col y` label. Shared scroll geometry, semantic vector menu buttons, a
+single command registry, and a normal TextField inside FilePicker all make the
+interface easier to inspect and also remove visible inconsistencies. Quiet
+Spex now retains a full log plus JSONL failures, so a long real-input run can be
+queried without flooding the collaboration context.
+
+Keep the John Davenport/Elixir Slack attribution as a personal acknowledgment;
+the public links above verify identity and relevant work, not the private
+conversation. Confirm consent and wording before publication.

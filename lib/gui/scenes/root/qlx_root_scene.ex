@@ -26,7 +26,6 @@ defmodule QuillEx.RootScene do
   # parent, which is this RootScene, which then processes the actions
 
   def init(%Scenic.Scene{} = scene, _args, _opts) do
-
     # if there aren't any buffers, initialize a new (empty) buffer on startup
     # checking with BufferManager on startup is cruicial for recovering from GUI crashes
     # cause we initialize with the correct state again
@@ -38,14 +37,16 @@ defmodule QuillEx.RootScene do
           Logger.info("Creating initial buffer with mode: #{inspect(mode)}")
           {:ok, buf_ref} = Quillex.Buffer.BufferManager.new_buffer(%{mode: mode})
           [buf_ref]
+
         buffers ->
           buffers
       end
 
-    state = QuillEx.RootScene.State.new(%{
-      frame: Widgex.Frame.new(scene.viewport),
-      buffers: buffers
-    })
+    state =
+      QuillEx.RootScene.State.new(%{
+        frame: Widgex.Frame.new(scene.viewport),
+        buffers: buffers
+      })
 
     # need to pass in scene so we can cast to children, even though we would never do that during init
     # On init, old_state is nil (no previous state)
@@ -118,9 +119,32 @@ defmodule QuillEx.RootScene do
   # Deletes the entire line under the cursor and moves the cursor to column 1
   # on the same line number (or the new last line if the bottom line was deleted).
   # When only one line remains the buffer is cleared to a single empty line.
-  # Supports undo via Ctrl+U.
+  # Supports undo via Ctrl+Z.
   def handle_input({:key, {:key_d, 1, [:ctrl]}}, _context, scene) do
     dispatch_to_active_buffer(scene, :delete_line)
+  end
+
+  # Folding commands are view-only TextField actions. They are handled at the
+  # root so the command registry and Help dialog describe real shortcuts even
+  # when focus has just moved between editor children.
+  def handle_input({:key, {:key_left_bracket, 1, mods}}, _context, scene)
+      when mods in [[:ctrl, :alt], [:alt, :ctrl]] do
+    if keyboard_overlay_open?(scene.assigns.state) do
+      {:noreply, scene}
+    else
+      {line, _col} = get_buffer_cursor(scene) || {1, 1}
+      Scenic.Scene.put_child(scene, :buffer_pane, {:action, {:toggle_fold, line}})
+      {:noreply, scene}
+    end
+  end
+
+  def handle_input({:key, {:key_right_bracket, 1, mods}}, _context, scene)
+      when mods in [[:ctrl, :alt], [:alt, :ctrl]] do
+    unless keyboard_overlay_open?(scene.assigns.state) do
+      Scenic.Scene.put_child(scene, :buffer_pane, {:action, :unfold_all})
+    end
+
+    {:noreply, scene}
   end
 
   # Handle Ctrl+Home — move cursor to the very start of the document (line 1, col 1).
@@ -163,16 +187,16 @@ defmodule QuillEx.RootScene do
   # correct code path.
 
   def handle_input({:viewport, {input, _coords}}, _context, scene)
-    when input in [:enter, :exit] do
-      # don't do anything when the mouse enters/leaves the viewport
-      {:noreply, scene}
+      when input in [:enter, :exit] do
+    # don't do anything when the mouse enters/leaves the viewport
+    {:noreply, scene}
   end
 
   def handle_input(
-    {:viewport, {:reshape, {_new_vp_width, _new_vp_height} = new_vp_size}},
-    _context,
-    scene
-  ) do
+        {:viewport, {:reshape, {_new_vp_width, _new_vp_height} = new_vp_size}},
+        _context,
+        scene
+      ) do
     current_frame = scene.assigns.state.frame
     current_size = {current_frame.size.width, current_frame.size.height}
 
@@ -194,13 +218,16 @@ defmodule QuillEx.RootScene do
 
       # Update state with new frame and saved cursor position for the renderizer
       old_state = scene.assigns.state
-      new_state = old_state
+
+      new_state =
+        old_state
         |> Map.put(:frame, new_frame)
         |> Map.put(:_restore_cursor, cursor_pos)
         |> Map.put(:_restore_first_visible_line, first_visible_line)
 
       # Reuse existing graph to preserve component PIDs and avoid race conditions
-      new_graph = QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+      new_graph =
+        QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
       # Remove the temporary restore keys from state
       final_state =
@@ -239,6 +266,7 @@ defmodule QuillEx.RootScene do
       # Route scroll to file navigator
       Scenic.Scene.put_child(scene, :file_nav, %{scroll: scroll_data})
     end
+
     # Note: buffer_pane (TextField in store_backed mode) handles its own scroll
     # via request_input/cursor_scroll - no need to forward via put_child
 
@@ -286,7 +314,7 @@ defmodule QuillEx.RootScene do
     # decides which of them holds it. Skipped while a dialog is open so a
     # stray click can't pull keyboard focus out from under the dialog.
     if state.show_file_nav and click_y > @top_bar_height and
-         not state.show_unsaved_prompt and not state.show_about do
+         not state.show_unsaved_prompt and not state.show_about and not state.show_shortcuts do
       if click_x < state.file_nav_width do
         Scenic.Scene.put_child(scene, :file_nav, :focus)
         Scenic.Scene.put_child(scene, :buffer_pane, :blur)
@@ -338,12 +366,18 @@ defmodule QuillEx.RootScene do
       # or answering a dialog mutates the file behind their back (Ctrl+D
       # would delete a line of the document mid-search).
       state.show_search_bar or state.show_unsaved_prompt or
-        Map.get(state, :show_about, false) or state.show_file_picker ->
+        Map.get(state, :show_about, false) or Map.get(state, :show_shortcuts, false) or
+          state.show_file_picker ->
         {:noreply, scene}
 
       true ->
         do_dispatch_to_active_buffer(scene, action)
     end
+  end
+
+  defp keyboard_overlay_open?(state) do
+    state.show_search_bar or state.show_unsaved_prompt or state.show_file_picker or
+      Map.get(state, :show_about, false) or Map.get(state, :show_shortcuts, false)
   end
 
   defp do_dispatch_to_active_buffer(scene, action) do
@@ -368,7 +402,7 @@ defmodule QuillEx.RootScene do
   defp get_buffer_cursor(scene) do
     with buf_ref when not is_nil(buf_ref) <- scene.assigns.state.active_buf,
          {:ok, buf_state} <- Quillex.Buffer.Process.fetch_buf(buf_ref),
-         [%{line: line, col: col} | _] <- buf_state.cursors do
+         %{line: line, col: col} <- buf_state.cursor do
       {line, col}
     else
       _ -> nil
@@ -478,7 +512,8 @@ defmodule QuillEx.RootScene do
       # Reuse existing graph to preserve component PIDs and avoid race conditions
       # during rapid buffer switches. Pass old_state to enable smart component updates
       # (only recreate when truly necessary, like switching buffers).
-      new_graph = QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+      new_graph =
+        QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
       {new_state, new_graph}
     end)
@@ -492,7 +527,9 @@ defmodule QuillEx.RootScene do
     {:noreply, scene}
   end
 
-  defp dispatch_toggle(:toggle_line_numbers), do: Quillex.RadixCache.ViewStore.toggle_line_numbers()
+  defp dispatch_toggle(:toggle_line_numbers),
+    do: Quillex.RadixCache.ViewStore.toggle_line_numbers()
+
   defp dispatch_toggle(:toggle_word_wrap), do: Quillex.RadixCache.ViewStore.toggle_word_wrap()
   defp dispatch_toggle(:toggle_file_nav), do: Quillex.RadixCache.ViewStore.toggle_file_nav()
 
@@ -503,7 +540,7 @@ defmodule QuillEx.RootScene do
     {:noreply, scene}
   end
 
-  def handle_cast({:action, {:close_buffer, %Quillex.Structs.BufState.BufRef{} = buf_ref}}, scene) do
+  def handle_cast({:action, {:close_buffer, %Quillex.Buffer.Ref{} = buf_ref}}, scene) do
     Quillex.Buffer.BufferManager.close_buffer(buf_ref)
     {:noreply, scene}
   end
@@ -536,7 +573,7 @@ defmodule QuillEx.RootScene do
 
         case buf_result do
           {:ok, %Quillex.Structs.BufState{source: %{filepath: file_path}, data: buf_data}}
-              when is_binary(file_path) ->
+          when is_binary(file_path) ->
             # Delegate comparison to the canonical implementation in FileAPI so
             # the file-reading + line-splitting logic lives in exactly one place.
             case Quillex.API.FileAPI.check_file_status(buf_data, file_path) do
@@ -545,7 +582,10 @@ defmodule QuillEx.RootScene do
                 show_status(scene, "File is unchanged on disk", :info)
 
               {:ok, :modified} ->
-                Logger.warning("[run_verification] File has been modified on disk since last save")
+                Logger.warning(
+                  "[run_verification] File has been modified on disk since last save"
+                )
+
                 show_status(scene, "File has been modified on disk since last save", :warning)
 
               {:ok, :deleted} ->
@@ -562,7 +602,10 @@ defmodule QuillEx.RootScene do
             show_status(scene, "Buffer has no associated file path", :info)
 
           {:error, reason} ->
-            Logger.debug("[run_verification] Skipped (failed to fetch buffer state): #{inspect(reason)}")
+            Logger.debug(
+              "[run_verification] Skipped (failed to fetch buffer state): #{inspect(reason)}"
+            )
+
             {:noreply, scene}
         end
     end
@@ -591,7 +634,7 @@ defmodule QuillEx.RootScene do
 
         case buf_result do
           {:ok, %Quillex.Structs.BufState{source: %{filepath: file_path}}}
-              when is_binary(file_path) ->
+          when is_binary(file_path) ->
             case File.read(file_path) do
               {:ok, content} ->
                 new_lines = String.split(content, "\n")
@@ -601,7 +644,11 @@ defmodule QuillEx.RootScene do
                   buf_ref,
                   {:action, [{:set_data, new_lines}, {:set_cursor, {1, 1}}, :mark_clean]}
                 )
-                Logger.info("[reload_from_disk] Reloaded #{length(new_lines)} lines from #{file_path}")
+
+                Logger.info(
+                  "[reload_from_disk] Reloaded #{length(new_lines)} lines from #{file_path}"
+                )
+
                 show_status(scene, "File reloaded from disk", :info)
 
               {:error, :enoent} ->
@@ -618,7 +665,10 @@ defmodule QuillEx.RootScene do
             show_status(scene, "Buffer has no associated file path", :info)
 
           {:error, reason} ->
-            Logger.debug("[reload_from_disk] Skipped (failed to fetch buffer state): #{inspect(reason)}")
+            Logger.debug(
+              "[reload_from_disk] Skipped (failed to fetch buffer state): #{inspect(reason)}"
+            )
+
             {:noreply, scene}
         end
     end
@@ -701,7 +751,13 @@ defmodule QuillEx.RootScene do
         scene
       ) do
     new_state = %{scene.assigns.state | buffers: buffers, active_buf: active}
-    {:noreply, render_snapshot(scene, new_state)}
+    new_scene = render_snapshot(scene, new_state)
+
+    if new_state.show_file_nav do
+      Scenic.Scene.put_child(new_scene, :file_nav, {:set_active, active && active.path})
+    end
+
+    {:noreply, new_scene}
   end
 
   # View-chrome store snapshots (:radix_view) — editor settings, file nav and
@@ -728,7 +784,12 @@ defmodule QuillEx.RootScene do
   # previous state, preserving component PIDs where the Renderizer allows.
   defp render_snapshot(scene, new_state) do
     new_graph =
-      QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, scene.assigns.state, new_state)
+      QuillEx.RootScene.Renderizer.render(
+        scene.assigns.graph,
+        scene,
+        scene.assigns.state,
+        new_state
+      )
 
     scene
     |> assign(state: new_state)
@@ -743,6 +804,7 @@ defmodule QuillEx.RootScene do
     :show_line_numbers,
     :word_wrap,
     :tab_width,
+    :text_size,
     :show_file_nav,
     :file_nav_path,
     :file_nav_width,
@@ -754,12 +816,17 @@ defmodule QuillEx.RootScene do
 
   defp editor_layout_changed?(old_state, new_state) do
     Enum.any?(
-      [:show_line_numbers, :word_wrap, :tab_width, :show_file_nav],
+      [:show_line_numbers, :word_wrap, :tab_width, :text_size, :show_file_nav],
       fn key -> Map.get(old_state, key) != Map.get(new_state, key) end
     )
   end
 
   # Handle events from child components (IconMenu, TabBar, etc.)
+  def handle_event({:menu_value_changed, "text_size", value}, _from, scene) do
+    Quillex.RadixCache.ViewStore.set_text_size(round(value))
+    {:noreply, scene}
+  end
+
   def handle_event({:menu_item_clicked, item_id}, _from, scene) do
     Logger.debug("Menu item clicked: #{inspect(item_id)}")
 
@@ -844,6 +911,24 @@ defmodule QuillEx.RootScene do
         Quillex.RadixCache.ViewStore.toggle_word_wrap()
         {:noreply, scene}
 
+      "toggle_fold" ->
+        {line, _col} = get_buffer_cursor(scene) || {1, 1}
+        Scenic.Scene.put_child(scene, :buffer_pane, {:action, {:toggle_fold, line}})
+        {:noreply, scene}
+
+      "unfold_all" ->
+        Scenic.Scene.put_child(scene, :buffer_pane, {:action, :unfold_all})
+        {:noreply, scene}
+
+      "fold_level_" <> level when level in ["1", "2", "3", "4"] ->
+        Scenic.Scene.put_child(
+          scene,
+          :buffer_pane,
+          {:action, {:fold_to_level, String.to_integer(level)}}
+        )
+
+        {:noreply, scene}
+
       "tab_width_" <> n when n in ["2", "3", "4", "8"] ->
         Quillex.RadixCache.ViewStore.set_tab_width(String.to_integer(n))
         {:noreply, scene}
@@ -852,8 +937,7 @@ defmodule QuillEx.RootScene do
         show_about_dialog(scene)
 
       "shortcuts" ->
-        # Keyboard shortcuts - not implemented yet
-        {:noreply, scene}
+        show_shortcuts_dialog(scene)
 
       _other ->
         Logger.warning("Unknown menu item: #{inspect(item_id)}")
@@ -919,13 +1003,18 @@ defmodule QuillEx.RootScene do
     Logger.debug("[search] #{match_count} matches for #{inspect(query)}")
 
     # Update state with match count
-    new_state = %{scene.assigns.state |
-      search_total_matches: match_count,
-      search_current_match: if(match_count > 0, do: 1, else: 0)
+    new_state = %{
+      scene.assigns.state
+      | search_total_matches: match_count,
+        search_current_match: if(match_count > 0, do: 1, else: 0)
     }
 
     # Update the search bar's match count display
-    Scenic.Scene.put_child(scene, :search_bar, {:set_matches, new_state.search_current_match, match_count})
+    Scenic.Scene.put_child(
+      scene,
+      :search_bar,
+      {:set_matches, new_state.search_current_match, match_count}
+    )
 
     new_scene = scene |> assign(state: new_state)
     {:noreply, new_scene}
@@ -994,6 +1083,32 @@ defmodule QuillEx.RootScene do
       |> push_graph(graph)
 
     Scenic.Scene.put_child(new_scene, :buffer_pane, :focus)
+    {:noreply, new_scene}
+  end
+
+  def handle_event({:popup_modal_response, :shortcuts_dialog, _action}, _from, scene) do
+    state = scene.assigns.state
+    graph = Scenic.Graph.delete(scene.assigns.graph, :shortcuts_dialog)
+
+    new_scene =
+      scene
+      |> assign(state: %{state | show_shortcuts: false})
+      |> assign(graph: graph)
+      |> push_graph(graph)
+
+    Scenic.Scene.put_child(new_scene, :buffer_pane, :focus)
+    {:noreply, new_scene}
+  end
+
+  def handle_event({:confirm_dialog_response, :quit_prompt, :discard}, _from, scene) do
+    new_scene = hide_quit_prompt(scene)
+    Quillex.Lifecycle.Coordinator.discard_and_quit()
+    {:noreply, new_scene}
+  end
+
+  def handle_event({:confirm_dialog_response, :quit_prompt, :cancel}, _from, scene) do
+    new_scene = hide_quit_prompt(scene)
+    Quillex.Lifecycle.Coordinator.cancel()
     {:noreply, new_scene}
   end
 
@@ -1093,36 +1208,71 @@ defmodule QuillEx.RootScene do
     {:noreply, new_scene}
   end
 
+  defp show_shortcuts_dialog(%{assigns: %{state: %{show_shortcuts: true}}} = scene),
+    do: {:noreply, scene}
+
+  defp show_shortcuts_dialog(scene) do
+    state = scene.assigns.state
+
+    graph =
+      ScenicWidgets.PopupModal.add_to_graph(
+        scene.assigns.graph,
+        %{
+          frame: state.frame,
+          title: "Keyboard Shortcuts",
+          body: Quillex.Commands.shortcut_lines()
+        },
+        id: :shortcuts_dialog
+      )
+
+    new_scene =
+      scene
+      |> assign(state: %{state | show_shortcuts: true})
+      |> assign(graph: graph)
+      |> push_graph(graph)
+
+    Scenic.Scene.put_child(new_scene, :buffer_pane, :blur)
+    {:noreply, new_scene}
+  end
+
   # ===========================================================================
   # Private Helpers - Dirty State
   # ===========================================================================
 
-  # Update the BufRef dirty? flag in state when a buffer's dirty state changes.
+  # Update the Ref dirty? flag in state when a buffer's dirty state changes.
   # This triggers tab bar re-render to show/hide the " *" indicator.
+  defp maybe_update_dirty_state(scene, %Quillex.Buffer.Snapshot{ref: ref}),
+    do: maybe_update_dirty_ref(scene, ref)
+
   defp maybe_update_dirty_state(scene, %Quillex.Structs.BufState{} = new_buf) do
+    maybe_update_dirty_ref(scene, Quillex.Buffer.Ref.generate(new_buf))
+  end
+
+  defp maybe_update_dirty_ref(scene, %Quillex.Buffer.Ref{} = new_buf_ref) do
     state = scene.assigns.state
 
-    # Find the matching BufRef in the state's buffers list
-    old_buf_ref = Enum.find(state.buffers, & &1.uuid == new_buf.uuid)
+    # Find the matching Ref in the state's buffers list
+    old_buf_ref = Enum.find(state.buffers, &(&1.uuid == new_buf_ref.uuid))
 
-    if old_buf_ref && old_buf_ref.dirty? != new_buf.dirty? do
-      # Dirty state changed - update the BufRef and re-render tab bar
-      new_buf_ref = Quillex.Structs.BufState.BufRef.generate(new_buf)
+    if old_buf_ref && old_buf_ref.dirty? != new_buf_ref.dirty? do
+      # Dirty state changed - update the Ref and re-render tab bar
+      updated_buffers =
+        Enum.map(state.buffers, fn b ->
+          if b.uuid == new_buf_ref.uuid, do: new_buf_ref, else: b
+        end)
 
-      updated_buffers = Enum.map(state.buffers, fn b ->
-        if b.uuid == new_buf.uuid, do: new_buf_ref, else: b
-      end)
-
-      new_active = if state.active_buf && state.active_buf.uuid == new_buf.uuid do
-        new_buf_ref
-      else
-        state.active_buf
-      end
+      new_active =
+        if state.active_buf && state.active_buf.uuid == new_buf_ref.uuid do
+          new_buf_ref
+        else
+          state.active_buf
+        end
 
       old_state = state
       new_state = %{state | buffers: updated_buffers, active_buf: new_active}
 
-      new_graph = QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+      new_graph =
+        QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
       scene
       |> assign(state: new_state)
@@ -1162,9 +1312,11 @@ defmodule QuillEx.RootScene do
         {:noreply, scene}
 
       buf_ref ->
-        {:ok, new_buf} = Quillex.Buffer.BufferManager.call_buffer(buf_ref, {:action, [:save]})
-        scene = maybe_update_dirty_state(scene, new_buf)
-        {:noreply, scene}
+        case Quillex.Buffer.save(buf_ref) do
+          {:ok, new_buf} -> {:noreply, maybe_update_dirty_state(scene, new_buf)}
+          {:error, :no_path} -> show_file_picker_save(scene)
+          {:error, reason} -> show_status(scene, "Save failed: #{inspect(reason)}", :error)
+        end
     end
   end
 
@@ -1187,24 +1339,29 @@ defmodule QuillEx.RootScene do
     Scenic.Scene.put_child(scene, :icon_menu, {:update_menus, new_menus})
 
     # Add cursor position and first visible line for restoration after re-render
-    new_state = if cursor_pos do
-      Map.put(new_state, :_restore_cursor, cursor_pos)
-    else
-      new_state
-    end
+    new_state =
+      if cursor_pos do
+        Map.put(new_state, :_restore_cursor, cursor_pos)
+      else
+        new_state
+      end
 
-    new_state = if first_visible_line do
-      Map.put(new_state, :_restore_first_visible_line, first_visible_line)
-    else
-      new_state
-    end
+    new_state =
+      if first_visible_line do
+        Map.put(new_state, :_restore_first_visible_line, first_visible_line)
+      else
+        new_state
+      end
 
     # Reuse existing graph to preserve component PIDs and avoid race conditions
     old_state = scene.assigns.state
-    new_graph = QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+
+    new_graph =
+      QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
     # Remove the temporary restore keys from state
-    final_state = new_state
+    final_state =
+      new_state
       |> Map.delete(:_restore_cursor)
       |> Map.delete(:_restore_first_visible_line)
 
@@ -1235,7 +1392,7 @@ defmodule QuillEx.RootScene do
     initial_query =
       with buf_ref when not is_nil(buf_ref) <- scene.assigns.state.active_buf,
            {:ok, buf_state} <- Quillex.Buffer.Process.fetch_buf(buf_ref),
-           [%{line: line, col: col} | _] <- buf_state.cursors do
+           %{line: line, col: col} <- buf_state.cursor do
         TFState.word_at(buf_state.data, {line, col}) || ""
       else
         _ -> ""
@@ -1246,7 +1403,9 @@ defmodule QuillEx.RootScene do
     # If search bar is already showing and we're toggling replace mode, just update replace
     if old_state.show_search_bar and replace_mode do
       new_state = %{old_state | show_replace: true}
-      new_graph = QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+
+      new_graph =
+        QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
       new_scene =
         scene
@@ -1262,10 +1421,11 @@ defmodule QuillEx.RootScene do
   end
 
   defp do_show_search_bar(scene, old_state, initial_query, replace_mode) do
-    new_state = %{old_state |
-      show_search_bar: true,
-      search_query: initial_query,
-      show_replace: replace_mode
+    new_state = %{
+      old_state
+      | show_search_bar: true,
+        search_query: initial_query,
+        show_replace: replace_mode
     }
 
     # Blur the buffer pane BEFORE re-rendering. Showing the search bar
@@ -1282,7 +1442,8 @@ defmodule QuillEx.RootScene do
     Scenic.Scene.put_child(scene, :buffer_pane, {:set_overlay_open, true})
 
     # Reuse existing graph to preserve component PIDs and avoid race conditions
-    new_graph = QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+    new_graph =
+      QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
     new_scene =
       scene
@@ -1305,12 +1466,13 @@ defmodule QuillEx.RootScene do
 
   # Hides the search bar and clears search state.
   defp hide_search_bar(scene) do
-    new_state = %{scene.assigns.state |
-      show_search_bar: false,
-      show_replace: false,
-      search_query: "",
-      search_current_match: 0,
-      search_total_matches: 0
+    new_state = %{
+      scene.assigns.state
+      | show_search_bar: false,
+        show_replace: false,
+        search_query: "",
+        search_current_match: 0,
+        search_total_matches: 0
     }
 
     # Clear search in TextField
@@ -1318,7 +1480,9 @@ defmodule QuillEx.RootScene do
 
     # Reuse existing graph to preserve component PIDs and avoid race conditions
     old_state = scene.assigns.state
-    new_graph = QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+
+    new_graph =
+      QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
     new_scene =
       scene
@@ -1351,7 +1515,8 @@ defmodule QuillEx.RootScene do
     new_state = %{scene.assigns.state | show_file_picker: true}
 
     # Add the file picker component to the graph
-    graph = scene.assigns.graph
+    graph =
+      scene.assigns.graph
       |> ScenicWidgets.FilePicker.add_to_graph(
         %{
           frame: new_state.frame,
@@ -1378,31 +1543,39 @@ defmodule QuillEx.RootScene do
     new_state = %{scene.assigns.state | show_file_picker: true}
 
     # Get the current buffer name as default filename
-    default_filename = case scene.assigns.state.active_buf do
-      nil -> "untitled.txt"
-      buf_ref ->
-        case Quillex.Buffer.Process.fetch_buf(buf_ref) do
-          {:ok, buf} ->
-            case buf.source do
-              %{filepath: file_path} when is_binary(file_path) ->
-                # If buffer has a file path, use its basename
-                Path.basename(file_path)
-              _ ->
-                # Otherwise use buffer name or default
-                buf.name || "untitled.txt"
-            end
-          _ -> "untitled.txt"
-        end
-    end
+    default_filename =
+      case scene.assigns.state.active_buf do
+        nil ->
+          "untitled.txt"
+
+        buf_ref ->
+          case Quillex.Buffer.Process.fetch_buf(buf_ref) do
+            {:ok, buf} ->
+              case buf.source do
+                %{filepath: file_path} when is_binary(file_path) ->
+                  # If buffer has a file path, use its basename
+                  Path.basename(file_path)
+
+                _ ->
+                  # Otherwise use buffer name or default
+                  buf.name || "untitled.txt"
+              end
+
+            _ ->
+              "untitled.txt"
+          end
+      end
 
     # Add the file picker component in save mode
-    graph = scene.assigns.graph
+    graph =
+      scene.assigns.graph
       |> ScenicWidgets.FilePicker.add_to_graph(
         %{
           frame: new_state.frame,
           start_path: System.user_home!(),
           mode: :save,
-          filename: default_filename
+          filename: default_filename,
+          font: Quillex.GUI.Theme.editor_font(14)
         },
         id: :file_picker
       )
@@ -1424,7 +1597,8 @@ defmodule QuillEx.RootScene do
     new_state = %{scene.assigns.state | show_file_picker: false}
 
     # Remove the file picker from the graph
-    graph = scene.assigns.graph
+    graph =
+      scene.assigns.graph
       |> Scenic.Graph.delete(:file_picker)
 
     new_scene =
@@ -1449,7 +1623,8 @@ defmodule QuillEx.RootScene do
     new_state = %{scene.assigns.state | show_file_picker: false}
 
     # Remove the file picker from the graph
-    graph = scene.assigns.graph
+    graph =
+      scene.assigns.graph
       |> Scenic.Graph.delete(:file_picker)
 
     new_scene =
@@ -1471,11 +1646,11 @@ defmodule QuillEx.RootScene do
   # Clean buffers are closed immediately (no dialog shown).
   #
   # The close decision needs the authoritative dirty? flag. The :radix_buffers
-  # snapshot keeps scene BufRefs fresh via edge-casts, but those hop through
+  # snapshot keeps scene Refs fresh via edge-casts, but those hop through
   # two mailboxes (Buffer.Process → BufferManager → publish) — a synchronous
   # fresh-read from Buffer.Process is the race-free authority for a decision
   # as consequential as discarding a buffer.
-  defp try_close_buffer(scene, %Quillex.Structs.BufState.BufRef{} = buf_ref) do
+  defp try_close_buffer(scene, %Quillex.Buffer.Ref{} = buf_ref) do
     fresh_buf_ref = refresh_buf_ref(buf_ref)
 
     case decide_close(scene.assigns.state, fresh_buf_ref) do
@@ -1499,12 +1674,12 @@ defmodule QuillEx.RootScene do
     end
   end
 
-  # Fresh-read the BufRef from Buffer.Process. The authoritative dirty? flag
+  # Fresh-read the Ref from Buffer.Process. The authoritative dirty? flag
   # lives in the buffer's own GenServer state — the copy in scene.assigns is a
   # cached snapshot from the last time RootScene actively applied an action.
-  defp refresh_buf_ref(%Quillex.Structs.BufState.BufRef{} = buf_ref) do
+  defp refresh_buf_ref(%Quillex.Buffer.Ref{} = buf_ref) do
     {:ok, buf_state} = Quillex.Buffer.Process.fetch_buf(buf_ref)
-    Quillex.Structs.BufState.BufRef.generate(buf_state)
+    Quillex.Buffer.Ref.generate(buf_state)
   end
 
   @doc false
@@ -1519,11 +1694,11 @@ defmodule QuillEx.RootScene do
       nil ->
         :noop
 
-      %Quillex.Structs.BufState.BufRef{dirty?: true} = buf_ref ->
+      %Quillex.Buffer.Ref{dirty?: true} = buf_ref ->
         new_state = %{state | show_unsaved_prompt: true, pending_close_buf_ref: buf_ref}
         {:show_prompt, buf_ref, new_state}
 
-      %Quillex.Structs.BufState.BufRef{} = buf_ref ->
+      %Quillex.Buffer.Ref{} = buf_ref ->
         {:close, buf_ref}
     end
   end
@@ -1583,6 +1758,35 @@ defmodule QuillEx.RootScene do
     new_scene
   end
 
+  def handle_info({:quit_requested, dirty_buffers}, scene) do
+    names = Enum.map_join(dirty_buffers, "\n", &"• #{&1.name || "untitled"}")
+    state = %{scene.assigns.state | show_unsaved_prompt: true, quit_dirty_buffers: dirty_buffers}
+
+    graph =
+      ScenicWidgets.ConfirmDialog.add_to_graph(
+        scene.assigns.graph,
+        %{
+          frame: state.frame,
+          title: "Unsaved Changes",
+          message: "The following buffers have unsaved changes:\n\n#{names}",
+          buttons: [{:discard, "Quit Without Saving"}, {:cancel, "Cancel"}]
+        },
+        id: :quit_prompt
+      )
+
+    new_scene = scene |> assign(state: state) |> assign(graph: graph) |> push_graph(graph)
+    Scenic.Scene.put_child(new_scene, :buffer_pane, :blur)
+    {:noreply, new_scene}
+  end
+
+  defp hide_quit_prompt(scene) do
+    state = %{scene.assigns.state | show_unsaved_prompt: false, quit_dirty_buffers: []}
+    graph = Scenic.Graph.delete(scene.assigns.graph, :quit_prompt)
+    new_scene = scene |> assign(state: state) |> assign(graph: graph) |> push_graph(graph)
+    Scenic.Scene.put_child(new_scene, :buffer_pane, :focus)
+    new_scene
+  end
+
   # Saves the current buffer to a new file path.
   defp save_buffer_as(scene, file_path) do
     case scene.assigns.state.active_buf do
@@ -1594,30 +1798,34 @@ defmodule QuillEx.RootScene do
         Logger.info("Saving buffer as: #{file_path}")
 
         # Use the buffer's save_as action
-        result = Quillex.Buffer.Process.save_as(buf_ref, file_path)
+        result = Quillex.Buffer.save_as(buf_ref, file_path)
         Logger.info("save_as result: #{inspect(result)}")
 
         case result do
           {:ok, updated_buf} ->
             Logger.info("Successfully saved to: #{file_path}, new name: #{updated_buf.name}")
 
-            # Generate a new BufRef with the updated name
-            new_buf_ref = Quillex.Structs.BufState.BufRef.generate(updated_buf)
+            new_buf_ref = updated_buf.ref
 
-            # Update the buffers list with the new BufRef
+            # Update the buffers list with the new Ref
             old_state = scene.assigns.state
-            updated_buffers = Enum.map(old_state.buffers, fn b ->
-              if b.uuid == buf_ref.uuid, do: new_buf_ref, else: b
-            end)
+
+            updated_buffers =
+              Enum.map(old_state.buffers, fn b ->
+                if b.uuid == buf_ref.uuid, do: new_buf_ref, else: b
+              end)
 
             # Update state with new buffers list and active_buf
-            new_state = %{old_state |
-              buffers: updated_buffers,
-              active_buf: new_buf_ref
-            }
+            new_state = %{old_state | buffers: updated_buffers, active_buf: new_buf_ref}
 
             # Re-render to update the tab bar with new filename
-            new_graph = QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+            new_graph =
+              QuillEx.RootScene.Renderizer.render(
+                scene.assigns.graph,
+                scene,
+                old_state,
+                new_state
+              )
 
             new_scene =
               scene
@@ -1658,5 +1866,4 @@ defmodule QuillEx.RootScene do
         {:noreply, scene}
     end
   end
-
 end

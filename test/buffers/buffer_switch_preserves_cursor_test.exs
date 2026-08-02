@@ -24,7 +24,7 @@ defmodule Quillex.Buffers.BufferSwitchPreservesCursorTest do
 
       DIAG_TF_CLICK coords={1805.0, 18.0}  inside?=true   frame_pin={0, 35} frame_size={2000, 1165}
       DIAG_TF_CLICK_INSIDE → set_cursor={1, 17}
-      DIAG_BUF_CAST buf_id=6a55a13a actions=[set_cursor: {1, 17}] → cursors=[col: 17]
+      DIAG_BUF_CAST buf_id=6a55a13a actions=[set_cursor: {1, 17}] → cursor=[col: 17]
 
   The line text is "Line one content" (16 chars × 20px ≈ 192px wide), but
   the click x is 1805 — far past any plausible end-of-line tolerance.
@@ -44,7 +44,7 @@ defmodule Quillex.Buffers.BufferSwitchPreservesCursorTest do
   # `click_to_cursor → string_width` call can complete in :direct mode (where
   # the reducer is expected to fall through to the existing positioning path).
   @font_ttf Path.expand(
-              "../../deps/scenic_widget_contrib/assets/fonts/IBMPlexMono-Regular.ttf",
+              "../../../scenic-widget-contrib/assets/fonts/IBMPlexMono-Regular.ttf",
               __DIR__
             )
 
@@ -80,8 +80,11 @@ defmodule Quillex.Buffers.BufferSwitchPreservesCursorTest do
       wrap_mode: :none,
       font: %{name: :ibm_plex_mono, size: 20, metrics: font_metrics()},
       colors: %{
-        text: :white, background: :medium_slate_blue, cursor: :white,
-        line_numbers: {255, 255, 255, 85}, border: {80, 80, 100, 180},
+        text: :white,
+        background: :medium_slate_blue,
+        cursor: :white,
+        line_numbers: {255, 255, 255, 85},
+        border: {80, 80, 100, 180},
         focused_border: {255, 215, 0}
       },
       scroll: scroll,

@@ -3,8 +3,8 @@ defmodule Quillex.UndoRedoSpex do
   Phase 5: Undo/Redo Functionality
 
   Validates undo and redo behavior:
-  - Ctrl+U triggers undo
-  - Ctrl+R triggers redo
+  - Ctrl+Z triggers undo
+  - Ctrl+Shift+Z triggers redo
   - Undo reverses text changes (typing, enter, backspace, delete, tab)
   - Redo restores undone changes
   - New edits clear redo stack
@@ -30,7 +30,6 @@ defmodule Quillex.UndoRedoSpex do
     # Wait for scene to fully initialize
     Process.sleep(2000)
 
-
     # Known LAYOUT to start from (overlays dismissed, file navigator
     # closed) without touching buffers — an open navigator shifts the
     # editor pane 250px right and makes fixed-x clicks miss it.
@@ -38,10 +37,9 @@ defmodule Quillex.UndoRedoSpex do
     :ok
   end
 
-  spex "Basic Undo - Ctrl+U",
-    description: "Validates that Ctrl+U undoes the last text change",
+  spex "Basic Undo - Ctrl+Z",
+    description: "Validates that Ctrl+Z undoes the last text change",
     tags: [:phase_5, :undo, :keyboard] do
-
     # =========================================================================
     # 1. UNDO AFTER TYPING
     # =========================================================================
@@ -57,12 +55,12 @@ defmodule Quillex.UndoRedoSpex do
         {:ok, context}
       end
 
-      when_ "we type 'Hello' then press Ctrl+U", context do
+      when_ "we type 'Hello' then press Ctrl+Z", context do
         Probes.send_text("Hello")
         Process.sleep(100)
         # Each character is a separate undo point
-        # Pressing Ctrl+U should undo the last character typed
-        Probes.send_keys("u", [:ctrl])
+        # Pressing Ctrl+Z should undo the last character typed
+        Probes.send_keys("z", [:ctrl])
         Process.sleep(100)
         {:ok, context}
       end
@@ -86,12 +84,12 @@ defmodule Quillex.UndoRedoSpex do
         {:ok, context}
       end
 
-      when_ "we press Ctrl+U three more times", context do
-        Probes.send_keys("u", [:ctrl])
+      when_ "we press Ctrl+Z three more times", context do
+        Probes.send_keys("z", [:ctrl])
         Process.sleep(50)
-        Probes.send_keys("u", [:ctrl])
+        Probes.send_keys("z", [:ctrl])
         Process.sleep(50)
-        Probes.send_keys("u", [:ctrl])
+        Probes.send_keys("z", [:ctrl])
         Process.sleep(100)
         {:ok, context}
       end
@@ -113,8 +111,8 @@ defmodule Quillex.UndoRedoSpex do
         {:ok, context}
       end
 
-      when_ "we press Ctrl+U one more time", context do
-        Probes.send_keys("u", [:ctrl])
+      when_ "we press Ctrl+Z one more time", context do
+        Probes.send_keys("z", [:ctrl])
         Process.sleep(100)
         {:ok, context}
       end
@@ -127,10 +125,9 @@ defmodule Quillex.UndoRedoSpex do
     end
   end
 
-  spex "Basic Redo - Ctrl+R",
-    description: "Validates that Ctrl+R redoes the last undone change",
+  spex "Basic Redo - Ctrl+Shift+Z",
+    description: "Validates that Ctrl+Shift+Z redoes the last undone change",
     tags: [:phase_5, :redo, :keyboard] do
-
     # =========================================================================
     # 4. REDO AFTER UNDO
     # =========================================================================
@@ -149,12 +146,12 @@ defmodule Quillex.UndoRedoSpex do
 
       when_ "we undo twice then redo once", context do
         # Undo twice: Test -> Tes -> Te
-        Probes.send_keys("u", [:ctrl])
+        Probes.send_keys("z", [:ctrl])
         Process.sleep(50)
-        Probes.send_keys("u", [:ctrl])
+        Probes.send_keys("z", [:ctrl])
         Process.sleep(50)
         # Redo once: Te -> Tes
-        Probes.send_keys("r", [:ctrl])
+        Probes.send_keys("z", [:ctrl, :shift])
         Process.sleep(100)
         {:ok, context}
       end
@@ -174,8 +171,8 @@ defmodule Quillex.UndoRedoSpex do
         {:ok, context}
       end
 
-      when_ "we press Ctrl+R again", context do
-        Probes.send_keys("r", [:ctrl])
+      when_ "we press Ctrl+Shift+Z again", context do
+        Probes.send_keys("z", [:ctrl, :shift])
         Process.sleep(100)
         {:ok, context}
       end
@@ -190,7 +187,6 @@ defmodule Quillex.UndoRedoSpex do
   spex "Redo Stack Clearing",
     description: "Validates that new edits clear the redo stack",
     tags: [:phase_5, :redo, :stack] do
-
     # =========================================================================
     # 6. NEW EDIT CLEARS REDO STACK
     # =========================================================================
@@ -205,17 +201,17 @@ defmodule Quillex.UndoRedoSpex do
         Probes.send_text("ABC")
         Process.sleep(50)
         # Undo: ABC -> AB
-        Probes.send_keys("u", [:ctrl])
+        Probes.send_keys("z", [:ctrl])
         Process.sleep(100)
         {:ok, context}
       end
 
-      when_ "we type 'X' then try Ctrl+R", context do
+      when_ "we type 'X' then try Ctrl+Shift+Z", context do
         # Type new character - this should clear redo stack
         Probes.send_text("X")
         Process.sleep(50)
         # Try to redo - should do nothing since redo stack is cleared
-        Probes.send_keys("r", [:ctrl])
+        Probes.send_keys("z", [:ctrl, :shift])
         Process.sleep(100)
         {:ok, context}
       end
@@ -232,7 +228,6 @@ defmodule Quillex.UndoRedoSpex do
   spex "Undo Different Operations",
     description: "Validates undo works for various text operations",
     tags: [:phase_5, :undo, :operations] do
-
     # =========================================================================
     # 7. UNDO BACKSPACE
     # =========================================================================
@@ -251,8 +246,8 @@ defmodule Quillex.UndoRedoSpex do
         {:ok, context}
       end
 
-      when_ "we press Ctrl+U to undo the backspace", context do
-        Probes.send_keys("u", [:ctrl])
+      when_ "we press Ctrl+Z to undo the backspace", context do
+        Probes.send_keys("z", [:ctrl])
         Process.sleep(100)
         {:ok, context}
       end
@@ -285,11 +280,12 @@ defmodule Quillex.UndoRedoSpex do
       when_ "we undo the Line2 text and then the Enter", context do
         # Undo Line2 characters: Line2 -> Line -> Lin -> Li -> L -> (empty line)
         for _ <- 1..5 do
-          Probes.send_keys("u", [:ctrl])
+          Probes.send_keys("z", [:ctrl])
           Process.sleep(30)
         end
+
         # Undo the Enter to merge lines
-        Probes.send_keys("u", [:ctrl])
+        Probes.send_keys("z", [:ctrl])
         Process.sleep(100)
         {:ok, context}
       end
@@ -323,11 +319,12 @@ defmodule Quillex.UndoRedoSpex do
       when_ "we undo the Suffix and the Tab", context do
         # Undo Suffix characters (6 chars)
         for _ <- 1..6 do
-          Probes.send_keys("u", [:ctrl])
+          Probes.send_keys("z", [:ctrl])
           Process.sleep(30)
         end
+
         # Undo the Tab
-        Probes.send_keys("u", [:ctrl])
+        Probes.send_keys("z", [:ctrl])
         Process.sleep(100)
         {:ok, context}
       end
@@ -343,7 +340,6 @@ defmodule Quillex.UndoRedoSpex do
   spex "Cursor Position Restoration",
     description: "Validates cursor position is correctly restored on undo/redo",
     tags: [:phase_5, :undo, :cursor] do
-
     # =========================================================================
     # 10. CURSOR POSITION ON UNDO
     # =========================================================================
@@ -370,7 +366,7 @@ defmodule Quillex.UndoRedoSpex do
 
       when_ "we undo the X and type 'Y'", context do
         # Undo X - cursor should return to before X was inserted
-        Probes.send_keys("u", [:ctrl])
+        Probes.send_keys("z", [:ctrl])
         Process.sleep(50)
         # Type Y - should go where cursor was restored
         Probes.send_text("Y")
@@ -400,14 +396,14 @@ defmodule Quillex.UndoRedoSpex do
         Probes.send_text("Word")
         Process.sleep(50)
         # Undo: Word -> Wor
-        Probes.send_keys("u", [:ctrl])
+        Probes.send_keys("z", [:ctrl])
         Process.sleep(100)
         {:ok, context}
       end
 
       when_ "we redo then type '!'", context do
         # Redo: Wor -> Word
-        Probes.send_keys("r", [:ctrl])
+        Probes.send_keys("z", [:ctrl, :shift])
         Process.sleep(50)
         # Type ! - cursor should be at end after redo
         Probes.send_text("!")
@@ -416,7 +412,9 @@ defmodule Quillex.UndoRedoSpex do
       end
 
       then_ "'Word!' should be visible" do
-        assert Query.text_visible?("Word!"), "'Word!' should be visible (cursor was at end after redo)"
+        assert Query.text_visible?("Word!"),
+               "'Word!' should be visible (cursor was at end after redo)"
+
         :ok
       end
     end
@@ -425,7 +423,6 @@ defmodule Quillex.UndoRedoSpex do
   spex "Undo/Redo Edge Cases",
     description: "Validates undo/redo behavior in edge cases",
     tags: [:phase_5, :undo, :edge_cases] do
-
     # =========================================================================
     # 12. UNDO ON EMPTY STACK (NO-OP)
     # =========================================================================
@@ -439,9 +436,10 @@ defmodule Quillex.UndoRedoSpex do
         Process.sleep(100)
         # Undo many times to exhaust the stack
         for _ <- 1..20 do
-          Probes.send_keys("u", [:ctrl])
+          Probes.send_keys("z", [:ctrl])
           Process.sleep(20)
         end
+
         {:ok, context}
       end
 
@@ -450,9 +448,10 @@ defmodule Quillex.UndoRedoSpex do
         Process.sleep(50)
         # Undo more times than we have history
         for _ <- 1..10 do
-          Probes.send_keys("u", [:ctrl])
+          Probes.send_keys("z", [:ctrl])
           Process.sleep(20)
         end
+
         {:ok, context}
       end
 
@@ -482,8 +481,8 @@ defmodule Quillex.UndoRedoSpex do
         {:ok, context}
       end
 
-      when_ "we press Ctrl+R without having undone anything", context do
-        Probes.send_keys("r", [:ctrl])
+      when_ "we press Ctrl+Shift+Z without having undone anything", context do
+        Probes.send_keys("z", [:ctrl, :shift])
         Process.sleep(100)
         {:ok, context}
       end
@@ -498,7 +497,6 @@ defmodule Quillex.UndoRedoSpex do
   spex "Delete Operation Undo",
     description: "Validates undo works correctly for delete key operations",
     tags: [:phase_5, :undo, :delete] do
-
     # =========================================================================
     # 14. UNDO DELETE KEY
     # =========================================================================
@@ -520,12 +518,12 @@ defmodule Quillex.UndoRedoSpex do
         {:ok, context}
       end
 
-      when_ "we press Delete then Ctrl+U", context do
+      when_ "we press Delete then Ctrl+Z", context do
         # Delete removes C (character ahead of cursor)
         Probes.send_keys("delete", [])
         Process.sleep(50)
         # Undo should restore C
-        Probes.send_keys("u", [:ctrl])
+        Probes.send_keys("z", [:ctrl])
         Process.sleep(100)
         {:ok, context}
       end

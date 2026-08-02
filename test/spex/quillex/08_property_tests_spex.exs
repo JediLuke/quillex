@@ -37,8 +37,14 @@ defmodule Quillex.PropertyTestsSpex do
   # Generator for cursor movement operations
   def cursor_movement_gen do
     StreamData.member_of([
-      :left, :right, :up, :down, :home, :end,
-      :ctrl_home, :ctrl_end
+      :left,
+      :right,
+      :up,
+      :down,
+      :home,
+      :end,
+      :ctrl_home,
+      :ctrl_end
     ])
   end
 
@@ -48,15 +54,21 @@ defmodule Quillex.PropertyTestsSpex do
       StreamData.constant(:backspace),
       StreamData.constant(:delete),
       StreamData.constant(:enter),
-      StreamData.map(StreamData.string(:alphanumeric, min_length: 1, max_length: 1), fn char -> {:char, char} end)
+      StreamData.map(StreamData.string(:alphanumeric, min_length: 1, max_length: 1), fn char ->
+        {:char, char}
+      end)
     ])
   end
 
   # Generator for selection operations
   def selection_operation_gen do
     StreamData.member_of([
-      :shift_left, :shift_right, :shift_up, :shift_down,
-      :select_all, :escape
+      :shift_left,
+      :shift_right,
+      :shift_up,
+      :shift_down,
+      :select_all,
+      :escape
     ])
   end
 
@@ -72,7 +84,6 @@ defmodule Quillex.PropertyTestsSpex do
   spex "Property: Cursor Bounds Invariant",
     description: "After any sequence of cursor movements, cursor stays within valid bounds",
     tags: [:property, :cursor, :bounds] do
-
     scenario "Random cursor movements maintain bounds", _context do
       given_ "fresh buffer with some initial content", context do
         clear_buffer()
@@ -102,6 +113,7 @@ defmodule Quillex.PropertyTestsSpex do
 
           # Check bounds after each operation
           cursor_pos = get_cursor_position()
+
           if cursor_pos do
             {line, col} = cursor_pos
             assert line >= 1, "Cursor line must be >= 1 after op #{idx}: #{inspect(op)}"
@@ -137,7 +149,6 @@ defmodule Quillex.PropertyTestsSpex do
   spex "Property: Cursor Visibility Invariant",
     description: "Cursor should always be visible (scroll follows cursor)",
     tags: [:property, :cursor, :scroll] do
-
     scenario "Cursor stays visible during rapid navigation", _context do
       given_ "buffer with many lines of content", context do
         clear_buffer()
@@ -148,6 +159,7 @@ defmodule Quillex.PropertyTestsSpex do
           Probes.send_keys("enter", [])
           Process.sleep(20)
         end
+
         Process.sleep(300)
 
         {:ok, context}
@@ -155,15 +167,32 @@ defmodule Quillex.PropertyTestsSpex do
 
       when_ "we rapidly navigate through the document", context do
         operations = [
-          :ctrl_home,  # Start
-          :ctrl_end,   # End
-          :ctrl_home,  # Back to start
-          # Page through document
-          :down, :down, :down, :down, :down,
-          :down, :down, :down, :down, :down,
-          :up, :up, :up,
+          # Start
+          :ctrl_home,
+          # End
           :ctrl_end,
-          :up, :up, :up, :up, :up,
+          # Back to start
+          :ctrl_home,
+          # Page through document
+          :down,
+          :down,
+          :down,
+          :down,
+          :down,
+          :down,
+          :down,
+          :down,
+          :down,
+          :down,
+          :up,
+          :up,
+          :up,
+          :ctrl_end,
+          :up,
+          :up,
+          :up,
+          :up,
+          :up,
           :ctrl_home
         ]
 
@@ -206,7 +235,6 @@ defmodule Quillex.PropertyTestsSpex do
   spex "Property: Selection Bounds Invariant",
     description: "Selection start and end are always valid positions",
     tags: [:property, :selection, :bounds] do
-
     scenario "Random selection operations maintain valid bounds", _context do
       given_ "buffer with multi-line content", context do
         clear_buffer()
@@ -230,6 +258,7 @@ defmodule Quillex.PropertyTestsSpex do
 
           # After each op, verify we can still query rendered text (app is responsive)
           rendered = Query.rendered_text()
+
           assert is_binary(rendered),
                  "App should still respond after op #{idx}: #{inspect(op)}"
         end
@@ -257,7 +286,6 @@ defmodule Quillex.PropertyTestsSpex do
   spex "Property: Edit Operations Don't Corrupt Buffer",
     description: "Random edit operations maintain buffer consistency",
     tags: [:property, :editing, :consistency] do
-
     scenario "Random edit sequence maintains consistency", _context do
       given_ "buffer with initial content", context do
         clear_buffer()
@@ -301,7 +329,6 @@ defmodule Quillex.PropertyTestsSpex do
   spex "Property: Undo/Redo Consistency",
     description: "Undo and redo operations maintain buffer consistency",
     tags: [:property, :undo, :redo] do
-
     scenario "Random undo/redo sequence is consistent", _context do
       given_ "buffer with some edits", context do
         clear_buffer()
@@ -320,17 +347,19 @@ defmodule Quillex.PropertyTestsSpex do
       end
 
       when_ "we perform random undo/redo operations", context do
-        operations = for _ <- 1..10 do
-          Enum.random([:undo, :redo])
-        end
+        operations =
+          for _ <- 1..10 do
+            Enum.random([:undo, :redo])
+          end
 
         IO.puts("\nExecuting undo/redo sequence: #{inspect(operations)}")
 
         for op <- operations do
           case op do
-            :undo -> Probes.send_keys("u", [:ctrl])
-            :redo -> Probes.send_keys("r", [:ctrl])
+            :undo -> Probes.send_keys("z", [:ctrl])
+            :redo -> Probes.send_keys("z", [:ctrl, :shift])
           end
+
           Process.sleep(50)
         end
 
@@ -379,9 +408,15 @@ defmodule Quillex.PropertyTestsSpex do
 
   defp generate_edit_operations(count) do
     ops = [
-      :backspace, :delete, :enter,
-      {:char, "a"}, {:char, "b"}, {:char, "x"}, {:char, " "}
+      :backspace,
+      :delete,
+      :enter,
+      {:char, "a"},
+      {:char, "b"},
+      {:char, "x"},
+      {:char, " "}
     ]
+
     for _ <- 1..count, do: Enum.random(ops)
   end
 

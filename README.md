@@ -86,6 +86,22 @@ than flashing an empty one first.
 - **macOS**: [Homebrew](https://brew.sh)
 - **Linux**: `gcc`, `make`, and a package manager
 
+## Library and headless use
+
+Configure `config :quillex, runtime_mode: :standalone | :embedded | :headless`
+before starting the application. Standalone owns its window and close
+lifecycle; embedded starts buffer/store services without claiming the host VM;
+headless omits Scenic and works solely through `Quillex.Buffer`, whose public
+read contract is `Quillex.Buffer.Ref` and immutable `Quillex.Buffer.Snapshot`.
+
+An embedding host supplies its own viewport and decides when its supervision
+tree stops. Flamelex's older adapter must migrate separately; Quillex no longer
+infers host identity.
+
+The default dependency graph is pinned to immutable Git revisions. For a
+checked-out Scenic constellation, set `QUILLEX_LOCAL_DEPS=1` to use the sibling
+repositories as an explicit development override.
+
 ## Manual Setup & Troubleshooting
 
 If the install script doesn't work for your system, or you run into issues,

@@ -1,9 +1,9 @@
 defmodule Quillex.WordNavigationSpex do
   @moduledoc """
-  Phase 15: Word Navigation — Ctrl+Left / Ctrl+Right
+  Phase 15: Word Navigation — Ctrl+Left / Ctrl+Shift+Zight
 
   Validates that word-boundary cursor movement works end-to-end:
-  - Ctrl+Right  — jump forward to the start of the next word
+  - Ctrl+Shift+Zight  — jump forward to the start of the next word
   - Ctrl+Left   — jump backward to the start of the current/previous word
 
   The underlying logic lives in `Quillex.Buffer.Utils.next_word_coords/1` and
@@ -14,8 +14,8 @@ defmodule Quillex.WordNavigationSpex do
   Column arithmetic: all columns are 1-based.
   For the line "hello world":
     col 1  = 'h', col 6 = ' ', col 7 = 'w', col 12 = past-end
-  Ctrl+Right from col 1 → col 7 (skip "hello", skip " ", land at "world")
-  Ctrl+Right from col 7 → col 12 (skip "world", no further spaces)
+  Ctrl+Shift+Zight from col 1 → col 7 (skip "hello", skip " ", land at "world")
+  Ctrl+Shift+Zight from col 7 → col 12 (skip "world", no further spaces)
   Ctrl+Left  from col 7 → col 1  (skip " ", skip "hello", land at col 1)
   """
   use SexySpex
@@ -62,6 +62,7 @@ defmodule Quillex.WordNavigationSpex do
 
   defp close_extra_tabs do
     count = SemanticHelpers.get_tab_count() || 0
+
     if count > 1 do
       Probes.click_element("icon_menu_file")
       Process.sleep(200)
@@ -72,6 +73,7 @@ defmodule Quillex.WordNavigationSpex do
         Probes.send_keys("d", [])
         Process.sleep(400)
       end
+
       close_extra_tabs()
     end
   end
@@ -112,16 +114,15 @@ defmodule Quillex.WordNavigationSpex do
   end
 
   # ===========================================================================
-  # Ctrl+Right — forward word jump
+  # Ctrl+Shift+Zight — forward word jump
   # ===========================================================================
 
-  spex "Word Navigation - Ctrl+Right jumps to the next word",
-    description: "Ctrl+Right advances the cursor over the current word and the following spaces",
+  spex "Word Navigation - Ctrl+Shift+Zight jumps to the next word",
+    description:
+      "Ctrl+Shift+Zight advances the cursor over the current word and the following spaces",
     tags: [:word_navigation, :ctrl_right, :cursor_movement] do
-
-    scenario "Ctrl+Right from the start of 'hello world' moves to col 7 (start of 'world')",
-      _context do
-
+    scenario "Ctrl+Shift+Zight from the start of 'hello world' moves to col 7 (start of 'world')",
+             _context do
       given_ "the buffer contains 'hello world' with cursor at col 1", context do
         reset_to_empty_single_buffer()
         Probes.send_text("hello world")
@@ -129,27 +130,31 @@ defmodule Quillex.WordNavigationSpex do
         goto_doc_start()
 
         {:ok, start_pos} = wait_for_cursor({1, 1})
+
         assert start_pos == {1, 1},
                "Cursor should be at {1,1} after Ctrl+Home, got #{inspect(start_pos)}"
 
         {:ok, Map.put(context, :start_pos, start_pos)}
       end
 
-      when_ "we press Ctrl+Right once", context do
+      when_ "we press Ctrl+Shift+Zight once", context do
         Probes.send_keys("right", [:ctrl])
         {:ok, context}
       end
 
       then_ "the cursor should be at col 7 (start of 'world')" do
         {:ok, pos} = wait_for_cursor({1, 7})
+
         assert pos == {1, 7},
-               "Ctrl+Right from col 1 on 'hello world' should land at col 7, got #{inspect(pos)}"
+               "Ctrl+Shift+Zight from col 1 on 'hello world' should land at col 7, got #{inspect(pos)}"
+
         :ok
       end
     end
 
-    scenario "Ctrl+Right from the start of 'world' advances to the line end", _context do
-      given_ "the buffer contains 'hello world' with cursor at col 7 (start of 'world')", context do
+    scenario "Ctrl+Shift+Zight from the start of 'world' advances to the line end", _context do
+      given_ "the buffer contains 'hello world' with cursor at col 7 (start of 'world')",
+             context do
         reset_to_empty_single_buffer()
         Probes.send_text("hello world")
         Process.sleep(200)
@@ -160,7 +165,7 @@ defmodule Quillex.WordNavigationSpex do
         {:ok, context}
       end
 
-      when_ "we press Ctrl+Right again", context do
+      when_ "we press Ctrl+Shift+Zight again", context do
         Probes.send_keys("right", [:ctrl])
         {:ok, context}
       end
@@ -174,6 +179,7 @@ defmodule Quillex.WordNavigationSpex do
             # "hello world" has length 11; col 12 = one past the last character
             assert col >= 11,
                    "Cursor should be at end of 'world' (col ≥ 11), got #{inspect(pos)}"
+
           other ->
             flunk("Expected cursor on line 1, got #{inspect(other)}")
         end
@@ -182,9 +188,8 @@ defmodule Quillex.WordNavigationSpex do
       end
     end
 
-    scenario "Ctrl+Right skips leading spaces and lands on the first letter of the next word",
-      _context do
-
+    scenario "Ctrl+Shift+Zight skips leading spaces and lands on the first letter of the next word",
+             _context do
       given_ "the buffer contains '  foo  bar' (leading spaces) with cursor at col 1", context do
         reset_to_empty_single_buffer()
         Probes.send_text("  foo  bar")
@@ -195,7 +200,7 @@ defmodule Quillex.WordNavigationSpex do
         {:ok, context}
       end
 
-      when_ "we press Ctrl+Right once", context do
+      when_ "we press Ctrl+Shift+Zight once", context do
         Probes.send_keys("right", [:ctrl])
         {:ok, context}
       end
@@ -211,9 +216,10 @@ defmodule Quillex.WordNavigationSpex do
         case pos do
           {1, col} ->
             assert col > 1,
-                   "Ctrl+Right should move cursor forward from col 1, got #{inspect(pos)}"
+                   "Ctrl+Shift+Zight should move cursor forward from col 1, got #{inspect(pos)}"
+
           other ->
-            flunk("Expected cursor on line 1 after Ctrl+Right, got #{inspect(other)}")
+            flunk("Expected cursor on line 1 after Ctrl+Shift+Zight, got #{inspect(other)}")
         end
 
         :ok
@@ -226,12 +232,11 @@ defmodule Quillex.WordNavigationSpex do
   # ===========================================================================
 
   spex "Word Navigation - Ctrl+Left jumps to the start of the previous word",
-    description: "Ctrl+Left moves the cursor backwards to the start of the current or preceding word",
+    description:
+      "Ctrl+Left moves the cursor backwards to the start of the current or preceding word",
     tags: [:word_navigation, :ctrl_left, :cursor_movement] do
-
     scenario "Ctrl+Left from col 7 ('w' of 'world') moves to col 1 ('h' of 'hello')",
-      _context do
-
+             _context do
       given_ "the buffer contains 'hello world' with cursor at col 7", context do
         reset_to_empty_single_buffer()
         Probes.send_text("hello world")
@@ -250,8 +255,10 @@ defmodule Quillex.WordNavigationSpex do
 
       then_ "cursor should be at col 1 (start of 'hello')" do
         {:ok, pos} = wait_for_cursor({1, 1})
+
         assert pos == {1, 1},
                "Ctrl+Left from col 7 should land at col 1 (start of 'hello'), got #{inspect(pos)}"
+
         :ok
       end
     end
@@ -279,6 +286,7 @@ defmodule Quillex.WordNavigationSpex do
           {1, col} ->
             assert col >= 1,
                    "Column must never underflow below 1, got col #{col}"
+
           other ->
             flunk("Expected cursor on line 1, got #{inspect(other)}")
         end
@@ -289,14 +297,14 @@ defmodule Quillex.WordNavigationSpex do
   end
 
   # ===========================================================================
-  # Round-trip: Ctrl+Right then Ctrl+Left
+  # Round-trip: Ctrl+Shift+Zight then Ctrl+Left
   # ===========================================================================
 
-  spex "Word Navigation - Ctrl+Right then Ctrl+Left returns to original word start",
-    description: "Pressing Ctrl+Right and then Ctrl+Left forms a round-trip back to the word start",
+  spex "Word Navigation - Ctrl+Shift+Zight then Ctrl+Left returns to original word start",
+    description:
+      "Pressing Ctrl+Shift+Zight and then Ctrl+Left forms a round-trip back to the word start",
     tags: [:word_navigation, :round_trip, :cursor_movement] do
-
-    scenario "Ctrl+Right then Ctrl+Left on 'foo bar' returns to col 1", _context do
+    scenario "Ctrl+Shift+Zight then Ctrl+Left on 'foo bar' returns to col 1", _context do
       given_ "the buffer contains 'foo bar' with cursor at col 1", context do
         reset_to_empty_single_buffer()
         Probes.send_text("foo bar")
@@ -306,7 +314,7 @@ defmodule Quillex.WordNavigationSpex do
         {:ok, context}
       end
 
-      when_ "we press Ctrl+Right then Ctrl+Left", context do
+      when_ "we press Ctrl+Shift+Zight then Ctrl+Left", context do
         Probes.send_keys("right", [:ctrl])
         Process.sleep(200)
         Probes.send_keys("left", [:ctrl])
@@ -315,8 +323,10 @@ defmodule Quillex.WordNavigationSpex do
 
       then_ "cursor should be back at col 1" do
         {:ok, pos} = wait_for_cursor({1, 1})
+
         assert pos == {1, 1},
-               "Round-trip Ctrl+Right→Ctrl+Left should return to col 1, got #{inspect(pos)}"
+               "Round-trip Ctrl+Shift+Zight→Ctrl+Left should return to col 1, got #{inspect(pos)}"
+
         :ok
       end
     end
@@ -329,7 +339,6 @@ defmodule Quillex.WordNavigationSpex do
   spex "Word Navigation - Plain arrow keys not affected",
     description: "Adding Ctrl+Left/Right should not disturb plain Left/Right arrow key behaviour",
     tags: [:word_navigation, :regression, :arrow_keys] do
-
     scenario "Plain Right arrow moves one character at a time", _context do
       given_ "the buffer contains 'abc' with cursor at col 1", context do
         reset_to_empty_single_buffer()
@@ -350,8 +359,10 @@ defmodule Quillex.WordNavigationSpex do
 
       then_ "cursor should be at col 3" do
         {:ok, pos} = wait_for_cursor({1, 3})
+
         assert pos == {1, 3},
                "Two plain Right presses should reach col 3, got #{inspect(pos)}"
+
         :ok
       end
     end
@@ -379,6 +390,7 @@ defmodule Quillex.WordNavigationSpex do
           {1, col} ->
             assert col >= 2 and col <= 3,
                    "Plain Left from end of 'abc' should land at col 2 or 3, got #{inspect(pos)}"
+
           other ->
             flunk("Expected cursor on line 1 after Left key, got #{inspect(other)}")
         end

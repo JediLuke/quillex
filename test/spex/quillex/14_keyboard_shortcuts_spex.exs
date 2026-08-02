@@ -59,6 +59,7 @@ defmodule Quillex.KeyboardShortcutsSpex do
     Process.sleep(300)
     Probes.click_element("icon_menu_file_close")
     Process.sleep(400)
+
     if ScenicMcp.Query.text_visible?("Unsaved Changes") do
       Probes.send_keys("d", [])
       Process.sleep(400)
@@ -93,7 +94,6 @@ defmodule Quillex.KeyboardShortcutsSpex do
   spex "Keyboard Shortcuts - Ctrl+N creates a new buffer",
     description: "Pressing Ctrl+N is equivalent to File → New Buffer: a fresh tab appears",
     tags: [:keyboard_shortcuts, :ctrl_n, :new_buffer] do
-
     scenario "Ctrl+N adds a new tab to the tab bar", _context do
       given_ "we have a known number of open tabs", context do
         close_buffers_until_one_remains()
@@ -111,23 +111,29 @@ defmodule Quillex.KeyboardShortcutsSpex do
       then_ "there should be one more tab in the tab bar", context do
         expected = context.initial_count + 1
         {:ok, new_count} = SemanticHelpers.wait_for_tab_count(expected)
+
         assert new_count == expected,
                "Ctrl+N should add a tab. Expected #{expected}, got #{new_count}"
+
         {:ok, context}
       end
 
       then_ "the new tab should show an untitled buffer name" do
         labels = tab_labels()
         has_untitled = Enum.any?(labels, &String.contains?(&1, "untitled"))
+
         assert has_untitled,
                "New buffer tab should be labelled 'untitled…'. Got: #{inspect(labels)}"
+
         :ok
       end
 
       then_ "the app is still rendering normally" do
         rendered = Query.rendered_text()
+
         assert is_binary(rendered) and rendered != "",
                "App should keep rendering after Ctrl+N"
+
         :ok
       end
     end
@@ -151,8 +157,10 @@ defmodule Quillex.KeyboardShortcutsSpex do
       then_ "there should be three tabs total", context do
         expected = context.initial_count + 2
         {:ok, new_count} = SemanticHelpers.wait_for_tab_count(expected)
+
         assert new_count == expected,
                "Two Ctrl+N presses should yield #{expected} tabs, got #{new_count}"
+
         {:ok, context}
       end
     end
@@ -165,7 +173,6 @@ defmodule Quillex.KeyboardShortcutsSpex do
   spex "Keyboard Shortcuts - Ctrl+O opens the file picker",
     description: "Pressing Ctrl+O is equivalent to File → Open: the file picker overlay appears",
     tags: [:keyboard_shortcuts, :ctrl_o, :open_file, :file_picker] do
-
     scenario "Ctrl+O opens the file picker overlay", _context do
       given_ "the file picker is not open and we have one buffer", context do
         press_escape()
@@ -183,13 +190,16 @@ defmodule Quillex.KeyboardShortcutsSpex do
       then_ "the file picker overlay should be visible" do
         assert file_picker_visible?(),
                "File picker should be visible after Ctrl+O. Rendered: #{Query.rendered_text()}"
+
         :ok
       end
 
       then_ "pressing Escape dismisses the picker" do
         press_escape()
+
         refute file_picker_visible?(),
                "File picker should close after Escape. Rendered: #{Query.rendered_text()}"
+
         :ok
       end
     end
@@ -209,10 +219,13 @@ defmodule Quillex.KeyboardShortcutsSpex do
 
       then_ "the overlay shows 'Open' (not 'Save')" do
         rendered = Query.rendered_text()
+
         assert String.contains?(rendered, "Open"),
                "File picker in open mode should show 'Open' button. Rendered: #{rendered}"
+
         refute String.contains?(rendered, "File name:"),
                "'File name:' label is only present in save mode; open mode should not show it"
+
         :ok
       end
 
@@ -231,7 +244,6 @@ defmodule Quillex.KeyboardShortcutsSpex do
   spex "Keyboard Shortcuts - Ctrl+W closes the active buffer",
     description: "Pressing Ctrl+W is equivalent to File → Close Buffer",
     tags: [:keyboard_shortcuts, :ctrl_w, :close_buffer] do
-
     scenario "Ctrl+W closes the active buffer when multiple tabs are open", _context do
       given_ "we have exactly two open tabs", context do
         close_buffers_until_one_remains()
@@ -250,8 +262,10 @@ defmodule Quillex.KeyboardShortcutsSpex do
       then_ "there should be one fewer tab", context do
         expected = context.initial_count - 1
         {:ok, new_count} = SemanticHelpers.wait_for_tab_count(expected)
+
         assert new_count == expected,
                "Ctrl+W should remove one tab. Expected #{expected}, got #{new_count}"
+
         {:ok, context}
       end
 
@@ -263,8 +277,10 @@ defmodule Quillex.KeyboardShortcutsSpex do
 
       then_ "the app is still rendering normally" do
         rendered = Query.rendered_text()
+
         assert is_binary(rendered) and rendered != "",
                "App should keep rendering after Ctrl+W"
+
         :ok
       end
     end
@@ -285,15 +301,19 @@ defmodule Quillex.KeyboardShortcutsSpex do
 
       then_ "the tab count is still one (close is silently ignored)" do
         count = tab_count()
+
         assert count == 1,
                "Ctrl+W on the last buffer should be a no-op; tab count should stay 1, got #{count}"
+
         :ok
       end
 
       then_ "the app is still rendering normally" do
         rendered = Query.rendered_text()
+
         assert is_binary(rendered) and rendered != "",
                "App should keep rendering after Ctrl+W on last buffer"
+
         :ok
       end
     end
@@ -306,7 +326,6 @@ defmodule Quillex.KeyboardShortcutsSpex do
   spex "Keyboard Shortcuts - Ctrl+D deletes the current line",
     description: "Pressing Ctrl+D removes the entire line under the cursor",
     tags: [:keyboard_shortcuts, :ctrl_d, :delete_line] do
-
     scenario "Ctrl+D on a single-line buffer clears the line to empty", _context do
       given_ "we have a buffer with a single line of text", context do
         close_buffers_until_one_remains()
@@ -329,15 +348,19 @@ defmodule Quillex.KeyboardShortcutsSpex do
 
       then_ "the original text is gone" do
         rendered = Query.rendered_text()
+
         refute String.contains?(rendered, "only line"),
                "Ctrl+D should have deleted the line. Rendered: #{rendered}"
+
         :ok
       end
 
       then_ "the app is still rendering normally" do
         rendered = Query.rendered_text()
+
         assert is_binary(rendered),
                "App should keep rendering after Ctrl+D on single line"
+
         :ok
       end
     end
@@ -370,20 +393,24 @@ defmodule Quillex.KeyboardShortcutsSpex do
 
       then_ "the first line is gone" do
         rendered = Query.rendered_text()
+
         refute String.contains?(rendered, "first line"),
                "Ctrl+D should have deleted the first line. Rendered: #{rendered}"
+
         :ok
       end
 
       then_ "the second line is still present" do
         rendered = Query.rendered_text()
+
         assert String.contains?(rendered, "second line"),
                "Second line should still be visible after Ctrl+D. Rendered: #{rendered}"
+
         :ok
       end
     end
 
-    scenario "Ctrl+D can be undone with Ctrl+U", _context do
+    scenario "Ctrl+D can be undone with Ctrl+Z", _context do
       given_ "we have a buffer with known text", context do
         close_buffers_until_one_remains()
         press_escape()
@@ -396,18 +423,20 @@ defmodule Quillex.KeyboardShortcutsSpex do
         {:ok, context}
       end
 
-      when_ "we press Ctrl+D then Ctrl+U", context do
+      when_ "we press Ctrl+D then Ctrl+Z", context do
         Probes.send_keys("d", [:ctrl])
         Process.sleep(300)
-        Probes.send_keys("u", [:ctrl])
+        Probes.send_keys("z", [:ctrl])
         Process.sleep(300)
         {:ok, context}
       end
 
       then_ "the deleted line is restored" do
         rendered = Query.rendered_text()
+
         assert String.contains?(rendered, "undo me"),
-               "Ctrl+U should restore the line deleted by Ctrl+D. Rendered: #{rendered}"
+               "Ctrl+Z should restore the line deleted by Ctrl+D. Rendered: #{rendered}"
+
         :ok
       end
     end
@@ -418,9 +447,9 @@ defmodule Quillex.KeyboardShortcutsSpex do
   # ===========================================================================
 
   spex "Keyboard Shortcuts - Existing shortcuts not regressed by this change",
-    description: "Ctrl+H (Find & Replace) and Ctrl+V+F (Verify) still work after adding new shortcuts",
+    description:
+      "Ctrl+H (Find & Replace) and Ctrl+V+F (Verify) still work after adding new shortcuts",
     tags: [:keyboard_shortcuts, :regression] do
-
     scenario "Ctrl+H still opens Find & Replace bar", _context do
       given_ "the search bar is not visible", context do
         press_escape()
@@ -439,8 +468,10 @@ defmodule Quillex.KeyboardShortcutsSpex do
         rendered = Query.rendered_text()
         # The search/replace bar renders "Replace:" or "Find:" text
         has_replace = String.contains?(rendered, "Replace") or String.contains?(rendered, "Find")
+
         assert has_replace,
                "Ctrl+H should open Find & Replace. Rendered: #{rendered}"
+
         :ok
       end
 

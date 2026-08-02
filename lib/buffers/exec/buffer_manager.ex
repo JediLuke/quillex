@@ -4,9 +4,9 @@ defmodule Quillex.Buffer.BufferManager do
 
   Owns the list of open buffers and which one is active. Every mutation
   funnels through `publish/1`, which publishes the full
-  `%{buffers: [BufRef], active_buf: BufRef | nil}` snapshot on the retained
+  `%{buffers: [Ref], active_buf: Ref | nil}` snapshot on the retained
   `:radix_buffers` Scenic.PubSub source. Buffer processes edge-cast metadata
-  changes (dirty flips, renames) here so the published BufRefs stay fresh.
+  changes (dirty flips, renames) here so the published Refs stay fresh.
 
   Lifecycle and list-state live in one process deliberately: opening or
   closing a buffer IS a buffer-list change — splitting them would race two
@@ -23,7 +23,7 @@ defmodule Quillex.Buffer.BufferManager do
 
   # ── Selectors (read side — instant ETS, no GenServer call) ──
 
-  @doc "The retained store snapshot: %{buffers: [BufRef], active_buf: BufRef | nil}"
+  @doc "The retained store snapshot: %{buffers: [Ref], active_buf: Ref | nil}"
   def get_state, do: Scenic.PubSub.get(Sources.buffers())
 
   # ── Actions (write side) ──
@@ -44,17 +44,21 @@ defmodule Quillex.Buffer.BufferManager do
     GenServer.call(__MODULE__, {:open_buffer, args})
   end
 
-  @doc "Activate a buffer by BufRef or 1-based index. Cast — never blocks the GUI."
+  @doc "Activate a buffer by Ref or 1-based index. Cast — never blocks the GUI."
   def activate_buffer(buf_ref_or_n) do
     GenServer.cast(__MODULE__, {:activate_buffer, buf_ref_or_n})
+  end
+
+  def internal_ref(%{uuid: uuid}) do
+    list_buffers() |> Enum.find(&(&1.uuid == uuid))
   end
 
   @doc """
   Close a buffer: terminate its process, drop it from the list, reactivate a
   neighbour if it was active. The last remaining buffer cannot be closed.
   """
-  def close_buffer(%Quillex.Structs.BufState.BufRef{} = buf_ref) do
-    GenServer.cast(__MODULE__, {:close_buffer, buf_ref})
+  def close_buffer(%{uuid: uuid} = buf_ref) when is_binary(uuid) do
+    GenServer.call(__MODULE__, {:close_buffer, buf_ref})
   end
 
   @doc "Edge-cast from Buffer.Process when display metadata (dirty?, name) transitions."
@@ -70,7 +74,7 @@ defmodule Quillex.Buffer.BufferManager do
     GenServer.call(__MODULE__, {:get_live_buffer, args})
   end
 
-  def get_live_buffer(%Quillex.Structs.BufState.BufRef{} = args) do
+  def get_live_buffer(%Quillex.Buffer.Ref{} = args) do
     GenServer.call(__MODULE__, {:get_live_buffer, args})
   end
 
@@ -92,23 +96,31 @@ defmodule Quillex.Buffer.BufferManager do
     {:ok, state}
   end
 
-  def handle_call({:open_buffer, %Quillex.Structs.BufState.BufRef{} = buf_ref}, _from, state) do
+  def handle_call({:open_buffer, %Quillex.Buffer.Ref{} = buf_ref}, _from, state) do
     # check we're not trying to open the same buffer twice
-    if Enum.any?(state.buffers, & &1.uuid == buf_ref.uuid) do
+    if Enum.any?(state.buffers, &(&1.uuid == buf_ref.uuid)) do
       {:reply, {:ok, buf_ref}, publish(%{state | active_buf: buf_ref})}
     else
-      raise "Could not find buffer: #{inspect buf_ref}"
+      raise "Could not find buffer: #{inspect(buf_ref)}"
     end
   end
 
   def handle_call({:open_buffer, args}, _from, state) do
-    do_start_new_buffer_process(state, args)
+    args = normalize_path(args)
+
+    case existing_for_path(state, source_path(args)) do
+      nil ->
+        do_start_new_buffer_process(state, args)
+
+      existing ->
+        {:reply, {:ok, existing}, publish(%{state | active_buf: existing})}
+    end
   end
 
   def handle_call({:get_live_buffer, %{"uuid" => buf_uuid}}, _from, state) do
-    case Enum.filter(state.buffers, & &1.uuid == buf_uuid) do
+    case Enum.filter(state.buffers, &(&1.uuid == buf_uuid)) do
       [] ->
-        {:reply, {:error, "buf with uuid: #{inspect buf_uuid} not live"}, state}
+        {:reply, {:error, "buf with uuid: #{inspect(buf_uuid)} not live"}, state}
 
       [buf_ref] ->
         {:ok, buf} = Quillex.Buffer.Process.fetch_buf(buf_ref)
@@ -116,10 +128,14 @@ defmodule Quillex.Buffer.BufferManager do
     end
   end
 
-  def handle_call({:get_live_buffer,  %Quillex.Structs.BufState.BufRef{uuid: buf_uuid}}, _from, state) do
-    case Enum.filter(state.buffers, & &1.uuid == buf_uuid) do
+  def handle_call(
+        {:get_live_buffer, %Quillex.Buffer.Ref{uuid: buf_uuid}},
+        _from,
+        state
+      ) do
+    case Enum.filter(state.buffers, &(&1.uuid == buf_uuid)) do
       [] ->
-        {:reply, {:error, "buf with uuid: #{inspect buf_uuid} not live"}, state}
+        {:reply, {:error, "buf with uuid: #{inspect(buf_uuid)} not live"}, state}
 
       [buf_ref] ->
         {:ok, buf} = Quillex.Buffer.Process.fetch_buf(buf_ref)
@@ -135,6 +151,20 @@ defmodule Quillex.Buffer.BufferManager do
     {:reply, :ok, state}
   end
 
+  def handle_call({:close_buffer, %{uuid: uuid} = buf_ref}, _from, state) when is_binary(uuid) do
+    case close_state(state, buf_ref) do
+      {:ok, new_state} ->
+        terminate_buffer_process(buf_ref)
+        {:reply, :ok, publish(new_state)}
+
+      :last_buffer ->
+        {:reply, {:error, :last_buffer}, state}
+
+      :not_found ->
+        {:reply, {:error, :not_found}, state}
+    end
+  end
+
   def handle_cast({:activate_buffer, x}, state) do
     case activate_state(state, x) do
       {:ok, new_state} ->
@@ -146,25 +176,9 @@ defmodule Quillex.Buffer.BufferManager do
     end
   end
 
-  def handle_cast({:close_buffer, %Quillex.Structs.BufState.BufRef{} = buf_ref}, state) do
-    case close_state(state, buf_ref) do
-      {:ok, new_state} ->
-        terminate_buffer_process(buf_ref)
-        {:noreply, publish(new_state)}
-
-      :last_buffer ->
-        Logger.warning("Cannot close the last buffer")
-        {:noreply, state}
-
-      :not_found ->
-        Logger.warning("close_buffer: buffer UUID #{buf_ref.uuid} not found, ignoring")
-        {:noreply, state}
-    end
-  end
-
   def handle_cast({:buffer_meta, uuid, meta}, state) do
     merge = fn
-      %Quillex.Structs.BufState.BufRef{uuid: ^uuid} = ref -> struct(ref, meta)
+      %Quillex.Buffer.Ref{uuid: ^uuid} = ref -> struct(ref, meta)
       ref -> ref
     end
 
@@ -188,7 +202,7 @@ defmodule Quillex.Buffer.BufferManager do
         GenServer.call(pid, msg)
 
       [] ->
-        raise "Could not find Buffer.Process process, uuid: #{inspect(buf_uuid)}"
+        {:error, :not_found}
     end
   end
 
@@ -198,25 +212,25 @@ defmodule Quillex.Buffer.BufferManager do
   def activate_state(state, n) when is_integer(n) and n >= 1 do
     case Enum.at(state.buffers, n - 1) do
       nil -> :not_found
-      %Quillex.Structs.BufState.BufRef{} = buf_ref -> activate_state(state, buf_ref)
+      %Quillex.Buffer.Ref{} = buf_ref -> activate_state(state, buf_ref)
     end
   end
 
-  def activate_state(state, %Quillex.Structs.BufState.BufRef{} = buf_ref) do
+  def activate_state(state, %{uuid: uuid} = buf_ref) when is_binary(uuid) do
     case Enum.find(state.buffers, &(&1.uuid == buf_ref.uuid)) do
       nil -> :not_found
-      %Quillex.Structs.BufState.BufRef{} = found -> {:ok, %{state | active_buf: found}}
+      %Quillex.Buffer.Ref{} = found -> {:ok, %{state | active_buf: found}}
     end
   end
 
   @doc false
-  def close_state(state, %Quillex.Structs.BufState.BufRef{} = buf_ref) do
+  def close_state(state, %{uuid: uuid} = buf_ref) when is_binary(uuid) do
     cond do
-      length(state.buffers) <= 1 ->
-        :last_buffer
-
       not Enum.any?(state.buffers, &(&1.uuid == buf_ref.uuid)) ->
         :not_found
+
+      length(state.buffers) <= 1 ->
+        :last_buffer
 
       true ->
         new_buffers = Enum.reject(state.buffers, &(&1.uuid == buf_ref.uuid))
@@ -242,6 +256,32 @@ defmodule Quillex.Buffer.BufferManager do
 
   defp snapshot(state), do: %{buffers: state.buffers, active_buf: state.active_buf}
 
+  defp normalize_path(args) when is_map(args) do
+    source = Map.get(args, :source) || Map.get(args, "source")
+
+    case source do
+      %{filepath: path} when is_binary(path) ->
+        Map.put(args, :source, %{filepath: Quillex.Buffer.PathIdentity.canonical(path)})
+
+      %{"filepath" => path} when is_binary(path) ->
+        Map.put(args, :source, %{filepath: Quillex.Buffer.PathIdentity.canonical(path)})
+
+      _ ->
+        args
+    end
+  end
+
+  defp source_path(args) do
+    case Map.get(args, :source) || Map.get(args, "source") do
+      %{filepath: path} -> path
+      %{"filepath" => path} -> path
+      _ -> nil
+    end
+  end
+
+  defp existing_for_path(_state, nil), do: nil
+  defp existing_for_path(state, path), do: Enum.find(state.buffers, &(&1.path == path))
+
   defp terminate_buffer_process(%{uuid: uuid}) do
     case Registry.lookup(Quillex.BufferRegistry, {uuid, Quillex.Buffer.Process}) do
       [{pid, _meta}] -> DynamicSupervisor.terminate_child(Quillex.BufferSupervisor, pid)
@@ -251,14 +291,15 @@ defmodule Quillex.Buffer.BufferManager do
 
   defp do_start_new_buffer_process(state, args) do
     # If no name provided, generate a unique name
-    args = if Map.get(args, :name) || Map.get(args, "name") do
-      args
-    else
-      Map.put(args, :name, generate_unique_buffer_name(state.buffers))
-    end
+    args =
+      if Map.get(args, :name) || Map.get(args, "name") do
+        args
+      else
+        Map.put(args, :name, generate_unique_buffer_name(state.buffers))
+      end
 
     case Quillex.BufferSupervisor.start_new_buffer_process(args) do
-      {:ok, %Quillex.Structs.BufState.BufRef{} = buf_ref} ->
+      {:ok, %Quillex.Buffer.Ref{} = buf_ref} ->
         new_state = publish(%{state | buffers: state.buffers ++ [buf_ref], active_buf: buf_ref})
         {:reply, {:ok, buf_ref}, new_state}
 

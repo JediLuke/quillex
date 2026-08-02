@@ -28,7 +28,6 @@ defmodule Quillex.ReplaceSpex do
     # Wait for scene to fully initialize
     Process.sleep(2000)
 
-
     # Known LAYOUT to start from (overlays dismissed, file navigator
     # closed) without touching buffers — an open navigator shifts the
     # editor pane 250px right and makes fixed-x clicks miss it.
@@ -39,7 +38,6 @@ defmodule Quillex.ReplaceSpex do
   spex "Ctrl+H Opens Replace Bar",
     description: "Validates that Ctrl+H opens the search bar with the replace row visible",
     tags: [:phase_12, :replace, :keyboard] do
-
     # =========================================================================
     # 1. CTRL+H OPENS REPLACE BAR
     # =========================================================================
@@ -77,9 +75,10 @@ defmodule Quillex.ReplaceSpex do
 
         # The replace row renders placeholder "Replace..." and buttons "Replace" and "All"
         # Also the search row renders "Search..." placeholder or "<" ">" navigation buttons
-        visible_check = Query.text_visible?("Replace") or
-                        Query.text_visible?("Replace...") or
-                        Query.text_visible?("All")
+        visible_check =
+          Query.text_visible?("Replace") or
+            Query.text_visible?("Replace...") or
+            Query.text_visible?("All")
 
         assert visible_check, "Replace bar should be visible (Replace placeholder or All button)"
         :ok
@@ -90,7 +89,6 @@ defmodule Quillex.ReplaceSpex do
   spex "Replace Single Match",
     description: "Validates that Enter in the replace field replaces the current match",
     tags: [:phase_12, :replace, :single] do
-
     # =========================================================================
     # 2. REPLACE SINGLE MATCH
     # =========================================================================
@@ -147,7 +145,6 @@ defmodule Quillex.ReplaceSpex do
   spex "Replace All Occurrences",
     description: "Validates that clicking All replaces every occurrence of the search term",
     tags: [:phase_12, :replace, :replace_all] do
-
     # =========================================================================
     # 3. REPLACE ALL
     # =========================================================================
@@ -202,6 +199,7 @@ defmodule Quillex.ReplaceSpex do
             Probes.send_keys("enter", [])
             Process.sleep(300)
         end
+
         {:ok, context}
       end
 
@@ -215,7 +213,6 @@ defmodule Quillex.ReplaceSpex do
   spex "Escape Closes Replace Bar",
     description: "Validates that Escape dismisses the replace/search bar",
     tags: [:phase_12, :replace, :close] do
-
     # =========================================================================
     # 4. ESCAPE CLOSES REPLACE BAR
     # =========================================================================
@@ -241,7 +238,10 @@ defmodule Quillex.ReplaceSpex do
         # After closing, any typed character should go to the editor
         Probes.send_text("Z")
         Process.sleep(100)
-        assert Query.text_visible?("Z"), "'Z' should be visible in main editor after closing replace bar"
+
+        assert Query.text_visible?("Z"),
+               "'Z' should be visible in main editor after closing replace bar"
+
         :ok
       end
     end
@@ -250,7 +250,6 @@ defmodule Quillex.ReplaceSpex do
   spex "Replace Preserves Undo",
     description: "Validates that a replace operation can be undone with Ctrl+Z",
     tags: [:phase_12, :replace, :undo] do
-
     # =========================================================================
     # 5. REPLACE + UNDO
     # =========================================================================
@@ -295,7 +294,7 @@ defmodule Quillex.ReplaceSpex do
         {:ok, context}
       end
 
-      then_ "Ctrl+U should undo the replace and restore original text" do
+      then_ "Ctrl+Z should undo the replace and restore original text" do
         # First verify replacement occurred (goodbye or original hello visible)
         path = Probes.take_screenshot("12_replace_undo_after_replace")
         IO.puts("Screenshot saved to: #{path}")
@@ -304,13 +303,14 @@ defmodule Quillex.ReplaceSpex do
         Probes.send_keys("escape", [])
         Process.sleep(200)
 
-        # Undo the replace — QuillEx uses Ctrl+U for undo (not Ctrl+Z)
-        Probes.send_keys("u", [:ctrl])
+        # Undo the replace — QuillEx uses the canonical Ctrl+Z binding
+        Probes.send_keys("z", [:ctrl])
         Process.sleep(500)
 
         # After undo, original text should be visible
         assert Query.text_visible?("hello world") or Query.text_visible?("hello"),
-          "'hello world' should be restored after undo"
+               "'hello world' should be restored after undo"
+
         :ok
       end
     end

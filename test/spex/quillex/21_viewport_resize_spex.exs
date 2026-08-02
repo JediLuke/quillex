@@ -49,22 +49,9 @@ defmodule Quillex.ViewportResizeSpex do
         Probes.send_keys("escape", [])
         Process.sleep(200)
 
-        # A predecessor spex may have just toggled layout (recreating the
-        # pane); type-and-verify with retry so a keystroke lost to the
-        # recreation window doesn't poison the whole scenario.
-        typed? =
-          Enum.reduce_while(1..3, false, fn _, _ ->
-            Probes.send_text("resize probe alpha")
-            Process.sleep(400)
-
-            if Query.text_visible?("resize probe alpha") do
-              {:halt, true}
-            else
-              {:cont, false}
-            end
-          end)
-
-        assert typed?, "typed setup text never appeared after 3 attempts"
+        Probes.send_text("resize probe alpha")
+        Process.sleep(400)
+        assert Query.text_visible?("resize probe alpha"), "typed setup text never appeared"
         {:ok, context}
       end
 

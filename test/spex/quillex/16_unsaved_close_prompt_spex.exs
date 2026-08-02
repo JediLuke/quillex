@@ -83,7 +83,6 @@ defmodule Quillex.UnsavedClosePromptSpex do
   spex "UnsavedClosePrompt - Ctrl+W on dirty buffer shows confirmation dialog",
     description: "Pressing Ctrl+W with unsaved changes shows the unsaved-changes dialog",
     tags: [:unsaved_close_prompt, :ctrl_w, :dirty] do
-
     scenario "Ctrl+W on a dirty buffer shows the confirmation dialog" do
       given_ "the app is open with a single clean buffer", context do
         Probes.send_keys("escape", [])
@@ -109,26 +108,34 @@ defmodule Quillex.UnsavedClosePromptSpex do
 
       then_ "the confirmation dialog is visible with the expected title" do
         rendered = Query.rendered_text()
+
         assert String.contains?(rendered, "Unsaved Changes"),
                "Dialog title 'Unsaved Changes' should be visible. Got: #{inspect(rendered)}"
+
         :ok
       end
 
       then_ "the dialog shows Save, Discard, and Cancel buttons" do
         rendered = Query.rendered_text()
+
         assert String.contains?(rendered, "Save"),
                "Dialog should show 'Save' button. Got: #{inspect(rendered)}"
+
         assert String.contains?(rendered, "Discard"),
                "Dialog should show 'Discard' button. Got: #{inspect(rendered)}"
+
         assert String.contains?(rendered, "Cancel"),
                "Dialog should show 'Cancel' button. Got: #{inspect(rendered)}"
+
         :ok
       end
 
       then_ "the buffer tab is still present while dialog is shown" do
         count = SemanticHelpers.get_tab_count() || 0
+
         assert count >= 1,
                "Buffer tab should still be present while dialog is shown. Tab count: #{count}"
+
         :ok
       end
 
@@ -144,14 +151,14 @@ defmodule Quillex.UnsavedClosePromptSpex do
   # ===========================================================================
   # SPEX 1b: Stale-cache regression — dirty flip happens inside Buffer.Process
   # only, with no intervening RootScene action that would refresh its cached
-  # BufRef. RootScene must consult the live buffer (not its stale dirty? cache)
+  # Ref. RootScene must consult the live buffer (not its stale dirty? cache)
   # when deciding whether to show the unsaved-changes dialog on Ctrl+W.
   # ===========================================================================
 
   spex "UnsavedClosePrompt - Ctrl+W on file-backed buffer with stale RootScene cache",
-    description: "Ctrl+W shows dialog even when dirty flag was set only inside Buffer.Process (stale cache regression)",
+    description:
+      "Ctrl+W shows dialog even when dirty flag was set only inside Buffer.Process (stale cache regression)",
     tags: [:unsaved_close_prompt, :ctrl_w, :dirty, :regression, :stale_cache] do
-
     scenario "Ctrl+W shows dialog even when dirty flag was set only inside Buffer.Process (stale cache regression)" do
       given_ "the app is open and other tabs are closed", context do
         Probes.send_keys("escape", [])
@@ -160,7 +167,8 @@ defmodule Quillex.UnsavedClosePromptSpex do
         {:ok, context}
       end
 
-      given_ "a file-backed buffer is open (buffer_backed mode, TextField writes to Buffer.Process)", context do
+      given_ "a file-backed buffer is open (buffer_backed mode, TextField writes to Buffer.Process)",
+             context do
         stale_file = tmp_file_path("stale_cache_regression.txt")
         File.write!(stale_file, "original content\n")
 
@@ -177,9 +185,10 @@ defmodule Quillex.UnsavedClosePromptSpex do
         {:ok, Map.put(context, :stale_file, stale_file)}
       end
 
-      when_ "we type directly into the buffer (dirties Buffer.Process; RootScene cache stays stale)", context do
+      when_ "we type directly into the buffer (dirties Buffer.Process; RootScene cache stays stale)",
+            context do
         # Direct typing through TextField → Buffer.Process. RootScene is not
-        # subscribed to {:buffers, uuid} PubSub, so its cached BufRef remains
+        # subscribed to {:buffers, uuid} PubSub, so its cached Ref remains
         # dirty?: false. We deliberately do NOT switch tabs, save, or open a
         # menu before pressing Ctrl+W — those would refresh RootScene's cache
         # and mask the regression.
@@ -195,15 +204,19 @@ defmodule Quillex.UnsavedClosePromptSpex do
 
       then_ "the unsaved-changes dialog is visible" do
         rendered = Query.rendered_text()
+
         assert String.contains?(rendered, "Unsaved Changes"),
                "Dialog must appear even though only Buffer.Process knew the buffer was dirty. Got: #{inspect(rendered)}"
+
         :ok
       end
 
       then_ "the file-backed tab is still present while dialog is shown" do
         count = SemanticHelpers.get_tab_count() || 0
+
         assert count >= 1,
                "File-backed tab should still be present while dialog is shown. Tab count: #{count}"
+
         :ok
       end
 
@@ -232,7 +245,6 @@ defmodule Quillex.UnsavedClosePromptSpex do
   spex "UnsavedClosePrompt - Ctrl+W on clean buffer closes immediately",
     description: "A clean (unmodified) buffer closes without showing any dialog",
     tags: [:unsaved_close_prompt, :ctrl_w, :clean] do
-
     scenario "Ctrl+W on a clean new buffer closes without dialog" do
       given_ "we open a fresh clean buffer with Ctrl+N", context do
         Probes.send_keys("escape", [])
@@ -259,16 +271,20 @@ defmodule Quillex.UnsavedClosePromptSpex do
 
       then_ "no confirmation dialog appears" do
         rendered = Query.rendered_text()
+
         refute String.contains?(rendered, "Unsaved Changes"),
                "Dialog should NOT appear for a clean buffer. Got: #{inspect(rendered)}"
+
         :ok
       end
 
       then_ "the tab count decreases by one", context do
         count = SemanticHelpers.get_tab_count() || 0
         expected = context.count_before_close - 1
+
         assert count == expected,
                "Tab count should be #{expected} after clean close, got #{count}"
+
         {:ok, context}
       end
     end
@@ -281,7 +297,6 @@ defmodule Quillex.UnsavedClosePromptSpex do
   spex "UnsavedClosePrompt - Discard closes buffer without saving",
     description: "Pressing D (discard) in the dialog closes the buffer without saving",
     tags: [:unsaved_close_prompt, :discard] do
-
     scenario "Discard on the unsaved-changes dialog removes the tab" do
       given_ "we have a dirty buffer open alongside an existing tab", context do
         Probes.send_keys("escape", [])
@@ -303,6 +318,7 @@ defmodule Quillex.UnsavedClosePromptSpex do
       then_ "the dialog is visible" do
         assert Query.text_visible?("Unsaved Changes"),
                "Unsaved changes dialog should be visible before discard"
+
         :ok
       end
 
@@ -314,16 +330,20 @@ defmodule Quillex.UnsavedClosePromptSpex do
 
       then_ "the dialog disappears" do
         rendered = Query.rendered_text()
+
         refute String.contains?(rendered, "Unsaved Changes"),
                "Dialog should have closed after discard. Got: #{inspect(rendered)}"
+
         :ok
       end
 
       then_ "the buffer tab is removed from the tab bar", context do
         count = SemanticHelpers.get_tab_count() || 0
         expected = context.count_before - 1
+
         assert count == expected,
                "Tab count should drop to #{expected} after discard. Got: #{count}"
+
         {:ok, context}
       end
     end
@@ -336,7 +356,6 @@ defmodule Quillex.UnsavedClosePromptSpex do
   spex "UnsavedClosePrompt - Cancel keeps buffer open with content intact",
     description: "Pressing Escape (cancel) in the dialog keeps the buffer open",
     tags: [:unsaved_close_prompt, :cancel] do
-
     scenario "Cancel on the unsaved-changes dialog leaves the buffer intact" do
       given_ "we have a dirty buffer open", context do
         Probes.send_keys("escape", [])
@@ -358,6 +377,7 @@ defmodule Quillex.UnsavedClosePromptSpex do
       then_ "the dialog is visible" do
         assert Query.text_visible?("Unsaved Changes"),
                "Unsaved changes dialog should be visible"
+
         :ok
       end
 
@@ -369,22 +389,28 @@ defmodule Quillex.UnsavedClosePromptSpex do
 
       then_ "the dialog disappears" do
         rendered = Query.rendered_text()
+
         refute String.contains?(rendered, "Unsaved Changes"),
                "Dialog should close after cancel. Got: #{inspect(rendered)}"
+
         :ok
       end
 
       then_ "the buffer tab count is unchanged", context do
         count = SemanticHelpers.get_tab_count() || 0
+
         assert count == context.tab_count,
                "Tab count should remain #{context.tab_count} after cancel. Got: #{count}"
+
         {:ok, context}
       end
 
       then_ "the buffer content is still visible" do
         rendered = Query.rendered_text()
+
         assert String.contains?(rendered, "cancel test content"),
                "Buffer content should still contain typed text after cancel. Got: #{inspect(rendered)}"
+
         :ok
       end
 
@@ -409,7 +435,6 @@ defmodule Quillex.UnsavedClosePromptSpex do
   spex "UnsavedClosePrompt - Save action saves changes and closes the buffer",
     description: "Pressing S (save) in the dialog writes changes to disk and removes the tab",
     tags: [:unsaved_close_prompt, :save, :file] do
-
     scenario "Save on unsaved-changes dialog saves file on disk and removes tab" do
       given_ "a temp file exists and is open in Quillex", context do
         save_file = tmp_file_path("save_then_close.txt")
@@ -445,6 +470,7 @@ defmodule Quillex.UnsavedClosePromptSpex do
       then_ "the dialog is visible for the file-backed buffer" do
         assert Query.text_visible?("Unsaved Changes"),
                "Unsaved changes dialog should appear for edited file buffer"
+
         :ok
       end
 
@@ -457,23 +483,29 @@ defmodule Quillex.UnsavedClosePromptSpex do
 
       then_ "the dialog disappears" do
         rendered = Query.rendered_text()
+
         refute String.contains?(rendered, "Unsaved Changes"),
                "Dialog should close after save. Got: #{inspect(rendered)}"
+
         :ok
       end
 
       then_ "the buffer tab is removed", context do
         count = SemanticHelpers.get_tab_count() || 0
         expected = context.count_before - 1
+
         assert count == expected,
                "Tab count should drop to #{expected} after save-and-close. Got: #{count}"
+
         {:ok, context}
       end
 
       then_ "the file on disk contains the updated content", context do
         disk_content = File.read!(context.save_file)
+
         assert String.contains?(disk_content, "edited"),
                "File on disk should have updated content after save. Got: #{inspect(disk_content)}"
+
         {:ok, context}
       end
 
@@ -491,7 +523,6 @@ defmodule Quillex.UnsavedClosePromptSpex do
   spex "UnsavedClosePrompt - Tab close button on dirty buffer shows dialog",
     description: "Clicking the × close button on a dirty tab shows the confirmation dialog",
     tags: [:unsaved_close_prompt, :tab_button, :dirty] do
-
     scenario "Tab close button triggers the unsaved-changes dialog" do
       given_ "we have a base tab and a second dirty tab open", context do
         Probes.send_keys("escape", [])
@@ -525,15 +556,19 @@ defmodule Quillex.UnsavedClosePromptSpex do
 
       then_ "the confirmation dialog appears" do
         rendered = Query.rendered_text()
+
         assert String.contains?(rendered, "Unsaved Changes"),
                "Dialog should appear when closing dirty tab via close button. Got: #{inspect(rendered)}"
+
         :ok
       end
 
       then_ "the dirty tab is still present in the tab bar" do
         count = SemanticHelpers.get_tab_count() || 0
+
         assert count >= 2,
                "Both tabs should still be present while dialog is shown. Tab count: #{count}"
+
         :ok
       end
 

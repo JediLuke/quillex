@@ -28,9 +28,12 @@ defmodule Quillex.PerfMonitor do
   use GenServer
   require Logger
 
-  @window_size 120  # rolling window of frames for FPS calc
-  @slow_threshold_ms 16.67  # > 1 frame at 60fps
-  @report_interval_ms 5_000  # log summary every 5s
+  # rolling window of frames for FPS calc
+  @window_size 120
+  # > 1 frame at 60fps
+  @slow_threshold_ms 16.67
+  # log summary every 5s
+  @report_interval_ms 5_000
 
   # --- Public API ---
 
@@ -59,15 +62,13 @@ defmodule Quillex.PerfMonitor do
   """
   def measure(label, fun) when is_function(fun, 0) do
     t0 = :erlang.monotonic_time(:microsecond)
-    result = fun.()
-    elapsed_us = :erlang.monotonic_time(:microsecond) - t0
 
-    # Fire-and-forget cast — never blocks the caller
-    GenServer.cast(__MODULE__, {:handler_sample, label, elapsed_us})
-
-    result
-  catch
-    :exit, _ -> fun.()  # monitor not running, just run the function
+    try do
+      fun.()
+    after
+      elapsed_us = :erlang.monotonic_time(:microsecond) - t0
+      GenServer.cast(__MODULE__, {:handler_sample, label, elapsed_us})
+    end
   end
 
   # --- GenServer ---
@@ -75,25 +76,38 @@ defmodule Quillex.PerfMonitor do
   @impl GenServer
   def init(_opts) do
     # Attach telemetry handlers for Scenic driver render events
-    :telemetry.attach("quillex-render-start", [:render, :start], &__MODULE__.handle_telemetry/4, nil)
-    :telemetry.attach("quillex-render-finish", [:render, :finish], &__MODULE__.handle_telemetry/4, nil)
+    :telemetry.attach(
+      "quillex-render-start",
+      [:render, :start],
+      &__MODULE__.handle_telemetry/4,
+      nil
+    )
+
+    :telemetry.attach(
+      "quillex-render-finish",
+      [:render, :finish],
+      &__MODULE__.handle_telemetry/4,
+      nil
+    )
 
     Process.send_after(self(), :report, @report_interval_ms)
 
-    {:ok, %{
-      # Render (GPU) timing
-      render_start: nil,
-      render_times: :queue.new(),
-      render_count: 0,
-      render_max_ms: 0.0,
+    {:ok,
+     %{
+       # Render (GPU) timing
+       render_start: nil,
+       render_times: :queue.new(),
+       render_count: 0,
+       render_max_ms: 0.0,
 
-      # Handler (Elixir) timing — per-label
-      handler_samples: %{},  # label => {count, total_us, max_us, recent_queue}
+       # Handler (Elixir) timing — per-label
+       # label => {count, total_us, max_us, recent_queue}
+       handler_samples: %{},
 
-      # FPS tracking
-      frame_timestamps: :queue.new(),
-      slow_frames: 0,
-    }}
+       # FPS tracking
+       frame_timestamps: :queue.new(),
+       slow_frames: 0
+     }}
   end
 
   # Telemetry callbacks — run in the driver process, send to our GenServer
@@ -126,24 +140,28 @@ defmodule Quillex.PerfMonitor do
     render_times = queue_push(state.render_times, elapsed_ms, @window_size)
     frame_timestamps = queue_push(state.frame_timestamps, finish_ts, @window_size)
 
-    slow_frames = if elapsed_ms > @slow_threshold_ms,
-      do: state.slow_frames + 1,
-      else: state.slow_frames
+    slow_frames =
+      if elapsed_ms > @slow_threshold_ms,
+        do: state.slow_frames + 1,
+        else: state.slow_frames
 
-    {:noreply, %{state |
-      render_start: nil,
-      render_times: render_times,
-      render_count: state.render_count + 1,
-      render_max_ms: max(state.render_max_ms, elapsed_ms),
-      frame_timestamps: frame_timestamps,
-      slow_frames: slow_frames,
-    }}
+    {:noreply,
+     %{
+       state
+       | render_start: nil,
+         render_times: render_times,
+         render_count: state.render_count + 1,
+         render_max_ms: max(state.render_max_ms, elapsed_ms),
+         frame_timestamps: frame_timestamps,
+         slow_frames: slow_frames
+     }}
   end
 
   def handle_cast({:handler_sample, label, elapsed_us}, state) do
     elapsed_ms = elapsed_us / 1000
 
-    {count, total_us, max_us, recent} = Map.get(state.handler_samples, label, {0, 0, 0, :queue.new()})
+    {count, total_us, max_us, recent} =
+      Map.get(state.handler_samples, label, {0, 0, 0, :queue.new()})
 
     new_entry = {
       count + 1,
@@ -161,15 +179,16 @@ defmodule Quillex.PerfMonitor do
   end
 
   def handle_call(:reset, _from, _state) do
-    {:reply, :ok, %{
-      render_start: nil,
-      render_times: :queue.new(),
-      render_count: 0,
-      render_max_ms: 0.0,
-      handler_samples: %{},
-      frame_timestamps: :queue.new(),
-      slow_frames: 0,
-    }}
+    {:reply, :ok,
+     %{
+       render_start: nil,
+       render_times: :queue.new(),
+       render_count: 0,
+       render_max_ms: 0.0,
+       handler_samples: %{},
+       frame_timestamps: :queue.new(),
+       slow_frames: 0
+     }}
   end
 
   @impl GenServer
@@ -177,15 +196,18 @@ defmodule Quillex.PerfMonitor do
     stats = compute_stats(state)
 
     if stats.frame_count > 0 do
-      handler_str = stats.handler_stats
-        |> Enum.map(fn {label, h} -> "#{label}: avg=#{Float.round(h.avg_ms, 1)}ms max=#{Float.round(h.max_ms, 1)}ms" end)
+      handler_str =
+        stats.handler_stats
+        |> Enum.map(fn {label, h} ->
+          "#{label}: avg=#{Float.round(h.avg_ms, 1)}ms max=#{Float.round(h.max_ms, 1)}ms"
+        end)
         |> Enum.join(", ")
 
       Logger.debug(
         "[PerfMon] FPS: #{Float.round(stats.fps, 1)} (observed: #{Float.round(stats.observed_fps, 1)}) | " <>
-        "render: avg=#{Float.round(stats.avg_render_ms, 1)}ms max=#{Float.round(stats.max_render_ms, 1)}ms | " <>
-        "handlers: #{handler_str} | " <>
-        "slow_frames: #{stats.slow_frames}/#{stats.frame_count}"
+          "render: avg=#{Float.round(stats.avg_render_ms, 1)}ms max=#{Float.round(stats.max_render_ms, 1)}ms | " <>
+          "handlers: #{handler_str} | " <>
+          "slow_frames: #{stats.slow_frames}/#{stats.frame_count}"
       )
     end
 
@@ -199,17 +221,22 @@ defmodule Quillex.PerfMonitor do
     render_list = :queue.to_list(state.render_times)
     avg_render = if render_list == [], do: 0.0, else: Enum.sum(render_list) / length(render_list)
 
-    handler_stats = state.handler_samples
+    handler_stats =
+      state.handler_samples
       |> Enum.map(fn {label, {count, total_us, max_us, recent}} ->
         recent_list = :queue.to_list(recent)
-        avg_ms = if count > 0, do: (total_us / count) / 1000, else: 0.0
-        recent_avg = if recent_list == [], do: 0.0, else: Enum.sum(recent_list) / length(recent_list)
-        {label, %{
-          count: count,
-          avg_ms: avg_ms,
-          max_ms: max_us / 1000,
-          recent_avg_ms: recent_avg,
-        }}
+        avg_ms = if count > 0, do: total_us / count / 1000, else: 0.0
+
+        recent_avg =
+          if recent_list == [], do: 0.0, else: Enum.sum(recent_list) / length(recent_list)
+
+        {label,
+         %{
+           count: count,
+           avg_ms: avg_ms,
+           max_ms: max_us / 1000,
+           recent_avg_ms: recent_avg
+         }}
       end)
       |> Map.new()
 
@@ -223,7 +250,7 @@ defmodule Quillex.PerfMonitor do
       max_render_ms: state.render_max_ms,
       frame_count: state.render_count,
       slow_frames: state.slow_frames,
-      handler_stats: handler_stats,
+      handler_stats: handler_stats
     }
   end
 
@@ -236,10 +263,11 @@ defmodule Quillex.PerfMonitor do
   # could hold if it rendered continuously; `observed_fps` reports actual
   # wall-clock frame cadence for debugging idleness vs slowness.
   defp compute_fps(avg_render_ms, handler_stats, frame_timestamps) do
-    render_graph_ms = case Map.get(handler_stats, :render_graph) do
-      %{avg_ms: ms} when is_number(ms) and ms > 0 -> ms
-      _ -> 0.0
-    end
+    render_graph_ms =
+      case Map.get(handler_stats, :render_graph) do
+        %{avg_ms: ms} when is_number(ms) and ms > 0 -> ms
+        _ -> 0.0
+      end
 
     frame_time_ms = avg_render_ms + render_graph_ms
 
@@ -254,19 +282,26 @@ defmodule Quillex.PerfMonitor do
 
   defp compute_observed_fps(timestamps) do
     list = :queue.to_list(timestamps)
+
     case list do
-      [] -> 0.0
-      [_] -> 0.0
+      [] ->
+        0.0
+
+      [_] ->
+        0.0
+
       _ ->
         oldest = List.first(list)
         newest = List.last(list)
-        span_s = (newest - oldest) / 1_000_000_000  # nanoseconds to seconds
+        # nanoseconds to seconds
+        span_s = (newest - oldest) / 1_000_000_000
         if span_s > 0, do: (length(list) - 1) / span_s, else: 0.0
     end
   end
 
   defp queue_push(queue, item, max_size) do
     queue = :queue.in(item, queue)
+
     if :queue.len(queue) > max_size do
       {_, queue} = :queue.out(queue)
       queue

@@ -70,6 +70,7 @@ defmodule Quillex.TextField.CtrlXCutTest do
       # Mouse-drag selection is broadcast back from the buffer in this shape
       # (see Quillex.Buffer.Process.Reducer for {:select_range, ...}).
       s = state(selection: %{start: {1, 7}, end: {1, 12}})
+
       assert Reducer.input_to_buffer_action(s, {:key, {:key_x, 1, [:ctrl]}}) ==
                {:cut, :selection}
     end
@@ -81,6 +82,7 @@ defmodule Quillex.TextField.CtrlXCutTest do
       # `when selection != nil`, this would still pass; the real discriminator
       # is the nil-selection test below plus the mouse-shape test above.
       s = state(selection: {{1, 7}, {1, 12}})
+
       assert Reducer.input_to_buffer_action(s, {:key, {:key_x, 1, [:ctrl]}}) ==
                {:cut, :selection}
     end
@@ -93,6 +95,7 @@ defmodule Quillex.TextField.CtrlXCutTest do
       # action is produced regardless; the buffer will no-op if IT also has
       # no selection.
       s = state(selection: nil)
+
       assert Reducer.input_to_buffer_action(s, {:key, {:key_x, 1, [:ctrl]}}) ==
                {:cut, :selection}
     end
@@ -114,12 +117,14 @@ defmodule Quillex.TextField.CtrlXCutTest do
   describe "input_to_buffer_action/2 — Ctrl+C (key_c, ctrl)" do
     test "with mouse-shape selection returns {:copy, :selection}" do
       s = state(selection: %{start: {1, 7}, end: {1, 12}})
+
       assert Reducer.input_to_buffer_action(s, {:key, {:key_c, 1, [:ctrl]}}) ==
                {:copy, :selection}
     end
 
     test "with selection: nil returns {:copy, :selection} (same rationale as cut)" do
       s = state(selection: nil)
+
       assert Reducer.input_to_buffer_action(s, {:key, {:key_c, 1, [:ctrl]}}) ==
                {:copy, :selection}
     end

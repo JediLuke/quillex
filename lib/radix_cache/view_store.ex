@@ -19,6 +19,7 @@ defmodule Quillex.RadixCache.ViewStore do
     show_line_numbers: true,
     word_wrap: false,
     tab_width: 4,
+    text_size: 24,
     # File navigator sidebar
     show_file_nav: false,
     file_nav_path: nil,
@@ -52,6 +53,7 @@ defmodule Quillex.RadixCache.ViewStore do
 
   @doc "Show the file-navigator sidebar. Idempotent, unlike `toggle_file_nav/0`."
   def open_file_nav, do: GenServer.cast(__MODULE__, :open_file_nav)
+
   @doc "Close the file navigator. The counterpart to open_file_nav/0 — toggling is not the same thing when you need a known state."
   def close_file_nav, do: GenServer.cast(__MODULE__, :close_file_nav)
 
@@ -59,8 +61,13 @@ defmodule Quillex.RadixCache.ViewStore do
     GenServer.cast(__MODULE__, {:set_tab_width, n})
   end
 
+  def set_text_size(n) when is_integer(n) and n in 12..32 do
+    GenServer.cast(__MODULE__, {:set_text_size, n})
+  end
+
   @doc "Show a transient status message; the store clears it after 5s."
-  def show_status(message, severity) when is_binary(message) and severity in [:info, :warning, :error] do
+  def show_status(message, severity)
+      when is_binary(message) and severity in [:info, :warning, :error] do
     GenServer.cast(__MODULE__, {:show_status, message, severity})
   end
 
@@ -84,7 +91,8 @@ defmodule Quillex.RadixCache.ViewStore do
   def handle_call(:sync, _from, state), do: {:reply, :ok, state}
 
   def handle_cast(:toggle_line_numbers, state) do
-    {:noreply, publish(state, %{state.view | show_line_numbers: not state.view.show_line_numbers})}
+    {:noreply,
+     publish(state, %{state.view | show_line_numbers: not state.view.show_line_numbers})}
   end
 
   def handle_cast(:toggle_word_wrap, state) do
@@ -105,6 +113,10 @@ defmodule Quillex.RadixCache.ViewStore do
 
   def handle_cast({:set_tab_width, n}, state) do
     {:noreply, publish(state, %{state.view | tab_width: n})}
+  end
+
+  def handle_cast({:set_text_size, n}, state) do
+    {:noreply, publish(state, %{state.view | text_size: n})}
   end
 
   def handle_cast({:show_status, message, severity}, state) do

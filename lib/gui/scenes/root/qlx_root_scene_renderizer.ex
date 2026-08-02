@@ -20,10 +20,6 @@ defmodule QuillEx.RootScene.Renderizer do
   @status_color_warning {170, 100, 30}
   @status_color_error {160, 40, 40}
 
-  # Helper for tab width menu labels with checkmark
-  defp tab_width_label(width, current) when width == current, do: "#{width} Spaces  ✓"
-  defp tab_width_label(width, _current), do: "#{width} Spaces"
-
   # `_scene` is kept in the signature for API stability (callers pass the scene struct);
   # it is currently unused because rendering is pure graph-state transformation.
   # old_state is nil on init, or the previous state on updates.
@@ -44,11 +40,11 @@ defmodule QuillEx.RootScene.Renderizer do
   end
 
   def render(
-    %Scenic.Graph{} = graph,
-    scene,
-    old_state,
-    %QuillEx.RootScene.State{} = state
-  ) do
+        %Scenic.Graph{} = graph,
+        scene,
+        old_state,
+        %QuillEx.RootScene.State{} = state
+      ) do
     # Split frame: top bar and buffer pane below
     [top_bar_frame, buffer_frame] = Widgex.Frame.v_split(state.frame, px: @top_bar_height)
 
@@ -77,8 +73,10 @@ defmodule QuillEx.RootScene.Renderizer do
     {status_bar_frame, actual_buffer_frame} =
       if state.status_message do
         content_height = content_frame.size.height
+
         [buf_frame, stat_frame] =
           Widgex.Frame.v_split(content_frame, px: content_height - @status_bar_height)
+
         {stat_frame, buf_frame}
       else
         {nil, content_frame}
@@ -200,6 +198,7 @@ defmodule QuillEx.RootScene.Renderizer do
 
   # Create search bar if frame is provided (search bar visible)
   defp maybe_create_search_bar(graph, _state, nil), do: graph
+
   defp maybe_create_search_bar(graph, state, %Widgex.Frame{} = frame) do
     search_bar_data = %{
       id: :search_bar,
@@ -239,16 +238,24 @@ defmodule QuillEx.RootScene.Renderizer do
 
   # Create file navigator sidebar if frame is provided (file nav visible)
   defp maybe_create_file_nav(graph, _state, nil), do: graph
+
   defp maybe_create_file_nav(graph, state, %Widgex.Frame{} = frame) do
     # Build file tree from current path
     file_tree = FileTree.build(state.file_nav_path || File.cwd!())
 
     # Use dark theme for file navigator (merlinex-inspired)
+    side_nav_theme =
+      SideNavThemes.dark()
+      |> Map.put(:font, :ibm_plex_mono)
+      |> Map.put(:font_size, state.text_size)
+      |> Map.put(:line_height, state.text_size + 6)
+      |> Map.put(:item_height, state.text_size + 10)
+
     side_nav_data = %{
       frame: frame,
       tree: file_tree,
-      active_id: nil,
-      theme: SideNavThemes.dark()
+      active_id: state.active_buf && state.active_buf.path,
+      theme: side_nav_theme
     }
 
     graph
@@ -281,6 +288,7 @@ defmodule QuillEx.RootScene.Renderizer do
 
   # Create status bar (transient notification strip at bottom of content area)
   defp maybe_create_status_bar(graph, _state, nil), do: graph
+
   defp maybe_create_status_bar(graph, state, %Widgex.Frame{} = frame) do
     bg_color = status_color(state.status_severity)
     {w, h} = {frame.size.width, frame.size.height}
@@ -327,20 +335,25 @@ defmodule QuillEx.RootScene.Renderizer do
     cursor_label_width = 110
     tab_bar_width = frame.size.width - icon_menu_width - cursor_label_width
 
-    tab_bar_frame = Widgex.Frame.new(
-      pin: frame.pin.point,
-      size: {tab_bar_width, frame.size.height}
-    )
+    tab_bar_frame =
+      Widgex.Frame.new(
+        pin: frame.pin.point,
+        size: {tab_bar_width, frame.size.height}
+      )
 
-    cursor_label_frame = Widgex.Frame.new(
-      pin: {elem(frame.pin.point, 0) + tab_bar_width, elem(frame.pin.point, 1)},
-      size: {cursor_label_width, frame.size.height}
-    )
+    cursor_label_frame =
+      Widgex.Frame.new(
+        pin: {elem(frame.pin.point, 0) + tab_bar_width, elem(frame.pin.point, 1)},
+        size: {cursor_label_width, frame.size.height}
+      )
 
-    icon_menu_frame = Widgex.Frame.new(
-      pin: {elem(frame.pin.point, 0) + tab_bar_width + cursor_label_width, elem(frame.pin.point, 1)},
-      size: {icon_menu_width, frame.size.height}
-    )
+    icon_menu_frame =
+      Widgex.Frame.new(
+        pin:
+          {elem(frame.pin.point, 0) + tab_bar_width + cursor_label_width,
+           elem(frame.pin.point, 1)},
+        size: {icon_menu_width, frame.size.height}
+      )
 
     graph
     |> render_tab_bar(scene, old_state, state, tab_bar_frame)
@@ -356,7 +369,7 @@ defmodule QuillEx.RootScene.Renderizer do
           %{
             frame: frame,
             source: Quillex.RadixCache.PaneStore.source(),
-            font: %{name: Quillex.GUI.Components.BufferPane.State.new(%{}).font.name, size: 13}
+            font: %{name: :ibm_plex_mono, size: 13}
           },
           id: :cursor_pos_label,
           translate: frame.pin.point
@@ -391,6 +404,7 @@ defmodule QuillEx.RootScene.Renderizer do
     case Scenic.Graph.get(graph, :icon_menu) do
       [] ->
         menus = build_menus(state)
+
         icon_menu_data = %{
           frame: frame,
           menus: menus,
@@ -411,7 +425,9 @@ defmodule QuillEx.RootScene.Renderizer do
   end
 
   # Check if tab bar needs recreation
-  defp needs_tab_bar_recreation?(nil, _new_state), do: true  # Initial render
+  # Initial render
+  defp needs_tab_bar_recreation?(nil, _new_state), do: true
+
   defp needs_tab_bar_recreation?(old_state, new_state) do
     # Compare buffer UUIDs (order matters for tabs)
     old_uuids = Enum.map(old_state.buffers, & &1.uuid)
@@ -434,14 +450,16 @@ defmodule QuillEx.RootScene.Renderizer do
   # Helper to create tab bar
   # Build tabs from open buffers, appending " *" for dirty (unsaved) buffers
   defp derive_tabs(state) do
-    tabs = Enum.map(state.buffers, fn buf ->
-      label = if buf.dirty?, do: buf.name <> " *", else: buf.name
-      %{
-        id: buf.uuid,
-        label: label,
-        closeable: true
-      }
-    end)
+    tabs =
+      Enum.map(state.buffers, fn buf ->
+        label = if buf.dirty?, do: buf.name <> " *", else: buf.name
+
+        %{
+          id: buf.uuid,
+          label: label,
+          closeable: true
+        }
+      end)
 
     # Select the active buffer's tab
     selected_id = if state.active_buf, do: state.active_buf.uuid, else: nil
@@ -472,44 +490,95 @@ defmodule QuillEx.RootScene.Renderizer do
   Build menus with current toggle states from state.
   """
   def build_menus(%QuillEx.RootScene.State{} = state) do
+    alias ScenicWidgets.Menu.Model.{Item, Radio, Slider, Toggle}
+
     [
-      %{id: :file, icon: "F", items: [
-        {"new", "New Buffer"},
-        {"open", "Open File..."},
-        {"save", "Save (Ctrl+S)"},
-        {"save_as", "Save As..."},
-        {"verify", "Verify File"},
-        {"reload", "Reload from Disk"},
-        {"close", "Close Buffer"}
-      ]},
-      %{id: :edit, icon: "E", items: [
-        {"undo", "Undo (Ctrl+U)"},
-        {"redo", "Redo (Ctrl+R)"},
-        {"cut", "Cut (Ctrl+X)"},
-        {"copy", "Copy (Ctrl+C)"},
-        {"paste", "Paste (Ctrl+V)"},
-        {"find", "Find (Ctrl+F)"},
-        {"find_replace", "Find & Replace (Ctrl+H)"},
-        {"find_next", "Find Next (Ctrl+G)"}
-      ]},
-      %{id: :view, icon: "V", items: [
-        {"file_nav", "File Navigator", %{type: :toggle, checked: state.show_file_nav}},
-        {"line_numbers", "Line Numbers", %{type: :toggle, checked: state.show_line_numbers}},
-        {"word_wrap", "Word Wrap", %{type: :toggle, checked: state.word_wrap}},
-        {"tab_width_2", tab_width_label(2, state.tab_width)},
-        {"tab_width_3", tab_width_label(3, state.tab_width)},
-        {"tab_width_4", tab_width_label(4, state.tab_width)},
-        {"tab_width_8", tab_width_label(8, state.tab_width)}
-      ]},
-      %{id: :help, icon: "?", items: [
-        {"about", "About Quillex"},
-        {"shortcuts", "Keyboard Shortcuts"}
-      ]}
+      %{
+        id: :file,
+        icon: :file,
+        items: [
+          %Item{id: "new", label: Quillex.Commands.menu_label(:new)},
+          %Item{id: "open", label: Quillex.Commands.menu_label(:open)},
+          %Item{id: "save", label: Quillex.Commands.menu_label(:save)},
+          %Item{id: "save_as", label: Quillex.Commands.menu_label(:save_as)},
+          %Item{id: "verify", label: "Verify File"},
+          %Item{id: "reload", label: "Reload from Disk"},
+          %Item{id: "close", label: Quillex.Commands.menu_label(:close)}
+        ]
+      },
+      %{
+        id: :edit,
+        icon: :edit,
+        items: [
+          %Item{id: "undo", label: Quillex.Commands.menu_label(:undo)},
+          %Item{id: "redo", label: Quillex.Commands.menu_label(:redo)},
+          %Item{id: "cut", label: Quillex.Commands.menu_label(:cut)},
+          %Item{id: "copy", label: Quillex.Commands.menu_label(:copy)},
+          %Item{id: "paste", label: Quillex.Commands.menu_label(:paste)},
+          %Item{id: "find", label: Quillex.Commands.menu_label(:find)},
+          %Item{id: "find_replace", label: Quillex.Commands.menu_label(:find_replace)},
+          %Item{id: "find_next", label: Quillex.Commands.menu_label(:find_next)}
+        ]
+      },
+      %{
+        id: :view,
+        icon: :view,
+        items: [
+          %Toggle{id: "file_nav", label: "File Navigator", checked?: state.show_file_nav},
+          %Toggle{id: "line_numbers", label: "Line Numbers", checked?: state.show_line_numbers},
+          %Toggle{id: "word_wrap", label: "Word Wrap", checked?: state.word_wrap},
+          %Slider{id: "text_size", label: "Text Size", value: state.text_size, min: 12, max: 32},
+          %Item{id: "toggle_fold", label: Quillex.Commands.menu_label(:toggle_fold)},
+          %Item{id: "unfold_all", label: Quillex.Commands.menu_label(:unfold_all)},
+          %Item{id: "fold_level_1", label: "Fold to Level 1"},
+          %Item{id: "fold_level_2", label: "Fold to Level 2"},
+          %Item{id: "fold_level_3", label: "Fold to Level 3"},
+          %Item{id: "fold_level_4", label: "Fold to Level 4"},
+          %Radio{
+            id: "tab_width_2",
+            label: "Tab Width 2",
+            group: :tab_width,
+            value: 2,
+            selected?: state.tab_width == 2
+          },
+          %Radio{
+            id: "tab_width_3",
+            label: "Tab Width 3",
+            group: :tab_width,
+            value: 3,
+            selected?: state.tab_width == 3
+          },
+          %Radio{
+            id: "tab_width_4",
+            label: "Tab Width 4",
+            group: :tab_width,
+            value: 4,
+            selected?: state.tab_width == 4
+          },
+          %Radio{
+            id: "tab_width_8",
+            label: "Tab Width 8",
+            group: :tab_width,
+            value: 8,
+            selected?: state.tab_width == 8
+          }
+        ]
+      },
+      %{
+        id: :help,
+        icon: :help,
+        items: [
+          %Item{id: "about", label: "About Quillex"},
+          %Item{id: "shortcuts", label: "Keyboard Shortcuts"}
+        ]
+      }
     ]
   end
 
   # Check if buffer_pane needs to be recreated based on state changes
-  defp needs_buffer_pane_recreation?(nil, _new_state), do: true  # Initial render
+  # Initial render
+  defp needs_buffer_pane_recreation?(nil, _new_state), do: true
+
   defp needs_buffer_pane_recreation?(old_state, new_state) do
     # NOTE: switching the active buffer does NOT recreate the buffer pane —
     # the TextField is a view over the stable pane source and PaneStore just
@@ -524,12 +593,13 @@ defmodule QuillEx.RootScene.Renderizer do
     settings_changed = false
 
     # Recreate if search bar, replace mode, or file nav visibility changed (affects buffer frame size)
-    layout_changed = old_state.show_search_bar != new_state.show_search_bar or
-      Map.get(old_state, :show_replace, false) != Map.get(new_state, :show_replace, false) or
-      old_state.show_file_nav != new_state.show_file_nav
+    layout_changed =
+      old_state.show_search_bar != new_state.show_search_bar or
+        Map.get(old_state, :show_replace, false) != Map.get(new_state, :show_replace, false) or
+        old_state.show_file_nav != new_state.show_file_nav
 
     # Recreate if status bar appears or disappears (carves @status_bar_height from content area)
-    status_bar_changed = (old_state.status_message == nil) != (new_state.status_message == nil)
+    status_bar_changed = old_state.status_message == nil != (new_state.status_message == nil)
 
     # Recreate if the root frame changed (window resize / reshape). Every
     # child's frame is derived from it, so the incremental branch would leave
@@ -547,8 +617,8 @@ defmodule QuillEx.RootScene.Renderizer do
     {:ok, buf} = Quillex.Buffer.Process.fetch_buf(state.active_buf)
 
     # Create font
-    buffer_pane_state = Quillex.GUI.Components.BufferPane.State.new(%{})
-    font = buffer_pane_state.font
+    font = Quillex.GUI.Theme.editor_font(state.text_size)
+    colors = Quillex.GUI.Theme.editor_colors()
 
     # Check if we have a cursor position to restore (from resize or saved in buffer)
     # Priority: 1) _restore_cursor from state (explicit restore), 2) buffer's saved cursor
@@ -563,48 +633,49 @@ defmodule QuillEx.RootScene.Renderizer do
     # Buffer should NOT be focused if search bar is visible (search bar takes focus)
     buffer_focused = not state.show_search_bar
 
-    text_field_data = %{
-      frame: frame,
-      initial_text: Enum.join(buf.data, "\n"),
-      mode: :multi_line,
-      # STORE-BACKED: TextField is a pure view over the PANE — a stable
-      # source/dispatch pair that never changes for the widget's life.
-      # PaneStore follows the active buffer behind this contract, so buffer
-      # switches are invisible here (see the store contract in
-      # ScenicWidgets.TextField docs).
-      input_mode: :store_backed,
-      dispatch: Quillex.RadixCache.PaneStore,
-      source: Quillex.RadixCache.PaneStore.source(),
-      buffer_id: buf.uuid,
-      show_line_numbers: state.show_line_numbers,
-      wrap_mode: wrap_mode,
-      tab_width: state.tab_width,
-      # QA A5: a thin line either side of the text pane, none on top/bottom
-      # (top would double the tab bar's edge; bottom hugs the window edge)
-      border_sides: [:left, :right],
-      editable: true,
-      focused: buffer_focused,
-      font: %{
-        name: font.name,
-        size: font.size,
-        metrics: font.metrics
-      },
-      colors: %{
-        text: :white,
-        background: buffer_pane_state.colors.slate,
-        cursor: :white,
-        line_numbers: {255, 255, 255, 85},
-        border: {80, 80, 100, 180},
-        focused_border: {255, 215, 0}
-      },
-      cursor_mode: :cursor,
-      viewport_buffer_lines: 5,
-      id: :buffer_pane
-    }
-    # Add initial_cursor if we're restoring from a resize or buffer switch
-    |> maybe_add_cursor(initial_cursor)
-    # Add first_visible_line if we're restoring scroll position (e.g., after word wrap toggle)
-    |> maybe_add_first_visible_line(first_visible_line)
+    text_field_data =
+      %{
+        frame: frame,
+        initial_text: Enum.join(buf.data, "\n"),
+        mode: :multi_line,
+        # STORE-BACKED: TextField is a pure view over the PANE — a stable
+        # source/dispatch pair that never changes for the widget's life.
+        # PaneStore follows the active buffer behind this contract, so buffer
+        # switches are invisible here (see the store contract in
+        # ScenicWidgets.TextField docs).
+        input_mode: :store_backed,
+        dispatch: Quillex.RadixCache.PaneStore,
+        source: Quillex.RadixCache.PaneStore.source(),
+        buffer_id: buf.uuid,
+        show_line_numbers: state.show_line_numbers,
+        wrap_mode: wrap_mode,
+        tab_width: state.tab_width,
+        # QA A5: a thin line either side of the text pane, none on top/bottom
+        # (top would double the tab bar's edge; bottom hugs the window edge)
+        border_sides: [:left, :right],
+        editable: true,
+        focused: buffer_focused,
+        font: %{
+          name: font.name,
+          size: font.size,
+          metrics: font.metrics
+        },
+        colors: %{
+          text: :white,
+          background: colors.slate,
+          cursor: :white,
+          line_numbers: {255, 255, 255, 85},
+          border: {80, 80, 100, 180},
+          focused_border: {255, 215, 0}
+        },
+        cursor_mode: :cursor,
+        viewport_buffer_lines: 5,
+        id: :buffer_pane
+      }
+      # Add initial_cursor if we're restoring from a resize or buffer switch
+      |> maybe_add_cursor(initial_cursor)
+      # Add first_visible_line if we're restoring scroll position (e.g., after word wrap toggle)
+      |> maybe_add_first_visible_line(first_visible_line)
 
     graph
     |> ScenicWidgets.TextField.add_to_graph(
@@ -622,10 +693,11 @@ defmodule QuillEx.RootScene.Renderizer do
   defp maybe_add_first_visible_line(data, nil), do: data
   defp maybe_add_first_visible_line(data, line), do: Map.put(data, :first_visible_line, line)
 
-  # Extract cursor position from buffer's cursors field
+  # Extract cursor position from buffer's cursor field
   # Returns {line, col} tuple or nil if not available
-  defp get_buffer_cursor(%{cursors: [%{line: line, col: col} | _]}) when line >= 1 and col >= 1 do
+  defp get_buffer_cursor(%{cursor: %{line: line, col: col}}) when line >= 1 and col >= 1 do
     {line, col}
   end
+
   defp get_buffer_cursor(_), do: nil
 end

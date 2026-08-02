@@ -3,16 +3,15 @@ defmodule Quillex.ModelConformanceSpex do
   Phase 25: Model-based conformance (Roadmap 1.0, Phase 4b layer 2 — the
   flagship showcase spex).
 
-  The backend Reducer is pure — it IS the formal model of the editor. This
-  spex generates seeded random operation sequences and applies each sequence
+  A deliberately independent reference model defines the expected editor
+  semantics. This spex generates seeded random operation sequences and applies each sequence
   through BOTH worlds:
 
     * to the **live GUI**, as real keystrokes through the GLFW driver
       (keymap → PaneStore → Buffer.Process → PubSub → TextField → semantic
       render), and
     * to the **oracle**, by folding the equivalent semantic actions
-      directly through `Quillex.Buffer.Process.Reducer` with no processes
-      involved (`TestHelpers.Oracle`).
+      through `TestHelpers.Oracle`, which imports no production buffer code.
 
   After every batch the two worlds must agree on document text and cursor.
   Any lost, duplicated, or reordered operation anywhere in the pipeline —
@@ -27,7 +26,7 @@ defmodule Quillex.ModelConformanceSpex do
 
   A closing scenario checks the undo/redo laws: for any edit sequence,
   `edits ++ undo^n` restores the starting text and `++ redo^n` restores
-  the edited text (the Reducer's push-undo-before-modify discipline).
+  the edited text.
   """
   use SexySpex
 
@@ -104,64 +103,27 @@ defmodule Quillex.ModelConformanceSpex do
   # Helpers
   # ==========================================================================
 
-  # Create a fresh empty buffer and focus it — VERIFYING both, with retry.
-  # A lost File→New click (see the roadmap's input-drop notes) would
-  # otherwise leave some earlier scenario's document active, and every
-  # keystroke below would edit the wrong buffer — which is exactly how this
-  # spex once "diverged" while the editor was working correctly.
-  # Close every other buffer before conformance runs. Diagnosis (2026-08-01):
-  # the editor pane was observed switching mid-run to a document opened by an
-  # earlier spex — with only one buffer alive there is nothing to switch to,
-  # and this spex gets the isolated environment its property assumes.
+  # Public API calls are confined to setup: they establish one isolated empty
+  # document, after which every randomized operation travels through real UI
+  # input and is checked against the independent oracle.
   defp close_other_buffers do
-    Enum.reduce_while(1..12, :ok, fn _, _ ->
-      if (SemanticHelpers.get_tab_count() || 1) <= 1 do
-        {:halt, :ok}
-      else
-        Probes.click_element("icon_menu_file")
-        Process.sleep(200)
-        Probes.click_element("icon_menu_file_close")
-        Process.sleep(400)
-
-        # Dirty buffers raise the unsaved-changes dialog: discard.
-        if ScenicMcp.Query.text_visible?("Unsaved Changes") do
-          Probes.send_keys("d", [])
-          Process.sleep(400)
-        end
-
-        {:cont, :ok}
-      end
-    end)
+    previous = Quillex.Buffer.list()
+    {:ok, ref} = Quillex.Buffer.new(%{name: "conformance"})
+    Enum.each(previous, &Quillex.Buffer.close(&1, :discard))
+    ref
   end
 
   defp fresh_focused_buffer do
     Probes.send_keys("escape", [])
     Process.sleep(200)
-    close_other_buffers()
+    ref = close_other_buffers()
+    :ok = Quillex.Buffer.activate(ref)
+    Process.sleep(600)
 
-    ok? =
-      Enum.reduce_while(1..4, false, fn _, _ ->
-        Probes.send_keys("escape", [])
-        Process.sleep(200)
-        Probes.click_element("icon_menu_file")
-        Process.sleep(250)
-        Probes.click_element("icon_menu_file_new")
-        Process.sleep(600)
-
-        case SemanticHelpers.get_buffer_frame() do
-          %{} = frame ->
-            Probes.click(frame.x + trunc(frame.width * 0.4), frame.y + trunc(frame.height * 0.4))
-            Process.sleep(250)
-            # Poll: the semantic content can lag the buffer swap, so a single
-            # read can report "" for a document that is merely late.
-            if empty_buffer_settled?(), do: {:halt, true}, else: {:cont, false}
-
-          _ ->
-            {:cont, false}
-        end
-      end)
-
-    assert ok?, "could not obtain a fresh, empty, focused buffer after 4 attempts"
+    assert %{} = frame = SemanticHelpers.get_buffer_frame()
+    Probes.click(frame.x + trunc(frame.width * 0.4), frame.y + trunc(frame.height * 0.4))
+    Process.sleep(250)
+    assert empty_buffer_settled?(), "could not obtain a fresh, empty, focused buffer"
   end
 
   # An empty buffer that STAYS empty across consecutive reads — distinguishes
@@ -221,8 +183,12 @@ defmodule Quillex.ModelConformanceSpex do
     actual = gui_text()
 
     cond do
-      actual == expected -> {:ok, actual}
-      System.monotonic_time(:millisecond) >= deadline -> {:diverged, actual}
+      actual == expected ->
+        {:ok, actual}
+
+      System.monotonic_time(:millisecond) >= deadline ->
+        {:diverged, actual}
+
       true ->
         Process.sleep(100)
         do_await(expected, deadline)
@@ -247,7 +213,7 @@ defmodule Quillex.ModelConformanceSpex do
 
   spex "The GUI implements the pure document model",
     description:
-      "Seeded random keystrokes vs the Reducer folded directly — text and cursor must agree after every batch",
+      "Seeded random keystrokes vs an independent model — text and cursor must agree after every batch",
     tags: [:phase_25, :conformance, :property] do
     scenario "Random operation batches converge to the oracle" do
       given_ "a fresh focused buffer and a seeded RNG", context do
@@ -359,7 +325,7 @@ defmodule Quillex.ModelConformanceSpex do
         edited_text = gui_text()
 
         for _ <- 1..n do
-          Probes.send_keys("u", [:ctrl])
+          Probes.send_keys("z", [:ctrl])
           Process.sleep(@op_sleep_ms)
         end
 
@@ -367,7 +333,7 @@ defmodule Quillex.ModelConformanceSpex do
         undone_text = gui_text()
 
         for _ <- 1..n do
-          Probes.send_keys("r", [:ctrl])
+          Probes.send_keys("z", [:ctrl, :shift])
           Process.sleep(@op_sleep_ms)
         end
 

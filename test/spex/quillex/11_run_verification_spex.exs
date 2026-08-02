@@ -48,6 +48,13 @@ defmodule Quillex.RunVerificationSpex do
     :ok
   end
 
+  setup do
+    # Every scenario gets a known overlay/focus floor. This is setup, not a
+    # fallback: each interaction below is still issued exactly once.
+    Quillex.TestHelpers.AppReset.reset_layout!()
+    :ok
+  end
+
   # ===========================================================================
   # Helpers
   # ===========================================================================
@@ -58,69 +65,45 @@ defmodule Quillex.RunVerificationSpex do
   end
 
   defp click_verify_menu_item do
-    # The File dropdown must actually be rendered before the item click can
-    # land. Under momentary load either click in the open-then-pick flow can
-    # misfire, so retry the WHOLE flow (re-open the menu if the item never
-    # appeared) up to 3 times.
-    Enum.reduce_while(1..3, :ok, fn _, _ ->
-      if wait_for_verify_item(System.monotonic_time(:millisecond) + 1_500) == :visible do
-        Probes.click_element("icon_menu_file_verify")
-        Process.sleep(300)
-        {:halt, :ok}
-      else
-        # Dropdown not open (or closed itself) — open it and try again
-        Probes.click_element("icon_menu_file")
-        Process.sleep(300)
-        {:cont, :ok}
-      end
-    end)
+    assert wait_for_verify_item(System.monotonic_time(:millisecond) + 1_500) == :visible
+    Probes.click_element("icon_menu_file_verify")
+    Process.sleep(300)
   end
 
   defp wait_for_verify_item(deadline) do
     cond do
-      String.contains?(Query.rendered_text(), "Verify File") -> :visible
-      System.monotonic_time(:millisecond) >= deadline -> :absent
+      String.contains?(Query.rendered_text(), "Verify File") ->
+        :visible
+
+      System.monotonic_time(:millisecond) >= deadline ->
+        :absent
+
       true ->
         Process.sleep(100)
         wait_for_verify_item(deadline)
     end
   end
 
-
   # Poll for a transient status-bar message with a bounded window. The status
   # message auto-clears after 5s and takes a render cycle to appear, so a
   # single immediate read races BOTH edges — under suite load (pipeline
   # stalls, see roadmap perf notes) that race was this file's flake source.
-  # Wait for a transient status message, RE-TRIGGERING the verify action if
-  # it never appears. The message auto-clears after 5s, so the whole
-  # open-menu → click-verify → read sequence races its own expiry; and if
-  # the verify click was lost there is nothing to find at all. Verify is
-  # idempotent (it only re-inspects the file), so re-running it is safe.
+  # Wait for the one requested action's transient status message. A timeout is
+  # a real interaction failure; this helper never replays the gesture.
   defp await_status(text, timeout_ms \\ 3000) do
-    Enum.reduce_while(1..3, {:timeout, ""}, fn attempt, _acc ->
-      deadline = System.monotonic_time(:millisecond) + timeout_ms
-
-      case poll_status(text, deadline) do
-        :ok ->
-          {:halt, :ok}
-
-        {:timeout, rendered} ->
-          if attempt < 3 do
-            click_verify_menu_item()
-            {:cont, {:timeout, rendered}}
-          else
-            {:halt, {:timeout, rendered}}
-          end
-      end
-    end)
+    poll_status(text, System.monotonic_time(:millisecond) + timeout_ms)
   end
 
   defp poll_status(text, deadline) do
     rendered = Query.rendered_text()
 
     cond do
-      String.contains?(rendered, text) -> :ok
-      System.monotonic_time(:millisecond) >= deadline -> {:timeout, rendered}
+      String.contains?(rendered, text) ->
+        :ok
+
+      System.monotonic_time(:millisecond) >= deadline ->
+        {:timeout, rendered}
+
       true ->
         Process.sleep(100)
         poll_status(text, deadline)
@@ -141,6 +124,7 @@ defmodule Quillex.RunVerificationSpex do
 
   defp close_all_but_one do
     count = SemanticHelpers.get_tab_count() || 0
+
     if count > 1 do
       Probes.click_element("icon_menu_file")
       Process.sleep(300)
@@ -151,6 +135,7 @@ defmodule Quillex.RunVerificationSpex do
         Probes.send_keys("d", [])
         Process.sleep(400)
       end
+
       close_all_but_one()
     end
   end
@@ -164,7 +149,6 @@ defmodule Quillex.RunVerificationSpex do
   spex "RunVerification - Verify File menu item is accessible",
     description: "File menu contains Verify File item",
     tags: [:run_verification, :menu, :smoke] do
-
     scenario "Verify File appears in the File menu" do
       given_ "the Quillex app is running", context do
         Process.sleep(300)
@@ -178,8 +162,10 @@ defmodule Quillex.RunVerificationSpex do
 
       then_ "the Verify File menu item is visible" do
         rendered = Query.rendered_text()
+
         assert String.contains?(rendered, "Verify"),
                "File menu should contain a 'Verify' item. Got: #{inspect(rendered)}"
+
         :ok
       end
 
@@ -207,7 +193,6 @@ defmodule Quillex.RunVerificationSpex do
     # :shutdown before they finish initialising — logged as [error] by Scenic.
     # These are benign lifecycle events, not real failures.
     fail_on_error_logs: false do
-
     scenario "Verify File on a new unsaved buffer completes without crashing" do
       given_ "we have one open buffer with no saved file path", context do
         # Use Ctrl+N to open a fresh untitled buffer — this guarantees the active
@@ -230,16 +215,20 @@ defmodule Quillex.RunVerificationSpex do
 
       then_ "the app is still rendering correctly" do
         rendered = Query.rendered_text()
+
         assert is_binary(rendered) and rendered != "",
                "App should still be rendering after verify on no-filepath buffer"
+
         :ok
       end
 
       then_ "the status bar shows that the buffer has no associated file path" do
         result = await_status("no associated file path")
         rendered = with {:timeout, r} <- result, do: r
+
         assert result == :ok,
                "Status bar should show 'no associated file path'. Got: #{inspect(rendered)}"
+
         :ok
       end
 
@@ -252,6 +241,7 @@ defmodule Quillex.RunVerificationSpex do
         # The 'x' we typed should be present somewhere in the editor area
         assert is_binary(rendered),
                "Viewport should still be renderable after verification"
+
         :ok
       end
 
@@ -270,7 +260,6 @@ defmodule Quillex.RunVerificationSpex do
   spex "RunVerification - Verify File on saved buffer (file unchanged)",
     description: "Verify File on a saved file that has not changed on disk logs 'unchanged'",
     tags: [:run_verification, :file_unchanged] do
-
     scenario "Verify File on a saved, unmodified file does not crash or disrupt editing" do
       given_ "we create and save a temp file directly on disk", context do
         content = "Hello from Quillex verify test"
@@ -304,24 +293,30 @@ defmodule Quillex.RunVerificationSpex do
 
       then_ "the app continues to render without errors" do
         rendered = Query.rendered_text()
+
         assert is_binary(rendered) and rendered != "",
                "App should still render after verify of unchanged file"
+
         :ok
       end
 
       then_ "the status bar shows that the file is unchanged on disk" do
         result = await_status("unchanged on disk")
         rendered = with {:timeout, r} <- result, do: r
+
         assert result == :ok,
                "Status bar should show 'unchanged on disk'. Got: #{inspect(rendered)}"
+
         :ok
       end
 
       then_ "the buffer content is intact" do
         # The file content should still be visible in the editor
         rendered = Query.rendered_text()
+
         assert String.contains?(rendered, "Hello"),
                "Buffer should still display file content after verification"
+
         :ok
       end
 
@@ -338,9 +333,9 @@ defmodule Quillex.RunVerificationSpex do
   # ===========================================================================
 
   spex "RunVerification - Verify File when file has been deleted from disk",
-    description: "Verify File on a buffer whose file no longer exists logs a warning and does not crash",
+    description:
+      "Verify File on a buffer whose file no longer exists logs a warning and does not crash",
     tags: [:run_verification, :file_deleted] do
-
     scenario "Verify File with a deleted file logs warning without crashing" do
       given_ "we create a temp file and open it in Quillex", context do
         deleted_path = Path.join(@tmp_dir, "will_be_deleted.txt")
@@ -374,16 +369,20 @@ defmodule Quillex.RunVerificationSpex do
       then_ "the app does not crash" do
         # If the RootScene process crashed, we would not get a rendered viewport
         rendered = Query.rendered_text()
+
         assert is_binary(rendered) and rendered != "",
                "App should still be alive after verifying a deleted file"
+
         :ok
       end
 
       then_ "the status bar shows that the file was deleted from disk" do
         result = await_status("deleted from disk")
         rendered = with {:timeout, r} <- result, do: r
+
         assert result == :ok,
                "Status bar should show 'deleted from disk'. Got: #{inspect(rendered)}"
+
         :ok
       end
 
@@ -399,9 +398,9 @@ defmodule Quillex.RunVerificationSpex do
   # ===========================================================================
 
   spex "RunVerification - Verify File when file has been modified on disk",
-    description: "Verify File on a buffer whose file was changed externally logs a warning and does not crash",
+    description:
+      "Verify File on a buffer whose file was changed externally logs a warning and does not crash",
     tags: [:run_verification, :file_modified] do
-
     scenario "Verify File with a modified file does not crash the app" do
       given_ "we create a temp file and open it in Quillex", context do
         modified_path = Path.join(@tmp_dir, "will_be_modified.txt")
@@ -434,16 +433,20 @@ defmodule Quillex.RunVerificationSpex do
 
       then_ "the app does not crash" do
         rendered = Query.rendered_text()
+
         assert is_binary(rendered) and rendered != "",
                "App should still be alive after verifying a modified file"
+
         :ok
       end
 
       then_ "the status bar shows that the file was modified on disk" do
         result = await_status("modified on disk")
         rendered = with {:timeout, r} <- result, do: r
+
         assert result == :ok,
                "Status bar should show 'modified on disk'. Got: #{inspect(rendered)}"
+
         :ok
       end
 
@@ -451,8 +454,10 @@ defmodule Quillex.RunVerificationSpex do
         type_text("x")
         Process.sleep(100)
         rendered = Query.rendered_text()
+
         assert is_binary(rendered),
                "Viewport should still be renderable after modification verification"
+
         :ok
       end
 
@@ -479,7 +484,6 @@ defmodule Quillex.RunVerificationSpex do
   spex "RunVerification - App stable after Ctrl+V then Ctrl+F key sequence",
     description: "Pressing Ctrl+V (paste) followed by Ctrl+F (find) does not crash the app",
     tags: [:run_verification, :stability] do
-
     scenario "Ctrl+V then Ctrl+F sequence leaves app alive and rendering" do
       given_ "we have one buffer open with some content", context do
         close_all_but_one()
@@ -500,8 +504,10 @@ defmodule Quillex.RunVerificationSpex do
 
       then_ "the app is still responsive and rendering" do
         rendered = Query.rendered_text()
+
         assert is_binary(rendered) and rendered != "",
                "App should still render after Ctrl+V + Ctrl+F"
+
         :ok
       end
 

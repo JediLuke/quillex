@@ -17,7 +17,11 @@ defmodule Quillex.BufferSupervisor do
 
             buf =
               Quillex.Structs.BufState.new(
-                Map.merge(args, %{data: lines, name: Path.basename(filepath), source: %{filepath: filepath}})
+                Map.merge(args, %{
+                  data: lines,
+                  name: Path.basename(filepath),
+                  source: %{filepath: filepath}
+                })
               )
 
             do_start_buffer(buf)
@@ -47,7 +51,7 @@ defmodule Quillex.BufferSupervisor do
 
   def do_start_buffer(%Quillex.Structs.BufState{} = buf) do
     {:ok, _pid} = DynamicSupervisor.start_child(__MODULE__, {Quillex.Buffer.Process, buf})
-    buf_ref = Quillex.Structs.BufState.BufRef.generate(buf)
+    buf_ref = Quillex.Buffer.Ref.generate(buf)
 
     {:ok, buf_ref}
   end

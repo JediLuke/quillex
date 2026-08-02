@@ -14,7 +14,7 @@ defmodule Quillex.Buffer.UtilsTest do
   defp buf(data, line, col) do
     buf = BufState.new(%{name: "test"})
     cursor = %{line: line, col: col}
-    %{buf | data: data, cursors: [cursor]}
+    %{buf | data: data, cursor: cursor}
   end
 
   # ─── next_word_coords ─────────────────────────────────────────────────────

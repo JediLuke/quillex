@@ -10,6 +10,7 @@ defmodule Quillex.APITests.BufferAPITest do
       # When no RootScene process is running, it returns {:error, binary_reason}.
       # Both outcomes are valid — the important invariant is that it never raises.
       result = FileAPI.verify_file_integrity()
+
       assert match?({:ok, _}, result) or match?({:error, _}, result),
              "Expected {:ok, _} or {:error, _}, got: #{inspect(result)}"
     end
@@ -34,12 +35,14 @@ defmodule Quillex.APITests.BufferAPITest do
       # When the active buffer has no filepath (fresh buffer or no app running),
       # save/0 must return {:error, reason} with a binary reason.
       result = FileAPI.save()
+
       assert match?({:error, _}, result) or match?({:ok, _}, result),
              "Expected {:ok, _} or {:error, _}, got: #{inspect(result)}"
 
       case result do
         {:error, reason} ->
           assert is_binary(reason), "Error reason must be a binary"
+
         {:ok, _} ->
           :ok
       end
@@ -51,6 +54,7 @@ defmodule Quillex.APITests.BufferAPITest do
       # When the app is running, info/0 returns {:ok, map}.
       # When no process is running, it returns {:error, binary_reason}.
       result = FileAPI.info()
+
       assert match?({:ok, _}, result) or match?({:error, _}, result),
              "Expected {:ok, _} or {:error, _}, got: #{inspect(result)}"
     end

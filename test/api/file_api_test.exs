@@ -66,6 +66,7 @@ defmodule Quillex.API.FileAPITest do
   describe "reload/0 — smoke tests" do
     test "returns a tagged tuple in all runtime contexts" do
       result = FileAPI.reload()
+
       assert match?({:ok, _}, result) or match?({:error, _}, result),
              "reload/0 must return a tagged tuple, got: #{inspect(result)}"
     end

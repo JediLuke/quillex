@@ -17,7 +17,6 @@ defmodule Quillex.TestHelpers do
       SceneHelpers,
       ScriptInspector,
       FileOpener,
-      BufferSwitcher,
       AppReset,
       ViewportResizer,
       Perf,

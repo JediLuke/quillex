@@ -43,7 +43,6 @@ defmodule Quillex.IntegrationV1Spex do
     # Wait for scene to fully initialize
     Process.sleep(2000)
 
-
     # Known LAYOUT to start from (overlays dismissed, file navigator
     # closed) without touching buffers — an open navigator shifts the
     # editor pane 250px right and makes fixed-x clicks miss it.
@@ -74,6 +73,7 @@ defmodule Quillex.IntegrationV1Spex do
 
   defp trigger_action({:activate_buffer, n}) when is_integer(n) do
     labels = buffer_names()
+
     case Enum.at(labels, n - 1) do
       nil -> :error
       label -> SemanticHelpers.click_tab_by_label(label)
@@ -81,27 +81,12 @@ defmodule Quillex.IntegrationV1Spex do
   end
 
   defp trigger_action(:new_buffer) do
-    # VERIFY the new buffer actually appeared, with retry. A lost File→New
-    # click leaves the previous document active, and every assertion in the
-    # scenario then runs against the wrong buffer — the single largest
-    # source of rotating failures in this file.
-    Enum.reduce_while(1..3, false, fn _, _ ->
-      Probes.click_element("icon_menu_file")
-      Process.sleep(250)
-      Probes.click_element("icon_menu_file_new")
-      Process.sleep(500)
-
-      # Scenarios that create a buffer are about to type into it — guarantee
-      # the pane has keyboard focus regardless of what was focused before.
-      # On a fresh empty buffer the click lands on line 1, so the cursor is
-      # unaffected (clamped to {1,1}).
-      ensure_editor_focused()
-
-      # WAIT for the new buffer rather than re-clicking impatiently: a
-      # premature retry creates a SECOND buffer, and enough of those
-      # overflow the tab bar and destabilise every later tab interaction.
-      if wait_for_empty_buffer(2_000), do: {:halt, true}, else: {:cont, false}
-    end)
+    Probes.click_element("icon_menu_file")
+    Process.sleep(250)
+    Probes.click_element("icon_menu_file_new")
+    Process.sleep(500)
+    ensure_editor_focused()
+    wait_for_empty_buffer(2_000)
   end
 
   # Poll until the active buffer reads empty twice in a row (one read can
@@ -329,28 +314,9 @@ defmodule Quillex.IntegrationV1Spex do
     index = Enum.find_index(labels, &(&1 == name))
 
     if index do
-      clicked? =
-        Enum.reduce_while(1..2, false, fn _, _ ->
-          trigger_action({:activate_buffer, index + 1})
-          Process.sleep(300)
-
-          case SemanticHelpers.wait_for_tab_selected(name, 2000) do
-            {:ok, _} -> {:halt, true}
-            _ -> {:cont, false}
-          end
-        end)
-
-      # Fall back to the deterministic API switch. Tab CLICKS are exercised
-      # on their own in the Tab Handling spex; here the point is merely to
-      # BE on the right buffer, and a silently-failed switch would make
-      # every later assertion test the wrong document.
-      if clicked? do
-        true
-      else
-        Quillex.TestHelpers.BufferSwitcher.switch(index + 1)
-        Process.sleep(300)
-        match?({:ok, _}, SemanticHelpers.wait_for_tab_selected(name, 2000))
-      end
+      trigger_action({:activate_buffer, index + 1})
+      Process.sleep(300)
+      match?({:ok, _}, SemanticHelpers.wait_for_tab_selected(name, 2000))
     else
       false
     end
@@ -397,7 +363,6 @@ defmodule Quillex.IntegrationV1Spex do
   spex "V1 Integration - Boot State",
     description: "Validates app can create empty untitled buffers",
     tags: [:v1, :integration, :boot] do
-
     scenario "Creating a new buffer results in untitled buffer" do
       given_ "Quillex has launched", context do
         Process.sleep(500)
@@ -428,7 +393,6 @@ defmodule Quillex.IntegrationV1Spex do
   spex "V1 Integration - Basic Typing",
     description: "Validates typing produces correct output (no double characters)",
     tags: [:v1, :integration, :typing] do
-
     scenario "Typing produces exactly the typed characters" do
       given_ "we have an empty buffer", context do
         new_empty_buffer()
@@ -445,8 +409,10 @@ defmodule Quillex.IntegrationV1Spex do
       then_ "buffer should contain exactly 'Hello World'", context do
         {:ok, _} = wait_for_active_buffer_content("Hello World")
         content = active_buffer_content()
+
         assert content == "Hello World",
-          "Expected 'Hello World', got '#{content}' (length: #{String.length(content || "")})"
+               "Expected 'Hello World', got '#{content}' (length: #{String.length(content || "")})"
+
         {:ok, context}
       end
     end
@@ -466,8 +432,10 @@ defmodule Quillex.IntegrationV1Spex do
       then_ "buffer should contain exactly 'abc' (3 characters)", context do
         {:ok, _} = wait_for_active_buffer_content("abc")
         content = active_buffer_content()
+
         assert content == "abc",
-          "Expected 'abc' (3 chars), got '#{content}' (#{String.length(content || "")} chars)"
+               "Expected 'abc' (3 chars), got '#{content}' (#{String.length(content || "")} chars)"
+
         {:ok, context}
       end
     end
@@ -480,7 +448,6 @@ defmodule Quillex.IntegrationV1Spex do
   spex "V1 Integration - Open Large File",
     description: "Validates opening and viewing a large text file",
     tags: [:v1, :integration, :file_open, :scroll] do
-
     scenario "Open Spinoza's Ethics Part 1" do
       given_ "Spinoza's Ethics file exists", context do
         assert File.exists?(@spinoza_path), "Spinoza file not found at #{@spinoza_path}"
@@ -503,8 +470,10 @@ defmodule Quillex.IntegrationV1Spex do
       then_ "buffer should be named after the file", context do
         names = buffer_names()
         has_spinoza = Enum.any?(names, &String.contains?(&1, "spinozas_ethics"))
+
         assert has_spinoza,
-          "Expected a buffer with 'spinozas_ethics' in #{inspect(names)}"
+               "Expected a buffer with 'spinozas_ethics' in #{inspect(names)}"
+
         {:ok, context}
       end
 
@@ -515,9 +484,11 @@ defmodule Quillex.IntegrationV1Spex do
         # Poll until the expected content appears — switching tab triggers a render cycle
         # that can take several frames before the semantic table reflects the new buffer.
         assert {:ok, content} = wait_for_content_containing("CONCERNING GOD", 5000),
-          "Expected to find 'CONCERNING GOD' in Spinoza buffer within 5s. Last content: #{String.slice(active_buffer_content() || "", 0, 200)}"
+               "Expected to find 'CONCERNING GOD' in Spinoza buffer within 5s. Last content: #{String.slice(active_buffer_content() || "", 0, 200)}"
+
         assert String.contains?(content, "DEFINITIONS"),
-          "Expected to find 'DEFINITIONS' in content"
+               "Expected to find 'DEFINITIONS' in content"
+
         {:ok, context}
       end
     end
@@ -538,7 +509,8 @@ defmodule Quillex.IntegrationV1Spex do
       then_ "it should have approximately 339 lines", context do
         # Allow 339 or 340 due to trailing newline handling differences
         assert context.line_count in 339..340,
-          "Expected ~339 lines, got #{context.line_count}"
+               "Expected ~339 lines, got #{context.line_count}"
+
         {:ok, context}
       end
     end
@@ -551,7 +523,6 @@ defmodule Quillex.IntegrationV1Spex do
   spex "V1 Integration - Open Code File",
     description: "Validates opening an Elixir code file",
     tags: [:v1, :integration, :code_file] do
-
     scenario "Open app.ex" do
       given_ "app.ex exists", context do
         assert File.exists?(@code_file_path), "Code file not found at #{@code_file_path}"
@@ -574,9 +545,8 @@ defmodule Quillex.IntegrationV1Spex do
         switch_to_buffer("app.ex")
         Process.sleep(300)
 
-        content = active_buffer_content()
-        assert String.contains?(content || "", "defmodule"),
-          "Expected to find 'defmodule' in Elixir code"
+        assert {:ok, _content} = wait_for_content_containing("defmodule")
+
         {:ok, context}
       end
     end
@@ -593,7 +563,6 @@ defmodule Quillex.IntegrationV1Spex do
     # for components (SearchBar, TabBar) that receive :shutdown mid-init.
     # These are benign lifecycle events, not real failures.
     fail_on_error_logs: false do
-
     scenario "Switch between buffers using tabs" do
       given_ "we have multiple buffers open", context do
         # Set up our own buffers for this test
@@ -632,12 +601,17 @@ defmodule Quillex.IntegrationV1Spex do
         switch_to_buffer("app.ex")
         name3 = active_buffer_name()
 
-        {:ok, Map.merge(context, %{name1: name1, name2: name2, name3: name3, untitled: untitled_name})}
+        {:ok,
+         Map.merge(context, %{name1: name1, name2: name2, name3: name3, untitled: untitled_name})}
       end
 
       then_ "each switch should activate the correct buffer", context do
-        assert context.name1 == context.untitled, "Expected '#{context.untitled}', got '#{context.name1}'"
-        assert context.name2 == "spinozas_ethics_p1.txt", "Expected 'spinozas_ethics_p1.txt', got '#{context.name2}'"
+        assert context.name1 == context.untitled,
+               "Expected '#{context.untitled}', got '#{context.name1}'"
+
+        assert context.name2 == "spinozas_ethics_p1.txt",
+               "Expected 'spinozas_ethics_p1.txt', got '#{context.name2}'"
+
         assert context.name3 == "app.ex", "Expected 'app.ex', got '#{context.name3}'"
         {:ok, context}
       end
@@ -668,7 +642,8 @@ defmodule Quillex.IntegrationV1Spex do
       then_ "we should be on a different buffer", context do
         # With 2+ buffers, activating by index should change buffer
         assert context.after_next != context.first_name,
-          "Expected different buffer after activate_buffer(1), still on '#{context.first_name}'"
+               "Expected different buffer after activate_buffer(1), still on '#{context.first_name}'"
+
         {:ok, context}
       end
     end
@@ -681,7 +656,6 @@ defmodule Quillex.IntegrationV1Spex do
   spex "V1 Integration - Find in Spinoza",
     description: "Validates search functionality with famous philosophical passages",
     tags: [:v1, :integration, :find, :search] do
-
     scenario "Search for 'God' in Spinoza's Ethics" do
       given_ "Spinoza's Ethics is the active buffer", context do
         # Close any existing search bar first
@@ -697,8 +671,10 @@ defmodule Quillex.IntegrationV1Spex do
         Process.sleep(500)
 
         name = active_buffer_name()
+
         assert name == "spinozas_ethics_p1.txt",
-          "Expected Spinoza buffer active, got '#{name}'"
+               "Expected Spinoza buffer active, got '#{name}'"
+
         {:ok, context}
       end
 
@@ -721,11 +697,13 @@ defmodule Quillex.IntegrationV1Spex do
         Enum.each(1..50, fn _ ->
           Probes.send_keys("backspace", [])
         end)
+
         Process.sleep(200)
 
         # Now type search query
         Probes.send_text("God")
-        Process.sleep(800)  # Wait for search to complete
+        # Wait for search to complete
+        Process.sleep(800)
         {:ok, context}
       end
 
@@ -736,7 +714,9 @@ defmodule Quillex.IntegrationV1Spex do
 
         # Check that we have matches visible (the count should appear)
         has_matches = String.contains?(rendered, "/") or String.contains?(rendered, "of")
-        assert has_matches, "Search should show match count in UI. Rendered: #{String.slice(rendered, 0, 200)}"
+
+        assert has_matches,
+               "Search should show match count in UI. Rendered: #{String.slice(rendered, 0, 200)}"
 
         {:ok, context}
       end
@@ -755,9 +735,11 @@ defmodule Quillex.IntegrationV1Spex do
         # Clear any pre-fill by going to end and backspacing
         Probes.send_keys("end", [])
         Process.sleep(50)
+
         Enum.each(1..50, fn _ ->
           Probes.send_keys("backspace", [])
         end)
+
         Process.sleep(200)
 
         # Type new search term
@@ -770,6 +752,7 @@ defmodule Quillex.IntegrationV1Spex do
         # Verify through UI - search text should be visible
         assert ScenicMcp.Query.text_visible?("absolutely infinite"),
                "Search term should be visible in search bar"
+
         {:ok, context}
       end
     end
@@ -784,36 +767,14 @@ defmodule Quillex.IntegrationV1Spex do
       end
 
       then_ "search bar should be closed", context do
-        # Search-bar close triggers a full pane recreation; a click or key
-        # landing in that window can be lost (transform-miss drop / dying
-        # instance). Retry the focus-click + keystroke: this scenario tests
-        # that typing reaches the buffer after close, not single-event
-        # delivery.
+        Probes.click(120, 200)
+        Process.sleep(250)
+        Probes.send_text("Z")
+        Process.sleep(400)
+
         landed? =
-          Enum.reduce_while(1..3, false, fn _, _ ->
-            # Click NEAR THE START of a line (x=120), not out in the margin:
-            # clicks landing right of a short/blank line's text are dropped
-            # by TextField's overlay-click heuristic (see its note — a known
-            # limitation, deferred past 1.0). Spinoza has blank lines
-            # between paragraphs, so a click at x=400 often lands in that
-            # dead zone and never focuses the pane.
-            Probes.click(120, 200)
-            Process.sleep(250)
-            Probes.send_text("Z")
-            Process.sleep(400)
-
-            # Accept EITHER the semantic content or the actually-drawn text.
-            # While a pane is being replaced there are briefly two
-            # :buffer_pane semantic entries, and picking the dying one reads
-            # stale content — reporting "the typing never arrived" when it
-            # did. Drawn text comes from the live component, so it is the
-            # stronger evidence of the two.
-            typed_landed? =
-              String.contains?(active_buffer_content() || "", "Z") or
-                Quillex.TestHelpers.ScriptInspector.rendered_text_contains?("Z")
-
-            if typed_landed?, do: {:halt, true}, else: {:cont, false}
-          end)
+          String.contains?(active_buffer_content() || "", "Z") or
+            Quillex.TestHelpers.ScriptInspector.rendered_text_contains?("Z")
 
         assert landed?,
                "After closing search, typing should go to buffer. " <>
@@ -831,7 +792,6 @@ defmodule Quillex.IntegrationV1Spex do
   spex "V1 Integration - Search Bar Focus",
     description: "Validates search bar has exclusive input focus when open",
     tags: [:v1, :integration, :find, :focus] do
-
     scenario "Search bar input does NOT go to buffer" do
       given_ "we have a buffer with known content", context do
         new_empty_buffer()
@@ -865,11 +825,12 @@ defmodule Quillex.IntegrationV1Spex do
         Process.sleep(300)
 
         content = active_buffer_content()
+
         refute String.contains?(content || "", "searchterm"),
-          "Buffer should NOT contain 'searchterm' - search bar should have exclusive focus. Got: '#{content}'"
+               "Buffer should NOT contain 'searchterm' - search bar should have exclusive focus. Got: '#{content}'"
 
         assert content == context.original_content,
-          "Buffer should still contain original content '#{context.original_content}', got '#{content}'"
+               "Buffer should still contain original content '#{context.original_content}', got '#{content}'"
 
         {:ok, context}
       end
@@ -896,8 +857,10 @@ defmodule Quillex.IntegrationV1Spex do
       then_ "text should appear in buffer", context do
         content = active_buffer_content()
         expected = (context.content_before || "") <> "X"
+
         assert content == expected,
-          "Expected '#{expected}' after typing, got '#{content}'"
+               "Expected '#{expected}' after typing, got '#{content}'"
+
         {:ok, context}
       end
     end
@@ -910,7 +873,6 @@ defmodule Quillex.IntegrationV1Spex do
   spex "V1 Integration - Search Highlight Accuracy",
     description: "Validates search highlights appear at correct positions",
     tags: [:v1, :integration, :find, :highlight] do
-
     scenario "Highlights appear at exact match positions" do
       given_ "we have a buffer with predictable content", context do
         new_empty_buffer()
@@ -940,6 +902,7 @@ defmodule Quillex.IntegrationV1Spex do
         # "the" appears twice: "The" (case insensitive) and "the"
         # Check for indication of 2 matches in rendered output
         has_two_matches = String.contains?(rendered, "/2") or String.contains?(rendered, "2 of")
+
         assert has_two_matches,
                "Expected 2 matches for 'the' shown in UI. Rendered: #{String.slice(rendered, 0, 200)}"
 
@@ -984,6 +947,7 @@ defmodule Quillex.IntegrationV1Spex do
 
         # "word" appears on line 1 and line 4, NOT on empty lines 2-3
         has_two_matches = String.contains?(rendered, "/2") or String.contains?(rendered, "2 of")
+
         assert has_two_matches,
                "Expected 2 matches for 'word' shown in UI. Rendered: #{String.slice(rendered, 0, 200)}"
 
@@ -1002,7 +966,6 @@ defmodule Quillex.IntegrationV1Spex do
   spex "V1 Integration - Undo/Redo",
     description: "Validates undo and redo work correctly",
     tags: [:v1, :integration, :undo, :redo] do
-
     scenario "Undo restores previous state" do
       given_ "we have a fresh buffer with some text", context do
         new_empty_buffer()
@@ -1012,7 +975,9 @@ defmodule Quillex.IntegrationV1Spex do
         Process.sleep(300)
         {:ok, _} = wait_for_active_buffer_content("Hello")
         content_before = active_buffer_content()
-        assert content_before == "Hello", "Setup failed: expected 'Hello', got '#{content_before}'"
+
+        assert content_before == "Hello",
+               "Setup failed: expected 'Hello', got '#{content_before}'"
 
         {:ok, Map.put(context, :content_before, content_before)}
       end
@@ -1023,23 +988,27 @@ defmodule Quillex.IntegrationV1Spex do
         Process.sleep(300)
         {:ok, _} = wait_for_active_buffer_content("HelloX")
         content_with_addition = active_buffer_content()
-        assert content_with_addition == "HelloX", "Add failed: expected 'HelloX', got '#{content_with_addition}'"
 
-        # Single undo should remove the X (Ctrl+U is undo)
-        Probes.send_keys("u", [:ctrl])
+        assert content_with_addition == "HelloX",
+               "Add failed: expected 'HelloX', got '#{content_with_addition}'"
+
+        # Single undo should remove the X (Ctrl+Z is undo)
+        Probes.send_keys("z", [:ctrl])
         Process.sleep(300)
         {:ok, _} = wait_for_active_buffer_content("Hello")
         content_after_undo = active_buffer_content()
 
-        {:ok, Map.merge(context, %{
-          content_with_addition: content_with_addition,
-          content_after_undo: content_after_undo
-        })}
+        {:ok,
+         Map.merge(context, %{
+           content_with_addition: content_with_addition,
+           content_after_undo: content_after_undo
+         })}
       end
 
       then_ "content should be restored", context do
         assert context.content_after_undo == context.content_before,
-          "Undo should restore: expected '#{context.content_before}', got '#{context.content_after_undo}'"
+               "Undo should restore: expected '#{context.content_before}', got '#{context.content_after_undo}'"
+
         {:ok, context}
       end
     end
@@ -1055,21 +1024,22 @@ defmodule Quillex.IntegrationV1Spex do
         {:ok, _} = wait_for_active_buffer_content("TestY")
         content_before_undo = active_buffer_content()
 
-        # Undo (Ctrl+U)
-        Probes.send_keys("u", [:ctrl])
+        # Undo (Ctrl+Z)
+        Probes.send_keys("z", [:ctrl])
         Process.sleep(300)
         {:ok, _} = wait_for_active_buffer_content("Test")
         content_after_undo = active_buffer_content()
 
-        {:ok, Map.merge(context, %{
-          content_before_undo: content_before_undo,
-          content_after_undo: content_after_undo
-        })}
+        {:ok,
+         Map.merge(context, %{
+           content_before_undo: content_before_undo,
+           content_after_undo: content_after_undo
+         })}
       end
 
       when_ "we redo", context do
-        # Redo is Ctrl+R
-        Probes.send_keys("r", [:ctrl])
+        # Redo is Ctrl+Shift+Z
+        Probes.send_keys("z", [:ctrl, :shift])
         Process.sleep(300)
         {:ok, _} = wait_for_active_buffer_content(context.content_before_undo)
         content_after_redo = active_buffer_content()
@@ -1078,7 +1048,8 @@ defmodule Quillex.IntegrationV1Spex do
 
       then_ "the undone text should be restored", context do
         assert context.content_after_redo == context.content_before_undo,
-          "Redo should restore: expected '#{context.content_before_undo}', got '#{context.content_after_redo}'"
+               "Redo should restore: expected '#{context.content_before_undo}', got '#{context.content_after_redo}'"
+
         {:ok, context}
       end
     end
@@ -1091,7 +1062,6 @@ defmodule Quillex.IntegrationV1Spex do
   spex "V1 Integration - Save and Reopen",
     description: "Validates saving a file and reopening it preserves content",
     tags: [:v1, :integration, :save, :file_io] do
-
     scenario "Save buffer to temp file" do
       given_ "we have a buffer with unique content", context do
         new_empty_buffer()
@@ -1108,9 +1078,11 @@ defmodule Quillex.IntegrationV1Spex do
       when_ "we save to a temp file", context do
         # Get active buffer content and save it
         content = active_buffer_content()
+
         if content do
           File.write!(@temp_save_path, content)
         end
+
         Process.sleep(500)
         {:ok, context}
       end
@@ -1118,8 +1090,10 @@ defmodule Quillex.IntegrationV1Spex do
       then_ "file should exist with correct content", context do
         assert File.exists?(@temp_save_path), "Saved file should exist"
         file_content = File.read!(@temp_save_path) |> String.trim()
+
         assert file_content == context.unique_content,
-          "File content should match: expected '#{context.unique_content}', got '#{file_content}'"
+               "File content should match: expected '#{context.unique_content}', got '#{file_content}'"
+
         {:ok, context}
       end
     end
@@ -1155,8 +1129,9 @@ defmodule Quillex.IntegrationV1Spex do
       then_ "content should match original", context do
         {:ok, _} = wait_for_active_buffer_content(context.unique_content)
         content = active_buffer_content()
+
         assert content == context.unique_content,
-          "Reopened content should match: expected '#{context.unique_content}', got '#{content}'"
+               "Reopened content should match: expected '#{context.unique_content}', got '#{content}'"
 
         # Cleanup
         File.rm(@temp_save_path)
@@ -1176,7 +1151,6 @@ defmodule Quillex.IntegrationV1Spex do
     # rebuilds; Scenic logs [error] for components receiving :shutdown mid-init.
     # These are benign lifecycle events — all scenario assertions pass.
     fail_on_error_logs: false do
-
     scenario "Open 8 buffers with various states" do
       given_ "we start with a clean slate", context do
         # Close all but one
@@ -1270,7 +1244,6 @@ defmodule Quillex.IntegrationV1Spex do
   spex "V1 Integration - Scrolling",
     description: "Validates scrolling works in large files",
     tags: [:v1, :integration, :scroll] do
-
     scenario "Scroll down in large file" do
       given_ "Spinoza's Ethics is open (340 lines)", context do
         open_file(@spinoza_path)
@@ -1287,6 +1260,7 @@ defmodule Quillex.IntegrationV1Spex do
           Probes.send_keys("down", [])
           Process.sleep(30)
         end)
+
         Process.sleep(300)
         {:ok, context}
       end
@@ -1303,7 +1277,6 @@ defmodule Quillex.IntegrationV1Spex do
     # 22_scrollbar_drag_spex.exs — shift tracking is gated on keyboard focus,
     # which the shared-state monolith cannot guarantee at this point.
 
-
     # NOTE: the scrollbar-thumb drag scenario was extracted to
     # 22_scrollbar_drag_spex.exs — it needs a self-contained, focus-guaranteed
     # setup and viewport-size-relative coordinates (the WM may grant a
@@ -1317,7 +1290,6 @@ defmodule Quillex.IntegrationV1Spex do
   spex "V1 Integration - Word Wrap Scroll",
     description: "Validates scroll limits are recalculated when word wrap toggles",
     tags: [:v1, :integration, :scroll, :wordwrap] do
-
     scenario "Word wrap ON allows scrolling to wrapped content" do
       given_ "Spinoza's Ethics is open with word wrap OFF", context do
         open_file(@spinoza_path)
@@ -1333,9 +1305,11 @@ defmodule Quillex.IntegrationV1Spex do
         Process.sleep(200)
         # Now it's back to initial state - toggle once more if needed
         # Just use trigger_action directly for known state
-        trigger_action(:toggle_word_wrap)  # Toggle to known state
+        # Toggle to known state
+        trigger_action(:toggle_word_wrap)
         Process.sleep(200)
-        trigger_action(:toggle_word_wrap)  # Toggle back - now OFF for sure if we toggle an even number
+        # Toggle back - now OFF for sure if we toggle an even number
+        trigger_action(:toggle_word_wrap)
         Process.sleep(200)
 
         {:ok, context}
@@ -1365,6 +1339,7 @@ defmodule Quillex.IntegrationV1Spex do
           Probes.send_keys("down", [])
           Process.sleep(30)
         end)
+
         Process.sleep(300)
 
         # If no crash and we can still interact, scroll limits were properly updated
@@ -1383,7 +1358,8 @@ defmodule Quillex.IntegrationV1Spex do
         new_empty_buffer()
 
         # Create content with multiple very long lines
-        long_line = String.duplicate("word ", 50)  # ~250 chars per line
+        # ~250 chars per line
+        long_line = String.duplicate("word ", 50)
         Probes.send_text(long_line)
         Probes.send_keys("enter", [])
         Probes.send_text(long_line)
@@ -1432,7 +1408,6 @@ defmodule Quillex.IntegrationV1Spex do
   spex "V1 Integration - Keyboard Selection",
     description: "Validates Shift+Arrow text selection",
     tags: [:v1, :integration, :selection] do
-
     scenario "Select text with Shift+Right" do
       given_ "we have a buffer with text", context do
         new_empty_buffer()
@@ -1452,6 +1427,7 @@ defmodule Quillex.IntegrationV1Spex do
           Probes.send_keys("right", [:shift])
           Process.sleep(50)
         end)
+
         Process.sleep(300)
         {:ok, context}
       end
@@ -1459,7 +1435,6 @@ defmodule Quillex.IntegrationV1Spex do
       then_ "we should have 'Hello' selected", context do
         case wait_for_active_selection() do
           {:ok, buffer, selection} ->
-
             {start_pos, end_pos} = normalize_selection(selection)
             {start_line, start_col} = start_pos
             {end_line, end_col} = end_pos
@@ -1472,9 +1447,12 @@ defmodule Quillex.IntegrationV1Spex do
 
             [first_line | _] = String.split(buffer.content || "", "\n", parts: 2)
             selected_text = selected_text_from_line(first_line, selection)
-            assert selected_text == "Hello", "Expected 'Hello' to be selected, got '#{selected_text}'"
+
+            assert selected_text == "Hello",
+                   "Expected 'Hello' to be selected, got '#{selected_text}'"
 
             {:ok, context}
+
           _ ->
             flunk("Could not get semantic selection")
         end
@@ -1497,6 +1475,7 @@ defmodule Quillex.IntegrationV1Spex do
           Probes.send_keys("left", [:shift])
           Process.sleep(50)
         end)
+
         Process.sleep(300)
         {:ok, context}
       end
@@ -1504,19 +1483,22 @@ defmodule Quillex.IntegrationV1Spex do
       then_ "we should have 'rld' selected (last 3 chars)", context do
         case wait_for_active_selection() do
           {:ok, buffer, selection} ->
-
             {start_pos, end_pos} = normalize_selection(selection)
             {_, actual_start_col} = start_pos
             {_, actual_end_col} = end_pos
 
-            assert actual_start_col == 3, "Selection start should be at col 3 ('r'), got #{actual_start_col}"
-            assert actual_end_col == 6, "Selection end should be at col 6 (after 'd'), got #{actual_end_col}"
+            assert actual_start_col == 3,
+                   "Selection start should be at col 3 ('r'), got #{actual_start_col}"
+
+            assert actual_end_col == 6,
+                   "Selection end should be at col 6 (after 'd'), got #{actual_end_col}"
 
             [first_line | _] = String.split(buffer.content || "", "\n", parts: 2)
             selected_text = selected_text_from_line(first_line, selection)
             assert selected_text == "rld", "Expected 'rld' to be selected, got '#{selected_text}'"
 
             {:ok, context}
+
           _ ->
             flunk("Could not get semantic selection")
         end
@@ -1539,6 +1521,7 @@ defmodule Quillex.IntegrationV1Spex do
         case wait_for_active_selection() do
           {:ok, _buffer, _selection} ->
             {:ok, context}
+
           _ ->
             flunk("Could not get semantic selection")
         end
@@ -1555,10 +1538,12 @@ defmodule Quillex.IntegrationV1Spex do
         # Move to start and select "ABC"
         Probes.send_keys("home", [])
         Process.sleep(100)
+
         Enum.each(1..3, fn _ ->
           Probes.send_keys("right", [:shift])
           Process.sleep(50)
         end)
+
         Process.sleep(200)
 
         content_before = active_buffer_content()
@@ -1574,8 +1559,10 @@ defmodule Quillex.IntegrationV1Spex do
       then_ "selected text should be removed", context do
         {:ok, _} = wait_for_active_buffer_content("DEFGH")
         content_after = active_buffer_content()
+
         assert content_after == "DEFGH",
-          "Expected 'DEFGH' after cutting 'ABC', got '#{content_after}'"
+               "Expected 'DEFGH' after cutting 'ABC', got '#{content_after}'"
+
         {:ok, context}
       end
     end
@@ -1588,12 +1575,10 @@ defmodule Quillex.IntegrationV1Spex do
   spex "V1 Integration - Mouse Control",
     description: "Validates mouse click cursor positioning",
     tags: [:v1, :integration, :mouse] do
-
     # NOTE: the click-positions-cursor scenario was extracted to
     # 23_click_cursor_spex.exs — it needs a self-contained setup that
     # guarantees pane focus before typing (in the shared-state monolith,
     # earlier scenarios could leave focus elsewhere, making it flaky).
-
 
     scenario "Click and drag selects text on a single line", _context do
       given_ "we have a buffer with known text", context do
@@ -1614,29 +1599,18 @@ defmodule Quillex.IntegrationV1Spex do
         # Global coords: line 1's visual row is global y [39, 63) (pane pin
         # y=35, cursor-block offset +4, line_height 24) — click its centre.
         #
-        # Retry the whole gesture: a mouse_down landing in a recreation
-        # window is dropped (transform-miss), and the drag then never
-        # starts. This scenario tests drag-selects-text, not single-event
-        # delivery.
         start_x = 120
         drag_end_x = 200
         line_y = 50
 
-        Enum.reduce_while(1..3, nil, fn _, _ ->
-          Probes.mouse_down(start_x, line_y)
-          Process.sleep(50)
-          Probes.send_mouse_move(start_x + 30, line_y)
-          Process.sleep(30)
-          Probes.send_mouse_move(drag_end_x, line_y)
-          Process.sleep(30)
-          Probes.mouse_up(drag_end_x, line_y)
-          Process.sleep(300)
-
-          case wait_for_active_selection(1000) do
-            {:ok, _, _} -> {:halt, :ok}
-            _ -> {:cont, nil}
-          end
-        end)
+        Probes.mouse_down(start_x, line_y)
+        Process.sleep(50)
+        Probes.send_mouse_move(start_x + 30, line_y)
+        Process.sleep(30)
+        Probes.send_mouse_move(drag_end_x, line_y)
+        Process.sleep(30)
+        Probes.mouse_up(drag_end_x, line_y)
+        Process.sleep(300)
 
         {:ok, context}
       end
@@ -1647,12 +1621,16 @@ defmodule Quillex.IntegrationV1Spex do
             {start_pos, end_pos} = normalize_selection(selection)
             {start_line, start_col} = start_pos
             {end_line, end_col} = end_pos
+
             assert start_line == 1,
                    "Drag selection should start on line 1, got line #{start_line}"
+
             assert end_line == 1,
                    "Drag selection should end on line 1, got line #{end_line}"
+
             assert end_col > start_col,
                    "Drag selection end col (#{end_col}) should be greater than start col (#{start_col})"
+
             {:ok, context}
 
           {:error, :selection_timeout} ->
@@ -1693,8 +1671,10 @@ defmodule Quillex.IntegrationV1Spex do
             {start_pos, end_pos} = normalize_selection(selection)
             {_start_line, start_col} = start_pos
             {_end_line, end_col} = end_pos
+
             assert end_col > start_col,
                    "Double-click word selection should span multiple columns (start=#{start_col}, end=#{end_col})"
+
             {:ok, context}
 
           {:error, :selection_timeout} ->

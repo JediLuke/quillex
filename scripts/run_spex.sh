@@ -19,8 +19,5 @@ fi
 PINNER_PID=$!
 trap 'kill "$PINNER_PID" 2>/dev/null || true' EXIT
 
-if [ $# -gt 0 ]; then
-  MIX_ENV=test mix spex "$@"
-else
-  MIX_ENV=test mix spex
-fi
+JSONL="${SPEX_JSONL:-/tmp/quillex_spex_failures_$(date +%Y%m%d_%H%M%S).jsonl}"
+MIX_ENV=test SCENIC_LOCAL_TARGET=glfw mix spex --jsonl="$JSONL" "$@"

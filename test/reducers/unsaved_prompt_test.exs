@@ -3,7 +3,7 @@ defmodule QuillEx.RootScene.UnsavedPromptTest do
 
   alias QuillEx.RootScene
   alias QuillEx.RootScene.State, as: RootState
-  alias Quillex.Structs.BufState.BufRef
+  alias Quillex.Buffer.Ref
 
   # Build a RootScene.State skeleton that satisfies the struct invariants.
   # The `decide_close/2` function only reads and writes the dirty-prompt
@@ -18,10 +18,11 @@ defmodule QuillEx.RootScene.UnsavedPromptTest do
   end
 
   defp buf_ref(dirty?) do
-    %BufRef{uuid: "uuid-" <> Integer.to_string(:erlang.unique_integer([:positive])),
-            name: "untitled",
-            mode: :edit,
-            dirty?: dirty?}
+    %Ref{
+      uuid: "uuid-" <> Integer.to_string(:erlang.unique_integer([:positive])),
+      name: "untitled",
+      dirty?: dirty?
+    }
   end
 
   describe "decide_close/2" do

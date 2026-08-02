@@ -1,12 +1,11 @@
 defmodule Quillex.Buffer.Utils do
-
-  def prev_word_coords(%{cursors: [c]} = buf_state) do
+  def prev_word_coords(%{cursor: c} = buf_state) do
     line = Enum.at(buf_state.data, c.line - 1)
     new_col = find_prev_word_start(line, c.col)
     {c.line, new_col}
   end
 
-  def next_word_coords(%{cursors: [c]} = buf_state) do
+  def next_word_coords(%{cursor: c} = buf_state) do
     line = Enum.at(buf_state.data, c.line - 1, "")
     new_col = find_next_word_start(line, c.col)
     {c.line, new_col}
@@ -14,8 +13,8 @@ defmodule Quillex.Buffer.Utils do
 
   defp find_next_word_start(line, col) do
     graphemes = String.graphemes(line)
-    max_col   = length(graphemes)
-    col       = min(col, max_col + 1)
+    max_col = length(graphemes)
+    col = min(col, max_col + 1)
 
     # Skip over the current word (non-spaces), then skip over spaces
     col = skip_while_right(col, graphemes, fn ch -> ch != " " end)
@@ -32,10 +31,10 @@ defmodule Quillex.Buffer.Utils do
 
   defp find_prev_word_start(line, col) do
     graphemes = String.graphemes(line)
-    max_col   = length(graphemes)
+    max_col = length(graphemes)
     # Clip to valid range. max/1 guards against empty lines where max_col == 0,
     # which would otherwise produce col 0 (invalid — columns are 1-based).
-    col       = max(1, min(col, max_col))
+    col = max(1, min(col, max_col))
 
     # Skip left over spaces, then skip left over the word
     col = skip_while_left(col, graphemes, fn ch -> ch == " " end)

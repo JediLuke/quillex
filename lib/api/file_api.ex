@@ -1,12 +1,12 @@
 defmodule Quillex.API.FileAPI do
   @moduledoc """
   File operations API for Quillex text editor.
-  
+
   Provides a clean interface for opening, saving, and manipulating files
   in the text editor through IEx or other programmatic interfaces.
-  
+
   ## Examples
-  
+
       # Open a file
       iex> Quillex.API.FileAPI.open("test/support/spinozas_ethics_p1.txt")
       {:ok, %{buffer_ref: ..., file_path: "test/support/spinozas_ethics_p1.txt"}}
@@ -28,36 +28,33 @@ defmodule Quillex.API.FileAPI do
 
   @doc """
   Opens a file in the text editor.
-  
+
   Creates a new buffer with the file contents and switches to it.
   If the file doesn't exist, creates a new empty buffer associated with that path.
-  
+
   ## Parameters
   - `file_path` - Path to the file to open (string)
-  
+
   ## Returns
   - `{:ok, %{buffer_ref: ref, file_path: path}}` on success
   - `{:error, reason}` on failure
   """
   def open(file_path) when is_binary(file_path) do
-    # Opening an already-open file ACTIVATES its existing buffer instead of
-    # duplicating it. (Duplicates also produce identical tab labels, which
-    # breaks anything addressing tabs by name — found via a Tab Navigation
-    # spex flake where "app.ex" appeared twice in the tab bar.)
-    existing =
-      Quillex.Buffer.BufferManager.list_buffers()
-      |> Enum.find(fn b -> match?(%{source: %{filepath: ^file_path}}, b) end)
+    file_path = Quillex.Buffer.PathIdentity.canonical(file_path)
+    existing = Enum.find(Quillex.Buffer.BufferManager.list_buffers(), &(&1.path == file_path))
 
     if existing do
-      buf_ref = struct(Quillex.Structs.BufState.BufRef, uuid: existing.uuid, name: existing.name)
-      :ok = Quillex.Buffer.switch(buf_ref)
+      buf_ref = existing
+      :ok = Quillex.Buffer.activate(buf_ref)
+
+      {:ok, snapshot} = Quillex.Buffer.fetch(buf_ref)
 
       {:ok,
        %{
          buffer_ref: buf_ref,
          file_path: file_path,
-         lines: length(existing.data),
-         bytes: existing.data |> Enum.join("\n") |> byte_size()
+         lines: length(snapshot.lines),
+         bytes: snapshot.lines |> Enum.join("\n") |> byte_size()
        }}
     else
       do_open_new(file_path)
@@ -73,37 +70,41 @@ defmodule Quillex.API.FileAPI do
         # Do NOT call Buffer.switch/1 here — it would send a redundant {:activate_buffer}
         # cast that may arrive before the PubSub message, causing RootScene to raise
         # "Buffer not found" because the buffer has not yet been added to state.
-        {:ok, buf_ref} = Buffer.new(%{
-          name: Path.basename(file_path),
-          source: %{filepath: file_path},
-          data: String.split(content, "\n"),
-          dirty: false
-        })
+        {:ok, buf_ref} =
+          Buffer.new(%{
+            name: Path.basename(file_path),
+            source: %{filepath: file_path},
+            data: String.split(content, "\n"),
+            dirty: false
+          })
 
-        {:ok, %{
-          buffer_ref: buf_ref,
-          file_path: file_path,
-          lines: length(String.split(content, "\n")),
-          bytes: byte_size(content)
-        }}
+        {:ok,
+         %{
+           buffer_ref: buf_ref,
+           file_path: file_path,
+           lines: length(String.split(content, "\n")),
+           bytes: byte_size(content)
+         }}
 
       {:error, :enoent} ->
         # File doesn't exist, create new buffer for this path.
         # Same reasoning as above — PubSub handles activation; no explicit switch needed.
-        {:ok, buf_ref} = Buffer.new(%{
-          name: Path.basename(file_path),
-          source: %{filepath: file_path},
-          data: [""],
-          dirty: false
-        })
+        {:ok, buf_ref} =
+          Buffer.new(%{
+            name: Path.basename(file_path),
+            source: %{filepath: file_path},
+            data: [""],
+            dirty: false
+          })
 
-        {:ok, %{
-          buffer_ref: buf_ref,
-          file_path: file_path,
-          lines: 1,
-          bytes: 0,
-          created: true
-        }}
+        {:ok,
+         %{
+           buffer_ref: buf_ref,
+           file_path: file_path,
+           lines: 1,
+           bytes: 0,
+           created: true
+         }}
 
       {:error, reason} ->
         {:error, "Failed to open #{file_path}: #{reason}"}
@@ -112,10 +113,10 @@ defmodule Quillex.API.FileAPI do
 
   @doc """
   Saves the current active buffer to its associated file.
-  
+
   If the buffer has no associated file path, returns an error.
   Use `save_as/1` to save to a new file path.
-  
+
   ## Returns
   - `{:ok, %{file_path: path, bytes_written: count}}` on success
   - `{:error, reason}` on failure
@@ -124,25 +125,26 @@ defmodule Quillex.API.FileAPI do
     case get_active_buffer_data() do
       {:ok, %{file_path: nil}} ->
         {:error, "No file path associated with current buffer. Use save_as/1 instead."}
-        
+
       {:ok, %{file_path: file_path, data: lines}} ->
         content = Enum.join(lines, "\n")
-        
+
         case File.write(file_path, content) do
           :ok ->
             # Mark buffer as clean (not dirty)
             mark_buffer_clean()
-            
-            {:ok, %{
-              file_path: file_path,
-              bytes_written: byte_size(content),
-              lines: length(lines)
-            }}
-            
+
+            {:ok,
+             %{
+               file_path: file_path,
+               bytes_written: byte_size(content),
+               lines: length(lines)
+             }}
+
           {:error, reason} ->
             {:error, "Failed to save #{file_path}: #{reason}"}
         end
-        
+
       {:error, reason} ->
         {:error, reason}
     end
@@ -150,10 +152,10 @@ defmodule Quillex.API.FileAPI do
 
   @doc """
   Saves the current active buffer to a specific file path.
-  
+
   ## Parameters
   - `file_path` - Path where to save the file (string)
-  
+
   ## Returns
   - `{:ok, %{file_path: path, bytes_written: count}}` on success
   - `{:error, reason}` on failure
@@ -162,23 +164,24 @@ defmodule Quillex.API.FileAPI do
     case get_active_buffer_data() do
       {:ok, %{data: lines}} ->
         content = Enum.join(lines, "\n")
-        
+
         case File.write(file_path, content) do
           :ok ->
             # Update buffer to associate with new file path and mark clean
             update_buffer_file_path(file_path)
             mark_buffer_clean()
-            
-            {:ok, %{
-              file_path: file_path,
-              bytes_written: byte_size(content),
-              lines: length(lines)
-            }}
-            
+
+            {:ok,
+             %{
+               file_path: file_path,
+               bytes_written: byte_size(content),
+               lines: length(lines)
+             }}
+
           {:error, reason} ->
             {:error, "Failed to save #{file_path}: #{reason}"}
         end
-        
+
       {:error, reason} ->
         {:error, reason}
     end
@@ -186,12 +189,12 @@ defmodule Quillex.API.FileAPI do
 
   @doc """
   Creates a new empty buffer.
-  
+
   ## Parameters
   - `opts` - Optional parameters (keyword list)
     - `:name` - Name for the buffer (default: auto-generated)
     - `:file_path` - Associate with a file path (default: nil)
-  
+
   ## Returns
   - `{:ok, %{buffer_ref: ref}}` on success
   - `{:error, reason}` on failure
@@ -203,19 +206,20 @@ defmodule Quillex.API.FileAPI do
     # Buffer.new/1 triggers PubSub {:new_buffer_opened, buf_ref}; RootScene activates it.
     # Do NOT call Buffer.switch/1 — the PubSub message already handles activation and the
     # explicit switch cast can race with the PubSub message, crashing RootScene.
-    {:ok, buf_ref} = Buffer.new(%{
-      source: if(file_path, do: %{filepath: file_path}, else: nil),
-      name: name,
-      data: [""],
-      dirty: false
-    })
+    {:ok, buf_ref} =
+      Buffer.new(%{
+        source: if(file_path, do: %{filepath: file_path}, else: nil),
+        name: name,
+        data: [""],
+        dirty: false
+      })
 
     {:ok, %{buffer_ref: buf_ref}}
   end
 
   @doc """
   Gets information about the current active buffer.
-  
+
   ## Returns
   - `{:ok, %{file_path: path, lines: count, dirty: boolean, buffer_ref: ref}}` on success
   - `{:error, reason}` on failure
@@ -223,14 +227,15 @@ defmodule Quillex.API.FileAPI do
   def info() do
     case get_active_buffer_data() do
       {:ok, data} ->
-        {:ok, %{
-          file_path: data.file_path,
-          lines: length(data.data),
-          dirty: Map.get(data, :dirty, false),
-          buffer_ref: Map.get(data, :buffer_ref),
-          bytes: data.data |> Enum.join("\n") |> byte_size()
-        }}
-        
+        {:ok,
+         %{
+           file_path: data.file_path,
+           lines: length(data.data),
+           dirty: Map.get(data, :dirty, false),
+           buffer_ref: Map.get(data, :buffer_ref),
+           bytes: data.data |> Enum.join("\n") |> byte_size()
+         }}
+
       {:error, reason} ->
         {:error, reason}
     end
@@ -238,7 +243,7 @@ defmodule Quillex.API.FileAPI do
 
   @doc """
   Lists all open buffers.
-  
+
   ## Returns
   - List of buffer information maps
   """
@@ -249,11 +254,12 @@ defmodule Quillex.API.FileAPI do
         buffer_ref: buf_info,
         file_path: Map.get(buf_info, :file_path),
         dirty: Map.get(buf_info, :dirty, false),
-        lines: case Map.get(buf_info, :data) do
-          nil -> 0
-          data when is_list(data) -> length(data)
-          _ -> 1
-        end
+        lines:
+          case Map.get(buf_info, :data) do
+            nil -> 0
+            data when is_list(data) -> length(data)
+            _ -> 1
+          end
       }
     end)
   end
@@ -290,11 +296,12 @@ defmodule Quillex.API.FileAPI do
               {:action, [{:set_data, new_lines}, {:set_cursor, {1, 1}}, :mark_clean]}
             )
 
-            {:ok, %{
-              file_path: file_path,
-              lines: length(new_lines),
-              bytes: byte_size(content)
-            }}
+            {:ok,
+             %{
+               file_path: file_path,
+               lines: length(new_lines),
+               bytes: byte_size(content)
+             }}
 
           {:error, :enoent} ->
             {:error, "File has been deleted from disk"}
@@ -386,13 +393,13 @@ defmodule Quillex.API.FileAPI do
     case Enum.find(list_buffers(), fn buf -> buf.file_path == identifier end) do
       nil ->
         {:error, "No buffer found for file path: #{identifier}"}
-        
+
       buf ->
         Buffer.switch(buf.buffer_ref)
         :ok
     end
   end
-  
+
   def switch_to(buffer_ref) do
     # Switch by buffer reference
     Buffer.switch(buffer_ref)
@@ -412,16 +419,19 @@ defmodule Quillex.API.FileAPI do
         buf_ref ->
           case Quillex.Buffer.Process.fetch_buf(buf_ref) do
             {:ok, %Quillex.Structs.BufState{} = buf_state} ->
-              file_path = case buf_state.source do
-                %{filepath: fp} -> fp
-                _ -> nil
-              end
-              {:ok, %{
-                file_path: file_path,
-                data: buf_state.data,
-                buffer_ref: buf_ref,
-                dirty: buf_state.dirty?
-              }}
+              file_path =
+                case buf_state.source do
+                  %{filepath: fp} -> fp
+                  _ -> nil
+                end
+
+              {:ok,
+               %{
+                 file_path: file_path,
+                 data: buf_state.data,
+                 buffer_ref: buf_ref,
+                 dirty: buf_state.dirty?
+               }}
 
             {:error, reason} ->
               {:error, "Failed to fetch buffer state: #{inspect(reason)}"}
@@ -439,7 +449,9 @@ defmodule Quillex.API.FileAPI do
   defp mark_buffer_clean() do
     # Send :save action to the active buffer's process, which sets dirty?: false
     case Quillex.Buffer.active_buf() do
-      nil -> :ok
+      nil ->
+        :ok
+
       buf_ref ->
         Quillex.Buffer.BufferManager.call_buffer(buf_ref, {:action, [:mark_clean]})
         :ok
@@ -455,7 +467,11 @@ defmodule Quillex.API.FileAPI do
         # Update the buffer's name and source metadata via the reducer action.
         # {:set_file_path, path} updates name + source without writing to disk,
         # since the caller (save_as/1) has already written the file directly.
-        Quillex.Buffer.BufferManager.call_buffer(buf_ref, {:action, [{:set_file_path, file_path}]})
+        Quillex.Buffer.BufferManager.call_buffer(
+          buf_ref,
+          {:action, [{:set_file_path, file_path}]}
+        )
+
         :ok
     end
   end

@@ -7,7 +7,7 @@ defmodule Quillex.RadixCache.Sources do
   creation is safe here.
   """
 
-  @doc "Buffer-list store source: `%{buffers: [BufRef], active_buf: BufRef | nil}`"
+  @doc "Buffer-list store source: `%{buffers: [Ref], active_buf: Ref | nil}`"
   def buffers, do: :radix_buffers
 
   @doc "UI chrome store source (ViewStore state map)"

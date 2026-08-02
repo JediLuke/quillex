@@ -5,61 +5,46 @@ defmodule Quillex.Structs.BufState do
 
   @type source :: %{filepath: String.t()} | nil
   @type selection :: %{start: {pos_integer, pos_integer}, end: {pos_integer, pos_integer}} | nil
-  @type timestamps :: %{
-    opened: DateTime.t() | nil,
-    last_update: DateTime.t() | nil,
-    last_save: DateTime.t() | nil
-  }
-
   @type t :: %__MODULE__{
-    uuid: String.t() | nil,
-    name: String.t(),
-    type: :text,
-    data: [String.t()] | nil,
-    mode: :edit | {:vim, :insert} | {:vim, :normal},
-    source: source(),
-    cursors: [Cursor.t()],
-    selection: selection(),
-    history: list(),
-    read_only?: boolean(),
-    dirty?: boolean(),
-    undo_stack: list(),
-    redo_stack: list(),
-    undo_max_size: pos_integer(),
-    search_query: String.t() | nil,
-    search_matches: list(),
-    search_current_index: non_neg_integer(),
-    timestamps: timestamps()
-  }
+          uuid: String.t() | nil,
+          name: String.t(),
+          data: [String.t()] | nil,
+          source: source(),
+          cursor: Cursor.t(),
+          selection: selection(),
+          read_only?: boolean(),
+          dirty?: boolean(),
+          undo_stack: list(),
+          redo_stack: list(),
+          undo_max_size: pos_integer(),
+          search_query: String.t() | nil,
+          search_matches: list(),
+          search_current_index: non_neg_integer()
+        }
 
   defstruct [
     # a unique uuid for referencing the buffer
     uuid: nil,
     # the name of the buffer that appears in the tab-bar (NOT unique!)
     name: @unnamed,
-    # There are several types of buffers e.g. :text, :list - the most common though is :text
-    type: :text,
     # where the actual contents of the buffer is kept
     data: nil,
-    # Buffers can be in various "modes" e.g. {:vim, :normal}, :edit
-    mode: :edit,
     # Description of where this buffer originally came from, e.g. %{filepath: file_path}
     source: nil,
-    # a list of all the cursors in the buffer (these go into the buffer, not the buffer pane, because cursors are still used even through the API)
-    cursors: [],
+    # Singular document cursor; multi-cursor/Vim scaffolding was removed in 0.7.3.
+    cursor: nil,
     # text selection state - tracks start and end of selection
-    selection: nil,  # %{start: {line, col}, end: {line, col}} or nil for no selection
-    # track all the modifications as we do them, for undo/redo purposes
-    history: [],
+    # %{start: {line, col}, end: {line, col}} or nil for no selection
+    selection: nil,
     # a flag which lets us know if it's a read-only buffer, read-only buffers can't be modified
     read_only?: false,
     # a `dirty` buffer is one which is changed / modified in memory but not yet written to disk
     dirty?: false,
 
     # ===== UNDO/REDO STATE (Single Source of Truth) =====
-    # List of {data, cursors, selection} snapshots for undo (most recent first)
+    # List of {data, cursor, selection} snapshots for undo (most recent first)
     undo_stack: [],
-    # List of {data, cursors, selection} snapshots for redo (most recent first)
+    # List of {data, cursor, selection} snapshots for redo (most recent first)
     redo_stack: [],
     # Maximum undo stack size
     undo_max_size: 100,
@@ -70,46 +55,35 @@ defmodule Quillex.Structs.BufState do
     # List of {line, col, match_text} tuples for all matches
     search_matches: [],
     # Current match index (0-based)
-    search_current_index: 0,
-
-    # Where we track the timestamps for various operations
-    timestamps: %{
-      opened: nil,
-      last_update: nil,
-      last_save: nil
-    }
+    search_current_index: 0
   ]
 
   @doc """
   Create a new BufState from a map of arguments.
 
   ## Parameters
-  - `args` - Map with optional keys: `:name`, `:data`, `:mode`, `:source`, `:cursors`,
+  - `args` - Map with optional keys: `:name`, `:data`, `:source`, `:cursor`,
     `:read_only?`, `:undo_max_size`
 
   ## Returns
-  A `%BufState{}` struct with a freshly generated UUID and the opened timestamp set.
+  A `%BufState{}` struct with a freshly generated UUID.
   """
   @spec new(map()) :: t()
   def new(args) when is_map(args) do
     name = Map.get(args, :name) || Map.get(args, "name") || @unnamed
     data = Map.get(args, :data) || Map.get(args, "data") || [""]
     data = if is_list(data), do: data, else: raise("Buffer data must be a list of strings")
-    mode = Map.get(args, :mode) || Map.get(args, "mode") || :edit
     source = Map.get(args, :source) || Map.get(args, "source") || nil
-    cursors = Map.get(args, :cursors) || Map.get(args, "cursors") || [Cursor.new()]
+    cursor = Map.get(args, :cursor) || Map.get(args, "cursor") || Cursor.new()
     read_only? = Map.get(args, :read_only?) || Map.get(args, "read_only?") || false
 
     %__MODULE__{
       uuid: UUID.uuid4(),
       name: name,
-      type: :text,
       data: data,
-      mode: mode,
       source: source,
-      cursors: cursors,
+      cursor: cursor,
       selection: nil,
-      history: [],
       read_only?: read_only?,
       dirty?: false,
       # Undo/Redo - start with empty stacks
@@ -119,12 +93,7 @@ defmodule Quillex.Structs.BufState do
       # Search - start with no search
       search_query: nil,
       search_matches: [],
-      search_current_index: 0,
-      timestamps: %{
-        # TODO use some kind of default timezone
-        opened: DateTime.utc_now()
-      }
+      search_current_index: 0
     }
   end
-
 end

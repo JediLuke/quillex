@@ -43,10 +43,11 @@ defmodule QuillEx.RootSceneTest do
     end
 
     test "returns {:noreply, scene} when fetch_buf raises (buffer process not found)" do
-      # Point active_buf at a fake BufRef whose UUID has no registered buffer process.
+      # Point active_buf at a fake Ref whose UUID has no registered buffer process.
       # call_buffer/2 raises when the Registry lookup returns [] — our try/catch in the
       # handler converts that raise/exit into {:error, reason} and logs at :debug level.
-      fake_buf_ref = %Quillex.Structs.BufState.BufRef{uuid: "nonexistent-uuid-test", name: "ghost.txt"}
+      fake_buf_ref = %Quillex.Buffer.Ref{uuid: "nonexistent-uuid-test", name: "ghost.txt"}
+
       scene = %{
         assigns: %{
           state: %QuillEx.RootScene.State{
@@ -57,6 +58,7 @@ defmodule QuillEx.RootSceneTest do
           graph: %Scenic.Graph{}
         }
       }
+
       result = RootScene.handle_cast({:action, :run_verification}, scene)
       assert {:noreply, ^scene} = result
     end
@@ -82,10 +84,11 @@ defmodule QuillEx.RootSceneTest do
     end
 
     test "returns {:noreply, scene} when the buffer process is not found in the registry" do
-      # A fake BufRef whose UUID has no registered Buffer.Process.
+      # A fake Ref whose UUID has no registered Buffer.Process.
       # BufferManager.call_buffer/2 raises (Registry lookup returns []).
       # The try/catch in the handler converts that to {:error, reason} → {:noreply, scene}.
-      fake_buf_ref = %Quillex.Structs.BufState.BufRef{uuid: "reload-ghost-uuid", name: "ghost.txt"}
+      fake_buf_ref = %Quillex.Buffer.Ref{uuid: "reload-ghost-uuid", name: "ghost.txt"}
+
       scene = %{
         assigns: %{
           state: %QuillEx.RootScene.State{
@@ -96,6 +99,7 @@ defmodule QuillEx.RootSceneTest do
           graph: %Scenic.Graph{}
         }
       }
+
       result = RootScene.handle_cast({:action, :reload_from_disk}, scene)
       assert {:noreply, ^scene} = result
     end
@@ -111,7 +115,8 @@ defmodule QuillEx.RootSceneTest do
       menus = QuillEx.RootScene.Renderizer.build_menus(state)
       file_menu = Enum.find(menus, fn m -> m.id == :file end)
       assert file_menu != nil, "File menu must exist"
-      item_ids = Enum.map(file_menu.items, fn {id, _label} -> id end)
+      item_ids = Enum.map(file_menu.items, & &1.id)
+
       assert "reload" in item_ids,
              "File menu must contain 'reload' item, got: #{inspect(item_ids)}"
     end
@@ -120,11 +125,12 @@ defmodule QuillEx.RootSceneTest do
       state = %QuillEx.RootScene.State{}
       menus = QuillEx.RootScene.Renderizer.build_menus(state)
       file_menu = Enum.find(menus, fn m -> m.id == :file end)
-      item_ids = Enum.map(file_menu.items, fn {id, _label} -> id end)
+      item_ids = Enum.map(file_menu.items, & &1.id)
       verify_pos = Enum.find_index(item_ids, &(&1 == "verify"))
       reload_pos = Enum.find_index(item_ids, &(&1 == "reload"))
       assert verify_pos != nil, "verify item must be present"
       assert reload_pos != nil, "reload item must be present"
+
       assert reload_pos == verify_pos + 1,
              "reload must appear immediately after verify in the file menu"
     end
@@ -214,11 +220,13 @@ defmodule QuillEx.RootSceneTest do
       #
       # Both paths prove the correct Ctrl+N clause fired (not the catch-all).
       scene = bare_scene()
+
       try do
         result = RootScene.handle_input({:key, {:key_n, 1, [:ctrl]}}, nil, scene)
         assert match?({:noreply, _}, result)
       rescue
-        FunctionClauseError -> :ok  # assign/push_graph on bare map — correct clause fired
+        # assign/push_graph on bare map — correct clause fired
+        FunctionClauseError -> :ok
       end
     end
   end
@@ -241,6 +249,7 @@ defmodule QuillEx.RootSceneTest do
       # FilePicker.add_to_graph raises RuntimeError when :frame is nil —
       # proves show_file_picker/1 was called, not the catch-all.
       scene = bare_scene()
+
       assert_raise RuntimeError, fn ->
         RootScene.handle_input({:key, {:key_o, 1, [:ctrl]}}, nil, scene)
       end
@@ -269,6 +278,7 @@ defmodule QuillEx.RootSceneTest do
       # active_buf is nil — no process_actions call, no side effects.
       scene = bare_scene()
       result = RootScene.handle_input({:key, {:key_w, 1, [:ctrl]}}, nil, scene)
+
       assert {:noreply, ^scene} = result,
              "Ctrl+W with no active buffer must return {:noreply, scene} unchanged"
     end
@@ -291,6 +301,7 @@ defmodule QuillEx.RootSceneTest do
       # With active_buf: nil, dispatch_to_active_buffer is a no-op.
       scene = bare_scene()
       result = RootScene.handle_input({:key, {:key_home, 1, [:ctrl]}}, nil, scene)
+
       assert {:noreply, ^scene} = result,
              "Ctrl+Home with no active buffer should return {:noreply, scene} unchanged"
     end
@@ -317,6 +328,7 @@ defmodule QuillEx.RootSceneTest do
       # With active_buf: nil, dispatch_to_active_buffer is a no-op.
       scene = bare_scene()
       result = RootScene.handle_input({:key, {:key_end, 1, [:ctrl]}}, nil, scene)
+
       assert {:noreply, ^scene} = result,
              "Ctrl+End with no active buffer should return {:noreply, scene} unchanged"
     end
@@ -326,6 +338,7 @@ defmodule QuillEx.RootSceneTest do
       # the catch-all and also returns {:noreply, scene}.
       scene = bare_scene()
       result = RootScene.handle_input({:key, {:key_home, 1, []}}, nil, scene)
+
       assert match?({:noreply, _}, result),
              "Plain Home without Ctrl should fall through to catch-all"
     end
@@ -335,6 +348,7 @@ defmodule QuillEx.RootSceneTest do
       # the catch-all and also returns {:noreply, scene}.
       scene = bare_scene()
       result = RootScene.handle_input({:key, {:key_end, 1, []}}, nil, scene)
+
       assert match?({:noreply, _}, result),
              "Plain End without Ctrl should fall through to catch-all"
     end
@@ -355,6 +369,7 @@ defmodule QuillEx.RootSceneTest do
       # Scenic 0.12 atom-based key format: {:key_left, 1, [:ctrl]}.
       scene = bare_scene()
       result = RootScene.handle_input({:key, {:key_left, 1, [:ctrl]}}, nil, scene)
+
       assert match?({:noreply, _}, result),
              "Ctrl+Left with no active buffer should return {:noreply, scene} unchanged"
     end
@@ -373,6 +388,7 @@ defmodule QuillEx.RootSceneTest do
       # the catch-all and also returns {:noreply, scene}.
       scene = bare_scene()
       result = RootScene.handle_input({:key, {:key_left, 1, []}}, nil, scene)
+
       assert match?({:noreply, _}, result),
              "Plain Left without Ctrl should fall through to catch-all"
     end
@@ -388,6 +404,7 @@ defmodule QuillEx.RootSceneTest do
       # Scenic 0.12 atom-based key format: {:key_right, 1, [:ctrl]}.
       scene = bare_scene()
       result = RootScene.handle_input({:key, {:key_right, 1, [:ctrl]}}, nil, scene)
+
       assert match?({:noreply, _}, result),
              "Ctrl+Right with no active buffer should return {:noreply, scene} unchanged"
     end
@@ -400,6 +417,7 @@ defmodule QuillEx.RootSceneTest do
     test "plain Right arrow (no ctrl) is NOT handled by the Ctrl+Right clause" do
       scene = bare_scene()
       result = RootScene.handle_input({:key, {:key_right, 1, []}}, nil, scene)
+
       assert match?({:noreply, _}, result),
              "Plain Right without Ctrl should fall through to catch-all"
     end
@@ -410,7 +428,7 @@ defmodule QuillEx.RootSceneTest do
   # ---------------------------------------------------------------------------
   #
   # The scene's try_close_buffer/2 intercepts dirty buffers BEFORE dispatching:
-  # a dirty BufRef shows the ConfirmDialog and waits for a response. Only after
+  # a dirty Ref shows the ConfirmDialog and waits for a response. Only after
   # the user confirms (save or discard) does {:close_buffer, buf_ref} get cast
   # to BufferManager, the buffer-list store. These tests pin the store's pure
   # transition functions in isolation from the scene-level guard and from the
@@ -418,32 +436,34 @@ defmodule QuillEx.RootSceneTest do
 
   describe "BufferManager.close_state/2" do
     test "removes the buffer regardless of dirty? (no dirty guard at store layer)" do
-      dirty_buf = %Quillex.Structs.BufState.BufRef{uuid: "dirty-1", name: "modified.txt", dirty?: true}
-      clean_buf = %Quillex.Structs.BufState.BufRef{uuid: "clean-1", name: "clean.txt",    dirty?: false}
+      dirty_buf = %Quillex.Buffer.Ref{uuid: "dirty-1", name: "modified.txt", dirty?: true}
+      clean_buf = %Quillex.Buffer.Ref{uuid: "clean-1", name: "clean.txt", dirty?: false}
       state = %{active_buf: dirty_buf, buffers: [dirty_buf, clean_buf]}
 
       {:ok, new_state} = Quillex.Buffer.BufferManager.close_state(state, dirty_buf)
 
       refute Enum.any?(new_state.buffers, &(&1.uuid == "dirty-1")),
              "Store must remove the dirty buffer when explicitly told to close it"
+
       assert Enum.any?(new_state.buffers, &(&1.uuid == "clean-1")),
              "Other buffers must remain after close"
     end
 
     test "switches active_buf to another buffer after closing the active one" do
-      buf_a = %Quillex.Structs.BufState.BufRef{uuid: "a", name: "a.txt", dirty?: false}
-      buf_b = %Quillex.Structs.BufState.BufRef{uuid: "b", name: "b.txt", dirty?: false}
+      buf_a = %Quillex.Buffer.Ref{uuid: "a", name: "a.txt", dirty?: false}
+      buf_b = %Quillex.Buffer.Ref{uuid: "b", name: "b.txt", dirty?: false}
       state = %{active_buf: buf_a, buffers: [buf_a, buf_b]}
 
       {:ok, new_state} = Quillex.Buffer.BufferManager.close_state(state, buf_a)
 
       refute Enum.any?(new_state.buffers, &(&1.uuid == "a"))
+
       assert new_state.active_buf.uuid == "b",
              "active_buf must switch to the remaining buffer"
     end
 
     test "returns :last_buffer when only one buffer remains (last-buffer guard)" do
-      sole_buf = %Quillex.Structs.BufState.BufRef{uuid: "sole-1", name: "last.txt", dirty?: true}
+      sole_buf = %Quillex.Buffer.Ref{uuid: "sole-1", name: "last.txt", dirty?: true}
       state = %{active_buf: sole_buf, buffers: [sole_buf]}
 
       assert :last_buffer = Quillex.Buffer.BufferManager.close_state(state, sole_buf),
@@ -451,9 +471,9 @@ defmodule QuillEx.RootSceneTest do
     end
 
     test "returns :not_found for a buffer not in the list" do
-      buf_a = %Quillex.Structs.BufState.BufRef{uuid: "a", name: "a.txt"}
-      buf_b = %Quillex.Structs.BufState.BufRef{uuid: "b", name: "b.txt"}
-      ghost = %Quillex.Structs.BufState.BufRef{uuid: "ghost", name: "ghost.txt"}
+      buf_a = %Quillex.Buffer.Ref{uuid: "a", name: "a.txt"}
+      buf_b = %Quillex.Buffer.Ref{uuid: "b", name: "b.txt"}
+      ghost = %Quillex.Buffer.Ref{uuid: "ghost", name: "ghost.txt"}
       state = %{active_buf: buf_a, buffers: [buf_a, buf_b]}
 
       assert :not_found = Quillex.Buffer.BufferManager.close_state(state, ghost)
@@ -461,9 +481,9 @@ defmodule QuillEx.RootSceneTest do
   end
 
   describe "BufferManager.activate_state/2" do
-    test "activates a buffer by BufRef" do
-      buf_a = %Quillex.Structs.BufState.BufRef{uuid: "a", name: "a.txt"}
-      buf_b = %Quillex.Structs.BufState.BufRef{uuid: "b", name: "b.txt"}
+    test "activates a buffer by Ref" do
+      buf_a = %Quillex.Buffer.Ref{uuid: "a", name: "a.txt"}
+      buf_b = %Quillex.Buffer.Ref{uuid: "b", name: "b.txt"}
       state = %{active_buf: buf_a, buffers: [buf_a, buf_b]}
 
       {:ok, new_state} = Quillex.Buffer.BufferManager.activate_state(state, buf_b)
@@ -471,8 +491,8 @@ defmodule QuillEx.RootSceneTest do
     end
 
     test "activates a buffer by 1-based index" do
-      buf_a = %Quillex.Structs.BufState.BufRef{uuid: "a", name: "a.txt"}
-      buf_b = %Quillex.Structs.BufState.BufRef{uuid: "b", name: "b.txt"}
+      buf_a = %Quillex.Buffer.Ref{uuid: "a", name: "a.txt"}
+      buf_b = %Quillex.Buffer.Ref{uuid: "b", name: "b.txt"}
       state = %{active_buf: buf_a, buffers: [buf_a, buf_b]}
 
       {:ok, new_state} = Quillex.Buffer.BufferManager.activate_state(state, 2)
@@ -480,8 +500,8 @@ defmodule QuillEx.RootSceneTest do
     end
 
     test "returns :not_found for an index or ref outside the list" do
-      buf_a = %Quillex.Structs.BufState.BufRef{uuid: "a", name: "a.txt"}
-      ghost = %Quillex.Structs.BufState.BufRef{uuid: "ghost", name: "ghost.txt"}
+      buf_a = %Quillex.Buffer.Ref{uuid: "a", name: "a.txt"}
+      ghost = %Quillex.Buffer.Ref{uuid: "ghost", name: "ghost.txt"}
       state = %{active_buf: buf_a, buffers: [buf_a]}
 
       assert :not_found = Quillex.Buffer.BufferManager.activate_state(state, 5)
@@ -498,6 +518,7 @@ defmodule QuillEx.RootSceneTest do
         search_current_match: 2,
         search_total_matches: 5
       }
+
       new_state = QuillEx.RootScene.Reducer.process(state, :close_replace)
       assert new_state.show_search_bar == false
       assert new_state.show_replace == false
@@ -508,9 +529,13 @@ defmodule QuillEx.RootSceneTest do
 
     test "is idempotent when bar is already closed" do
       state = %QuillEx.RootScene.State{
-        show_search_bar: false, show_replace: false,
-        search_query: "", search_current_match: 0, search_total_matches: 0
+        show_search_bar: false,
+        show_replace: false,
+        search_query: "",
+        search_current_match: 0,
+        search_total_matches: 0
       }
+
       new_state = QuillEx.RootScene.Reducer.process(state, :close_replace)
       assert new_state.show_search_bar == false
       assert new_state.show_replace == false
@@ -600,11 +625,19 @@ defmodule QuillEx.RootSceneTest do
       # Full layout behaviour is validated in spex integration tests.
       old_state = %QuillEx.RootScene.State{frame: nil, status_message: nil}
       new_state_with_msg = %QuillEx.RootScene.State{frame: nil, status_message: "hello"}
-      new_state_nil_msg  = %QuillEx.RootScene.State{frame: nil, status_message: nil}
+      new_state_nil_msg = %QuillEx.RootScene.State{frame: nil, status_message: nil}
       graph = %Scenic.Graph{}
+
       # Both transitions return the graph unchanged (nil-frame guard) — confirms render/4 accepts them
-      assert QuillEx.RootScene.Renderizer.render(graph, nil, old_state, new_state_with_msg) == graph
-      assert QuillEx.RootScene.Renderizer.render(graph, nil, new_state_with_msg, new_state_nil_msg) == graph
+      assert QuillEx.RootScene.Renderizer.render(graph, nil, old_state, new_state_with_msg) ==
+               graph
+
+      assert QuillEx.RootScene.Renderizer.render(
+               graph,
+               nil,
+               new_state_with_msg,
+               new_state_nil_msg
+             ) == graph
     end
   end
 end

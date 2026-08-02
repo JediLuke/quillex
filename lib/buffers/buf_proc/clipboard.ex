@@ -1,4 +1,4 @@
-defmodule Clipboard do
+defmodule Quillex.Buffer.ClipboardAdapter do
   @moduledoc """
   Copy and paste from system clipboard.
 
@@ -13,13 +13,13 @@ defmodule Clipboard do
 
   # Examples
 
-      iex> Clipboard.copy("Hello, World!")
+      iex> Quillex.Buffer.ClipboardAdapter.copy("Hello, World!")
       "Hello, World!"
 
-      iex> Clipboard.copy(["Hello", "World!"])
+      iex> Quillex.Buffer.ClipboardAdapter.copy(["Hello", "World!"])
       ["Hello", "World!"]
 
-      iex> "Hello, World!" |> Clipboard.copy() |> IO.puts()
+      iex> "Hello, World!" |> Quillex.Buffer.ClipboardAdapter.copy() |> IO.puts()
       "Hello, World"
 
   """
@@ -49,17 +49,17 @@ defmodule Clipboard do
   end
 
   defp copy({:unix, :darwin}, value) do
-    command = Application.get_env(:clipboard, :macos)[:copy] || {"pbcopy", []}
+    command = command(:macos, :copy, {"pbcopy", []})
     execute(command, value)
   end
 
   defp copy({:unix, _os_name}, value) do
-    command = Application.get_env(:clipboard, :unix)[:copy] || {"xclip", []}
+    command = command(:unix, :copy, {"xclip", []})
     execute(command, value)
   end
 
   defp copy({:win32, _os_name}, value) do
-    command = Application.get_env(:clipboard, :windows)[:copy] || {"clip", []}
+    command = command(:windows, :copy, {"clip", []})
     execute(command, value)
   end
 
@@ -72,7 +72,7 @@ defmodule Clipboard do
 
   # Examples
 
-      iex> Clipboard.paste()
+      iex> Quillex.Buffer.ClipboardAdapter.paste()
       "Hello, World!"
 
   """
@@ -107,17 +107,23 @@ defmodule Clipboard do
   end
 
   defp paste({:unix, :darwin}) do
-    command = Application.get_env(:clipboard, :macos)[:paste] || {"pbpaste", []}
+    command = command(:macos, :paste, {"pbpaste", []})
     execute(command)
   end
 
   defp paste({:unix, _os_name}) do
-    command = Application.get_env(:clipboard, :unix)[:paste] || {"xclip", ["-o"]}
+    command = command(:unix, :paste, {"xclip", ["-o"]})
     execute(command)
   end
 
   defp paste(_unsupported_os) do
     {:error, "Unsupported operating system"}
+  end
+
+  defp command(platform, operation, default) do
+    quillex = Application.get_env(:quillex, :clipboard_commands, [])
+    legacy = Application.get_env(:clipboard, platform, [])
+    get_in(quillex, [platform, operation]) || legacy[operation] || default
   end
 
   # Ports
@@ -159,7 +165,7 @@ defmodule Clipboard do
         end
 
         send(port, {self(), :close})
-        
+
         # Wait for the port to actually close before returning
         receive do
           {^port, :closed} -> :ok
