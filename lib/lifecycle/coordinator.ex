@@ -11,8 +11,14 @@ defmodule Quillex.Lifecycle.Coordinator do
   def discard_and_quit, do: GenServer.cast(__MODULE__, :discard_and_quit)
 
   @impl true
-  def init(opts),
-    do: {:ok, %{driver: Keyword.get(opts, :driver, :scenic_driver), pending?: false}}
+  def init(opts) do
+    {:ok,
+     %{
+       driver: Keyword.get(opts, :driver, :scenic_driver),
+       pending?: false,
+       shutdown: Keyword.get(opts, :shutdown, {System, :stop, [0]})
+     }}
+  end
 
   @impl true
   def handle_cast({:request_close, _reason}, %{pending?: true} = state), do: {:noreply, state}
@@ -20,8 +26,8 @@ defmodule Quillex.Lifecycle.Coordinator do
   def handle_cast({:request_close, _reason}, state) do
     case Quillex.Buffer.dirty_buffers() do
       [] ->
-        authorize(state.driver)
-        {:noreply, state}
+        complete_quit(state.driver, state.shutdown)
+        {:stop, :normal, state}
 
       dirty ->
         if scene = Process.whereis(QuillEx.RootScene), do: send(scene, {:quit_requested, dirty})
@@ -35,8 +41,8 @@ defmodule Quillex.Lifecycle.Coordinator do
   end
 
   def handle_cast(:discard_and_quit, %{pending?: true} = state) do
-    authorize(state.driver)
-    {:noreply, %{state | pending?: false}}
+    complete_quit(state.driver, state.shutdown)
+    {:stop, :normal, %{state | pending?: false}}
   end
 
   def handle_cast(:discard_and_quit, state), do: {:noreply, state}
@@ -50,4 +56,10 @@ defmodule Quillex.Lifecycle.Coordinator do
 
   defp resolve(pid) when is_pid(pid), do: pid
   defp resolve(name) when is_atom(name), do: Process.whereis(name)
+
+  @doc false
+  def complete_quit(driver, {module, function, args}) do
+    authorize(driver)
+    apply(module, function, args)
+  end
 end
