@@ -19,6 +19,13 @@ lifetime. Flamelex's stale adapter is intentionally not revived here.
 
 ## Verification evidence
 
+The implementation revisions are Quillex
+`6da554a37d5a0cbb05cbc9903827489976e8d8a7`, Scenic
+`bc2854bceb943e70247dcbe50167aff08cc7147e`, scenic_driver_local
+`35de351b5bd2075e7651e9f8bef37e9f3659a85d`, and scenic-widget-contrib
+`e0bc98d6b67025d3b9c052598a4c6584b1624a15`. Spex remains at
+`fc1c21f74913c9d6899821b8265b1607c505b48b`.
+
 The release was verified on Linux x86-64 with Elixir 1.18.4, Erlang/OTP 28.1,
 and `SCENIC_LOCAL_TARGET=glfw`. Exact commands use the explicit local override:
 

@@ -5,7 +5,7 @@ Release dependencies in `mix.exs` resolve immutable Git revisions. Setting
 
 | Repository | Base revision | 0.7.3 result revision |
 |---|---|---|
-| Quillex | `f68e87588d2a93537a6ab7dfb4cc2b764a5df875` | recorded after the release commit |
+| Quillex | `f68e87588d2a93537a6ab7dfb4cc2b764a5df875` | `6da554a37d5a0cbb05cbc9903827489976e8d8a7` |
 | Scenic | `e79ede34c7b2b2cb59e68d6aac0bf001e379270f` | `bc2854bceb943e70247dcbe50167aff08cc7147e` |
 | scenic_driver_local | `825261acc3edcfc840ff511b405ca7c57a366efd` | `35de351b5bd2075e7651e9f8bef37e9f3659a85d` |
 | scenic-widget-contrib | `44e382fa493ede12e645db944fadfaf4181fa739` | `e0bc98d6b67025d3b9c052598a4c6584b1624a15` |
