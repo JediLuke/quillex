@@ -4,7 +4,7 @@ defmodule QuillEx.MixProject do
   def project do
     [
       app: :quillex,
-      version: "0.7.3",
+      version: "0.7.2",
       elixir: "~> 1.12",
       build_embedded: true,
       start_permanent: Mix.env() == :prod,
@@ -90,24 +90,14 @@ defmodule QuillEx.MixProject do
         only: [:test, :dev],
         override: true
       ),
-      # DELIBERATELY still pinned, and not a constellation_dep.
-      #
-      # scenic_mcp main now contains 2f8c351, which reroutes click_element from
-      # a semantic_table scan onto Scenic.ViewPort.Semantic.click_element/3.
-      # That path resolves ids through `semantic_index` and then re-reads
-      # `semantic_table`, and against this widget set it reports
-      # "Element 'icon_menu_file' not found" for elements the old scan finds
-      # (spex suite: 1 failure -> 8). Until that is reconciled, quillex builds
-      # against the last revision known to drive this UI.
-      #
-      # Note the pinned revision also PREDATES the Escape fix ("escape" must
-      # send :key_esc, not :key_escape), so the contrib-side Escape work cannot
-      # be validated end-to-end until this moves forward. See docs/AUDIT.md.
-      {:scenic_mcp,
-       git: "https://github.com/scenic-contrib/scenic_mcp_experimental.git",
-       ref: "b3e0cb9b1a17dae2b645cb67a75531c503bc960d",
-       only: [:dev, :test],
-       override: true},
+      constellation_dep(
+        :scenic_mcp,
+        "../scenic_mcp_experimental",
+        "https://github.com/scenic-contrib/scenic_mcp_experimental.git",
+        "b3e0cb9b1a17dae2b645cb67a75531c503bc960d",
+        only: [:dev, :test],
+        override: true
+      ),
       {:stream_data, "~> 0.6", only: [:test, :dev]},
       {:tidewave, "~> 0.1", only: :dev},
       {:bandit, "~> 1.0", only: :dev}

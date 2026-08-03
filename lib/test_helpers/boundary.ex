@@ -21,6 +21,7 @@ defmodule Quillex.TestHelpers do
       ViewportResizer,
       Perf,
       Invariants,
+      SemanticProbe,
       Oracle
     ]
 end

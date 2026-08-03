@@ -10,16 +10,32 @@ line. See **[ARCHITECTURE.md](ARCHITECTURE.md)** for the diagrams.
 
 ## Quick Start
 
+Quillex builds against a constellation of forks that must be checked out
+beside it, so clone them into the same parent directory:
+
 ```bash
+mkdir flx && cd flx
 git clone https://github.com/JediLuke/quillex.git
+git clone https://github.com/JediLuke/scenic.git                # widget-v2
+git clone https://github.com/JediLuke/scenic_driver_local.git
+git clone https://github.com/JediLuke/scenic-widget-contrib.git
+git clone https://github.com/JediLuke/spex.git
+
 cd quillex
-sh ./script/install.sh
-iex -S mix
+scripts/install.sh
 ```
 
-The install script detects your OS and installs the required system
-dependencies (GLFW, GLEW, pkg-config), sets `SCENIC_LOCAL_TARGET=glfw`,
-then fetches and compiles everything.
+The install script checks you have Elixir, installs the system libraries
+Scenic renders through (GLFW, GLEW, pkg-config and a C compiler) using your
+package manager, compiles everything, and offers to put `qlx` on your PATH.
+It asks before doing anything; `--yes` skips the questions.
+
+Then either `qlx .` for the editor, or `iex -S mix` for a shell with it
+running.
+
+> Cloning quillex on its own doesn't work yet — that waits on those forks
+> being tagged. See [DISTRIBUTION.md](DISTRIBUTION.md) for how end users will
+> eventually get Quillex without any of this.
 
 ## The `qlx` command
 
@@ -102,10 +118,24 @@ The default dependency graph is pinned to immutable Git revisions. For a
 checked-out Scenic constellation, set `QUILLEX_LOCAL_DEPS=1` to use the sibling
 repositories as an explicit development override.
 
-## Manual Setup & Troubleshooting
+## Troubleshooting
 
-If the install script doesn't work for your system, or you run into issues,
-see [docs/MANUAL_INSTALL.md](docs/MANUAL_INSTALL.md).
+**`mix` not found, though you have Elixir.** Version managers add their shims
+to PATH from your shell profile; a fresh or non-interactive shell may not have
+them. `bin/qlx` falls back to `~/.asdf/shims` on its own, but `mix` and the
+install script won't.
+
+**The C driver fails to build.** It needs the GLFW and GLEW *development*
+packages, not just the runtime libraries. Check with
+`pkg-config --exists glfw3 glew && echo ok`. `SCENIC_LOCAL_TARGET` does not
+need setting — `scenic_driver_local` picks `glfw` on a desktop and `cairo-fb`
+on a framebuffer device by itself.
+
+**A path dependency isn't found.** The sibling forks in Quick Start must be
+checked out beside `quillex/`, not inside it.
+
+**Packaging Quillex for other people** — what it needs at runtime, and why
+it isn't a single binary — is in [DISTRIBUTION.md](DISTRIBUTION.md).
 
 ## License
 
