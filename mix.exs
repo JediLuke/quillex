@@ -62,7 +62,7 @@ defmodule QuillEx.MixProject do
         :scenic_driver_local,
         "../scenic_driver_local",
         "https://github.com/JediLuke/scenic_driver_local.git",
-        "35de351b5bd2075e7651e9f8bef37e9f3659a85d",
+        "97d241c464ef7aee7a749a839b3e2df63cdf6a82",
         override: true
       ),
       constellation_dep(
