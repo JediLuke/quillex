@@ -69,7 +69,7 @@ defmodule QuillEx.MixProject do
         :scenic_widget_contrib,
         "../scenic-widget-contrib",
         "https://github.com/JediLuke/scenic-widget-contrib.git",
-        "0a5a2a22b3c3bd9f977ad1c0036754200d709702"
+        "4e50782454d6f73d114f17e959bb39df4d8e4278"
       ),
       {:elixir_uuid, "~> 1.2"},
       {:font_metrics, "~> 0.5"},
@@ -94,7 +94,7 @@ defmodule QuillEx.MixProject do
         :scenic_mcp,
         "../scenic_mcp_experimental",
         "https://github.com/scenic-contrib/scenic_mcp_experimental.git",
-        "59381a09b6511b73da2f2b1d5ede953c713fa100",
+        "8ebf0c6a3709fba0beae9a05d4454c60c5acee09",
         only: [:dev, :test],
         override: true
       ),
