@@ -155,6 +155,10 @@ specifically intended to prove.
 | AUD-022 | Buffers/files | Reopening an existing filepath creates a duplicate buffer | High | Characterized |
 | AUD-023 | Tabs/layout | TabBar degrades when open tabs exceed available width | Medium | Observed |
 | AUD-024 | Editor/view state | Restore each buffer's previous scroll position when switching tabs | Low | Requirement |
+| AUD-025 | Shutdown/data safety | OS window close discards dirty buffers without confirmation | Critical | Characterized |
+| AUD-026 | Framework/semantic layer | Semantic elements do not model clipping, so clipped widgets advertise themselves as clickable | High | Characterized |
+| AUD-027 | Framework/input | Escape was dispatched as `:key_escape`, an atom no driver emits, so Escape-driven tests passed while real Escape did nothing | High | Characterized |
+| AUD-028 | Tooling/semantic lookup | `Semantic.click_element/3` cannot resolve widget-registered elements that a semantic_table scan finds | High | Observed |
 
 ## Findings
 
@@ -1208,7 +1212,232 @@ Repeat after resize, content edits, word-wrap changes, and closing/reopening a
 buffer. A two-pane component scenario should prove independent positions for
 the same buffer without changing document state or dirty status.
 
+### AUD-025 — Closing the OS window bypasses unsaved-buffer protection
+
+**Observation/question:** Now that Quillex 0.7.2 is usable for real work, the
+OS window close button becomes a data-safety boundary. Expected desktop-editor
+behavior is to pause shutdown when unsaved buffers exist and ask the user to
+save, discard, or cancel.
+
+**Current behavior:** Closing the window does not enter RootScene's existing
+dirty-buffer close workflow:
+
+- a `qlx`-launched window configures the local driver with
+  `on_close: :stop_system`;
+- an IEx-launched window uses `on_close: :stop_viewport`;
+- the driver handles those choices directly by stopping the VM or viewport;
+- the Save/Discard/Cancel prompt is currently invoked only by buffer-level
+  close gestures such as Ctrl+W and tab close.
+
+Therefore, unsaved buffer contents exist only in terminating processes and are
+discarded when the OS window is closed. No shutdown guard, save-all sequence,
+or recovery journal was found on that path.
+
+**Severity:** Critical for a 1.0 editor. A program capable of sustained real
+work must not silently discard that work through its most ordinary quit
+gesture.
+
+**Expected behavior:**
+
+- no dirty buffers: close immediately;
+- one dirty buffer: show Save / Discard / Cancel with its name;
+- multiple dirty buffers: present a comprehensible save/discard workflow,
+  preferably a consolidated list or a carefully designed sequence;
+- Cancel leaves the window, processes, buffers, focus, and editing state
+  intact;
+- Save handles both file-backed and unnamed buffers, invoking Save As where
+  needed, and only exits after all required writes succeed;
+- any failed/cancelled save aborts shutdown and reports the error;
+- Discard requires an explicit decision and then exits cleanly;
+- repeated close requests while a quit prompt is open do not bypass it or
+  create duplicate dialogs.
+
+**Framework context:** The local GLFW callback deliberately prevents native
+close and sends a close message upward, allowing the application to filter the
+request. `scenic_driver_local` supports an MFA `on_close` callback in addition
+to immediate stop actions. This suggests the framework has a seam for an
+application-owned quit coordinator, but its exact lifecycle—driver `closing`
+state, keeping the window alive, and later authorizing close—must be verified
+before design.
+
+**Architectural questions:**
+
+- Which process coordinates application shutdown without making the driver
+  synchronously call RootScene or creating supervision deadlocks?
+- Should BufferManager expose an authoritative dirty-buffer query/snapshot and
+  a save-all protocol?
+- Is quit-dialog state owned by ViewStore/RootScene, or by a separate lifecycle
+  coordinator that survives scene recreation?
+- How does the behavior differ for standalone CLI, IEx development, tests,
+  and future hosted/Flamelex mode?
+- Should OS signals/system shutdown receive best-effort recovery even when an
+  interactive prompt is impossible?
+- Is crash/session recovery a separate post-1.0 feature, or does 1.0 require a
+  minimal autosave journal as defense beyond graceful close?
+
+**Future acceptance evidence:** Add a real-window Spex or driver-level
+integration scenario that initiates the same close request as the OS window.
+Cover clean, one dirty file-backed buffer, dirty untitled buffer, multiple
+dirty buffers, Save, Save As, Discard, Cancel, failed write, and repeated close
+requests. Prove Cancel preserves the live window and exact contents; Save
+writes exact bytes before exit; and no termination occurs before the final
+explicit decision. Supplement with unit tests for the multi-buffer shutdown
+state machine.
+
+### AUD-026 — The semantic layer has no notion of clipping
+
+**Observation/question:** Scenic maintains two independent answers to "can the
+user interact with this element". Input routing consults the ancestor scissor
+stack — `Scenic.ViewPort.point_clipped?/3`, made nesting-correct in scenic
+`bc2854b`. The semantic layer does not: `Scenic.Semantic.Compiler` contains no
+reference to scissors at all. It computes `screen_bounds` by applying the
+primitive's transforms and sets `clickable` purely from the primitive's own
+`semantic: [clickable: …]` option.
+
+Consequence: a widget scrolled or clipped out of view still publishes a
+clickable semantic element, at coordinates that may sit outside its own
+container. Anything driving the UI through semantics — the Spex suite, MCP
+automation, future accessibility tooling — is told an element is actionable
+when clicking it cannot reach it.
+
+**Reproduction (TabBar, 2026-08-02):** `TabBar.register_semantic_elements/2`
+iterated every tab and registered each one's bounds. `State.tab_x_position/2`
+is scroll-relative (`x - offset`), so once tabs overflow the bar, tabs scrolled
+off the left have negative x and tabs past the right edge exceed the frame.
+Clicking such a semantic element targets a point outside the tab bar entirely.
+Observed as intermittent Spex failures where switching to a buffer left a
+different buffer active — the click landed nowhere.
+
+Note this qualifies the AUD-023 disposition ("TabBar clips visuals and
+hitboxes"): the *rendered* and *input* hitboxes are clipped, but the
+*semantic* elements were not.
+
+**Current mitigation (component level):** `State.tab_visible?/2` now requires a
+tab to lie fully within the bar, registration skips tabs that fail it, and the
+aggregate metadata carries a `visible` flag per tab.
+
+**Why that is the wrong altitude:** clipping is a general property of the
+scene graph, not a tab concept. Every clipped component needs the same logic —
+SideNav rows are the next candidate, and 0.7.3 ships captures of a
+horizontally and vertically clipped SideNav. Each component reimplementing
+visibility is duplicated, easy to forget in new widgets, and invisible to
+consumers that only read semantics.
+
+**Proposed direction (not yet authorization to fix):** have the semantic layer
+own visibility. The compiler already threads parent context and transforms
+while walking the graph, so it could carry the ancestor scissor stack,
+intersect `screen_bounds` against it, and either refuse `clickable: true` for
+fully clipped elements or publish a `clipped` / `visible_bounds` field.
+
+**Open questions:**
+
+- Two registration paths exist. The compiler walks graphs, but TabBar, SideNav
+  and IconMenu register imperatively via `:ets.insert` with hand-computed
+  coordinates, bypassing it. A compiler-only fix would not cover them; do those
+  components move onto the compiler path, or gain a shared clipping check?
+- Scissor data currently lives in input-list compilation, not the semantic
+  walk. What is the cheapest correct way to make it available?
+- Should a partially clipped element be clickable? The component-level fix
+  requires full visibility, on the grounds that clicking the midpoint of a
+  half-clipped widget is a coin flip. That policy belongs in the framework.
+- Does the same gap affect hover/`cursor_enter` semantics and any future
+  accessibility tree?
+
+### AUD-027 — Escape was sent as an atom no keyboard produces
+
+**Observation:** `scenic_driver_local` maps X11 keysym `0xFF1B` to `:key_esc`,
+and `ScenicWidgets.ScenicEventsDefinitions` declares
+`@escape_key {:key, {:key_esc, @key_pressed, []}}`. There is no `:key_escape`.
+
+`ScenicMcp` nevertheless sent `:key_escape`. Comparing every key atom the
+harness sends against the driver's table, Escape is the **only** mismatch.
+
+**Consequence, both directions:**
+
+- Eight widget components matched only `:key_escape` — ConfirmDialog,
+  PopupModal, SearchBar, FilePicker, ListSelectorDialog, MenuBar and SideNav
+  (×2). Escape did nothing for a real user, while their Spex passed, because
+  the harness sent the atom those components were (incorrectly) listening for.
+  **A green test proved nothing about a keyboard.**
+- IconMenu matched `:key_esc` correctly, so Escape worked for users but the
+  harness could not dismiss its menus. With pointer-motion dismissal removed
+  (contrib `763799c`), menus persisted; the next "open the File menu" click
+  then TOGGLED an already-open menu shut, and the item being looked for never
+  appeared. This is the mechanism behind the intermittent RunVerification and
+  menu-driven Spex failures.
+
+**Fix applied:** all components standardised on `:key_esc`; TextField's
+duplicate `:key_escape` clause removed. `scenic_mcp` now sends `:key_esc`
+(committed on its main). Matching both atoms was rejected deliberately — a
+clause for `:key_escape` can only ever be exercised by a harness bug.
+
+**Residual:** quillex still pins a scenic_mcp revision predating that fix (see
+AUD-028), so Escape-driven Spex fail honestly until the pin can move. Some Spex
+were also written against Escape *not* working and will need revisiting.
+
+### AUD-028 — Semantic.click_element cannot see widget-registered elements
+
+**Observation:** scenic_mcp `2f8c351` reroutes `click_element` from a
+`semantic_table` scan (`find_clickable_elements` + exact id filter) onto
+`Scenic.ViewPort.Semantic.click_element/3`, which resolves ids via
+`semantic_index` and then re-reads `semantic_table`.
+
+Against this widget set the new path reports `Element 'icon_menu_file' not
+found` for elements the old scan resolves. Swapping quillex onto that revision
+takes the Spex suite from 1 failure to 8.
+
+**Ruled out so far:** the id filter is exact, not substring; components DO
+write both `semantic_table` and `semantic_index` (icon_menu.ex:324,
+tab_bar.ex:385); the stored `screen_bounds` shape matches what
+`calculate_center/1` expects.
+
+**Still open:** why the index lookup misses. Candidates — key type or scope
+mismatch between `{scene_name, id}` written by components and what
+`lookup_in_index/2` expects; entries removed from `semantic_table` while
+`semantic_index` retains a stale pointer (`find_element_with_scene/2` returns
+`:not_found` in that case); or registration timing relative to the lookup.
+
+This blocks the dependency constellation: quillex cannot adopt current
+scenic_mcp, which means AUD-027's Escape fix cannot be validated end to end.
+It is the highest-value next investigation.
+
 ## Cross-cutting themes emerging
+
+## 0.7.3 implementation disposition — 2026-08-02
+
+| ID | Status | Decision, owner, and evidence |
+|---|---|---|
+| AUD-001 | Resolved | RootScene coalesces layout ownership and preserves the stable TextField on ordinary updates; performance Spex and full Spex cover resize behavior. |
+| AUD-002 | Resolved | TextField suppresses codepoints carrying command modifiers; keyboard Spex proves Ctrl+S does not insert `s`. |
+| AUD-003 | Resolved | `Quillex.Commands` generates the live shortcuts dialog and menu labels from one registry; RootScene and launch Spex cover visibility. |
+| AUD-004 | Resolved | Ctrl+Z/Ctrl+Shift+Z are canonical undo/redo through the focused editor; reducer and real-input Spex cover both. |
+| AUD-005 | Decided | Ctrl+U is intentionally unbound. Delete Line remains Ctrl+D and the shortcut registry is authoritative. |
+| AUD-006 | Resolved | SideNav content is clipped to its viewport and scrollbar gutters are opaque, owned interaction regions. |
+| AUD-007 | Resolved | SideNav uses the shared controller for measured horizontal overflow and scrolling. |
+| AUD-008 | Resolved | SideNav consumes the live editor text size rather than a private small constant. |
+| AUD-009 | Resolved | The status label sizes from its content and the remaining width is allocated to the overflow-capable TabBar. |
+| AUD-010 | Resolved | `:standalone`, `:embedded`, and `:headless` replace host-specific boot detection; supervision-shape tests cover ownership. |
+| AUD-011 | Resolved | `ScenicWidgets.ModalShell` supplies the shared overlay, centered panel, and input shield used by dialogs and FilePicker. |
+| AUD-012 | Resolved | FilePicker embeds the shared single-line TextField, including normal cursor, focus, and mouse behavior. |
+| AUD-013 | Resolved | RootScene gates application shortcuts while a modal owns input; dialog and RootScene tests cover isolation and dismissal. |
+| AUD-014 | Resolved | `Widgex.ScrollController` stores grab offset and maps drag position consistently at the track edges; unit and Spex coverage exercise dragging. |
+| AUD-015 | Resolved | SideNav scrollbars are clipped, rendered above rows, and claim their pointer hit regions before file rows. |
+| AUD-016 | Resolved | PerfMonitor records non-invasive telemetry while executing success, raise, throw, and exit paths exactly once; focused tests prove the invariant. |
+| AUD-017 | Resolved | Public test setup uses `Quillex.Buffer.Ref`/`Snapshot`; an architecture test prevents privileged reducer/state exports, and the conformance oracle is independent. |
+| AUD-018 | Resolved | SideNav highlight derives from the BufferManager active canonical file ref and follows tab, navigator, and API activation. |
+| AUD-019 | Resolved | The widget repository owns typed item/toggle/radio/slider/submenu/section rows, vector toolbar icons, stable semantic labels, and autohide behavior; Quillex menus consume the typed contract. |
+| AUD-020 | Resolved | TextField owns indentation-fold projection, gutter toggles, fold-level commands, unfolding, content extents, and line-count reconciliation without document dirtiness. |
+| AUD-021 | Resolved | Cursor and selection use the same row geometry in the TextField renderer. |
+| AUD-022 | Resolved | BufferManager canonicalizes paths and activates the existing ref for equivalent reopen requests; API/file tests cover deduplication. |
+| AUD-023 | Resolved | TabBar clips visuals and hitboxes, scrolls overflow, and reveals the selected tab; focused overflow tests cover targeting. |
+| AUD-024 | Resolved | PaneStore retains and clamps scroll/fold view state per buffer independently of document snapshots. |
+| AUD-025 | Resolved | The driver defers native close to `Lifecycle.Coordinator`; clean close authorizes immediately, while dirty close offers only Cancel or Quit Without Saving and cannot be bypassed by repeats. |
+
+The exact dependency result revisions and verification commands live in
+`docs/DEPENDENCY_MANIFEST.md`. Existing warnings and every unrelated dirty or
+untracked file identified before this pass remain preserved. GLFW framebuffer
+images and matching semantic captures for the material UI states are tracked
+under `docs/images/0.7.3/` and `docs/captures/0.7.3/`.
 
 These are themes to investigate, not conclusions:
 

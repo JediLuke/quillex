@@ -90,6 +90,19 @@ defmodule QuillEx.MixProject do
         only: [:test, :dev],
         override: true
       ),
+      # DELIBERATELY still pinned, and not a constellation_dep.
+      #
+      # scenic_mcp main now contains 2f8c351, which reroutes click_element from
+      # a semantic_table scan onto Scenic.ViewPort.Semantic.click_element/3.
+      # That path resolves ids through `semantic_index` and then re-reads
+      # `semantic_table`, and against this widget set it reports
+      # "Element 'icon_menu_file' not found" for elements the old scan finds
+      # (spex suite: 1 failure -> 8). Until that is reconciled, quillex builds
+      # against the last revision known to drive this UI.
+      #
+      # Note the pinned revision also PREDATES the Escape fix ("escape" must
+      # send :key_esc, not :key_escape), so the contrib-side Escape work cannot
+      # be validated end-to-end until this moves forward. See docs/AUDIT.md.
       {:scenic_mcp,
        git: "https://github.com/scenic-contrib/scenic_mcp_experimental.git",
        ref: "b3e0cb9b1a17dae2b645cb67a75531c503bc960d",
@@ -101,14 +114,24 @@ defmodule QuillEx.MixProject do
     ]
   end
 
-  # Published/release builds resolve immutable Git revisions. A constellation
-  # checkout opts into sibling paths explicitly to iterate across repositories:
-  # QUILLEX_LOCAL_DEPS=1 mix test
+  # Sibling checkouts are the DEFAULT, because this is a constellation: a fix
+  # usually spans quillex plus one or more of its sibling repositories, and
+  # pinning immutable revisions mid-fix means every iteration needs a commit,
+  # a push and a re-pin before it can even be tested.
+  #
+  # Immutable revisions are a RELEASE posture, not a development one. Opt into
+  # them when verifying what a clean machine will build:
+  #
+  #     QUILLEX_PINNED_DEPS=1 mix deps.get
+  #
+  # (`QUILLEX_LOCAL_DEPS=1` remains accepted so existing scripts and the 0.7.3
+  # release documentation keep working.)
   defp constellation_dep(name, path, git, ref, opts \\ []) do
-    source =
-      if System.get_env("QUILLEX_LOCAL_DEPS") in ["1", "true"],
-        do: [path: path],
-        else: [git: git, ref: ref]
+    pinned? =
+      System.get_env("QUILLEX_PINNED_DEPS") in ["1", "true"] and
+        System.get_env("QUILLEX_LOCAL_DEPS") not in ["1", "true"]
+
+    source = if pinned?, do: [git: git, ref: ref], else: [path: path]
 
     {name, Keyword.merge(source, opts)}
   end
