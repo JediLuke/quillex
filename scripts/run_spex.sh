@@ -9,15 +9,23 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# The pinner is an X11/EWMH daemon, so it only exists where X11 does. It is a
+# convenience — it keeps test windows on the current desktop — not a
+# requirement, so off X11 (macOS without XQuartz) skip it and run spex
+# directly. Mix.Tasks.RunSpex guards the same way before starting it.
 PINNER_BIN="./tools/window_pinner"
-if [ ! -x "$PINNER_BIN" ]; then
-  echo "Building window_pinner..."
-  (cd tools && make)
-fi
+if [ -n "${DISPLAY:-}" ]; then
+  if [ ! -x "$PINNER_BIN" ]; then
+    echo "Building window_pinner..."
+    (cd tools && make)
+  fi
 
-"$PINNER_BIN" &
-PINNER_PID=$!
-trap 'kill "$PINNER_PID" 2>/dev/null || true' EXIT
+  "$PINNER_BIN" &
+  PINNER_PID=$!
+  trap 'kill "$PINNER_PID" 2>/dev/null || true' EXIT
+else
+  echo "No DISPLAY — skipping window_pinner (spex windows will land wherever the WM puts them)."
+fi
 
 JSONL="${SPEX_JSONL:-/tmp/quillex_spex_failures_$(date +%Y%m%d_%H%M%S).jsonl}"
 MIX_ENV=test SCENIC_LOCAL_TARGET=glfw mix spex --jsonl="$JSONL" "$@"

@@ -84,9 +84,20 @@ fi
 
 if [ $# -eq 1 ]; then
   # Absolute-ise it here, while we are still standing in the user's directory.
-  # -m so a path that doesn't exist yet still resolves — `qlx new-notes.txt`
-  # is meant to open an empty buffer pointed at that path.
-  QLX_TARGET="$(realpath -m -- "$1")"
+  #
+  # Done by hand rather than with `realpath -m`: the target need not exist yet
+  # (`qlx new-notes.txt` opens an empty buffer pointed at that path), and -m is
+  # the GNU spelling of that — BSD realpath, which is what macOS ships, has no
+  # such flag. Only the DIRECTORY has to exist, so cd into it and let the shell
+  # canonicalise, then re-attach the filename.
+  qlx_dir="$(dirname -- "$1")"
+  qlx_base="$(basename -- "$1")"
+  if qlx_dir="$(cd -- "$qlx_dir" 2> /dev/null && pwd)"; then
+    QLX_TARGET="${qlx_dir%/}/$qlx_base"
+  else
+    echo "qlx: no such directory: $(dirname -- "$1")" >&2
+    exit 1
+  fi
   export QLX_TARGET
 fi
 
