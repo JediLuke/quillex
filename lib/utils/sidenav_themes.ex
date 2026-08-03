@@ -7,6 +7,31 @@ defmodule Quillex.Utils.SideNavThemes do
   """
 
   @doc """
+  The file navigator's theme, sized against the editor's text size.
+
+  The sidebar is chrome, not content: it should read as secondary to the text
+  being edited, so its label font is deliberately smaller than the buffer's.
+  It still tracks `text_size` rather than being fixed, so bumping the editor
+  font scales the whole UI instead of leaving the sidebar stranded.
+
+  `@nav_text_ratio` is what makes it smaller; the floor keeps it legible if
+  someone sets the editor to its 12pt minimum. Row height leaves room for the
+  glyph plus breathing space.
+  """
+  @nav_text_ratio 0.7
+  @nav_text_min 11
+
+  def for_editor(text_size) when is_integer(text_size) and text_size > 0 do
+    font_size = max(@nav_text_min, round(text_size * @nav_text_ratio))
+
+    dark()
+    |> Map.put(:font, :ibm_plex_mono)
+    |> Map.put(:font_size, font_size)
+    |> Map.put(:line_height, font_size + 6)
+    |> Map.put(:item_height, font_size + 10)
+  end
+
+  @doc """
   Dark theme based on merlinex app styling.
 
   Features:

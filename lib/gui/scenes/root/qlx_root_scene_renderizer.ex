@@ -243,13 +243,9 @@ defmodule QuillEx.RootScene.Renderizer do
     # Build file tree from current path
     file_tree = FileTree.build(state.file_nav_path || File.cwd!())
 
-    # Use dark theme for file navigator (merlinex-inspired)
-    side_nav_theme =
-      SideNavThemes.dark()
-      |> Map.put(:font, :ibm_plex_mono)
-      |> Map.put(:font_size, state.text_size)
-      |> Map.put(:line_height, state.text_size + 6)
-      |> Map.put(:item_height, state.text_size + 10)
+    # Sized against the editor's text, but deliberately smaller than it —
+    # see SideNavThemes.for_editor/1.
+    side_nav_theme = SideNavThemes.for_editor(state.text_size)
 
     side_nav_data = %{
       frame: frame,
@@ -332,7 +328,10 @@ defmodule QuillEx.RootScene.Renderizer do
     # "Ln 12, Col 34" label between the tabs and the icon menu (3.6): a
     # CursorPosLabel subscribed to the pane source — updates per keystroke
     # with no involvement from this scene (the store line in miniature).
-    cursor_label_width = 110
+    # Wide enough for five-digit lines and four-digit columns
+    # ("Ln 12345, Col 1234") at 13pt mono, so the label keeps its even padding
+    # instead of crowding the edges once a file gets long.
+    cursor_label_width = 170
     tab_bar_width = frame.size.width - icon_menu_width - cursor_label_width
 
     tab_bar_frame =

@@ -255,23 +255,12 @@ defmodule QuillEx.RootScene do
     {:noreply, assign(scene, state: new_state)}
   end
 
-  # Route scroll events to the appropriate component based on cursor position
-  def handle_input({:cursor_scroll, scroll_data}, _context, scene) do
-    state = scene.assigns.state
-    {cursor_x, _cursor_y} = state.cursor_pos
-
-    # Determine which component should receive the scroll based on cursor position
-    # If file_nav is visible and cursor is within its width, route to file_nav
-    if state.show_file_nav and cursor_x < state.file_nav_width do
-      # Route scroll to file navigator
-      Scenic.Scene.put_child(scene, :file_nav, %{scroll: scroll_data})
-    end
-
-    # Note: buffer_pane (TextField in store_backed mode) handles its own scroll
-    # via request_input/cursor_scroll - no need to forward via put_child
-
-    {:noreply, scene}
-  end
+  # Scroll is not routed from here. Both scrollable children — the buffer pane
+  # (TextField) and the file navigator (SideNav) — request :cursor_scroll
+  # themselves and bounds-check the pointer against their own frame, which is
+  # the one mechanism that works for positional input a component does not
+  # declare on a primitive. This scene used to forward wheel events to
+  # :file_nav via put_child, which is why the sidebar never scrolled.
 
   # Close-on-outside-click: intercept left-button presses to dismiss open menus
   # and overlays when the user clicks outside them.

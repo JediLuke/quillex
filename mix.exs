@@ -4,7 +4,7 @@ defmodule QuillEx.MixProject do
   def project do
     [
       app: :quillex,
-      version: "0.7.2",
+      version: "0.7.4",
       elixir: "~> 1.12",
       build_embedded: true,
       start_permanent: Mix.env() == :prod,
@@ -55,7 +55,7 @@ defmodule QuillEx.MixProject do
         :scenic,
         "../scenic",
         "https://github.com/Jediluke/scenic.git",
-        "bc2854bceb943e70247dcbe50167aff08cc7147e",
+        "6ee4b8c52d16621a05463284dfa1155667c9aeea",
         override: true
       ),
       constellation_dep(
@@ -69,7 +69,7 @@ defmodule QuillEx.MixProject do
         :scenic_widget_contrib,
         "../scenic-widget-contrib",
         "https://github.com/JediLuke/scenic-widget-contrib.git",
-        "e0bc98d6b67025d3b9c052598a4c6584b1624a15"
+        "0a5a2a22b3c3bd9f977ad1c0036754200d709702"
       ),
       {:elixir_uuid, "~> 1.2"},
       {:font_metrics, "~> 0.5"},
@@ -94,7 +94,7 @@ defmodule QuillEx.MixProject do
         :scenic_mcp,
         "../scenic_mcp_experimental",
         "https://github.com/scenic-contrib/scenic_mcp_experimental.git",
-        "b3e0cb9b1a17dae2b645cb67a75531c503bc960d",
+        "59381a09b6511b73da2f2b1d5ede953c713fa100",
         only: [:dev, :test],
         override: true
       ),
