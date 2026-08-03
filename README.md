@@ -15,7 +15,7 @@ beside it, so clone them into the same parent directory:
 
 ```bash
 mkdir flx && cd flx
-git clone https://github.com/JediLuke/quillex.git
+git clone -b franklin/work          https://github.com/JediLuke/quillex.git
 git clone -b main                   https://github.com/JediLuke/scenic.git
 git clone -b main                   https://github.com/JediLuke/scenic_driver_local.git
 git clone -b nice_module_attributes https://github.com/JediLuke/scenic-widget-contrib.git
@@ -25,12 +25,15 @@ cd quillex
 scripts/install.sh
 ```
 
-The `-b` flags matter. These forks' default branches are not where the work
-is, so a plain `git clone` gives you stale code that still compiles — the
-editor comes up with placeholder letters instead of toolbar icons and missing
-menu items, and nothing errors to tell you why. `scripts/install.sh` checks
-each fork contains the revision `mix.exs` pins and says so if not; it is safe
-to re-run at any time.
+**Every `-b` matters, quillex's most of all.** None of these repositories'
+default branches are where the work is — quillex's `main` is dozens of commits
+behind `franklin/work`. A plain `git clone` gives you code that still builds
+and still runs, so nothing tells you anything is wrong; you just get an older
+editor. The visible tell is the toolbar: single letters (F, E, V) where there
+should be drawn icons, and fewer items in the menus.
+
+`scripts/install.sh` checks each fork contains the revision `mix.exs` pins and
+says so if not. It is safe to re-run at any time.
 
 The install script checks you have Elixir, installs the system libraries
 Scenic renders through (GLFW, GLEW, pkg-config and a C compiler) using your
