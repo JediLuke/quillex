@@ -2,6 +2,15 @@
 
 ## 0.7.4 — 2026-08-03
 
+- Fixed every shifted character being discarded — capitals and all shifted
+  punctuation. TextField rejected any codepoint carrying modifiers, but Shift
+  is a text modifier the driver has already applied ("A" arrives as
+  {"A", [:shift]}). Only :ctrl and :meta disqualify a codepoint now; :alt is
+  allowed because macOS Option composes characters.
+- Added `Probes.send_codepoint/2`. The harness could not send a shifted
+  keystroke at all — `send_text` always used empty modifiers — which is why a
+  green suite never noticed.
+- Added `28_character_input_spex.exs`, verified to fail against the bug.
 - Fixed the file navigator never scrolling, on either axis. Scroll is
   positional input and Scenic hit-tests it only against primitives that ask for
   `:cursor_scroll`; no SideNav primitive did, and the root scene's `put_child`

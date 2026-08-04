@@ -69,7 +69,7 @@ defmodule QuillEx.MixProject do
         :scenic_widget_contrib,
         "../scenic-widget-contrib",
         "https://github.com/JediLuke/scenic-widget-contrib.git",
-        "0a5a2a22b3c3bd9f977ad1c0036754200d709702"
+        "4e50782454d6f73d114f17e959bb39df4d8e4278"
       ),
       {:elixir_uuid, "~> 1.2"},
       {:font_metrics, "~> 0.5"},
@@ -94,7 +94,7 @@ defmodule QuillEx.MixProject do
         :scenic_mcp,
         "../scenic_mcp_experimental",
         "https://github.com/scenic-contrib/scenic_mcp_experimental.git",
-        "59381a09b6511b73da2f2b1d5ede953c713fa100",
+        "8ebf0c6a3709fba0beae9a05d4454c60c5acee09",
         only: [:dev, :test],
         override: true
       ),
@@ -104,24 +104,32 @@ defmodule QuillEx.MixProject do
     ]
   end
 
-  # Sibling checkouts are the DEFAULT, because this is a constellation: a fix
-  # usually spans quillex plus one or more of its sibling repositories, and
-  # pinning immutable revisions mid-fix means every iteration needs a commit,
-  # a push and a re-pin before it can even be tested.
+  # Pinned git revisions are the DEFAULT, so that cloning quillex on its own is
+  # enough. Mix fetches each fork at the revision named above; nobody has to
+  # know this project is spread across five repositories, or clone four of them
+  # by hand onto the right branches to get a working editor.
   #
-  # Immutable revisions are a RELEASE posture, not a development one. Opt into
-  # them when verifying what a clean machine will build:
+  # Sibling checkouts are the DEVELOPMENT posture, for work that spans quillex
+  # and one or more forks at once — where pinning immutable revisions mid-fix
+  # would mean a commit, a push and a re-pin before every test run:
   #
-  #     QUILLEX_PINNED_DEPS=1 mix deps.get
+  #     QUILLEX_LOCAL_DEPS=1 mix deps.get
+  #     QUILLEX_LOCAL_DEPS=1 scripts/run_spex_quiet.sh
   #
-  # (`QUILLEX_LOCAL_DEPS=1` remains accepted so existing scripts and the 0.7.3
-  # release documentation keep working.)
+  # Export it in the shell you develop in. It expects ../scenic, ../spex and
+  # friends to exist; scripts/install.sh checks they are on the right revisions.
+  #
+  # One switch, not two. This used to default the other way, with
+  # QUILLEX_PINNED_DEPS to opt in — which meant a plain clone silently built
+  # against whatever happened to be checked out beside it, and a fresh clone of
+  # quillex alone could not build at all.
   defp constellation_dep(name, path, git, ref, opts \\ []) do
-    pinned? =
-      System.get_env("QUILLEX_PINNED_DEPS") in ["1", "true"] and
-        System.get_env("QUILLEX_LOCAL_DEPS") not in ["1", "true"]
-
-    source = if pinned?, do: [git: git, ref: ref], else: [path: path]
+    source =
+      if System.get_env("QUILLEX_LOCAL_DEPS") in ["1", "true"] do
+        [path: path]
+      else
+        [git: git, ref: ref]
+      end
 
     {name, Keyword.merge(source, opts)}
   end
