@@ -11,7 +11,7 @@ line. See **[ARCHITECTURE.md](ARCHITECTURE.md)** for the diagrams.
 ## Quick Start
 
 ```bash
-git clone -b franklin/work https://github.com/JediLuke/quillex.git
+git clone https://github.com/JediLuke/quillex.git
 cd quillex
 scripts/install.sh
 ```
@@ -19,12 +19,6 @@ scripts/install.sh
 That is the whole of it. Quillex is built across several forks of Scenic and
 its widget library, but `mix.exs` names the exact revision of each and Mix
 fetches them from GitHub — you do not need to know they exist, or clone them.
-
-The `-b` matters: quillex's default branch is `main`, which is dozens of
-commits behind `franklin/work`. A plain `git clone` gives you code that still
-builds and still runs, so nothing tells you anything is wrong — you just get
-an older editor. The tell is the toolbar: single letters (F, E, V) where there
-should be drawn icons, and fewer items in the menus.
 
 The install script checks you have Elixir, installs the system libraries
 Scenic renders through (GLFW, GLEW, pkg-config and a C compiler) using your
