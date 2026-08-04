@@ -128,16 +128,30 @@ fi
 # task picks glfw on a desktop and cairo-fb on a framebuffer device by itself.
 
 # ── 3. The sibling forks ────────────────────────────────────────────────────
-# Quillex builds against a constellation of forks, checked out beside it.
-# Standalone clones aren't supported yet — that waits on the forks being
-# tagged, after which mix.exs can name the tags directly.
+# Only relevant when developing across the constellation. By default mix.exs
+# fetches each fork from GitHub at a pinned revision, so a lone clone of
+# quillex is all anyone needs — there is nothing to check here.
 bold "3. Checking the sibling forks"
-missing=()
-for sibling in scenic scenic_driver_local scenic-widget-contrib spex; do
-  [ -d "$project_dir/../$sibling" ] || missing+=("$sibling")
-done
 
-if [ ${#missing[@]} -eq 0 ]; then
+if [ "${QUILLEX_LOCAL_DEPS:-}" != 1 ] && [ "${QUILLEX_LOCAL_DEPS:-}" != true ]; then
+  note "not needed — mix.exs fetches the forks from GitHub at pinned revisions"
+  note "(developing across repos? export QUILLEX_LOCAL_DEPS=1 to build against"
+  note " sibling checkouts instead, and re-run this to have them checked)"
+  skip_siblings=true
+else
+  skip_siblings=false
+fi
+
+missing=()
+if [ "$skip_siblings" = false ]; then
+  for sibling in scenic scenic_driver_local scenic-widget-contrib spex; do
+    [ -d "$project_dir/../$sibling" ] || missing+=("$sibling")
+  done
+fi
+
+if [ "$skip_siblings" = true ]; then
+  :
+elif [ ${#missing[@]} -eq 0 ]; then
   note "all four present"
 
   # Present is not the same as correct. A plain `git clone` of these forks

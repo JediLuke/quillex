@@ -104,24 +104,32 @@ defmodule QuillEx.MixProject do
     ]
   end
 
-  # Sibling checkouts are the DEFAULT, because this is a constellation: a fix
-  # usually spans quillex plus one or more of its sibling repositories, and
-  # pinning immutable revisions mid-fix means every iteration needs a commit,
-  # a push and a re-pin before it can even be tested.
+  # Pinned git revisions are the DEFAULT, so that cloning quillex on its own is
+  # enough. Mix fetches each fork at the revision named above; nobody has to
+  # know this project is spread across five repositories, or clone four of them
+  # by hand onto the right branches to get a working editor.
   #
-  # Immutable revisions are a RELEASE posture, not a development one. Opt into
-  # them when verifying what a clean machine will build:
+  # Sibling checkouts are the DEVELOPMENT posture, for work that spans quillex
+  # and one or more forks at once — where pinning immutable revisions mid-fix
+  # would mean a commit, a push and a re-pin before every test run:
   #
-  #     QUILLEX_PINNED_DEPS=1 mix deps.get
+  #     QUILLEX_LOCAL_DEPS=1 mix deps.get
+  #     QUILLEX_LOCAL_DEPS=1 scripts/run_spex_quiet.sh
   #
-  # (`QUILLEX_LOCAL_DEPS=1` remains accepted so existing scripts and the 0.7.3
-  # release documentation keep working.)
+  # Export it in the shell you develop in. It expects ../scenic, ../spex and
+  # friends to exist; scripts/install.sh checks they are on the right revisions.
+  #
+  # One switch, not two. This used to default the other way, with
+  # QUILLEX_PINNED_DEPS to opt in — which meant a plain clone silently built
+  # against whatever happened to be checked out beside it, and a fresh clone of
+  # quillex alone could not build at all.
   defp constellation_dep(name, path, git, ref, opts \\ []) do
-    pinned? =
-      System.get_env("QUILLEX_PINNED_DEPS") in ["1", "true"] and
-        System.get_env("QUILLEX_LOCAL_DEPS") not in ["1", "true"]
-
-    source = if pinned?, do: [git: git, ref: ref], else: [path: path]
+    source =
+      if System.get_env("QUILLEX_LOCAL_DEPS") in ["1", "true"] do
+        [path: path]
+      else
+        [git: git, ref: ref]
+      end
 
     {name, Keyword.merge(source, opts)}
   end

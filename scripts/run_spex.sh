@@ -27,5 +27,17 @@ else
   echo "No DISPLAY — skipping window_pinner (spex windows will land wherever the WM puts them)."
 fi
 
+# If the forks are checked out beside us but QUILLEX_LOCAL_DEPS is not set,
+# say so. mix.exs defaults to pinned GitHub revisions, so the suite would run
+# against those and quietly ignore local edits to scenic or the widget library
+# — you would be testing something other than what you are looking at.
+if [ "${QUILLEX_LOCAL_DEPS:-}" != 1 ] && [ "${QUILLEX_LOCAL_DEPS:-}" != true ] &&
+  [ -d ../scenic-widget-contrib ] && [ -d ../scenic ]; then
+  echo "note: sibling forks are checked out, but QUILLEX_LOCAL_DEPS is not set —"
+  echo "      running against the PINNED revisions in mix.exs, not your local edits."
+  echo "      Export QUILLEX_LOCAL_DEPS=1 to test the checkouts beside this one."
+  echo
+fi
+
 JSONL="${SPEX_JSONL:-/tmp/quillex_spex_failures_$(date +%Y%m%d_%H%M%S).jsonl}"
 MIX_ENV=test SCENIC_LOCAL_TARGET=glfw mix spex --jsonl="$JSONL" "$@"

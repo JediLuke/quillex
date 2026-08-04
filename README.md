@@ -10,30 +10,21 @@ line. See **[ARCHITECTURE.md](ARCHITECTURE.md)** for the diagrams.
 
 ## Quick Start
 
-Quillex builds against a constellation of forks that must be checked out
-beside it, so clone them into the same parent directory:
-
 ```bash
-mkdir flx && cd flx
-git clone -b franklin/work          https://github.com/JediLuke/quillex.git
-git clone -b main                   https://github.com/JediLuke/scenic.git
-git clone -b main                   https://github.com/JediLuke/scenic_driver_local.git
-git clone -b nice_module_attributes https://github.com/JediLuke/scenic-widget-contrib.git
-git clone -b feature/context-struct-and-function-givens https://github.com/JediLuke/spex.git
-
+git clone -b franklin/work https://github.com/JediLuke/quillex.git
 cd quillex
 scripts/install.sh
 ```
 
-**Every `-b` matters, quillex's most of all.** None of these repositories'
-default branches are where the work is — quillex's `main` is dozens of commits
-behind `franklin/work`. A plain `git clone` gives you code that still builds
-and still runs, so nothing tells you anything is wrong; you just get an older
-editor. The visible tell is the toolbar: single letters (F, E, V) where there
-should be drawn icons, and fewer items in the menus.
+That is the whole of it. Quillex is built across several forks of Scenic and
+its widget library, but `mix.exs` names the exact revision of each and Mix
+fetches them from GitHub — you do not need to know they exist, or clone them.
 
-`scripts/install.sh` checks each fork contains the revision `mix.exs` pins and
-says so if not. It is safe to re-run at any time.
+The `-b` matters: quillex's default branch is `main`, which is dozens of
+commits behind `franklin/work`. A plain `git clone` gives you code that still
+builds and still runs, so nothing tells you anything is wrong — you just get
+an older editor. The tell is the toolbar: single letters (F, E, V) where there
+should be drawn icons, and fewer items in the menus.
 
 The install script checks you have Elixir, installs the system libraries
 Scenic renders through (GLFW, GLEW, pkg-config and a C compiler) using your
@@ -43,9 +34,32 @@ It asks before doing anything; `--yes` skips the questions.
 Then either `qlx .` for the editor, or `iex -S mix` for a shell with it
 running.
 
-> Cloning quillex on its own doesn't work yet — that waits on those forks
-> being tagged. See [DISTRIBUTION.md](DISTRIBUTION.md) for how end users will
-> eventually get Quillex without any of this.
+### Working across the forks
+
+If you are changing Quillex *and* one of the forks at the same time, pinned
+revisions get in the way — every iteration would need a commit, a push and a
+re-pin before you could test it. Check the forks out beside quillex and build
+against them directly instead:
+
+```bash
+git clone -b main                   https://github.com/JediLuke/scenic.git
+git clone -b main                   https://github.com/JediLuke/scenic_driver_local.git
+git clone -b nice_module_attributes https://github.com/JediLuke/scenic-widget-contrib.git
+git clone -b feature/context-struct-and-function-givens https://github.com/JediLuke/spex.git
+
+export QUILLEX_LOCAL_DEPS=1     # in the shell you develop in
+mix deps.get
+```
+
+With that set, `scripts/install.sh` also verifies each checkout contains the
+revision `mix.exs` pins, and tells you the fetch-and-checkout command for any
+that don't. Without it, sibling directories are ignored entirely.
+
+Remember to commit, push and re-pin the fork before releasing: a revision that
+only exists on your machine builds fine for you and for nobody else.
+
+See [DISTRIBUTION.md](DISTRIBUTION.md) for how end users will eventually get
+Quillex without building it at all.
 
 ## The `qlx` command
 
