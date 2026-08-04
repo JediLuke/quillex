@@ -1,40 +1,41 @@
 defmodule Quillex.TestHelpers.SemanticHelpers do
   @moduledoc """
   Helper functions for working with the semantic layer in tests.
-  
+
   These helpers search across all graphs to find semantic elements,
   not just the root graph.
   """
-  
-  alias Scenic.Semantic.Query
-  
+
+  alias ScenicMcp.Tools
+  alias ScenicMcp.Probes
+
   @doc """
   Find elements by type across ALL graphs in the viewport.
-  
-  This is more robust than Query.find_by_type which only searches one graph.
+
+  Handles both ETS formats:
+  - Format 1 (build_semantic_info): `{graph_key, %{elements: %{id => elem}}}`
+  - Format 2 (manual registration): `{{scene_name, id}, %Scenic.Semantic.Compiler.Entry{}}`
   """
   def find_by_type_all_graphs(viewport, type) do
-    # Get all semantic data
     semantic_data = :ets.tab2list(viewport.semantic_table)
-    
-    elements = Enum.flat_map(semantic_data, fn {_graph_key, info} ->
-      case info do
-        %{by_type: by_type, elements: elements} ->
-          ids = Map.get(by_type, type, [])
-          Enum.map(ids, &Map.get(elements, &1))
 
-        %{elements: elements} ->
-          elements
-          |> Map.values()
-          |> Enum.filter(fn elem ->
-            Map.get(elem.semantic || %{}, :type) == type
-          end)
+    elements = Enum.flat_map(semantic_data, fn
+      # Format 2: {{scene_name, entry_id}, %Entry{}}
+      {{_scene_name, _entry_id}, %Scenic.Semantic.Compiler.Entry{type: entry_type} = entry} when entry_type == type ->
+        [entry_to_element(entry)]
 
-        _ ->
-          []
-      end
+      # Format 1: {graph_key, %{elements: %{id => elem}}}
+      {_graph_key, %{elements: elements}} ->
+        elements
+        |> Map.values()
+        |> Enum.filter(fn elem ->
+          Map.get(Map.get(elem, :semantic, %{}) || %{}, :type) == type
+        end)
+
+      _ ->
+        []
     end)
-    
+
     {:ok, elements}
   end
   
@@ -88,17 +89,20 @@ defmodule Quillex.TestHelpers.SemanticHelpers do
     semantic_data = :ets.tab2list(viewport.semantic_table)
 
     elements =
-      Enum.flat_map(semantic_data, fn {_graph_key, info} ->
-        case info do
-          %{elements: elements} ->
-            case Map.get(elements, id) do
-              nil -> []
-              elem -> [elem]
-            end
+      Enum.flat_map(semantic_data, fn
+        # Format 2
+        {{_scene_name, entry_id}, %Scenic.Semantic.Compiler.Entry{} = entry} when entry_id == id ->
+          [entry_to_element(entry)]
 
-          _ ->
-            []
-        end
+        # Format 1
+        {_graph_key, %{elements: elements}} ->
+          case Map.get(elements, id) do
+            nil -> []
+            elem -> [elem]
+          end
+
+        _ ->
+          []
       end)
 
     case elements do
@@ -112,29 +116,26 @@ defmodule Quillex.TestHelpers.SemanticHelpers do
 
     latest =
       semantic_data
-      |> Enum.flat_map(fn {_graph_key, info} ->
-        timestamp = Map.get(info, :timestamp, 0)
+      |> Enum.flat_map(fn
+        # Format 2: {{scene_name, entry_id}, %Entry{}}
+        {{_scene_name, _entry_id}, %Scenic.Semantic.Compiler.Entry{type: entry_type} = entry} when entry_type == type ->
+          elem = entry_to_element(entry)
+          if filter_fn.(elem), do: [{0, elem}], else: []
 
-        elements =
-          case info do
-            %{by_type: by_type, elements: elements} ->
-              ids = Map.get(by_type, type, [])
-              Enum.map(ids, &Map.get(elements, &1))
+        # Format 1: {graph_key, %{elements: ...}}
+        {_graph_key, %{elements: elements} = info} ->
+          timestamp = Map.get(info, :timestamp, 0)
 
-            %{elements: elements} ->
-              elements
-              |> Map.values()
-              |> Enum.filter(fn elem ->
-                Map.get(elem.semantic || %{}, :type) == type
-              end)
+          elements
+          |> Map.values()
+          |> Enum.filter(fn elem ->
+            Map.get(Map.get(elem, :semantic, %{}) || %{}, :type) == type
+          end)
+          |> Enum.filter(filter_fn)
+          |> Enum.map(&{timestamp, &1})
 
-            _ ->
-              []
-          end
-
-        elements
-        |> Enum.filter(filter_fn)
-        |> Enum.map(&{timestamp, &1})
+        _ ->
+          []
       end)
       |> Enum.max_by(fn {timestamp, _elem} -> timestamp end, fn -> nil end)
 
@@ -142,6 +143,45 @@ defmodule Quillex.TestHelpers.SemanticHelpers do
       nil -> {:error, :not_found}
       {_timestamp, elem} -> {:ok, elem}
     end
+  end
+
+  # Convert a Format 2 (manually registered) Scenic.Semantic.Compiler.Entry
+  # into the Format 1 (graph-based) element map shape that callers expect.
+  # Format 1 elements are maps with :id, :type, :content, :semantic, etc.
+  #
+  # When entry.value is a map, it is treated as custom semantic metadata from
+  # the component's semantic_metadata/1 callback (buffer_id, cursor_position,
+  # selection, scroll, etc.) and merged into the :semantic output map.
+  # Standard fields (type, label, role, value, clickable) take priority on conflict.
+  defp entry_to_element(%Scenic.Semantic.Compiler.Entry{} = entry) do
+    base_semantic = %{
+      type: entry.type,
+      label: entry.label,
+      role: entry.role,
+      value: entry.value,
+      clickable: entry.clickable
+    }
+
+    # Merge custom metadata when value is a map so that fields like buffer_id,
+    # cursor_position, selection, and scroll are accessible directly via
+    # semantic.field_name instead of semantic.value.field_name.
+    # base_semantic takes priority to preserve the standard fields.
+    full_semantic =
+      case entry.value do
+        %{} = meta when is_map(meta) -> Map.merge(meta, base_semantic)
+        _ -> base_semantic
+      end
+
+    %{
+      id: entry.id,
+      type: entry.type,
+      content: entry.label || "",
+      semantic: full_semantic,
+      clickable: entry.clickable,
+      label: entry.label || "",
+      screen_bounds: entry.screen_bounds,
+      local_bounds: entry.local_bounds
+    }
   end
 
   defp find_buffer_text_field(viewport) do
@@ -254,6 +294,26 @@ defmodule Quillex.TestHelpers.SemanticHelpers do
   Get the current cursor position from the buffer's semantic data.
   Returns {line, column} or nil if not found.
   """
+  @doc """
+  The buffer pane's actual frame `%{x:, y:, width:, height:}` in window
+  coords, from the TextField's semantic metadata. Spex must derive
+  window-size-dependent click coordinates (scrollbars, right-edge UI) from
+  this — the WM may grant a smaller window than configured, and
+  `Scenic.ViewPort.info/1` reports only the configured size.
+  """
+  def get_buffer_frame do
+    case Scenic.ViewPort.info(:main_viewport) do
+      {:ok, viewport} ->
+        case find_text_buffer(viewport) do
+          {:ok, buffer} -> get_in(buffer, [:semantic, :frame])
+          _ -> nil
+        end
+
+      _ ->
+        nil
+    end
+  end
+
   def get_cursor_position do
     case Scenic.ViewPort.info(:main_viewport) do
       {:ok, viewport} ->
@@ -267,7 +327,7 @@ defmodule Quillex.TestHelpers.SemanticHelpers do
     case find_text_buffer(viewport) do
       {:ok, buffer} ->
         semantic = buffer.semantic || %{}
-        case semantic[:cursor] do
+        case semantic[:cursor_position] do
           {line, col} -> {line, col}
           _ -> nil
         end
@@ -391,13 +451,104 @@ defmodule Quillex.TestHelpers.SemanticHelpers do
   @doc """
   Find the tab bar semantic element in the viewport.
   Returns {:ok, tab_bar_info} or {:error, :not_found}
+
+  Reads the aggregate entry written by ScenicWidgets.TabBar.register_semantic_elements/2.
+  That function stores a plain map (not a %Scenic.Semantic.Compiler.Entry{}) under the
+  key {scene_name, :tab_bar_aggregate} so that rich metadata (tab_count, tabs with labels,
+  selected_id) survives — the Entry struct has no fields for custom data.
   """
   def find_tab_bar do
     with_viewport(fn viewport -> find_tab_bar(viewport) end)
   end
 
   def find_tab_bar(viewport) do
-    find_latest_by_type(viewport, :tab_bar, fn _ -> true end)
+    case find_tab_bar_aggregate(viewport) do
+      {:ok, _} = result ->
+        result
+
+      _ ->
+        case find_latest_by_type(viewport, :tab_bar, fn _ -> true end) do
+          {:ok, _} = result -> result
+          _ -> build_tab_bar_from_tab_entries(viewport)
+        end
+    end
+  end
+
+  # Build a synthetic tab-bar aggregate from individual :tab type entries registered
+  # by ScenicWidgets.TabBar. The TabBar widget registers one Entry per tab with:
+  #   - type: :tab
+  #   - id: :"tab_bar_#{uuid}"
+  #   - label: the visible tab label (e.g. "untitled")
+  #   - role: :selected_tab (active) or :tab (inactive)
+  #   - value: the raw tab id (UUID string used as buffer id)
+  # We reconstruct tab_count, tabs list, and selected_id from these entries.
+  defp build_tab_bar_from_tab_entries(viewport) do
+    case find_by_type_all_graphs(viewport, :tab) do
+      {:ok, []} ->
+        {:error, :not_found}
+
+      {:ok, tab_entries} ->
+        tab_list =
+          Enum.map(tab_entries, fn entry ->
+            sem = entry.semantic || %{}
+
+            %{
+              id: sem[:value] || entry.id,
+              label: sem[:label] || entry.label || to_string(entry.content || "")
+            }
+          end)
+
+        selected_entry =
+          Enum.find(tab_entries, fn entry ->
+            (entry.semantic || %{})[:role] == :selected_tab
+          end)
+
+        selected_id =
+          if selected_entry do
+            sem = selected_entry.semantic || %{}
+            sem[:value] || selected_entry.id
+          end
+
+        {:ok,
+         %{
+           id: :tab_bar_derived,
+           type: :tab_bar,
+           content: nil,
+           semantic: %{
+             type: :tab_bar,
+             tab_count: length(tab_list),
+             tabs: tab_list,
+             selected_id: selected_id
+           },
+           clickable: false
+         }}
+    end
+  end
+
+  # Read the plain-map aggregate entry written by TabBar.register_tab_bar_aggregate/3.
+  # Returns {:ok, element} where element.semantic has :tab_count, :tabs, :selected_id.
+  defp find_tab_bar_aggregate(viewport) do
+    semantic_data = :ets.tab2list(viewport.semantic_table)
+
+    result =
+      Enum.find_value(semantic_data, fn
+        {{_scene_name, :tab_bar_aggregate}, %{tab_count: _} = data} ->
+          %{
+            id: :tab_bar_aggregate,
+            type: :tab_bar,
+            content: nil,
+            semantic: Map.put(data, :type, :tab_bar),
+            clickable: false
+          }
+
+        _ ->
+          nil
+      end)
+
+    case result do
+      nil -> {:error, :not_found}
+      elem -> {:ok, elem}
+    end
   end
 
   @doc """
@@ -565,6 +716,151 @@ defmodule Quillex.TestHelpers.SemanticHelpers do
   end
 
   # ===========================================================================
+  # TabBar Click Helpers (using semantic registration)
+  # ===========================================================================
+
+  @doc """
+  Click on a tab by its label using the semantic clickable registration.
+  Uses the aggregate tab bar metadata to find the tab ID, then clicks
+  the semantically registered tab element.
+  Returns {:ok, result} or {:error, reason}.
+  """
+  def click_tab_by_label(label) when is_binary(label) do
+    with_viewport(fn viewport ->
+      case find_tab_bar(viewport) do
+        {:ok, tab_bar} ->
+          semantic = tab_bar.semantic || %{}
+          tabs = semantic[:tabs] || []
+
+          # Find tab matching the label - prefer exact match, fall back to substring
+          exact_match = Enum.find(tabs, fn tab ->
+            to_string(tab[:label]) == label
+          end)
+
+          match = exact_match || Enum.find(tabs, fn tab ->
+            tab_label = to_string(tab[:label])
+            String.contains?(tab_label, label) or
+              String.contains?(label, tab_label)
+          end)
+
+          if match do
+            tab_id_str = to_string(match[:id])
+            semantic_id = "tab_bar_#{tab_id_str}"
+            Tools.click_element(%{"element_id" => semantic_id})
+          else
+            {:error, {:not_found, "No tab matching '#{label}'. Available: #{inspect(Enum.map(tabs, & &1[:label]))}"}}
+          end
+
+        _ ->
+          {:error, :tab_bar_not_found}
+      end
+    end)
+  end
+
+  @doc """
+  Click the close button on a tab by its label.
+  Returns {:ok, result} or {:error, reason}.
+  """
+  def close_tab_by_label(label) when is_binary(label) do
+    with_viewport(fn viewport ->
+      case find_tab_bar(viewport) do
+        {:ok, tab_bar} ->
+          semantic = tab_bar.semantic || %{}
+          tabs = semantic[:tabs] || []
+
+          exact_match = Enum.find(tabs, fn tab ->
+            to_string(tab[:label]) == label
+          end)
+
+          match = exact_match || Enum.find(tabs, fn tab ->
+            tab_label = to_string(tab[:label])
+            String.contains?(tab_label, label) or
+              String.contains?(label, tab_label)
+          end)
+
+          if match do
+            tab_id_str = to_string(match[:id])
+            close_id = "tab_bar_close_#{tab_id_str}"
+            Tools.click_element(%{"element_id" => close_id})
+          else
+            {:error, {:not_found, "No tab matching '#{label}'"}}
+          end
+
+        _ ->
+          {:error, :tab_bar_not_found}
+      end
+    end)
+  end
+
+  # ===========================================================================
+  # Selection Polling Helpers
+  # ===========================================================================
+
+  @doc """
+  Wait for the active text buffer to have a non-nil selection.
+
+  Polls the semantic viewport until a selection appears on the text buffer,
+  or until `timeout` ms elapses.
+
+  Returns `{:ok, buffer, selection}` where `selection` is a map with
+  `:start` and `:end` keys (each a `{line, col}` tuple), or
+  `{:error, :selection_timeout}` on timeout.
+  """
+  def wait_for_active_selection(timeout \\ 2000) do
+    end_time = System.monotonic_time(:millisecond) + timeout
+    do_wait_for_selection(end_time)
+  end
+
+  defp do_wait_for_selection(end_time) do
+    case Scenic.ViewPort.info(:main_viewport) do
+      {:ok, viewport} ->
+        case find_text_buffer(viewport) do
+          {:ok, buffer} ->
+            selection = get_in(buffer, [:semantic, :selection])
+
+            if selection do
+              {:ok, buffer, selection}
+            else
+              retry_selection_wait(end_time)
+            end
+
+          _ ->
+            retry_selection_wait(end_time)
+        end
+
+      _ ->
+        retry_selection_wait(end_time)
+    end
+  end
+
+  defp retry_selection_wait(end_time) do
+    if System.monotonic_time(:millisecond) < end_time do
+      Process.sleep(50)
+      do_wait_for_selection(end_time)
+    else
+      {:error, :selection_timeout}
+    end
+  end
+
+  # ===========================================================================
+  # Dialog Visibility Helpers
+  # ===========================================================================
+
+  @doc """
+  Check if the unsaved-changes confirmation dialog is currently visible.
+
+  Returns `true` when the ConfirmDialog titled "Unsaved Changes" is rendered in
+  the viewport (i.e. the user is being prompted about a dirty buffer close).
+  Returns `false` otherwise.
+
+  Used in integration tests to assert or refute dialog presence without
+  coupling to a specific semantic element ID.
+  """
+  def unsaved_prompt_visible? do
+    ScenicMcp.Query.text_visible?("Unsaved Changes")
+  end
+
+  # ===========================================================================
   # Viewport Helpers
   # ===========================================================================
 
@@ -587,5 +883,90 @@ defmodule Quillex.TestHelpers.SemanticHelpers do
       {:ok, viewport} -> {:ok, viewport}
       error -> error
     end
+  end
+
+  @doc """
+  Clear all buffers and create a fresh empty buffer.
+  Used in test setup to ensure clean state.
+  """
+  def clear_all_buffers_and_create_fresh do
+    # Try to close all buffers except one
+    tab_labels = get_tab_labels()
+
+    # Close all tabs except the first one
+    Enum.each(Enum.drop(tab_labels, 1), fn label ->
+      close_tab_by_label(label)
+      Process.sleep(100)
+    end)
+
+    # Clear content of remaining buffer
+    clear_current_buffer()
+
+    # Note: If all buffers were closed (shouldn't happen in normal test flow),
+    # we cannot create a new one here — SemanticHelpers is a black-box helper
+    # and must not call internal Quillex APIs. Test setup should ensure at least
+    # one buffer always exists before calling this helper.
+    :ok
+  end
+
+  @doc """
+  Clear content of the current active buffer.
+  """
+  def clear_current_buffer do
+    # Select all and delete
+    Probes.send_keys("a", [:ctrl])
+    Process.sleep(50)
+    Probes.send_keys("backspace", [])
+    Process.sleep(100)
+  end
+
+  # ===========================================================================
+  # Buffer Pane Focus Helpers
+  # ===========================================================================
+
+  @doc """
+  Return focus info for the buffer pane by reading the TextField scene's assigns
+  directly. Returns a map with `:focused?`, `:border`, `:focused_border`, and
+  `:current_border` (the color currently rendered given the focus state), or
+  `{:error, reason}` if the buffer pane cannot be located.
+  """
+  def buffer_pane_focus_info do
+    case Process.whereis(QuillEx.RootScene) do
+      nil ->
+        {:error, :root_scene_not_registered}
+
+      root_pid ->
+        # Scenic.Scene.child/2 in this fork expects a %Scenic.Scene{} struct, so
+        # fetch the scene state via :sys.get_state/1 and pass that.
+        root_scene = :sys.get_state(root_pid)
+
+        case Scenic.Scene.child(root_scene, :buffer_pane) do
+          {:ok, [buffer_pid | _]} ->
+            tf_state = :sys.get_state(buffer_pid).assigns.state
+
+            %{
+              focused?: tf_state.focused,
+              border: tf_state.colors.border,
+              focused_border: tf_state.colors.focused_border,
+              current_border:
+                if(tf_state.focused,
+                  do: tf_state.colors.focused_border,
+                  else: tf_state.colors.border
+                )
+            }
+
+          other ->
+            {:error, {:buffer_pane_not_found, other}}
+        end
+    end
+  end
+
+  @doc """
+  Returns true when the buffer pane TextField currently reports focus.
+  Raises if the buffer pane cannot be located.
+  """
+  def buffer_pane_focused? do
+    %{focused?: focused?} = buffer_pane_focus_info()
+    focused?
   end
 end

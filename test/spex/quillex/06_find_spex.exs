@@ -28,6 +28,11 @@ defmodule Quillex.FindSpex do
     # Wait for scene to fully initialize
     Process.sleep(2000)
 
+
+    # Known LAYOUT to start from (overlays dismissed, file navigator
+    # closed) without touching buffers — an open navigator shifts the
+    # editor pane 250px right and makes fixed-x clicks miss it.
+    Quillex.TestHelpers.AppReset.reset_layout!()
     :ok
   end
 
@@ -39,7 +44,7 @@ defmodule Quillex.FindSpex do
     # 1. OPEN SEARCH BAR
     # =========================================================================
 
-    scenario "Ctrl+F opens the search bar", context do
+    scenario "Ctrl+F opens the search bar" do
       given_ "Quillex has launched with some text", context do
         Process.sleep(300)
         # Click in editor area to ensure focus
@@ -70,7 +75,7 @@ defmodule Quillex.FindSpex do
         {:ok, context}
       end
 
-      then_ "the search bar should be visible", context do
+      then_ "the search bar should be visible" do
         # Take screenshot to see what's actually visible
         path = Probes.take_screenshot("01_search_bar_open")
         IO.puts("📸 Screenshot saved to: #{path}")
@@ -96,7 +101,7 @@ defmodule Quillex.FindSpex do
     # 2. TYPE IN SEARCH BAR
     # =========================================================================
 
-    scenario "Can type search query in search bar", context do
+    scenario "Can type search query in search bar" do
       given_ "search bar is open with test content", context do
         Process.sleep(300)
         # Ensure we have test content
@@ -122,7 +127,7 @@ defmodule Quillex.FindSpex do
         {:ok, context}
       end
 
-      then_ "the search query should be visible", context do
+      then_ "the search query should be visible" do
         # The pre-filled text should be visible in the search bar
         assert Query.text_visible?("apple"), "'apple' should be visible in search bar"
         :ok
@@ -133,7 +138,7 @@ defmodule Quillex.FindSpex do
     # 3. MATCH COUNT DISPLAY
     # =========================================================================
 
-    scenario "Match count is displayed", context do
+    scenario "Match count is displayed" do
       given_ "we have searched for 'apple' which appears 3 times", context do
         # Set up fresh - don't rely on previous scenario
         Process.sleep(300)
@@ -157,7 +162,7 @@ defmodule Quillex.FindSpex do
         {:ok, context}
       end
 
-      then_ "match count should show '1/3' or similar", context do
+      then_ "match count should show '1/3' or similar" do
         # Should show current match position and total
         # Format is "1/3" for first of three matches
         assert Query.text_visible?("/3") or Query.text_visible?("3"),
@@ -175,7 +180,7 @@ defmodule Quillex.FindSpex do
     # 4. NEXT MATCH WITH ENTER
     # =========================================================================
 
-    scenario "Enter moves to next match", context do
+    scenario "Enter moves to next match" do
       given_ "we have found matches for 'apple'", context do
         Process.sleep(300)
         # Set up fresh content
@@ -211,7 +216,7 @@ defmodule Quillex.FindSpex do
         {:ok, context}
       end
 
-      then_ "match counter should update", context do
+      then_ "match counter should update" do
         # After pressing Enter twice from match 1, should be at match 3
         # (or wrapped around depending on implementation)
         assert Query.text_visible?("/3") or Query.text_visible?("3"),
@@ -229,7 +234,7 @@ defmodule Quillex.FindSpex do
     # 5. PREVIOUS MATCH WITH SHIFT+ENTER
     # =========================================================================
 
-    scenario "Shift+Enter moves to previous match", context do
+    scenario "Shift+Enter moves to previous match" do
       given_ "we have found matches for 'apple'", context do
         Process.sleep(300)
         # Set up fresh content with 3 "apple" occurrences
@@ -263,7 +268,7 @@ defmodule Quillex.FindSpex do
         {:ok, context}
       end
 
-      then_ "we should move to previous match", context do
+      then_ "we should move to previous match" do
         # Match position should have changed, but still show 3 total
         assert Query.text_visible?("/3") or Query.text_visible?("3"),
           "Should still show 3 total matches"
@@ -280,7 +285,7 @@ defmodule Quillex.FindSpex do
     # 6. CLOSE WITH ESCAPE
     # =========================================================================
 
-    scenario "Escape closes the search bar", context do
+    scenario "Escape closes the search bar" do
       given_ "search bar is open", context do
         Process.sleep(300)
         # Make sure search bar is open
@@ -295,7 +300,7 @@ defmodule Quillex.FindSpex do
         {:ok, context}
       end
 
-      then_ "the search bar should be closed", context do
+      then_ "the search bar should be closed" do
         # The close button X should no longer be visible in search bar context
         # (Note: X might still be visible if it's part of regular content)
         # We verify the search bar is closed by checking we can type normally
@@ -311,7 +316,7 @@ defmodule Quillex.FindSpex do
     # 7. CLOSE WITH BUTTON CLICK
     # =========================================================================
 
-    scenario "Click X closes the search bar", context do
+    scenario "Click X closes the search bar" do
       given_ "search bar is open", context do
         # Clean up and re-open
         Probes.send_keys("a", [:ctrl])
@@ -333,7 +338,7 @@ defmodule Quillex.FindSpex do
         {:ok, context}
       end
 
-      then_ "the search bar should be closed", context do
+      then_ "the search bar should be closed" do
         # Verify by typing - should go to main editor
         Probes.send_text("Q")
         Process.sleep(100)
@@ -351,7 +356,7 @@ defmodule Quillex.FindSpex do
     # 8. BACKSPACE IN SEARCH BAR
     # =========================================================================
 
-    scenario "Backspace deletes characters in search query", context do
+    scenario "Backspace deletes characters in search query" do
       given_ "search bar is open with query 'test'", context do
         Process.sleep(300)
         Probes.send_keys("escape", [])
@@ -377,7 +382,7 @@ defmodule Quillex.FindSpex do
         {:ok, context}
       end
 
-      then_ "the query should be 'te'", context do
+      then_ "the query should be 'te'" do
         # After deleting 2 chars from "test", should have "te"
         # Hard to verify directly, but search results should change
         # "te" matches "testing" and "test"
@@ -395,7 +400,7 @@ defmodule Quillex.FindSpex do
     # 9. REOPEN SEARCH BAR
     # =========================================================================
 
-    scenario "Ctrl+F reopens after Escape", context do
+    scenario "Ctrl+F reopens after Escape" do
       given_ "search bar was closed", context do
         Process.sleep(300)
         # Ensure closed
@@ -410,7 +415,7 @@ defmodule Quillex.FindSpex do
         {:ok, context}
       end
 
-      then_ "search bar should reopen", context do
+      then_ "search bar should reopen" do
         # Search bar should be visible again
         visible_check = Query.text_visible?("<") or
                        Query.text_visible?(">") or
@@ -431,7 +436,7 @@ defmodule Quillex.FindSpex do
     # 10. NO MATCHES FOUND
     # =========================================================================
 
-    scenario "Search for non-existent text shows 0 matches", context do
+    scenario "Search for non-existent text shows 0 matches" do
       given_ "we have some text", context do
         Process.sleep(300)
         Probes.send_keys("escape", [])
@@ -453,7 +458,7 @@ defmodule Quillex.FindSpex do
         {:ok, context}
       end
 
-      then_ "match count should show 0", context do
+      then_ "match count should show 0" do
         # Should show 0/0 for no matches
         # The pre-fill means query is "Worldxyz123", not just "xyz123"
         visible = Query.text_visible?("0/0")
@@ -471,7 +476,7 @@ defmodule Quillex.FindSpex do
     # 11. CASE SENSITIVE SEARCH
     # =========================================================================
 
-    scenario "Search is case-sensitive", context do
+    scenario "Search is case-sensitive" do
       given_ "we have 'Hello' and 'hello' in text", context do
         Process.sleep(300)
         Probes.send_keys("escape", [])
@@ -493,7 +498,7 @@ defmodule Quillex.FindSpex do
         {:ok, context}
       end
 
-      then_ "only lowercase 'hello' should match", context do
+      then_ "only lowercase 'hello' should match" do
         # Should find exactly 1 match (the lowercase one)
         assert Query.text_visible?("1") or Query.text_visible?("/1"),
           "Should find 1 lowercase match"
@@ -510,7 +515,7 @@ defmodule Quillex.FindSpex do
     # 12. SEARCH BAR HAS FOCUS
     # =========================================================================
 
-    scenario "Search bar receives focus when opened", context do
+    scenario "Search bar receives focus when opened" do
       given_ "we have text in the editor", context do
         Process.sleep(300)
         Probes.send_keys("escape", [])
@@ -532,7 +537,7 @@ defmodule Quillex.FindSpex do
         {:ok, context}
       end
 
-      then_ "'search' should be in search bar, not in editor", context do
+      then_ "'search' should be in search bar, not in editor" do
         # Close search and check editor content
         Probes.send_keys("escape", [])
         Process.sleep(100)

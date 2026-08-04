@@ -13,7 +13,6 @@ defmodule Quillex.BufferStateCheckSpex do
   spex "Buffer State vs Rendered State",
     description: "Check if buffer has text even when not rendered",
     tags: [:debug] do
-
     scenario "Send input and check buffer state directly", context do
       given_ "app is running", context do
         IO.puts("\n=== BUFFER STATE CHECK ===")
@@ -26,7 +25,8 @@ defmodule Quillex.BufferStateCheckSpex do
         result = ScenicMcp.Tools.handle_send_keys(%{"text" => "Test"})
         IO.puts("Result: #{inspect(result)}")
 
-        Process.sleep(1000)  # Wait for processing
+        # Wait for processing
+        Process.sleep(1000)
         :ok
       end
 
@@ -39,7 +39,7 @@ defmodule Quillex.BufferStateCheckSpex do
           {:ok, buf_state} = Quillex.Buffer.BufferManager.get_live_buffer(buf_ref)
 
           IO.puts("Buffer data: #{inspect(buf_state.data)}")
-          IO.puts("Buffer cursors: #{inspect(buf_state.cursors)}")
+          IO.puts("Buffer cursor: #{inspect(buf_state.cursor)}")
 
           buffer_has_text = buf_state.data != [""] and buf_state.data != []
           IO.puts("Buffer has text? #{buffer_has_text}")
@@ -55,9 +55,11 @@ defmodule Quillex.BufferStateCheckSpex do
             buffer_has_text and user_content == [] ->
               IO.puts("\n🔴 PROBLEM FOUND: Buffer HAS text but it's NOT RENDERED!")
               IO.puts("This means the GUI isn't updating when buffer changes.")
+
             !buffer_has_text ->
               IO.puts("\n🔴 PROBLEM: Text didn't make it to buffer at all!")
               IO.puts("Input routing is broken.")
+
             true ->
               IO.puts("\n✅ Both buffer and rendering work!")
           end

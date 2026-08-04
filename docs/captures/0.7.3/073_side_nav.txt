@@ -1,0 +1,1 @@
+h assets biblio bin config docs git_garbage lib rel scripts test tools .gitignore AGENTS.md ARCHITECTURE.md CHANGELOG.md CLAUDE.md demo_semantic_quillex.exs DISTRIBUTION.md GEDIT_CLONE_ROADMAP.md LICENSE mix.exs Quillex-BasePrompt.md README.md test_long_file.txt TODO_TEXT_EDITOR_FEATURES.md conforman... Ln 1, Col 1 1 2 jfa hdch ehejjag

@@ -1,0 +1,26 @@
+{
+  "mcpServers": {
+    "whiteboard": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "whiteboard-mcp"]
+    },
+    "scenic-mcp": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["/home/luke/workbench/flx/scenic_mcp_experimental/dist/index.js"]
+    },
+    "memelex-mcp": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["/home/luke/workbench/flx/memelex_mcp/dist/index.js"],
+      "env": { "MEMELEX_MCP_PORT": "19998" }
+    },
+    "memelex-agent-tools-mcp": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["/home/luke/workbench/flx/memelex_mcp/dist/agent_index.js"],
+      "env": { "MEMELEX_MCP_PORT": "19998" }
+    }
+  }
+}

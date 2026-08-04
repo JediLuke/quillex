@@ -28,6 +28,11 @@ defmodule Quillex.BasicTextEditingSpex do
     # Wait for scene to fully initialize
     Process.sleep(2000)
 
+
+    # Known LAYOUT to start from (overlays dismissed, file navigator
+    # closed) without touching buffers — an open navigator shifts the
+    # editor pane 250px right and makes fixed-x clicks miss it.
+    Quillex.TestHelpers.AppReset.reset_layout!()
     :ok
   end
 
@@ -39,7 +44,7 @@ defmodule Quillex.BasicTextEditingSpex do
     # 1. TYPING SINGLE CHARACTERS
     # =========================================================================
 
-    scenario "Typing single characters appears at cursor", context do
+    scenario "Typing single characters appears at cursor" do
       given_ "Quillex has launched with empty buffer", context do
         Process.sleep(300)
         {:ok, context}
@@ -51,7 +56,7 @@ defmodule Quillex.BasicTextEditingSpex do
         {:ok, context}
       end
 
-      then_ "the character 'H' should appear in the text", context do
+      then_ "the character 'H' should appear in the text" do
         assert Query.text_visible?("H"), "Character 'H' should be visible after typing"
         :ok
       end
@@ -61,7 +66,7 @@ defmodule Quillex.BasicTextEditingSpex do
     # 2. TYPING MULTIPLE CHARACTERS
     # =========================================================================
 
-    scenario "Typing multiple characters in sequence works", context do
+    scenario "Typing multiple characters in sequence works" do
       given_ "we have typed 'H' already", context do
         # Continue from previous state
         {:ok, context}
@@ -73,7 +78,7 @@ defmodule Quillex.BasicTextEditingSpex do
         {:ok, context}
       end
 
-      then_ "the full text 'Hello World' should be visible", context do
+      then_ "the full text 'Hello World' should be visible" do
         assert Query.text_visible?("Hello World"),
                "Full text 'Hello World' should be visible"
         :ok
@@ -84,7 +89,7 @@ defmodule Quillex.BasicTextEditingSpex do
     # 3. CURSOR MOVEMENT - LEFT ARROW
     # =========================================================================
 
-    scenario "Left arrow moves cursor left", context do
+    scenario "Left arrow moves cursor left" do
       given_ "we have text 'Hello World' in the buffer", context do
         # Continue from previous state - cursor should be at end of 'Hello World'
         {:ok, context}
@@ -102,7 +107,7 @@ defmodule Quillex.BasicTextEditingSpex do
         {:ok, context}
       end
 
-      then_ "the text should show 'Hello WoXrld'", context do
+      then_ "the text should show 'Hello WoXrld'" do
         assert Query.text_visible?("Hello WoXrld"),
                "X should be inserted where cursor moved to"
         :ok
@@ -113,7 +118,7 @@ defmodule Quillex.BasicTextEditingSpex do
     # 4. BACKSPACE KEY
     # =========================================================================
 
-    scenario "Backspace deletes character before cursor", context do
+    scenario "Backspace deletes character before cursor" do
       given_ "we have text with 'X' in it", context do
         # Cursor is right after the 'X' we just typed
         {:ok, context}
@@ -125,7 +130,7 @@ defmodule Quillex.BasicTextEditingSpex do
         {:ok, context}
       end
 
-      then_ "the 'X' should be deleted", context do
+      then_ "the 'X' should be deleted" do
         assert Query.text_visible?("Hello World"),
                "Text should be back to 'Hello World' after backspace"
         :ok
@@ -141,7 +146,7 @@ defmodule Quillex.BasicTextEditingSpex do
     # 5. ENTER KEY - NEW LINE
     # =========================================================================
 
-    scenario "Enter creates new line and moves cursor", context do
+    scenario "Enter creates new line and moves cursor" do
       given_ "Quillex has launched", context do
         Process.sleep(300)
         {:ok, context}
@@ -157,13 +162,13 @@ defmodule Quillex.BasicTextEditingSpex do
         {:ok, context}
       end
 
-      then_ "both lines should be visible", context do
+      then_ "both lines should be visible" do
         assert Query.text_visible?("Line1"), "First line should be visible"
         assert Query.text_visible?("Line2"), "Second line should be visible"
         :ok
       end
 
-      then_ "line number 2 should be visible", context do
+      then_ "line number 2 should be visible" do
         # With 2 lines, line number 2 should now appear
         assert Query.text_visible?("2"), "Line number 2 should be visible"
         :ok
@@ -174,7 +179,7 @@ defmodule Quillex.BasicTextEditingSpex do
     # 6. CURSOR MOVEMENT - DOWN ARROW
     # =========================================================================
 
-    scenario "Down arrow moves cursor to next line", context do
+    scenario "Down arrow moves cursor to next line" do
       given_ "we have two lines of text", context do
         # Continue from previous state
         # Cursor is at end of Line2
@@ -191,7 +196,7 @@ defmodule Quillex.BasicTextEditingSpex do
         {:ok, context}
       end
 
-      then_ "Line1 should show the modification", context do
+      then_ "Line1 should show the modification" do
         assert Query.text_visible?("Line1_modified"),
                "First line should show '_modified' appended"
         :ok
@@ -202,7 +207,7 @@ defmodule Quillex.BasicTextEditingSpex do
     # 7. CURSOR MOVEMENT - RIGHT ARROW
     # =========================================================================
 
-    scenario "Right arrow moves cursor right", context do
+    scenario "Right arrow moves cursor right" do
       given_ "cursor is somewhere in text", context do
         # Move to start of line first
         Probes.send_keys("home", [])
@@ -220,7 +225,7 @@ defmodule Quillex.BasicTextEditingSpex do
         {:ok, context}
       end
 
-      then_ "the text should show the insertion at correct position", context do
+      then_ "the text should show the insertion at correct position" do
         # Starting from "Line1_modified", moving right 4 times puts cursor after "Line"
         # Then typing X gives us "LineX1_modified"
         rendered = Query.rendered_text()
@@ -235,7 +240,7 @@ defmodule Quillex.BasicTextEditingSpex do
     # 8. DELETE KEY
     # =========================================================================
 
-    scenario "Delete key removes character at cursor", context do
+    scenario "Delete key removes character at cursor" do
       given_ "cursor is positioned in text", context do
         # Move to start of current line
         Probes.send_keys("home", [])
@@ -252,7 +257,7 @@ defmodule Quillex.BasicTextEditingSpex do
         {:ok, context}
       end
 
-      then_ "the character at cursor should be deleted", context do
+      then_ "the character at cursor should be deleted" do
         # After delete, text length should have decreased
         current_text = Query.rendered_text()
         # Just verify we can still render (delete worked without crashing)
@@ -270,7 +275,7 @@ defmodule Quillex.BasicTextEditingSpex do
     # 9. ENTER IN MIDDLE OF LINE
     # =========================================================================
 
-    scenario "Enter in middle of line splits the line", context do
+    scenario "Enter in middle of line splits the line" do
       given_ "Quillex has launched with empty buffer", context do
         Process.sleep(300)
         {:ok, context}
@@ -298,7 +303,7 @@ defmodule Quillex.BasicTextEditingSpex do
         {:ok, context}
       end
 
-      then_ "text should be split into 'Hello' and 'World' on separate lines", context do
+      then_ "text should be split into 'Hello' and 'World' on separate lines" do
         assert Query.text_visible?("Hello"), "'Hello' should be on first line"
         assert Query.text_visible?("World"), "'World' should be on second line"
         # They should no longer be joined
@@ -312,7 +317,7 @@ defmodule Quillex.BasicTextEditingSpex do
     # 10. BACKSPACE AT LINE START JOINS LINES
     # =========================================================================
 
-    scenario "Backspace at line start joins with previous line", context do
+    scenario "Backspace at line start joins with previous line" do
       given_ "we have 'Hello' and 'World' on separate lines", context do
         # Continue from previous state
         # Cursor should be at start of "World" line after the Enter
@@ -328,7 +333,7 @@ defmodule Quillex.BasicTextEditingSpex do
         {:ok, context}
       end
 
-      then_ "the lines should be joined back to 'HelloWorld'", context do
+      then_ "the lines should be joined back to 'HelloWorld'" do
         assert Query.text_visible?("HelloWorld"),
                "Lines should be joined back together"
         :ok

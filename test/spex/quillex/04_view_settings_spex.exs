@@ -26,6 +26,11 @@ defmodule Quillex.ViewSettingsSpex do
     # Wait for scene to fully initialize
     Process.sleep(2000)
 
+
+    # Known LAYOUT to start from (overlays dismissed, file navigator
+    # closed) without touching buffers — an open navigator shifts the
+    # editor pane 250px right and makes fixed-x clicks miss it.
+    Quillex.TestHelpers.AppReset.reset_layout!()
     :ok
   end
 
@@ -33,15 +38,44 @@ defmodule Quillex.ViewSettingsSpex do
   # UI-Based Helpers
   # ===========================================================================
 
-  # Toggle line numbers via action dispatch
+  # Toggle line numbers via View menu
   defp toggle_line_numbers do
-    GenServer.call(QuillEx.RootScene, {:action, :toggle_line_numbers})
+    Probes.click_element("icon_menu_view")
+    Process.sleep(200)
+    Probes.click_element("icon_menu_view_line_numbers")
     Process.sleep(300)
   end
 
-  # Toggle word wrap via action dispatch
+  # Toggle word wrap via View menu
+
+  # Poll until the semantic cursor moves past column 1 (or time out and
+  # return whatever it reads, so the assertion reports reality).
+  defp await_cursor_past_col1(timeout_ms) do
+    deadline = System.monotonic_time(:millisecond) + timeout_ms
+    do_await_cursor_past_col1(deadline)
+  end
+
+  defp do_await_cursor_past_col1(deadline) do
+    cursor = SemanticHelpers.get_cursor_position()
+
+    case cursor do
+      {_line, col} when col > 1 ->
+        cursor
+
+      _ ->
+        if System.monotonic_time(:millisecond) >= deadline do
+          cursor
+        else
+          Process.sleep(100)
+          do_await_cursor_past_col1(deadline)
+        end
+    end
+  end
+
   defp toggle_word_wrap do
-    GenServer.call(QuillEx.RootScene, {:action, :toggle_word_wrap})
+    Probes.click_element("icon_menu_view")
+    Process.sleep(200)
+    Probes.click_element("icon_menu_view_word_wrap")
     Process.sleep(300)
   end
 
@@ -50,16 +84,25 @@ defmodule Quillex.ViewSettingsSpex do
     SemanticHelpers.get_tab_count() || 0
   end
 
-  # Create new buffer via action dispatch
+  # Create new buffer via File menu
   defp create_new_buffer do
-    GenServer.call(QuillEx.RootScene, {:action, :new_buffer})
+    Probes.click_element("icon_menu_file")
+    Process.sleep(200)
+    Probes.click_element("icon_menu_file_new")
     Process.sleep(500)
   end
 
-  # Close active buffer via action dispatch
+  # Close active buffer via File menu
   defp close_active_buffer do
-    GenServer.call(QuillEx.RootScene, {:action, :close_active_buffer})
-    Process.sleep(300)
+    Probes.click_element("icon_menu_file")
+    Process.sleep(200)
+    Probes.click_element("icon_menu_file_close")
+    Process.sleep(400)
+    # If the buffer was dirty, a dialog appeared — discard changes and close.
+    if Query.text_visible?("Unsaved Changes") do
+      Probes.send_keys("d", [])
+      Process.sleep(400)
+    end
   end
 
   # Close buffers until only one remains
@@ -70,15 +113,19 @@ defmodule Quillex.ViewSettingsSpex do
     end
   end
 
-  # Switch to a buffer by index (1-based) using keyboard or semantic helpers
+  # Switch to a buffer by 1-based index by clicking its tab
   defp switch_to_buffer(index) do
     labels = SemanticHelpers.get_tab_labels()
 
-    if index <= length(labels) do
-      # Use GenServer call for now until we have clickable tab coordinates
-      GenServer.call(QuillEx.RootScene, {:action, {:activate_buffer, index}})
-      Process.sleep(300)
-      true
+    if index >= 1 and index <= length(labels) do
+      label = Enum.at(labels, index - 1)
+      case SemanticHelpers.click_tab_by_label(label) do
+        {:ok, _} ->
+          Process.sleep(300)
+          true
+        _ ->
+          false
+      end
     else
       false
     end
@@ -119,26 +166,26 @@ defmodule Quillex.ViewSettingsSpex do
     # 1. LINE NUMBERS ARE VISIBLE BY DEFAULT
     # =========================================================================
 
-    scenario "Line numbers are visible by default", context do
+    scenario "Line numbers are visible by default" do
       given_ "Quillex has launched with content", context do
         # Create some content to ensure line numbers are meaningful
         create_multiline_content()
         {:ok, context}
       end
 
-      then_ "line number '1' should be visible in the UI", context do
+      then_ "line number '1' should be visible in the UI" do
         assert Query.text_visible?("1"),
                "Line number 1 should be visible by default"
         :ok
       end
 
-      then_ "line number '2' should be visible for second line", context do
+      then_ "line number '2' should be visible for second line" do
         assert Query.text_visible?("2"),
                "Line number 2 should be visible for second line"
         :ok
       end
 
-      then_ "line number '3' should be visible for third line", context do
+      then_ "line number '3' should be visible for third line" do
         assert Query.text_visible?("3"),
                "Line number 3 should be visible for third line"
         :ok
@@ -149,7 +196,7 @@ defmodule Quillex.ViewSettingsSpex do
     # 2. TOGGLING LINE NUMBERS HIDES THEM
     # =========================================================================
 
-    scenario "Toggling line numbers changes visibility", context do
+    scenario "Toggling line numbers changes visibility" do
       given_ "line numbers are currently visible", context do
         assert Query.text_visible?("1"),
                "Line number 1 should be visible initially"
@@ -174,7 +221,7 @@ defmodule Quillex.ViewSettingsSpex do
         {:ok, context}
       end
 
-      then_ "line numbers should be visible again", context do
+      then_ "line numbers should be visible again" do
         Process.sleep(200)
         assert Query.text_visible?("1"),
                "Line number 1 should be visible after toggle on"
@@ -193,7 +240,7 @@ defmodule Quillex.ViewSettingsSpex do
     # 3. WORD WRAP TOGGLE BEHAVIOR
     # =========================================================================
 
-    scenario "Word wrap toggle affects long line display", context do
+    scenario "Word wrap toggle affects long line display" do
       given_ "we have a very long line of text", context do
         clear_buffer()
         # Type a line that exceeds typical editor width
@@ -203,7 +250,7 @@ defmodule Quillex.ViewSettingsSpex do
         {:ok, context}
       end
 
-      then_ "the beginning of the text should be visible", context do
+      then_ "the beginning of the text should be visible" do
         assert Query.text_visible?("This is a very long"),
                "Beginning of long line should be visible"
         :ok
@@ -214,7 +261,7 @@ defmodule Quillex.ViewSettingsSpex do
         {:ok, context}
       end
 
-      then_ "the text should still be visible (layout may change)", context do
+      then_ "the text should still be visible (layout may change)" do
         Process.sleep(200)
         assert Query.text_visible?("This is a very long"),
                "Text should remain visible after word wrap toggle"
@@ -226,7 +273,7 @@ defmodule Quillex.ViewSettingsSpex do
         {:ok, context}
       end
 
-      then_ "the text should still be visible", context do
+      then_ "the text should still be visible" do
         Process.sleep(200)
         assert Query.text_visible?("This is a very long"),
                "Text should remain visible after second toggle"
@@ -243,7 +290,7 @@ defmodule Quillex.ViewSettingsSpex do
     # LONG DOCUMENT SCROLL BEHAVIOR WITH WORD WRAP
     # =========================================================================
 
-    scenario "Long document is fully scrollable with word wrap enabled", context do
+    scenario "Long document is fully scrollable with word wrap enabled" do
       given_ "we have a document with many lines of varying length", context do
         close_buffers_until_one_remains()
         clear_buffer()
@@ -272,7 +319,7 @@ defmodule Quillex.ViewSettingsSpex do
         {:ok, context}
       end
 
-      then_ "we should be able to scroll to the bottom of the document", context do
+      then_ "we should be able to scroll to the bottom of the document" do
         # Press Ctrl+End to go to end of document
         Probes.send_keys("end", [:ctrl])
         Process.sleep(500)
@@ -283,7 +330,7 @@ defmodule Quillex.ViewSettingsSpex do
         :ok
       end
 
-      then_ "we should be able to scroll back to the top", context do
+      then_ "we should be able to scroll back to the top" do
         # Press Ctrl+Home to go to start
         Probes.send_keys("home", [:ctrl])
         Process.sleep(500)
@@ -295,7 +342,7 @@ defmodule Quillex.ViewSettingsSpex do
       end
     end
 
-    scenario "Scroll position is preserved when toggling word wrap", context do
+    scenario "Scroll position is preserved when toggling word wrap" do
       given_ "we have scrolled to a specific position in a long document", context do
         # Navigate to middle of document (around line 25)
         Probes.send_keys("home", [:ctrl])
@@ -320,7 +367,7 @@ defmodule Quillex.ViewSettingsSpex do
         {:ok, context}
       end
 
-      then_ "the same content area should still be visible", context do
+      then_ "the same content area should still be visible" do
         # Line 25 area should still be visible (scroll position preserved)
         assert Query.text_visible?("Line 25:") or Query.text_visible?("Line 26:") or Query.text_visible?("Line 24:"),
                "Content around line 25 should still be visible after word wrap toggle"
@@ -333,7 +380,7 @@ defmodule Quillex.ViewSettingsSpex do
         {:ok, context}
       end
 
-      then_ "the same content area should still be visible", context do
+      then_ "the same content area should still be visible" do
         # Should still see the same area
         assert Query.text_visible?("Line 25:") or Query.text_visible?("Line 26:") or Query.text_visible?("Line 24:"),
                "Content around line 25 should still be visible after toggling back"
@@ -350,7 +397,7 @@ defmodule Quillex.ViewSettingsSpex do
     # 4. CURSOR POSITION SAVED WHEN SWITCHING AWAY
     # =========================================================================
 
-    scenario "Cursor position is preserved when switching buffers", context do
+    scenario "Cursor position is preserved when switching buffers" do
       given_ "we have a clean buffer with text and cursor at specific position", context do
         # Close all but one buffer
         close_buffers_until_one_remains()
@@ -367,14 +414,16 @@ defmodule Quillex.ViewSettingsSpex do
 
         # Move cursor to a specific position (middle of line 1)
         Probes.send_keys("up", [])
-        Process.sleep(50)
+        Process.sleep(100)
         Probes.send_keys("home", [])
-        Process.sleep(50)
-        # Move to column 5 (after "Line")
+        Process.sleep(100)
+        # Move to column 5 (after "Line") — 80ms per key to avoid dropped events
         for _ <- 1..4 do
           Probes.send_keys("right", [])
-          Process.sleep(30)
+          Process.sleep(80)
         end
+        # Extra settle time to ensure cursor position is committed to Buffer.Process
+        Process.sleep(200)
 
         {:ok, context}
       end
@@ -389,7 +438,7 @@ defmodule Quillex.ViewSettingsSpex do
         {:ok, context}
       end
 
-      then_ "typing a character should insert at the preserved cursor position", context do
+      then_ "typing a character should insert at the preserved cursor position" do
         # Type a marker character
         Probes.send_text("X")
         Process.sleep(100)
@@ -406,7 +455,7 @@ defmodule Quillex.ViewSettingsSpex do
     # 5. CURSOR PRESERVED ACROSS MULTIPLE SWITCHES
     # =========================================================================
 
-    scenario "Cursor preserved across multiple buffer switches", context do
+    scenario "Cursor preserved across multiple buffer switches" do
       given_ "we have two buffers with different cursor positions", context do
         # Ensure we have 2 buffers
         close_buffers_until_one_remains()
@@ -439,7 +488,7 @@ defmodule Quillex.ViewSettingsSpex do
         {:ok, context}
       end
 
-      then_ "buffer 2 cursor should be at the preserved position", context do
+      then_ "buffer 2 cursor should be at the preserved position" do
         # Type a marker character to verify cursor position
         Probes.send_text("*")
         Process.sleep(100)
@@ -458,7 +507,7 @@ defmodule Quillex.ViewSettingsSpex do
     # 6. CURSOR POSITION FROM SEMANTIC LAYER
     # =========================================================================
 
-    scenario "Cursor position is exposed via semantic layer", context do
+    scenario "Cursor position is exposed via semantic layer" do
       given_ "we have a buffer with content", context do
         close_buffers_until_one_remains()
         clear_buffer()
@@ -473,7 +522,7 @@ defmodule Quillex.ViewSettingsSpex do
         {:ok, context}
       end
 
-      then_ "semantic layer should report cursor position", context do
+      then_ "semantic layer should report cursor position" do
         cursor = SemanticHelpers.get_cursor_position()
         # Cursor should be at line 1, column 1 (or similar)
         # The exact values depend on indexing (0-based vs 1-based)
@@ -491,8 +540,12 @@ defmodule Quillex.ViewSettingsSpex do
         {:ok, context}
       end
 
-      then_ "cursor column should have increased", context do
-        cursor = SemanticHelpers.get_cursor_position()
+      then_ "cursor column should have increased" do
+        # Poll rather than read once: the keystroke has to reach the buffer,
+        # be published, and be re-rendered into the semantic table before it
+        # is observable, and a fixed sleep races that under load.
+        cursor = await_cursor_past_col1(2_000)
+
         if cursor do
           {_line, col} = cursor
           # After "Hello World" (11 chars), cursor should be at column 12

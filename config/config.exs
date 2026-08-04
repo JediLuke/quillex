@@ -2,16 +2,9 @@ import Config
 
 config :scenic, :assets, module: QuillEx.Assets
 
-# Configure scenic_mcp port for Quillex (different from Flamelex to avoid conflicts)
-config :scenic_mcp, 
-  port: 9997,
-  app_name: "Quillex"
-
-config :event_bus,
-  topics: [
-    :quill_ex_actions,
-    :quill_ex_user_input
-  ]
+# scenic_mcp is configured in dev.exs and test.exs, not here: it's a dev/test
+# dependency, and configuring an application that isn't in the build makes Mix
+# warn loudly on every prod boot.
 
 config :logger, level: :info
 

@@ -1,0 +1,219 @@
+#!/usr/bin/env bash
+# qlx — open Quillex from the shell.
+#
+#   qlx                 open an empty buffer
+#   qlx notes.txt       open a file (creating it, if it doesn't exist yet)
+#   qlx .               open a directory with the file tree showing
+#   qlx some/dir        same, for a directory elsewhere
+#
+#   -f, --foreground    stay attached and print the editor's log to the
+#                       terminal, instead of detaching (for debugging)
+#       --rebuild       rebuild the packaged editor, then run it
+#
+# Editors don't hold the terminal hostage: qlx hands the editor off to its own
+# session and returns your prompt. Anything the editor says goes to
+#
+#   ~/.local/state/quillex/qlx.log   (rewritten each launch)
+#
+# It runs the release in _build/prod/rel/quillex — a self-contained build with
+# its own Erlang runtime, no Mix, and nothing listening on a port. If that
+# build isn't there yet, qlx offers to make it. Sources newer than the build
+# are reported, not silently ignored: `qlx --rebuild` picks them up.
+#
+# MIX_ENV=dev qlx runs from source instead, with the development tooling
+# (scenic_mcp, Tidewave) and the ports it listens on.
+#
+# Install by symlinking this onto your PATH — the script resolves its own
+# location, so the link can live anywhere:
+#
+#   ln -s "$PWD/bin/qlx" ~/.local/bin/qlx
+#
+# The shell's context reaches the editor through the environment — QLX_CWD and
+# QLX_TARGET, both read by QuillEx.CLI during boot.
+set -euo pipefail
+
+usage() {
+  sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+# Resolve this script through any chain of symlinks to find the project root.
+source="${BASH_SOURCE[0]}"
+while [ -L "$source" ]; do
+  dir="$(cd -P "$(dirname "$source")" && pwd)"
+  source="$(readlink "$source")"
+  [[ "$source" == /* ]] || source="$dir/$source"
+done
+project_dir="$(cd -P "$(dirname "$source")/.." && pwd)"
+
+foreground=false
+rebuild=false
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    -f | --foreground)
+      foreground=true
+      shift
+      ;;
+    --rebuild)
+      rebuild=true
+      shift
+      ;;
+    --)
+      shift
+      break
+      ;;
+    -*)
+      echo "qlx: unknown option $1" >&2
+      echo "try: qlx --help" >&2
+      exit 64
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+if [ $# -gt 1 ]; then
+  echo "qlx: expected at most one path, got $#" >&2
+  echo "try: qlx --help" >&2
+  exit 64
+fi
+
+if [ $# -eq 1 ]; then
+  # Absolute-ise it here, while we are still standing in the user's directory.
+  #
+  # Done by hand rather than with `realpath -m`: the target need not exist yet
+  # (`qlx new-notes.txt` opens an empty buffer pointed at that path), and -m is
+  # the GNU spelling of that — BSD realpath, which is what macOS ships, has no
+  # such flag. Only the DIRECTORY has to exist, so cd into it and let the shell
+  # canonicalise, then re-attach the filename.
+  qlx_dir="$(dirname -- "$1")"
+  qlx_base="$(basename -- "$1")"
+  if qlx_dir="$(cd -- "$qlx_dir" 2> /dev/null && pwd)"; then
+    QLX_TARGET="${qlx_dir%/}/$qlx_base"
+  else
+    echo "qlx: no such directory: $(dirname -- "$1")" >&2
+    exit 1
+  fi
+  export QLX_TARGET
+fi
+
+export QLX_CWD="$PWD"
+
+# `qlx` gets typed from any shell, including ones that never sourced a version
+# manager's hook, so don't just trust PATH to be carrying mix. Only building
+# needs it — the release brings its own Erlang. The asdf shims are
+# self-contained (each execs asdf by absolute path), so the directory on PATH
+# is the whole of what they need.
+require_mix() {
+  if command -v mix > /dev/null 2>&1; then
+    return
+  fi
+  if [ -x "$HOME/.asdf/shims/mix" ]; then
+    export PATH="$HOME/.asdf/shims:$PATH"
+    return
+  fi
+  echo "qlx: building Quillex needs mix, and there's none on PATH" >&2
+  echo "     (no asdf shims at ~/.asdf/shims to fall back on either)." >&2
+  echo "     Install Elixir, or put your version manager's shims on PATH." >&2
+  exit 127
+}
+
+log_dir="${XDG_STATE_HOME:-$HOME/.local/state}/quillex"
+mkdir -p "$log_dir"
+log_file="$log_dir/qlx.log"
+
+# setsid detaches into a new session, so the editor outlives the terminal that
+# launched it. nohup is the macOS-friendly stand-in — it survives the hangup
+# without a session of its own.
+launch_detached() {
+  if command -v setsid > /dev/null 2>&1; then
+    setsid "$@" > "$log_file" 2>&1 < /dev/null &
+  else
+    nohup "$@" > "$log_file" 2>&1 < /dev/null &
+  fi
+  disown 2> /dev/null || true
+}
+
+cd "$project_dir"
+
+# ── MIX_ENV=dev (or test): run from source, dev tooling and all ──────────────
+if [ -n "${MIX_ENV:-}" ] && [ "$MIX_ENV" != prod ]; then
+  export MIX_ENV
+  require_mix
+
+  # In dev and test the MCP and Tidewave servers bind fixed ports (see
+  # config/dev.exs), so a second BEAM dies on :eaddrinuse — and detached, it
+  # would die somewhere you never look. Ask the port directly: bash's /dev/tcp
+  # needs no ss, no lsof, and doesn't guess from process names.
+  if (exec 3<> /dev/tcp/127.0.0.1/9997) 2> /dev/null; then
+    echo "qlx: Quillex is already running (port 9997 is taken)." >&2
+    echo "     Close that window first — a second instance can't start in $MIX_ENV." >&2
+    exit 1
+  fi
+
+  if [ "$foreground" = true ]; then
+    exec mix run --no-halt
+  fi
+
+  # A build failure is the one thing worth stealing the terminal for. Cold
+  # builds are minutes of the whole dependency tree, and a silent prompt for
+  # that long is worse than the noise — so let mix speak when there's no build
+  # to reuse, and stay quiet when compiling is instant or near enough.
+  if [ -d "_build/$MIX_ENV/lib/quillex" ]; then
+    if ! compile_output="$(mix compile 2>&1)"; then
+      printf '%s\n' "$compile_output" >&2
+      exit 1
+    fi
+  else
+    echo "qlx: first run in $MIX_ENV — building, this takes a few minutes..." >&2
+    mix compile >&2 || exit 1
+  fi
+
+  launch_detached mix run --no-halt --no-compile
+  exit 0
+fi
+
+# ── default: the packaged release ───────────────────────────────────────────
+release_bin="$project_dir/_build/prod/rel/quillex/bin/quillex"
+
+build_release() {
+  require_mix
+  echo "qlx: building Quillex — the first build takes a few minutes." >&2
+  MIX_ENV=prod mix release --overwrite >&2
+  echo "qlx: built." >&2
+}
+
+if [ "$rebuild" = true ]; then
+  build_release
+elif [ ! -x "$release_bin" ]; then
+  echo "qlx: Quillex isn't built yet." >&2
+  # No terminal to ask on — a cron job or a pipe — so say what to run instead
+  # of hanging on a prompt nobody will ever see.
+  if [ ! -t 0 ]; then
+    echo "     Run 'qlx --rebuild' to build it." >&2
+    exit 1
+  fi
+  printf 'qlx: build it now? [Y/n] ' >&2
+  read -r reply
+  case "$reply" in
+    [Nn]*)
+      echo "qlx: nothing to run — 'qlx --rebuild' when you're ready." >&2
+      exit 1
+      ;;
+  esac
+  build_release
+elif [ -n "$(find lib config assets mix.exs mix.lock -newer "$release_bin" -print -quit 2> /dev/null)" ]; then
+  # Worth one line: a silently stale binary is a genuinely confusing way to
+  # lose an afternoon while you wonder why your change did nothing.
+  echo "qlx: sources have changed since this build — 'qlx --rebuild' to pick them up." >&2
+fi
+
+if [ "$foreground" = true ]; then
+  exec "$release_bin" start
+fi
+
+launch_detached "$release_bin" start

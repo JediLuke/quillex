@@ -36,6 +36,30 @@
 - `mix.exs` uses local path dependencies for Scenic and related libraries; ensure sibling repos exist (e.g., `../scenic`, `../scenic_driver_local`).
 - Scenic requires OpenGL system deps; follow the Scenic install docs before running.
 
+## State Architecture — RadixCache stores (READ FIRST)
+
+Diagrams: `ARCHITECTURE.md` (repo root).
+
+State lives in GenServer stores organized by data domain, publishing full
+snapshots on retained `Scenic.PubSub` sources (see the Architecture section
+of `Quillex-BasePrompt.md` for the full picture):
+
+- `Buffer.Process` → `:"radix_buf_<uuid>"` (per-buffer text state)
+- `BufferManager` → `:radix_buffers` (buffer list, active buffer, dirty flags)
+- `ViewStore` → `:radix_view` (editor settings, file nav, status message)
+- `PaneStore` → `:radix_pane_main` (what the pane displays; the TextField's
+  stable source + dispatch — typing and buffer switches never touch RootScene)
+
+Rules when touching state:
+- Mutate through the store's action fns (casts), never by writing scene
+  assigns directly; the scene re-renders when the snapshot arrives.
+- Source atoms are minted ONLY in `Quillex.RadixCache.Sources`.
+- Every store mutation funnels through its single `publish` commit point.
+- NEVER add a catch-all `handle_info({{Scenic.PubSub, _}, _}, ...)` clause
+  above the specific `:data` clauses — it silently swallows store updates.
+- Scene-owned exceptions (search-bar/dialog flags) are documented in
+  `QuillEx.RootScene.State`'s moduledoc; don't move them without reading it.
+
 ## Scenic Rendering Patterns
 
 ### Z-Order Control via Full Rebuild

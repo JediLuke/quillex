@@ -17,9 +17,6 @@ defmodule Quillex.PropertyTestsSpex do
   alias ScenicMcp.Probes
   alias Quillex.TestHelpers.SemanticHelpers
 
-  # Maximum operations per test to keep runtime reasonable
-  @max_ops 20
-
   setup_all do
     # Start Quillex application
     case Application.ensure_all_started(:quillex) do
@@ -29,14 +26,25 @@ defmodule Quillex.PropertyTestsSpex do
     end
 
     Process.sleep(2000)
+
+    # Known LAYOUT to start from (overlays dismissed, file navigator
+    # closed) without touching buffers — an open navigator shifts the
+    # editor pane 250px right and makes fixed-x clicks miss it.
+    Quillex.TestHelpers.AppReset.reset_layout!()
     :ok
   end
 
   # Generator for cursor movement operations
   def cursor_movement_gen do
     StreamData.member_of([
-      :left, :right, :up, :down, :home, :end,
-      :ctrl_home, :ctrl_end
+      :left,
+      :right,
+      :up,
+      :down,
+      :home,
+      :end,
+      :ctrl_home,
+      :ctrl_end
     ])
   end
 
@@ -46,15 +54,21 @@ defmodule Quillex.PropertyTestsSpex do
       StreamData.constant(:backspace),
       StreamData.constant(:delete),
       StreamData.constant(:enter),
-      {:char, StreamData.string(:alphanumeric, min_length: 1, max_length: 1)}
+      StreamData.map(StreamData.string(:alphanumeric, min_length: 1, max_length: 1), fn char ->
+        {:char, char}
+      end)
     ])
   end
 
   # Generator for selection operations
   def selection_operation_gen do
     StreamData.member_of([
-      :shift_left, :shift_right, :shift_up, :shift_down,
-      :select_all, :escape
+      :shift_left,
+      :shift_right,
+      :shift_up,
+      :shift_down,
+      :select_all,
+      :escape
     ])
   end
 
@@ -70,8 +84,7 @@ defmodule Quillex.PropertyTestsSpex do
   spex "Property: Cursor Bounds Invariant",
     description: "After any sequence of cursor movements, cursor stays within valid bounds",
     tags: [:property, :cursor, :bounds] do
-
-    scenario "Random cursor movements maintain bounds", context do
+    scenario "Random cursor movements maintain bounds", _context do
       given_ "fresh buffer with some initial content", context do
         clear_buffer()
         # Type some multi-line content
@@ -100,6 +113,7 @@ defmodule Quillex.PropertyTestsSpex do
 
           # Check bounds after each operation
           cursor_pos = get_cursor_position()
+
           if cursor_pos do
             {line, col} = cursor_pos
             assert line >= 1, "Cursor line must be >= 1 after op #{idx}: #{inspect(op)}"
@@ -110,7 +124,7 @@ defmodule Quillex.PropertyTestsSpex do
         {:ok, context}
       end
 
-      then_ "cursor should still be at a valid position", context do
+      then_ "cursor should still be at a valid position" do
         # Final verification
         cursor_pos = get_cursor_position()
 
@@ -135,8 +149,7 @@ defmodule Quillex.PropertyTestsSpex do
   spex "Property: Cursor Visibility Invariant",
     description: "Cursor should always be visible (scroll follows cursor)",
     tags: [:property, :cursor, :scroll] do
-
-    scenario "Cursor stays visible during rapid navigation", context do
+    scenario "Cursor stays visible during rapid navigation", _context do
       given_ "buffer with many lines of content", context do
         clear_buffer()
 
@@ -146,6 +159,7 @@ defmodule Quillex.PropertyTestsSpex do
           Probes.send_keys("enter", [])
           Process.sleep(20)
         end
+
         Process.sleep(300)
 
         {:ok, context}
@@ -153,15 +167,32 @@ defmodule Quillex.PropertyTestsSpex do
 
       when_ "we rapidly navigate through the document", context do
         operations = [
-          :ctrl_home,  # Start
-          :ctrl_end,   # End
-          :ctrl_home,  # Back to start
-          # Page through document
-          :down, :down, :down, :down, :down,
-          :down, :down, :down, :down, :down,
-          :up, :up, :up,
+          # Start
+          :ctrl_home,
+          # End
           :ctrl_end,
-          :up, :up, :up, :up, :up,
+          # Back to start
+          :ctrl_home,
+          # Page through document
+          :down,
+          :down,
+          :down,
+          :down,
+          :down,
+          :down,
+          :down,
+          :down,
+          :down,
+          :down,
+          :up,
+          :up,
+          :up,
+          :ctrl_end,
+          :up,
+          :up,
+          :up,
+          :up,
+          :up,
           :ctrl_home
         ]
 
@@ -173,14 +204,28 @@ defmodule Quillex.PropertyTestsSpex do
         {:ok, context}
       end
 
-      then_ "cursor should still be visible", context do
+      then_ "cursor should still be visible" do
+        # Allow scroll to settle after rapid navigation sequence
+        # Ctrl+Home was the last operation; the scroll update may lag the cursor move.
+        Process.sleep(400)
+
         # Type a marker to verify cursor is usable
         Probes.send_text("MARKER")
-        Process.sleep(100)
 
-        # The marker should be visible if cursor is in viewport
-        assert Query.text_visible?("MARKER"),
-               "Marker should be visible - cursor should be in viewport"
+        # Bounded poll: under suite load the insert's publish → semantic
+        # sync can lag a few hundred ms (see the roadmap's dispatch-latency
+        # notes) — a single fixed-delay read races it.
+        visible? =
+          Enum.reduce_while(1..20, false, fn _, _ ->
+            if Query.text_visible?("MARKER") do
+              {:halt, true}
+            else
+              Process.sleep(100)
+              {:cont, false}
+            end
+          end)
+
+        assert visible?, "Marker should be visible - cursor should be in viewport"
 
         :ok
       end
@@ -190,8 +235,7 @@ defmodule Quillex.PropertyTestsSpex do
   spex "Property: Selection Bounds Invariant",
     description: "Selection start and end are always valid positions",
     tags: [:property, :selection, :bounds] do
-
-    scenario "Random selection operations maintain valid bounds", context do
+    scenario "Random selection operations maintain valid bounds", _context do
       given_ "buffer with multi-line content", context do
         clear_buffer()
         Probes.send_text("ABCDEFGHIJ")
@@ -214,6 +258,7 @@ defmodule Quillex.PropertyTestsSpex do
 
           # After each op, verify we can still query rendered text (app is responsive)
           rendered = Query.rendered_text()
+
           assert is_binary(rendered),
                  "App should still respond after op #{idx}: #{inspect(op)}"
         end
@@ -221,7 +266,7 @@ defmodule Quillex.PropertyTestsSpex do
         {:ok, context}
       end
 
-      then_ "buffer should still be in consistent state", context do
+      then_ "buffer should still be in consistent state" do
         # Escape to clear selection
         Probes.send_keys("escape", [])
         Process.sleep(50)
@@ -241,8 +286,7 @@ defmodule Quillex.PropertyTestsSpex do
   spex "Property: Edit Operations Don't Corrupt Buffer",
     description: "Random edit operations maintain buffer consistency",
     tags: [:property, :editing, :consistency] do
-
-    scenario "Random edit sequence maintains consistency", context do
+    scenario "Random edit sequence maintains consistency", _context do
       given_ "buffer with initial content", context do
         clear_buffer()
         Probes.send_text("Initial content")
@@ -264,7 +308,7 @@ defmodule Quillex.PropertyTestsSpex do
         {:ok, context}
       end
 
-      then_ "buffer should be in valid state", context do
+      then_ "buffer should be in valid state" do
         # Get rendered text - should not crash
         rendered = Query.rendered_text()
 
@@ -285,8 +329,7 @@ defmodule Quillex.PropertyTestsSpex do
   spex "Property: Undo/Redo Consistency",
     description: "Undo and redo operations maintain buffer consistency",
     tags: [:property, :undo, :redo] do
-
-    scenario "Random undo/redo sequence is consistent", context do
+    scenario "Random undo/redo sequence is consistent", _context do
       given_ "buffer with some edits", context do
         clear_buffer()
 
@@ -304,24 +347,26 @@ defmodule Quillex.PropertyTestsSpex do
       end
 
       when_ "we perform random undo/redo operations", context do
-        operations = for _ <- 1..10 do
-          Enum.random([:undo, :redo])
-        end
+        operations =
+          for _ <- 1..10 do
+            Enum.random([:undo, :redo])
+          end
 
         IO.puts("\nExecuting undo/redo sequence: #{inspect(operations)}")
 
         for op <- operations do
           case op do
             :undo -> Probes.send_keys("z", [:ctrl])
-            :redo -> Probes.send_keys("y", [:ctrl])
+            :redo -> Probes.send_keys("z", [:ctrl, :shift])
           end
+
           Process.sleep(50)
         end
 
         {:ok, context}
       end
 
-      then_ "buffer should be in valid state", context do
+      then_ "buffer should be in valid state" do
         rendered = Query.rendered_text()
 
         assert is_binary(rendered), "Rendered text should be a string"
@@ -363,9 +408,15 @@ defmodule Quillex.PropertyTestsSpex do
 
   defp generate_edit_operations(count) do
     ops = [
-      :backspace, :delete, :enter,
-      {:char, "a"}, {:char, "b"}, {:char, "x"}, {:char, " "}
+      :backspace,
+      :delete,
+      :enter,
+      {:char, "a"},
+      {:char, "b"},
+      {:char, "x"},
+      {:char, " "}
     ]
+
     for _ <- 1..count, do: Enum.random(ops)
   end
 

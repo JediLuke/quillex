@@ -4,13 +4,36 @@ defmodule QuillEx.MixProject do
   def project do
     [
       app: :quillex,
-      version: "0.1.2",
+      version: "0.7.4",
       elixir: "~> 1.12",
       build_embedded: true,
       start_permanent: Mix.env() == :prod,
       elixirc_paths: elixirc_paths(Mix.env()),
+      compilers: [:boundary] ++ Mix.compilers() ++ spex_compilers(),
+      spex: [pattern: "test/spex/**/*_spex.exs", boundary: Quillex.Spex],
+      preferred_cli_env: [spex: :test, run_spex: :test],
+      releases: releases(),
       deps: deps()
     ]
+  end
+
+  # `mix release` bundles the app, its deps and the ERTS into
+  # _build/prod/rel/quillex — a directory with no Mix, no Elixir install and no
+  # source tree behind it. bin/qlx runs this in preference to `mix run`.
+  defp releases do
+    [
+      quillex: [
+        include_executables_for: [:unix],
+        # rel/env.sh.eex switches distribution off; see the note there
+        quiet: true
+      ]
+    ]
+  end
+
+  # Mix.Tasks.Compile.Spex ships with sexy_spex, a dev/test-only dependency —
+  # naming the compiler in :prod asks Mix for a task that isn't there.
+  defp spex_compilers do
+    if Mix.env() in [:dev, :test], do: [:spex], else: []
   end
 
   # Specifies which paths to compile per environment
@@ -21,33 +44,85 @@ defmodule QuillEx.MixProject do
   def application do
     [
       mod: {QuillEx.App, []},
-
-      extra_applications:
-        [:event_bus] ++
-        if(Mix.env() in [:dev, :test], do: [:scenic_mcp], else: [])
+      extra_applications: if(Mix.env() in [:dev, :test], do: [:scenic_mcp], else: [])
     ]
   end
 
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:scenic, git: "https://github.com/JediLuke/scenic.git", branch: "main", override: true},
-      {:scenic_driver_local, git: "https://github.com/JediLuke/scenic_driver_local.git", branch: "main", override: true},
-      {:scenic_widget_contrib, git: "https://github.com/JediLuke/scenic-widget-contrib.git", branch: "main"},
+      constellation_dep(
+        :scenic,
+        "../scenic",
+        "https://github.com/Jediluke/scenic.git",
+        "6ee4b8c52d16621a05463284dfa1155667c9aeea",
+        override: true
+      ),
+      constellation_dep(
+        :scenic_driver_local,
+        "../scenic_driver_local",
+        "https://github.com/JediLuke/scenic_driver_local.git",
+        "97d241c464ef7aee7a749a839b3e2df63cdf6a82",
+        override: true
+      ),
+      constellation_dep(
+        :scenic_widget_contrib,
+        "../scenic-widget-contrib",
+        "https://github.com/JediLuke/scenic-widget-contrib.git",
+        "0a5a2a22b3c3bd9f977ad1c0036754200d709702"
+      ),
       {:elixir_uuid, "~> 1.2"},
       {:font_metrics, "~> 0.5"},
-      {:event_bus, "~> 1.7.0"},
+      {:truetype_metrics, "~> 0.6"},
       {:struct_access, "~> 1.1.2"},
       {:wormhole, "~> 2.3"},
       {:nimble_options, "~> 1.0", override: true},
       {:elixir_make, "~> 0.6", override: true},
+      {:boundary, "~> 0.10", runtime: false},
+      {:jason, "~> 1.4"},
 
       # dev tools
-      {:sexy_spex, git: "https://github.com/JediLuke/spex.git", branch: "main", only: [:test, :dev], override: true},
-      {:scenic_mcp, git: "https://github.com/scenic-contrib/scenic_mcp_experimental.git", branch: "main", only: [:dev, :test], override: true},
+      constellation_dep(
+        :sexy_spex,
+        "../spex",
+        "https://github.com/JediLuke/spex.git",
+        "fc1c21f74913c9d6899821b8265b1607c505b48b",
+        only: [:test, :dev],
+        override: true
+      ),
+      constellation_dep(
+        :scenic_mcp,
+        "../scenic_mcp_experimental",
+        "https://github.com/scenic-contrib/scenic_mcp_experimental.git",
+        "59381a09b6511b73da2f2b1d5ede953c713fa100",
+        only: [:dev, :test],
+        override: true
+      ),
       {:stream_data, "~> 0.6", only: [:test, :dev]},
       {:tidewave, "~> 0.1", only: :dev},
-      {:bandit, "~> 1.0", only: :dev},
+      {:bandit, "~> 1.0", only: :dev}
     ]
+  end
+
+  # Sibling checkouts are the DEFAULT, because this is a constellation: a fix
+  # usually spans quillex plus one or more of its sibling repositories, and
+  # pinning immutable revisions mid-fix means every iteration needs a commit,
+  # a push and a re-pin before it can even be tested.
+  #
+  # Immutable revisions are a RELEASE posture, not a development one. Opt into
+  # them when verifying what a clean machine will build:
+  #
+  #     QUILLEX_PINNED_DEPS=1 mix deps.get
+  #
+  # (`QUILLEX_LOCAL_DEPS=1` remains accepted so existing scripts and the 0.7.3
+  # release documentation keep working.)
+  defp constellation_dep(name, path, git, ref, opts \\ []) do
+    pinned? =
+      System.get_env("QUILLEX_PINNED_DEPS") in ["1", "true"] and
+        System.get_env("QUILLEX_LOCAL_DEPS") not in ["1", "true"]
+
+    source = if pinned?, do: [git: git, ref: ref], else: [path: path]
+
+    {name, Keyword.merge(source, opts)}
   end
 end

@@ -1,28 +1,16 @@
 defmodule Quillex.Buffer.Process do
   @moduledoc """
-  This is the _actual buffer_ process, which runs not as part
-  of the GUI, it runs under the Buffer SUpervision tree.
+  The buffer GenServer. Runs under the Buffer supervision tree (not the GUI).
 
-  Ignore user input in the actual Buffer process, wait for the GUI to convert it to actions
-
-
-    # TODO this is the way... combine the buffer & the component!!
-  # NOTE that didnt go so well actually... but good try
-  # use Scenic.Component
-  # @behaviour Scenic.Component
-  # use Scenic.Scene
-
-
+  User input is ignored here — the GUI component converts input to actions and
+  sends them via `handle_call/handle_cast({:action, ...})`. Buffer state changes
+  are broadcast over PubSub so the GUI can re-render.
   """
   use GenServer
   require Logger
 
-  def fetch_buf(%Quillex.Structs.BufState.BufRef{} = buf_ref) do
+  def fetch_buf(%{uuid: uuid} = buf_ref) when is_binary(uuid) do
     Quillex.Buffer.BufferManager.call_buffer(buf_ref, :get_state)
-  end
-
-  def save_as(%Quillex.Structs.BufState.BufRef{} = buf_ref, file_path) do
-    Quillex.Buffer.BufferManager.call_buffer(buf_ref, {:action, {:save_as, file_path}})
   end
 
   def start_link(%Quillex.Structs.BufState{} = buf) do
@@ -32,7 +20,10 @@ defmodule Quillex.Buffer.Process do
   end
 
   def init(%Quillex.Structs.BufState{} = buf) do
-    Quillex.Utils.PubSub.subscribe(topic: {:buffers, buf.uuid})
+    # Each buffer process IS a RadixCache store: it registers a retained
+    # Scenic.PubSub source and publishes its full BufState after every reduce.
+    Scenic.PubSub.register(Quillex.RadixCache.Sources.buffer(buf.uuid))
+    Scenic.PubSub.publish(Quillex.RadixCache.Sources.buffer(buf.uuid), buf)
     {:ok, buf}
   end
 
@@ -41,153 +32,151 @@ defmodule Quillex.Buffer.Process do
   end
 
   def handle_call({:action, actions}, _from, state) when is_list(actions) do
-    # TODO use wormhole here
-    new_state =
-      actions
-      |> Enum.reduce(state, fn action, state_acc ->
-        case Quillex.Buffer.Process.Reducer.process(state_acc, action) do
-          :ignore ->
-            state_acc
-
-          %Quillex.Structs.BufState{} = new_state ->
-            new_state
-        end
-      end)
-
-    # This ideally is where Scenic is able to go, no need to re-render if the state hasn't changed,
-    # however at this point I dont know how to do it... we might need to diff
-    # states or something very complex
-
-    # for now we just try and make sure that anything which needs to be done
-    # by a lower level component, gets L:re-routed to that component - this means
-    # that the FluxBuffer state should only change when its probably necessary to
-    # re-render anyway
-
-    # if something needs to be managed on both levels e.g. the cursor position, maybe
-    # throw 2 actions, one for the buffer, one for the component?? we'll see
-
-    # broadcast out buffer changes so the GUI (or whoever) can respond
-    Quillex.Utils.PubSub.broadcast(
-      topic: {:buffers, new_state.uuid},
-      msg: {:buf_state_changes, new_state}
-    )
-
-
-    # notify_gui(new_state)
-    # IO.puts "NOTIFY GUI"
-
-    # #TODO broadcast an event saying it updated, then let the GUI come fetch it if it wants...
-
-
-    {:reply, {:ok, new_state}, new_state}
+    if read_only_violation?(state, actions) do
+      {:reply, {:error, :read_only}, state}
+    else
+      case apply_actions(state, actions) do
+        {:ok, new_state} -> {:reply, {:ok, new_state}, new_state}
+        {:error, reason} -> {:reply, {:error, reason}, state}
+      end
+    end
   end
 
-  def handle_call({:action, a}, from, state) when is_tuple(a) do
-    # convenience API for single actions
+  def handle_call({:action, a}, from, state) when is_tuple(a) or is_atom(a) do
     handle_call({:action, [a]}, from, state)
   end
 
-  # Handle async action casts from TextField (buffer_backed mode)
+  # Handle async action casts from TextField (store_backed mode)
   def handle_cast({:action, actions}, state) when is_list(actions) do
-    new_state =
-      actions
-      |> Enum.reduce(state, fn action, state_acc ->
-        case Quillex.Buffer.Process.Reducer.process(state_acc, action) do
-          :ignore ->
-            state_acc
+    if read_only_violation?(state, actions) do
+      Logger.warning("Rejected content mutation for read-only buffer #{state.uuid}")
+      {:noreply, state}
+    else
+      case apply_actions(state, actions) do
+        {:ok, new_state} ->
+          {:noreply, new_state}
 
-          %Quillex.Structs.BufState{} = new_state ->
-            new_state
-        end
-      end)
-
-    # Broadcast changes so TextField can update
-    Quillex.Utils.PubSub.broadcast(
-      topic: {:buffers, new_state.uuid},
-      msg: {:buf_state_changes, new_state}
-    )
-
-    {:noreply, new_state}
+        {:error, reason} ->
+          Logger.warning("Rejected buffer actions #{inspect(actions)}: #{inspect(reason)}")
+          {:noreply, state}
+      end
+    end
   end
 
   def handle_cast({:action, a}, state) when is_tuple(a) or is_atom(a) do
-    # convenience API for single actions
     handle_cast({:action, [a]}, state)
   end
 
-  #TODo dont have buffers opening ports!!!
-  def handle_info({_port, :closed}, scene) do
-    # Debug: Need to handle this case properly
-    {:noreply, scene}
+  # Clipboard shell-outs leave port-closed messages behind
+  def handle_info({_port, :closed}, state) do
+    {:noreply, state}
   end
 
-  def handle_info({:user_input, _input}, scene) do
-    # buffer process doesnt respond to user input, only GUI component does, so just ignore this
-    # Note: Direct user input to buffer (unusual flow)
-    {:noreply, scene}
+  # The single reduce-and-broadcast path shared by call and cast entry points.
+  defp apply_actions(state, actions) do
+    result =
+      Enum.reduce_while(actions, {:ok, state}, fn action, {:ok, state_acc} ->
+        try do
+          case apply_effect_boundary(state_acc, action) do
+            %Quillex.Structs.BufState{} = new_state -> {:cont, {:ok, new_state}}
+            :ignore -> {:halt, {:error, {:invalid_action, action, "unsupported action"}}}
+            other -> {:halt, {:error, {:invalid_action_result, action, other}}}
+          end
+        rescue
+          error in FunctionClauseError ->
+            {:halt, {:error, {:invalid_action, action, Exception.message(error)}}}
+
+          error ->
+            {:halt, {:error, {:action_failed, action, Exception.message(error)}}}
+        end
+      end)
+
+    with {:ok, new_state} <- result do
+      # Edge-cast display metadata to the buffer-list store only on transition,
+      # so the tab bar's Refs stay fresh without per-keystroke list publishes
+      if new_state.dirty? != state.dirty? or new_state.name != state.name do
+        Quillex.Buffer.BufferManager.update_buffer_meta(new_state.uuid, %{
+          dirty?: new_state.dirty?,
+          name: new_state.name
+        })
+      end
+
+      Scenic.PubSub.publish(Quillex.RadixCache.Sources.buffer(new_state.uuid), new_state)
+
+      {:ok, new_state}
+    end
   end
+
+  # Clipboard access is an effect and therefore belongs at the process shell,
+  # never in the pure editing reducer. Effectful commands are translated into
+  # ordinary document actions only after their side effect succeeds.
+  defp apply_effect_boundary(%{selection: nil} = state, {:copy, :selection}), do: state
+  defp apply_effect_boundary(%{selection: nil} = state, {:cut, :selection}), do: state
+
+  defp apply_effect_boundary(state, {:copy, :selection}) do
+    state |> selected_text() |> Quillex.Buffer.ClipboardAdapter.copy!()
+    state
+  end
+
+  defp apply_effect_boundary(state, {:cut, :selection}) do
+    state |> selected_text() |> Quillex.Buffer.ClipboardAdapter.copy!()
+    Quillex.Buffer.Process.Reducer.process(state, {:delete, :selection})
+  end
+
+  defp apply_effect_boundary(state, {:yank, :line, :under_cursor}) do
+    state.data |> Enum.at(state.cursor.line - 1, "") |> Quillex.Buffer.ClipboardAdapter.copy!()
+    state
+  end
+
+  defp apply_effect_boundary(state, {:paste, :at_cursor}) do
+    Quillex.Buffer.Process.Reducer.process(state, {
+      :insert,
+      Quillex.Buffer.ClipboardAdapter.paste!(),
+      :at_cursor
+    })
+  end
+
+  defp apply_effect_boundary(state, {:paste, :line, :at_cursor}) do
+    Quillex.Buffer.Process.Reducer.process(
+      state,
+      {:insert, :line, Quillex.Buffer.ClipboardAdapter.paste!(), :below_cursor_line}
+    )
+  end
+
+  defp apply_effect_boundary(state, action),
+    do: Quillex.Buffer.Process.Reducer.process(state, action)
+
+  defp selected_text(%{data: lines, selection: %{start: start_pos, end: end_pos}}) do
+    {{start_line, start_col}, {end_line, end_col}} =
+      if start_pos <= end_pos, do: {start_pos, end_pos}, else: {end_pos, start_pos}
+
+    lines
+    |> Enum.slice((start_line - 1)..(end_line - 1))
+    |> Enum.with_index(start_line)
+    |> Enum.map_join("\n", fn {line, line_no} ->
+      from = if line_no == start_line, do: start_col - 1, else: 0
+      to = if line_no == end_line, do: end_col - 1, else: String.length(line)
+      String.slice(line, from, max(to - from, 0))
+    end)
+  end
+
+  defp read_only_violation?(%{read_only?: false}, _actions), do: false
+
+  defp read_only_violation?(%{read_only?: true}, actions) do
+    Enum.any?(actions, &mutating_action?/1)
+  end
+
+  defp mutating_action?({action, _})
+       when action in [:delete, :newline, :indent, :unindent, :set_data, :cut],
+       do: true
+
+  defp mutating_action?({action, _, _}) when action in [:insert, :replace, :replace_all], do: true
+  defp mutating_action?({:insert, _, _, _}), do: true
+  defp mutating_action?({:paste, _}), do: true
+  defp mutating_action?({:paste, _, _}), do: true
+  defp mutating_action?(:delete_line), do: true
+  defp mutating_action?(:empty_buffer), do: true
+  defp mutating_action?(:undo), do: true
+  defp mutating_action?(:redo), do: true
+  defp mutating_action?(_), do: false
 end
-
-# def move_cursor(buffer_name, direction) do
-#   GenServer.cast(via_tuple(buffer_name), {:move_cursor, direction})
-# end
-
-# def handle_cast({:insert_text, text}, state) do
-#   # Update the buffer content and notify subscribers
-#   new_state = %{state | content: state.content <> text}
-#   notify_gui(new_state)
-#   {:noreply, new_state}
-# end
-
-# def handle_cast({:move_cursor, direction}, state) do
-#   # Update the cursor position
-#   new_cursor = calculate_new_cursor(state.cursor, direction)
-#   new_state = %{state | cursor: new_cursor}
-#   notify_gui(new_state)
-#   {:noreply, new_state}
-# end
-
-# defp calculate_new_cursor({line, col}, direction) do
-#   # Implement cursor movement logic
-# end
-
-
-  #   # TODO handle_update, in such a way that we just go through init/3 again, but
-  #   # without needing to spin up sub-processes.... eliminate all the extra handle_cast logic
-
-  #   def handle_cast({:redraw, %{data: nil} = args}, scene) do
-  #     lines = [""]
-  #     GenServer.cast(self(), {:redraw, Map.put(args, :data, lines)})
-  #     {:noreply, scene}
-  #   end
-  #   def handle_cast({:redraw, %{data: text} = args}, scene) when is_bitstring(text) do
-  #     lines = String.split(text, @newline_char)
-  #     GenServer.cast(self(), {:redraw, Map.put(args, :data, lines)})
-  #     {:noreply, scene}
-  #   end
-
-  #   def handle_cast({:redraw, buffer}, scene) do
-  #     new_graph =
-  #       scene.assigns.graph
-  #       |> scroll_text_area(scene, buffer)
-  #       |> update_data(scene, buffer)
-  #       |> update_cursor(scene, buffer)
-
-  #     update_scroll_limits(scene, buffer)
-
-  # what is temperature? It's the ultimate inescapable force - temperature is the real "bottom" of our universe. Every point in the universe
-  # could be mapped, and it's temperature waves analyzed & drawn from that perspective
-
-  # temperature is the wall we cannot cross, it's gods hand forcing the boundary of our existence
-
-  #     if new_graph == scene.assigns.graph do
-  #       {:noreply, scene}
-  #     else
-  #       new_scene =
-  #         scene
-  #         |> assign(graph: new_graph)
-  #         |> push_graph(new_graph)
-
-  #       {:noreply, new_scene}
-  #     end
-  #   end

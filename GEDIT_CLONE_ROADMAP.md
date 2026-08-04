@@ -11,14 +11,20 @@ A comprehensive breakdown of current functionality vs target functionality for a
 - [x] **Icon Menu** - Right-aligned toolbar with F/E/V/? dropdown menus
 - [x] **Text Field** - Multi-line text editing with line numbers
 - [x] **Window Resize** - Handles viewport resize events
+- [x] **File Navigator** - Sidebar file browser panel (toggle via View menu)
 
 ### Core Editing
 - [x] Basic text input (typing characters)
-- [x] Cursor movement (arrow keys)
+- [x] Cursor movement (arrow keys, Home/End)
 - [x] Backspace/Delete
 - [x] Enter for new lines
 - [x] Line numbers display
 - [x] Cursor blinking
+- [x] Text selection (Shift+arrows)
+- [x] Copy/Cut/Paste (Ctrl+C/X/V)
+- [x] Undo/Redo (Ctrl+U/R)
+- [x] Word wrap toggle
+- [x] Find/Search (Ctrl+F) with Find Next (Ctrl+G) / Find Prev
 
 ### Buffer Management
 - [x] Multiple buffers in memory (BufferManager)
@@ -26,104 +32,115 @@ A comprehensive breakdown of current functionality vs target functionality for a
 - [x] Switch between buffers (via tab clicks)
 - [x] Buffer content persistence when switching tabs
 - [x] Auto-generated buffer names ("unnamed-1", "unnamed-2", etc.)
+- [x] Close tab functionality
+- [x] Dirty/unsaved indicator (" *" on tab label)
+
+### File Operations
+- [x] Open file (file picker dialog)
+- [x] Save file (Ctrl+S)
+- [x] Save As
+- [x] File integrity verification (detect external modifications)
 
 ### Menu System
 - [x] Dropdown menus open on click
 - [x] Right-aligned dropdowns (extend leftward to stay in window)
 - [x] Menu items are clickable
 - [x] Menus close after selection
+- [x] Keyboard shortcuts shown in menu labels
 
 ---
 
 ## Known Bugs / Issues
 
 ### Critical
-- [ ] **Tab switching may lose cursor position** - cursor resets to start
-- [ ] **No dirty/unsaved indicator** - no way to know if buffer has unsaved changes
-- [ ] **Close tab button doesn't work** - handler exists but not implemented
+- [x] ~~**Tab switching may lose cursor position**~~ — FIXED (cursor preserved on tab switch)
+- [x] ~~**No dirty/unsaved indicator**~~ — FIXED (" *" appended to tab label)
+- [x] ~~**Close tab button doesn't work**~~ — FIXED (tab close implemented)
 
 ### UI/UX
 - [ ] **Menu doesn't close on outside click** - menus stay open
-- [ ] **No keyboard shortcuts** - Ctrl+N, Ctrl+S, etc. don't work
+- [x] ~~**No keyboard shortcuts**~~ — PARTIAL: Ctrl+S (save), Ctrl+F (find), Ctrl+U (undo), Ctrl+R (redo), Ctrl+G (find next) work
 - [ ] **Tab overflow** - many tabs don't scroll/handle overflow well
 - [ ] **No focus indication** - hard to tell which component has focus
 
 ### Text Editing
-- [ ] **No text selection** - can't select text with mouse or shift+arrows
-- [ ] **No copy/paste** - Ctrl+C/V don't work
-- [ ] **No undo/redo** - Ctrl+Z doesn't work
-- [ ] **No word wrap** - long lines extend off screen
-- [ ] **No find/replace** - Ctrl+F doesn't work
+- [x] ~~**No text selection**~~ — FIXED (Shift+arrows, Select All)
+- [x] ~~**No copy/paste**~~ — FIXED (Ctrl+C/X/V)
+- [x] ~~**No undo/redo**~~ — FIXED (Ctrl+U/R)
+- [x] ~~**No word wrap**~~ — FIXED (toggle in View menu)
+- [x] ~~**No find/replace**~~ — DONE: Find (Ctrl+F) and Replace (Ctrl+H) both work
 - [ ] **No syntax highlighting** - all text is same color
+- [ ] **click_to_cursor broken in word-wrap mode** — `State.click_to_cursor/2` maps Y→line by assuming 1 logical line = 1 `line_height` px, which is wrong when word-wrap is active (a long line occupies multiple visual lines). Mouse click/drag positioning is incorrect when word-wrap is enabled. Default mode (`:none`) is unaffected.
 
 ---
 
 ## Target Functionality (GEdit Feature Parity)
 
 ### File Operations
-- [ ] **New File** (Ctrl+N) - Create empty buffer
-- [ ] **Open File** (Ctrl+O) - File picker dialog, load file content
-- [ ] **Save** (Ctrl+S) - Save to current path (prompt if new)
-- [ ] **Save As** (Ctrl+Shift+S) - Save to new path
-- [ ] **Close Tab** (Ctrl+W) - Close buffer (prompt if unsaved)
+- [x] **New File** (Ctrl+N) - Create empty buffer
+- [x] **Open File** (Ctrl+O) - File picker dialog, load file content
+- [x] **Save** (Ctrl+S) - Save to current path (prompt if new)
+- [x] **Save As** (Ctrl+Shift+S) - Save to new path
+- [x] **Close Tab** (Ctrl+W) - Close buffer (prompt if unsaved)
+- [x] **File Verification** (File menu → Verify File; no keyboard shortcut) - Check if file modified on disk
 - [ ] **Recent Files** - List of recently opened files
-- [ ] **File changed on disk detection** - Prompt to reload
+- [x] **Reload from Disk** (File menu → Reload from Disk) - Reload buffer content from file on disk
 
 ### Edit Operations
-- [ ] **Undo** (Ctrl+Z) - Undo last change
-- [ ] **Redo** (Ctrl+Shift+Z / Ctrl+Y) - Redo undone change
-- [ ] **Cut** (Ctrl+X) - Cut selection to clipboard
-- [ ] **Copy** (Ctrl+C) - Copy selection to clipboard
-- [ ] **Paste** (Ctrl+V) - Paste from clipboard
-- [ ] **Select All** (Ctrl+A) - Select entire document
-- [ ] **Delete Line** (Ctrl+D) - Delete current line
+- [x] **Undo** (Ctrl+U) - Undo last change
+- [x] **Redo** (Ctrl+R) - Redo undone change
+- [x] **Cut** (Ctrl+X) - Cut selection to clipboard
+- [x] **Copy** (Ctrl+C) - Copy selection to clipboard
+- [x] **Paste** (Ctrl+V) - Paste from clipboard
+- [x] **Select All** (Ctrl+A) - Select entire document
+- [x] **Delete Line** (Ctrl+D) - Delete current line
 - [ ] **Duplicate Line** (Ctrl+Shift+D) - Duplicate current line
 - [ ] **Move Line Up/Down** (Alt+Up/Down) - Reorder lines
 
 ### Text Selection
-- [ ] **Click to position cursor** - Mouse click places cursor
-- [ ] **Click and drag to select** - Mouse drag selects text
-- [ ] **Double-click to select word** - Word selection
+- [x] **Click to position cursor** - Mouse click places cursor (verified WS7: click_to_cursor accounts for scroll + gutter)
+- [x] **Click and drag to select** - Mouse drag selects text (verified WS7: full pipeline, {select_range,...} format compatible; no-wrap mode)
+- [x] **Double-click to select word** - Word selection (verified WS7: word_boundaries_at exists and dispatches {:select_range,...})
 - [ ] **Triple-click to select line** - Line selection
-- [ ] **Shift+Arrow selection** - Keyboard text selection
+- [x] **Shift+Arrow selection** - Keyboard text selection
 - [ ] **Shift+Click selection** - Extend selection with mouse
 - [ ] **Ctrl+Shift+Arrow** - Select by word
 
 ### Navigation
-- [ ] **Go to Line** (Ctrl+G) - Jump to specific line number
-- [ ] **Home/End** - Go to start/end of line
-- [ ] **Ctrl+Home/End** - Go to start/end of document
-- [ ] **Page Up/Down** - Scroll by page
-- [ ] **Ctrl+Left/Right** - Move by word
-- [ ] **Scroll with mouse wheel** - Vertical scrolling
-- [ ] **Horizontal scroll** - For long lines (if no word wrap)
+- [ ] **Go to Line** (Ctrl+G) - Jump to specific line number (Ctrl+G currently mapped to Find Next)
+- [x] **Home/End** - Go to start/end of line
+- [x] **Ctrl+Home/End** - Go to start/end of document
+- [x] **Page Up/Down** - Move cursor by one visible page (Page Up / Page Down keys)
+- [x] **Ctrl+Left/Right** - Move by word (prev_word / next_word in buffer_reducer)
+- [x] **Scroll with mouse wheel** - Vertical scrolling
+- [x] **Horizontal scroll** - For long lines (if no word wrap)
 
 ### Find & Replace
-- [ ] **Find** (Ctrl+F) - Search bar with highlighting
-- [ ] **Find Next/Previous** (F3/Shift+F3) - Navigate matches
-- [ ] **Replace** (Ctrl+H) - Find and replace dialog
-- [ ] **Replace All** - Replace all occurrences
+- [x] **Find** (Ctrl+F) - Search bar with highlighting
+- [x] **Find Next/Previous** (Ctrl+G) - Navigate matches
+- [x] **Replace** (Ctrl+H) - Find and replace dialog
+- [x] **Replace All** - Replace all occurrences
 - [ ] **Case sensitive toggle** - Match case option
 - [ ] **Regex search** - Regular expression support
 - [ ] **Highlight all matches** - Visual indication of matches
 
 ### View Options
-- [ ] **Toggle Line Numbers** - Show/hide line numbers
-- [ ] **Toggle Word Wrap** - Soft wrap long lines
+- [x] **Toggle Line Numbers** - Show/hide line numbers
+- [x] **Toggle Word Wrap** - Soft wrap long lines
 - [ ] **Toggle Minimap** - Code overview sidebar
-- [ ] **Toggle Sidebar** - File browser panel
+- [x] **Toggle Sidebar** - File browser panel
 - [ ] **Zoom In/Out** (Ctrl++/-) - Adjust font size
 - [ ] **Full Screen** (F11) - Full screen mode
 - [ ] **Status Bar** - Show line:column, encoding, file type
 
 ### Tab Management
-- [ ] **New Tab** (Ctrl+T) - New empty tab
-- [ ] **Close Tab** (Ctrl+W) - Close current tab
+- [x] **New Tab** (Ctrl+T) - New empty tab
+- [x] **Close Tab** (Ctrl+W) - Close current tab
 - [ ] **Close All Tabs** - Close all open tabs
 - [ ] **Tab reordering** - Drag tabs to reorder
 - [ ] **Tab overflow menu** - Dropdown for many tabs
 - [ ] **Middle-click to close** - Mouse button tab close
-- [ ] **Modified indicator** - Dot/asterisk on unsaved tabs
+- [x] **Modified indicator** - Asterisk on unsaved tabs (" *" suffix)
 
 ### Syntax & Appearance
 - [ ] **Syntax highlighting** - Language-aware coloring
@@ -146,26 +163,26 @@ A comprehensive breakdown of current functionality vs target functionality for a
 
 ## Implementation Priority
 
-### Phase 1: Core Stability (Must Have)
-1. Fix tab close functionality
-2. Implement text selection (mouse + keyboard)
-3. Implement copy/paste (system clipboard)
-4. Implement undo/redo
-5. Add keyboard shortcuts for common operations
-6. Dirty/unsaved buffer indicator
+### Phase 1: Core Stability (Must Have) — COMPLETED
+1. ~~Fix tab close functionality~~ ✓
+2. ~~Implement text selection (mouse + keyboard)~~ ✓ (keyboard done, mouse pending)
+3. ~~Implement copy/paste (system clipboard)~~ ✓
+4. ~~Implement undo/redo~~ ✓
+5. ~~Add keyboard shortcuts for common operations~~ ✓ (Ctrl+S/F/U/R/G)
+6. ~~Dirty/unsaved buffer indicator~~ ✓
 
-### Phase 2: File Operations (Must Have)
-1. Open file dialog
-2. Save file
-3. Save As dialog
-4. Prompt on close unsaved
+### Phase 2: File Operations (Must Have) — MOSTLY COMPLETE
+1. ~~Open file dialog~~ ✓
+2. ~~Save file~~ ✓
+3. ~~Save As dialog~~ ✓
+4. Prompt on close unsaved — not yet
 
-### Phase 3: Navigation & Search (Should Have)
-1. Find (Ctrl+F) with highlighting
-2. Replace
-3. Go to line
-4. Word-wise cursor movement
-5. Page up/down
+### Phase 3: Navigation & Search (Should Have) — PARTIALLY COMPLETE
+1. ~~Find (Ctrl+F) with highlighting~~ ✓
+2. ~~Replace (Ctrl+H) with Replace All~~ ✓
+3. Go to line — not yet
+4. ~~Word-wise cursor movement~~ ✓ (Ctrl+Left/Right: prev_word / next_word; Ctrl+Home/End: start/end of document)
+5. ~~Page Up/Down~~ ✓ (Page Up / Page Down keys: move cursor by one visible page)
 
 ### Phase 4: Polish (Nice to Have)
 1. Syntax highlighting (at least for Elixir)
@@ -178,6 +195,14 @@ A comprehensive breakdown of current functionality vs target functionality for a
 
 ## Architecture Notes
 
+> **2026-07: RadixCache refactor.** State now lives in GenServer stores
+> publishing retained snapshots on Scenic.PubSub: `Buffer.Process` per
+> buffer (`:"radix_buf_<uuid>"`), `BufferManager` as the buffer-list store
+> (`:radix_buffers`), and `ViewStore` for UI chrome (`:radix_view`). The
+> authoritative architecture description is in `Quillex-BasePrompt.md`
+> (Architecture Overview) and `AGENTS.md` (State Architecture). The notes
+> below describe the component tree and remain accurate at that level.
+
 ### Current Component Structure
 ```
 QuillEx.RootScene
@@ -185,6 +210,8 @@ QuillEx.RootScene
 │   └── Sends {:tab_selected, id}, {:tab_closed, id}
 ├── IconMenu (ScenicWidgets.IconMenu)
 │   └── Sends {:menu_item_clicked, item_id}
+├── FileNavigator (ScenicWidgets.FileNavigator)
+│   └── Sidebar file browser, toggle via View menu
 └── TextField (ScenicWidgets.TextField)
     └── Handles direct input, stores lines internally
 ```
@@ -197,7 +224,7 @@ Quillex.Buffer.BufferManager
 └── call_buffer/2 - Send actions to buffer process
 
 Quillex.Buffer.Process
-├── Holds buffer state (lines, cursor, etc.)
+├── Holds buffer state (lines, cursor, undo/redo stacks, etc.)
 └── Handles {:action, [...]} messages
 ```
 
@@ -215,23 +242,38 @@ Quillex.Buffer.Process
 
 ## Testing Strategy (Spex)
 
-### Unit Tests Needed
-- [ ] Buffer state management (add/remove/switch)
-- [ ] Text manipulation (insert, delete, selection)
+### Unit Tests
+- [x] Buffer state management (BufState.new, defaults) — `test/buffers/buf_state_test.exs`
+- [x] Cursor selection logic — `test/reducers/buffer_reducer_cursor_selection_test.exs`
+- [x] Dirty indicator tracking — `test/reducers/buffer_reducer_dirty_test.exs`
+- [x] Buffer API tests — `test/api/buffer_api_tests.exs`
 - [ ] Undo/redo stack operations
-- [ ] Cursor movement logic
+- [ ] Text manipulation (insert, delete)
 
-### Integration Tests Needed
-- [ ] Create buffer → appears in tab bar
-- [ ] Switch tab → content changes
-- [ ] Type text → persists on tab switch
-- [ ] Open file → content loads correctly
-- [ ] Save file → content written to disk
+### Integration Tests (Spex)
+- [x] App launch — `01_app_launch_spex.exs`
+- [x] Basic text editing — `02_basic_text_editing_spex.exs`
+- [x] Buffer management — `03_buffer_management_spex.exs`
+- [x] Tab handling — `04_tab_handling_spex.exs`
+- [x] View settings — `04_view_settings_spex.exs`
+- [x] Undo/redo — `05_undo_redo_spex.exs`
+- [x] Find — `06_find_spex.exs`
+- [x] Integration v1 — `07_integration_v1_spex.exs`
+- [x] Property tests — `08_property_tests_spex.exs`
+- [x] File operations — `09_file_operations_spex.exs`
+- [x] File navigator — `10_file_navigator_spex.exs`
+- [x] Run verification (file integrity check) — `11_run_verification_spex.exs`
+- [x] Find & Replace (Ctrl+H) — `12_replace_spex.exs`
+- [x] Menu close on outside click — `13_menu_close_outside_click_spex.exs`
+- [x] Keyboard shortcuts (Ctrl+N/O/W/S/etc.) — `14_keyboard_shortcuts_spex.exs`
+- [x] Word navigation (Ctrl+Left/Right) — `15_word_navigation_spex.exs`
+- [x] Unsaved-changes confirmation dialog — `16_unsaved_close_prompt_spex.exs`
+- [x] Page Up/Down navigation — `17_page_navigation_spex.exs`
 
 ### Visual/E2E Tests (via ScenicMCP)
-- [ ] Menu opens on click
-- [ ] Menu closes on selection
-- [ ] Tab selection highlights correctly
+- [x] Menu opens on click
+- [x] Menu closes on selection
+- [x] Tab selection highlights correctly
 - [ ] Cursor visible and positioned correctly
 
 ---
@@ -242,3 +284,4 @@ Quillex.Buffer.Process
 - System clipboard integration requires platform-specific code
 - File dialogs need custom implementation (Scenic has no native dialogs)
 - Consider Wayland/X11 differences for Linux clipboard
+- Tab width is configurable (2/3/4/8 spaces) via View menu
