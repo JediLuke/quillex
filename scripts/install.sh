@@ -12,9 +12,10 @@
 # What it does, in order:
 #   1. checks Elixir and Erlang are present
 #   2. installs GLFW, GLEW, pkg-config and a C compiler via your package manager
-#   3. checks the sibling forks Quillex builds against are checked out
+#   3. checks the sibling forks, if you're developing across them
 #   4. fetches and compiles everything
-#   5. offers to put `qlx` on your PATH
+#   5. packages the editor, so `qlx` runs straight away
+#   6. offers to put `qlx` on your PATH
 set -euo pipefail
 
 assume_yes=false
@@ -22,7 +23,7 @@ for arg in "$@"; do
   case "$arg" in
     -y | --yes) assume_yes=true ;;
     -h | --help)
-      sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     *)
@@ -239,13 +240,37 @@ note "this takes a few minutes the first time (the C driver included)"
 mix deps.get
 mix compile
 
-# ── 5. The qlx command ──────────────────────────────────────────────────────
+# ── 5. Packaging the editor ─────────────────────────────────────────────────
+# `qlx` runs the RELEASE in _build/prod/rel/quillex, not the dev build that
+# step 4 just produced. Without this, installing appears to finish and then the
+# very first `qlx .` stops to ask whether to build the editor — a second
+# multi-minute wait, at the exact moment someone expects to be typing. Do it
+# here, while they already know an install is in progress.
+bold "5. Packaging the editor"
+
+release_bin="$project_dir/_build/prod/rel/quillex/bin/quillex"
+
+# Rebuild only when there is nothing there, or sources have moved on — the
+# same staleness test bin/qlx uses, so the two agree about what "built" means.
+if [ ! -x "$release_bin" ]; then
+  note "building the release (a few minutes; this is what qlx runs)"
+  MIX_ENV=prod mix release --overwrite
+elif [ -n "$(find lib config assets mix.exs mix.lock -newer "$release_bin" -print -quit 2> /dev/null)" ]; then
+  note "sources are newer than the built editor — rebuilding"
+  MIX_ENV=prod mix release --overwrite
+else
+  note "already built and up to date"
+fi
+
+[ -x "$release_bin" ] || die "the release did not build — qlx has nothing to run"
+
+# ── 6. The qlx command ──────────────────────────────────────────────────────
 # Re-running this step has to be safe and has to be honest. "Already exists"
 # is not good enough: a symlink left over from a checkout you have since moved
 # or deleted points somewhere wrong, and reporting that as done sends you off
 # to debug a `qlx` that runs the wrong tree or nothing at all. So distinguish
 # the cases, and only ever offer to replace a link this script could have made.
-bold "5. The qlx command"
+bold "6. The qlx command"
 
 bin_dir="${QLX_BIN_DIR:-$HOME/.local/bin}"
 target="$bin_dir/qlx"
