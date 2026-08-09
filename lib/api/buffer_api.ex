@@ -128,12 +128,21 @@ defmodule Quillex.Buffer do
          path when is_binary(path) <- snapshot.ref.path,
          {:ok, content} <- File.read(path),
          lines = String.split(content, "\n"),
-         {:ok, updated} <- dispatch(buf_ref, [{:set_data, lines}, :mark_clean]) do
+         {:ok, updated} <- dispatch(buf_ref, {:reload_from_disk, lines}) do
       {:ok, updated}
     else
       nil -> {:error, :no_path}
       {:error, reason} -> {:error, reason}
       _ -> {:error, :no_path}
+    end
+  end
+
+  @doc false
+  def reload_if_clean(buf_ref, lines) when is_list(lines) do
+    Quillex.Buffer.BufferManager.call_buffer(buf_ref, {:reload_from_disk_if_clean, lines})
+    |> case do
+      {:ok, state} -> {:ok, Snapshot.from_internal(state)}
+      {:error, reason} -> {:error, reason}
     end
   end
 

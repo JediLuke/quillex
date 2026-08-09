@@ -1,6 +1,41 @@
 defmodule QuillEx.App do
   @moduledoc """
-  QuillEx is a simple text-editor, written in Elixir, using the Scenic gfx lib.
+  Boots and supervises the processes owned by the Quillex OTP application.
+
+  This module is the application callback configured in `mix.exs`. Its
+  `start/2` callback resolves runtime ownership, applies standalone CLI policy,
+  constructs the appropriate child list, appends optional development tooling,
+  and starts the children under a `:one_for_one` supervisor.
+
+  ## Runtime modes
+
+  The mode is read from the `:quillex` application's `:runtime_mode` setting:
+
+      config :quillex, runtime_mode: :standalone
+
+  `:standalone` is the default and is the complete desktop application. Quillex
+  adopts the directory supplied by its command-line launcher, starts performance
+  monitoring, the RadixCache stores, buffer supervision, close-lifecycle and CLI
+  services, and Scenic with Quillex's own window and root scene. Quillex owns the
+  viewport and decides when its standalone runtime should stop.
+
+  `:embedded` starts the RadixCache and buffer backends for use inside another
+  application. The host retains its process-wide working directory, owns Scenic,
+  supplies any viewport or editing surface, and controls VM/application lifetime.
+  Quillex therefore does not start its CLI, performance monitor, lifecycle
+  coordinator, or standalone Scenic window in this mode.
+
+  `:headless` starts the same backend child set as `:embedded` today, but states a
+  different contract: there is no graphical host or Quillex viewport. Callers
+  work through the `Quillex.Buffer` API and its `Quillex.Buffer.Ref` and
+  `Quillex.Buffer.Snapshot` read contracts. Keeping this mode distinct from
+  `:embedded` allows their supervision needs to evolve independently even though
+  their current child lists are identical.
+
+  In development, the optional Tidewave/Bandit child is appended to any mode
+  when those modules are available; it is development tooling rather than part
+  of a mode's product ownership contract. Unknown mode values raise
+  `ArgumentError` during application startup.
   """
 
   @tidewave_port 31337
@@ -44,6 +79,7 @@ defmodule QuillEx.App do
       {Quillex.PerfMonitor, []},
       {Quillex.RadixCache.Supervisor, []},
       {Quillex.Buffers.TopSupervisor, []},
+      {Quillex.Files.ExternalFileSync, []},
       {Quillex.Lifecycle.Coordinator, []},
       {QuillEx.CLI, []},
       {Scenic, [scenic_config()]}
@@ -53,14 +89,16 @@ defmodule QuillEx.App do
   def children_for(:embedded) do
     [
       {Quillex.RadixCache.Supervisor, []},
-      {Quillex.Buffers.TopSupervisor, []}
+      {Quillex.Buffers.TopSupervisor, []},
+      {Quillex.Files.ExternalFileSync, []}
     ]
   end
 
   def children_for(:headless) do
     [
       {Quillex.RadixCache.Supervisor, []},
-      {Quillex.Buffers.TopSupervisor, []}
+      {Quillex.Buffers.TopSupervisor, []},
+      {Quillex.Files.ExternalFileSync, []}
     ]
   end
 

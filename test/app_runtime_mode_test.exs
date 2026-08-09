@@ -20,6 +20,13 @@ defmodule QuillEx.AppRuntimeModeTest do
              QuillEx.App.children_for(:embedded),
              &match?({Quillex.Buffers.TopSupervisor, _}, &1)
            )
+
+    for mode <- [:standalone, :embedded, :headless] do
+      assert Enum.any?(
+               QuillEx.App.children_for(mode),
+               &match?({Quillex.Files.ExternalFileSync, _}, &1)
+             )
+    end
   end
 
   test "invalid modes fail explicitly" do

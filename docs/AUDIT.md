@@ -159,8 +159,211 @@ specifically intended to prove.
 | AUD-026 | Framework/semantic layer | Semantic elements do not model clipping, so clipped widgets advertise themselves as clickable | High | Characterized |
 | AUD-027 | Framework/input | Escape was dispatched as `:key_escape`, an atom no driver emits, so Escape-driven tests passed while real Escape did nothing | High | Characterized |
 | AUD-028 | Tooling/semantic lookup | `Semantic.click_element/3` cannot resolve widget-registered elements that a semantic_table scan finds | High | Observed |
+| AUD-029 | Performance/observability | Interactive latency budgets do not cover first-use scrolling, resize bursts, or end-to-end response | High | Observed |
+| AUD-030 | Editor/scroll input | Pane wheel scrolling can stop transiently while keyboard navigation continues, then recover without intervention | High | Observed |
+| AUD-031 | Files/buffer synchronization | Open file-backed buffers do not update when their files change on disk | High | Requirement |
 
 ## Findings
+
+### AUD-031 — Open buffers must react to external file changes
+
+**Observation:** When a file already has an open tab, changing that file on
+disk does not update the editor. The visible buffer remains stale until the
+user explicitly invokes **Reload from Disk**. This applies architecturally to
+every open file-backed buffer, not only the active tab.
+
+**Expected:** Quillex should watch every canonical path represented by an open
+file-backed buffer. When a clean buffer's file changes externally, reload the
+buffer promptly and publish the normal retained snapshots so the active pane,
+inactive tab state, cursor/view state, and later tab activation all observe the
+new contents. Show a transient informational status such as **Reloaded
+`filename` from disk**. Unsaved editor content must never be silently replaced.
+
+**Existing foundation:** `Quillex.Buffer.reload/1` already keeps disk I/O
+outside the reducer and replaces document data through the buffer action
+contract. `Quillex.RadixCache.ViewStore.show_status/2` already publishes a
+five-second status message. The manual File-menu reload path proves these
+pieces can update the active editor. What is missing is a supervised file-watch
+owner that tracks the whole open-buffer set and applies an explicit conflict
+policy.
+
+**Required policy:**
+
+- Clean buffer + changed file: reload automatically and report it.
+- Dirty buffer + changed file: preserve the in-memory edits, mark an external
+  conflict, and ask the user whether to reload/discard, overwrite, or compare;
+  do not merely show a transient warning that can disappear unnoticed.
+- File deleted: retain the buffer contents and report the deletion; saving must
+  require an intentional recreate/Save As decision.
+- Quillex's own save: update the watcher baseline and suppress the reflected
+  filesystem event so it is not presented as an external reload.
+- Inactive tab: update or mark conflict just as reliably as the active tab;
+  changing tabs must not be the detection mechanism.
+- Buffer close/path change: remove or retarget the watch without leaking a
+  process, descriptor, timer, or stale path-to-buffer association.
+
+**Filesystem realities:** Many editors and formatters save atomically by
+writing a temporary file and renaming it over the original. A watcher must
+therefore handle bursts of create/modify/rename/delete events, debounce them,
+re-establish watches when an inode is replaced, and read only after the new
+file has settled. Canonical path identity from `Quillex.Buffer.PathIdentity`
+must remain the lookup key. Content comparison (or a recorded content digest)
+should be authoritative; modification timestamps alone are not sufficient.
+
+**Ownership direction:** Detection belongs in a supervised file-watch service,
+not in RootScene and not in a per-frame poll. It should subscribe to the
+retained buffer-list source, own path/watch bookkeeping, and call the public
+buffer/store actions. RootScene remains a subscriber that renders resulting
+snapshots. This keeps headless and embedded modes capable of the same document
+synchronization while allowing hosts to choose how conflicts and notifications
+are surfaced.
+
+**Questions for characterization/design:**
+
+- Should watching be part of the common buffer backend in all runtime modes,
+  or an explicitly selectable child for embedded/headless hosts?
+- What persistent state represents an external conflict, and where should it
+  be published so tabs and hosts can render it?
+- How are cursor and selection clamped after a clean automatic reload, and is
+  each buffer's scroll position preserved?
+- Do we initially use an OTP filesystem-watcher dependency with a polling
+  fallback, or begin with portable stat/content polling?
+- What debounce and stable-read strategy behaves consistently on Linux and
+  macOS without delaying legitimate updates?
+
+**Future acceptance evidence:** A real-window Spex opens two temporary files,
+externally changes both active and inactive clean tabs, and observes new content
+plus an informational status without manual reload. Neighboring scenarios
+prove dirty content survives an external write and presents a durable conflict,
+atomic rename-over saves are detected exactly once, self-saves do not reload or
+notify, deletion is safe, and closing/repointing a buffer removes the old watch.
+
+### AUD-030 — Pane wheel scrolling can stop and recover transiently
+
+**Observation:** During the current dogfooding session, mouse-wheel/trackpad
+scrolling in the editor pane stopped having any visible effect. Cursor movement
+with the arrow keys continued to work normally, demonstrating that the editor
+process was responsive and the pane retained keyboard focus. Scrolling later
+started working again without a deliberate recovery action or application
+restart.
+
+**Expected:** Wheel scrolling over the pane should be continuously available.
+Focus changes, resizing, overlays, modifier keys, buffer switches, idle time,
+or temporary load must not leave scroll input ignored or redirected.
+
+**Implementation context:** TextField globally requests `:cursor_scroll` and
+then accepts each event only when the event coordinates fall inside its stored
+frame. This differs from keyboard handling and could explain why arrow keys
+continue while scrolling does not, but no coordinate mismatch has yet been
+observed. TextField also tracks Shift press/release to reinterpret vertical
+wheel input as horizontal scrolling; a lost release is another plausible
+transient state, especially where horizontal movement is clamped to zero.
+These are investigation candidates, not established causes.
+
+**Questions for characterization:**
+
+- While apparently stuck, does TextField receive no scroll event, reject it as
+  outside the stored frame, or process it into an unchanged/clamped offset?
+- Do the event coordinates, live semantic frame, and TextField state frame
+  disagree after activation or resize?
+- Is `scroll.shift_held` true while the physical Shift key is released?
+- Does opening/closing an overlay, moving the pointer out and back, pressing
+  Shift, clicking the pane, or waiting cause recovery?
+- Is the input delayed and later drained, or are events genuinely discarded?
+
+**Instrumentation needed:** For a bounded diagnostic window, correlate each
+driver scroll event with its coordinates, owning scene/component, live frame,
+bounds-check result, modifier/`shift_held` state, old/new offsets, graph push,
+and render completion. Record state transitions in a small ring buffer so the
+evidence survives after spontaneous recovery without flooding normal logs.
+This should become part of AUD-029's staged latency/event tracing.
+
+**Future acceptance evidence:** A Spex repeatedly crosses the suspected
+lifecycle boundaries and proves every wheel gesture delivered over the pane
+changes the intended offset within budget. A deterministic regression should
+first reproduce the eventual characterized cause; a long randomized lifecycle
+scenario should then provide additional resilience coverage.
+
+### AUD-029 — Interactive latency needs first-class budgets and end-to-end evidence
+
+**Observation:** Scrolling inside the editor pane sometimes has a visible lag,
+especially immediately after activating the pane. Interactive window resizing
+also produces definite delay on the current Linux machine, while the same
+problem has not been noticed on macOS. The resize observation extends AUD-001;
+this finding records the broader performance requirement and the missing
+measurement capability.
+
+**Expected:** Quillex is a programmer's editor, so its common interactions
+should feel immediate and remain predictably responsive across long sessions,
+large files, focus changes, resize bursts, and supported platforms. Performance
+regressions should fail automated tests before they are discovered by feel.
+
+**Existing evidence and gap:** `24_performance_budget_spex.exs` and
+`Quillex.PerfMonitor` already measure Scenic render time and instrumented
+Elixir handler time. That is a useful foundation, but the current scenario:
+
+- combines typing and scrolling into one sample set;
+- resets the counters only after the pane is focused, excluding activation and
+  first-use cost;
+- asserts averages plus a permissive 500 ms maximum, which can hide the exact
+  one-off stall a person notices;
+- does not measure a resize-event burst;
+- does not correlate an injected input with the graph publication and rendered
+  frame caused by that specific input;
+- has no cold/warm, percentile, session-age, or per-platform baselines.
+
+Consequently, a green performance Spex does not currently refute this
+observation.
+
+**Measurement workstream:** Establish named, independently sampled latency
+contracts rather than one blended "performance" number:
+
+1. pane activation: click delivery through focus-visible frame;
+2. first scroll after activation: wheel input through changed scroll offset and
+   the corresponding completed render;
+3. steady-state scroll: p50, p95, p99, and maximum across a controlled burst;
+4. click-to-cursor and key-to-buffer/render response;
+5. resize: each reshape handler, coalescing behavior, rebuild count, and final
+   settled frame during a realistic event burst;
+6. session aging: repeat the same workloads after many buffer switches,
+   component lifecycles, and graph publications;
+7. workload scaling: short, large, long-line, and wrapped documents.
+
+Use `System.monotonic_time/1`, `:telemetry`, process messages, and retained
+semantic/store snapshots to place correlation IDs and timestamps at the input,
+dispatch, store commit, graph push, and render-finish boundaries. Keep the
+measurement and any resulting architecture entirely in Elixir/OTP; introducing
+a Quillex NIF is explicitly out of scope. Existing Scenic/driver telemetry may
+be observed, but the editor should not gain native performance code.
+
+**Test design constraints:** Wall-clock Spex budgets can be noisy in CI and
+must not become flaky. Record distributions, require a minimum sample count,
+separate cold from warm measurements, and keep generous platform envelopes at
+first. Tighten them from recorded baselines. Pair these end-to-end budgets with
+deterministic structural assertions—for example, one scroll gesture must not
+recreate the TextField, and a resize burst should perform no more rebuilds than
+the chosen coalescing contract permits. Report stage timings on failure so a
+red test identifies whether input routing, store publication, graph work, or
+rendering consumed the budget.
+
+**Questions for characterization:**
+
+- Does the first-scroll stall occur only after focus acquisition, after a
+  buffer switch, after pane recreation, or after any idle period?
+- Is input queued while the TextField requests/captures focus, or is the first
+  render/semantic publication simply expensive?
+- On resize, how many TextField teardown/recreation cycles occur per second,
+  and which stage differs between Linux and macOS?
+- Can Scenic render-finish telemetry be correlated reliably with the exact
+  graph push under test, or does it need an Elixir-side sequence identifier?
+- Which budgets should be release gates on shared CI, and which should remain
+  machine-calibrated diagnostic runs?
+
+**Future acceptance evidence:** Focus followed immediately by scroll has no
+outlier beyond the agreed cold-path budget; steady-state scroll and
+click/key-to-visible-response meet percentile budgets; a reshape burst meets
+its responsiveness and rebuild-count contracts; results remain bounded after
+a long-session workload; and failures print a per-stage latency breakdown.
 
 ### AUD-001 — Manual resize causes severe lag and apparent instability
 

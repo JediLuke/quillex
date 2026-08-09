@@ -10,7 +10,14 @@ defmodule Quillex.BufferContractTest do
 
     File.write!(path, "alpha\nbeta")
 
-    on_exit(fn -> File.rm(path) end)
+    on_exit(fn ->
+      Buffer.list()
+      |> Enum.filter(&(&1.path == Path.expand(path)))
+      |> Enum.each(&Buffer.close(&1, :discard))
+
+      File.rm(path)
+    end)
+
     {:ok, path: path}
   end
 
@@ -49,6 +56,15 @@ defmodule Quillex.BufferContractTest do
     assert {:ok, ref} = Buffer.open(%{source: %{filepath: path}, data: ["old"]})
     File.write!(path, "new\ncontent")
     assert {:ok, %Snapshot{lines: ["new", "content"]}} = Buffer.reload(ref)
+  end
+
+  test "conditional external reload cannot overwrite a dirty buffer", %{path: path} do
+    assert {:ok, ref} = Buffer.open(%{source: %{filepath: path}, data: ["alpha", "beta"]})
+    assert {:ok, dirty} = Buffer.dispatch(ref, {:insert, "local ", :at_cursor})
+    assert dirty.ref.dirty?
+
+    assert {:error, :dirty} = Buffer.reload_if_clean(ref, ["external"])
+    assert {:ok, %Snapshot{lines: ["local alpha", "beta"]}} = Buffer.fetch(ref)
   end
 
   test "closing reports lifecycle errors explicitly" do

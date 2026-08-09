@@ -91,6 +91,24 @@ defmodule Quillex.Buffer.Process.Reducer do
     %{buf | data: lines}
   end
 
+  # Replace a clean document after its backing file changes. External reloads
+  # are a new baseline, not an undoable user edit. Preserve the cursor where
+  # possible, clamp it into the new document, and clear stale selection/history.
+  def process(%BufState{} = buf, {:reload_from_disk, lines}) when is_list(lines) do
+    cursor = {buf.cursor.line, buf.cursor.col}
+
+    %{
+      buf
+      | data: lines,
+        selection: nil,
+        dirty?: false,
+        external_change: nil,
+        undo_stack: [],
+        redo_stack: []
+    }
+    |> Navigation.move_cursor(cursor)
+  end
+
   # Set the cursor position directly (used for syncing from TextField on resize/switch)
   # Also clears selection since clicking to position cursor should deselect
   def process(%Quillex.Structs.BufState{} = buf, {:set_cursor, {line, col}})
@@ -324,7 +342,16 @@ defmodule Quillex.Buffer.Process.Reducer do
 
   # Mark buffer clean without writing to disk (used by FileAPI after it writes directly)
   def process(%Quillex.Structs.BufState{} = buf, :mark_clean) do
-    %{buf | dirty?: false}
+    %{buf | dirty?: false, external_change: nil}
+  end
+
+  def process(%BufState{} = buf, {:mark_external_change, change})
+      when change in [:modified, :deleted] do
+    %{buf | external_change: change}
+  end
+
+  def process(%BufState{} = buf, :clear_external_change) do
+    %{buf | external_change: nil}
   end
 
   # Update buffer name and source file path without writing to disk.

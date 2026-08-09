@@ -31,6 +31,19 @@ defmodule Quillex.Buffer.Process do
     {:reply, {:ok, state}, state}
   end
 
+  # The cleanliness check and replacement share this process turn. A watcher
+  # must not fetch "clean", race a keystroke, and then overwrite that edit.
+  def handle_call({:reload_from_disk_if_clean, _lines}, _from, %{dirty?: true} = state) do
+    {:reply, {:error, :dirty}, state}
+  end
+
+  def handle_call({:reload_from_disk_if_clean, lines}, _from, state) when is_list(lines) do
+    case apply_actions(state, [{:reload_from_disk, lines}]) do
+      {:ok, new_state} -> {:reply, {:ok, new_state}, new_state}
+      {:error, reason} -> {:reply, {:error, reason}, state}
+    end
+  end
+
   def handle_call({:action, actions}, _from, state) when is_list(actions) do
     if read_only_violation?(state, actions) do
       {:reply, {:error, :read_only}, state}
@@ -94,10 +107,14 @@ defmodule Quillex.Buffer.Process do
     with {:ok, new_state} <- result do
       # Edge-cast display metadata to the buffer-list store only on transition,
       # so the tab bar's Refs stay fresh without per-keystroke list publishes
-      if new_state.dirty? != state.dirty? or new_state.name != state.name do
+      if new_state.dirty? != state.dirty? or new_state.name != state.name or
+           new_state.source != state.source or
+           new_state.external_change != state.external_change do
         Quillex.Buffer.BufferManager.update_buffer_meta(new_state.uuid, %{
           dirty?: new_state.dirty?,
-          name: new_state.name
+          name: new_state.name,
+          path: source_path(new_state.source),
+          external_change: new_state.external_change
         })
       end
 
@@ -106,6 +123,9 @@ defmodule Quillex.Buffer.Process do
       {:ok, new_state}
     end
   end
+
+  defp source_path(%{filepath: path}) when is_binary(path), do: path
+  defp source_path(_source), do: nil
 
   # Clipboard access is an effect and therefore belongs at the process shell,
   # never in the pure editing reducer. Effectful commands are translated into

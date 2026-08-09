@@ -443,7 +443,13 @@ defmodule QuillEx.RootScene.Renderizer do
     new_dirty = Enum.map(new_state.buffers, & &1.dirty?)
     dirty_changed = old_dirty != new_dirty
 
-    buffers_changed or selection_changed or dirty_changed
+    # External conflicts are durable buffer metadata. Unlike the transient
+    # status message, the tab marker remains until reload/save resolves it.
+    old_external = Enum.map(old_state.buffers, & &1.external_change)
+    new_external = Enum.map(new_state.buffers, & &1.external_change)
+    external_changed = old_external != new_external
+
+    buffers_changed or selection_changed or dirty_changed or external_changed
   end
 
   # Helper to create tab bar
@@ -451,7 +457,10 @@ defmodule QuillEx.RootScene.Renderizer do
   defp derive_tabs(state) do
     tabs =
       Enum.map(state.buffers, fn buf ->
-        label = if buf.dirty?, do: buf.name <> " *", else: buf.name
+        label =
+          buf.name <>
+            if(buf.dirty?, do: " *", else: "") <>
+            if(buf.external_change, do: " !", else: "")
 
         %{
           id: buf.uuid,

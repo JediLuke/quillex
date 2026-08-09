@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Added supervised external-file synchronization in every runtime mode. Clean
+  open buffers reload automatically when their canonical files change, including
+  inactive tabs, and the status bar reports the reload.
+- External changes never overwrite dirty buffers. Modified or deleted backing
+  files set durable conflict metadata (and a tab `!` marker), while Quillex's
+  own saves are recognized without producing a false conflict.
+- External reload now uses an atomic buffer-process cleanliness check, so a
+  keystroke racing the disk watcher cannot be overwritten.
+
 ## 0.7.4 — 2026-08-03
 
 - Fixed every shifted character being discarded — capitals and all shifted
