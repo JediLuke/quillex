@@ -1,11 +1,11 @@
 defmodule QuillEx.App do
   @moduledoc """
-  Boots and supervises the processes owned by the Quillex OTP application.
+  Boots the supervision tree for the Quillex OTP application.
 
   This module is the application callback configured in `mix.exs`. Its
   `start/2` callback resolves runtime ownership, applies standalone CLI policy,
-  constructs the appropriate child list, appends optional development tooling,
-  and starts the children under a `:one_for_one` supervisor.
+  constructs the selected child list and starts the children under a
+  `:one_for_one` supervisor.
 
   ## Runtime modes
 
@@ -19,56 +19,31 @@ defmodule QuillEx.App do
   services, and Scenic with Quillex's own window and root scene. Quillex owns the
   viewport and decides when its standalone runtime should stop.
 
-  `:embedded` starts the RadixCache and buffer backends for use inside another
-  application. The host retains its process-wide working directory, owns Scenic,
-  supplies any viewport or editing surface, and controls VM/application lifetime.
-  Quillex therefore does not start its CLI, performance monitor, lifecycle
-  coordinator, or standalone Scenic window in this mode.
+  `:headless` starts Quillex's RadixCache and buffer backends without starting
+  its desktop shell. The caller retains the process-wide working directory,
+  owns VM/application lifetime, and may either use `Quillex.Buffer` directly or
+  compose Quillex-backed UI into a host application. Quillex does not start its
+  CLI, performance monitor, lifecycle coordinator, or Scenic viewport in this
+  mode.
 
-  `:headless` starts the same backend child set as `:embedded` today, but states a
-  different contract: there is no graphical host or Quillex viewport. Callers
-  work through the `Quillex.Buffer` API and its `Quillex.Buffer.Ref` and
-  `Quillex.Buffer.Snapshot` read contracts. Keeping this mode distinct from
-  `:embedded` allows their supervision needs to evolve independently even though
-  their current child lists are identical.
-
-  In development, the optional Tidewave/Bandit child is appended to any mode
-  when those modules are available; it is development tooling rather than part
-  of a mode's product ownership contract. Unknown mode values raise
-  `ArgumentError` during application startup.
+  Unknown mode values raise `ArgumentError` during application startup.
   """
-
-  @tidewave_port 31337
-  @start_tidewave? Mix.env() == :dev and Code.ensure_loaded?(Tidewave) and
-                     Code.ensure_loaded?(Bandit)
 
   def start(_type, _args) do
     mode = runtime_mode()
 
-    # Working-directory adoption is standalone shell policy. Embedded and
-    # headless hosts retain ownership of their process-wide current directory.
+    # Working-directory adoption is standalone shell policy. Headless hosts
+    # retain ownership of their process-wide current directory.
     if mode == :standalone, do: QuillEx.CLI.chdir!()
 
-    children = children_for(mode)
-
-    children =
-      children ++
-        if @start_tidewave? do
-          require Logger
-          Logger.info("Starting Tidewave server on port #{@tidewave_port} for development")
-          [{Bandit, plug: Tidewave, port: @tidewave_port}]
-        else
-          []
-        end
-
-    Supervisor.start_link(children, strategy: :one_for_one)
+    Supervisor.start_link(children_for(mode), strategy: :one_for_one)
   end
 
   @doc "Return the generic Quillex runtime mode."
-  @spec runtime_mode() :: :standalone | :embedded | :headless
+  @spec runtime_mode() :: :standalone | :headless
   def runtime_mode do
     case Application.get_env(:quillex, :runtime_mode, :standalone) do
-      mode when mode in [:standalone, :embedded, :headless] -> mode
+      mode when mode in [:standalone, :headless] -> mode
       mode -> raise ArgumentError, "invalid Quillex runtime mode: #{inspect(mode)}"
     end
   end
@@ -80,17 +55,10 @@ defmodule QuillEx.App do
       {Quillex.RadixCache.Supervisor, []},
       {Quillex.Buffers.TopSupervisor, []},
       {Quillex.Files.ExternalFileSync, []},
+      {Quillex.Files.NavigatorTreeSync, []},
       {Quillex.Lifecycle.Coordinator, []},
       {QuillEx.CLI, []},
       {Scenic, [scenic_config()]}
-    ]
-  end
-
-  def children_for(:embedded) do
-    [
-      {Quillex.RadixCache.Supervisor, []},
-      {Quillex.Buffers.TopSupervisor, []},
-      {Quillex.Files.ExternalFileSync, []}
     ]
   end
 
@@ -98,7 +66,8 @@ defmodule QuillEx.App do
     [
       {Quillex.RadixCache.Supervisor, []},
       {Quillex.Buffers.TopSupervisor, []},
-      {Quillex.Files.ExternalFileSync, []}
+      {Quillex.Files.ExternalFileSync, []},
+      {Quillex.Files.NavigatorTreeSync, []}
     ]
   end
 

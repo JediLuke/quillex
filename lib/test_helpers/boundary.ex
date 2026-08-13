@@ -8,9 +8,13 @@ defmodule Quillex.TestHelpers do
 
   Exported to the `Quillex.Spex` boundary so spex tests can use them
   for assertions about what's visible on screen.
+
+  `ScenicMcp` is intentionally not listed in `deps:`. Boundary enforces
+  relationships within this Mix application; external testing applications
+  are ordinary library dependencies, not Quillex boundaries.
   """
   use Boundary,
-    deps: [Quillex, ScenicMcp],
+    deps: [Quillex],
     exports: [
       SemanticHelpers,
       TextAssertions,

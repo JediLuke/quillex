@@ -148,7 +148,7 @@ specifically intended to prove.
 | AUD-015 | File navigator/input | Visible SideNav scrollbars do not own pointer input above file rows | High | Characterized |
 | AUD-016 | Instrumentation | PerfMonitor broadly suppresses exits and `measure/2` can run work twice | Medium | Characterized |
 | AUD-017 | Test architecture | Boundary exports grant privileged controls that can mask product failures | High | Characterized |
-| AUD-018 | File navigator/state | SideNav highlight does not follow the active file-backed buffer | Medium | Characterized |
+| AUD-018 | File navigator/state | SideNav highlight does not follow the active file-backed buffer | Medium | Resolved |
 | AUD-019 | Menus/component design | Reusable menus need icons and richer composable item types before 1.0 | Medium | Requirement |
 | AUD-020 | Editor/navigation | Basic indentation-based code folding | Low | Requirement |
 | AUD-021 | Editor/rendering | Selection highlight is vertically misaligned with the cursor | Low | Characterized |
@@ -162,8 +162,140 @@ specifically intended to prove.
 | AUD-029 | Performance/observability | Interactive latency budgets do not cover first-use scrolling, resize bursts, or end-to-end response | High | Observed |
 | AUD-030 | Editor/scroll input | Pane wheel scrolling can stop transiently while keyboard navigation continues, then recover without intervention | High | Observed |
 | AUD-031 | Files/buffer synchronization | Open file-backed buffers do not update when their files change on disk | High | Requirement |
+| AUD-032 | File navigator/resize | Navigator resize handle is visually poor and does not reliably resize the pane | High | Observed |
+| AUD-033 | File navigator/state design | Row highlighting uses inconsistent visual states with unclear meanings | Medium | Resolved |
+| AUD-034 | File navigator/scroll input | Vertical and horizontal scrollbar thumbs cannot be reliably clicked and dragged | High | Observed |
+| AUD-035 | File navigator/scroll input | Clicking empty scrollbar track space does not jump or page toward that position | Medium | Requirement |
+| AUD-036 | File navigator/layout | Fully scrolled content lacks bottom clearance for the horizontal scrollbar | Medium | Observed |
+| AUD-037 | File navigator/selection | File rows do not support Ctrl-toggle or Shift-range multi-selection | High | Resolved |
+| AUD-038 | File navigator/filesystem | Selected files and directories cannot be dragged to another directory to move them | High | Resolved |
+| AUD-039 | File navigator/context menu | Rows have no right-click menu for filesystem actions such as delete | High | Resolved |
 
 ## Findings
+
+### File navigator filesystem interactions — AUD-037 through AUD-039
+
+These features should share one explicit selection model rather than layering
+drag and context-menu behavior onto `active_id`, which currently means the file
+open in the editor.
+
+**Resolution (2026-08-09):** SideNav now has an explicit operation-selection
+set and stable range anchor. Plain, Ctrl, and Shift clicks follow desktop tree
+selection conventions; dragging moves the complete selection into a directory;
+and right-click exposes a dropdown-style Delete action guarded by Quillex's
+confirmation dialog. Filesystem changes are detected by the pure-Elixir
+`NavigatorTreeSync`, which refreshes the existing component while preserving
+valid expansion and selection state. `33_file_nav_operations_spex.exs` drives
+all of these through the real viewport and asserts the resulting disk state.
+
+#### AUD-037 — Add conventional multi-selection
+
+Plain click should replace the selection, Ctrl-click should toggle one item,
+and Shift-click should select the visible range from a stable anchor. Selection,
+keyboard focus, hover, and the active/open file must remain visually distinct.
+Collapsing a directory must define whether hidden descendants remain selected.
+
+#### AUD-038 — Drag selected filesystem entries to move them
+
+Dragging a selected row should move the complete selection; dragging an
+unselected row should first make it the sole selection. Directory rows are drop
+targets and need clear valid/invalid hover feedback. Before mutation, reject
+self-moves, moving a directory into its descendant, duplicate destinations,
+and operations involving missing or externally changed paths. On success,
+refresh the tree while preserving useful expansion and selection state; on
+failure, leave the filesystem and selection coherent and report the error in
+Quillex's status strip.
+
+#### AUD-039 — Add a right-click context menu
+
+Right-click should select an unselected row before opening a menu, while
+right-clicking within an existing multi-selection should preserve it. The menu
+should use the established dropdown visual language and initially expose safe,
+well-defined actions such as Open, Rename, Move, and Delete. Destructive actions
+must name the affected entries, require confirmation, and surface partial or
+failed filesystem operations in the status strip. Clicking elsewhere or
+pressing Escape closes the menu without changing the selection.
+
+### File navigator follow-up backlog — AUD-032 through AUD-036
+
+These findings were recorded during the current top-down dogfooding audit.
+They reopen file-navigator interaction work that the 0.7.3 disposition below
+marked resolved: the historical test evidence remains useful, but it does not
+override newly observed behavior in the assembled editor.
+
+#### AUD-032 — Replace the navigator resize handle
+
+**Observation:** The small border "slider" bubble is unattractive and does not
+reliably resize the file navigator when grabbed. Its appearance also does not
+communicate the available horizontal drag strongly enough.
+
+**Expected:** The divider should have a restrained, deliberate affordance with
+a comfortably sized hit target. Hover, press, drag, release, cancellation, and
+the collapse threshold must work consistently without causing layout lag.
+
+**Acceptance evidence to define:** A real-pointer Spex should grab from several
+points inside the visible hit target, resize in both directions, cross and
+recover from the collapse threshold, and prove that the TextField and SideNav
+processes remain stable throughout the gesture.
+
+#### AUD-033 — Define one highlighting language for SideNav
+
+**Observation:** Clicking and navigating rows produces several visually
+different highlight treatments. It is not obvious which treatment means
+hovered, keyboard-focused, selected, active/open file, or pressed.
+
+**Expected:** SideNav should define a small set of distinct states with one
+meaning each. At minimum, active file, transient hover, and keyboard focus must
+be recognizable without competing fills or apparently random persistence.
+
+**Resolved design:** Blue has exactly one durable meaning: the file backing the
+currently active editor buffer. It is sourced from BufferManager and therefore
+follows tab or programmatic activation as well as SideNav navigation. Neutral
+grey is the operation selection used by Ctrl/Shift selection, drag/move, and
+context-menu actions. A directory row receives that neutral treatment when it
+is clicked open. Hover remains transient and keyboard focus remains an outline;
+active blue takes precedence when a row is both active and selected.
+
+#### AUD-034 — Make both scrollbar thumbs draggable
+
+**Observation:** The visible vertical and horizontal scrollbar thumbs cannot be
+reliably grabbed and dragged in the file navigator.
+
+**Expected:** Pressing anywhere inside either thumb captures the pointer while
+preserving the grab offset. Motion updates the matching scroll axis, release
+ends capture even outside the component, and scrollbar input never activates a
+file row underneath it.
+
+**Acceptance evidence to define:** Cover both axes, both track ends, grabbing
+near either end of a thumb, leaving the navigator during capture, and release.
+Assert rendered row movement as well as final scroll state.
+
+#### AUD-035 — Clicking scrollbar negative space should navigate
+
+**Requirement:** Clicking the unoccupied track before or after a thumb should
+move toward the clicked position. The exact interaction—page by one viewport or
+center the thumb around the click—must be selected once and shared with other
+Widgex scroll consumers rather than invented only for SideNav.
+
+**Acceptance evidence to define:** Click above/below the vertical thumb and
+left/right of the horizontal thumb; verify direction, clamping, repeat clicks,
+and that the track consumes the click instead of the row beneath it.
+
+#### AUD-036 — Reserve bottom clearance for the horizontal scrollbar
+
+**Observation:** At the bottom of a fully scrolled navigator, the final row has
+insufficient clearance from the horizontal scrollbar. Content and the
+scrollbar compete for the same visual/interactive strip.
+
+**Expected:** The scrollable content extent should include bottom padding at
+least equal to the horizontal scrollbar gutter plus normal row breathing room.
+The final row must remain fully visible and clickable above the scrollbar when
+both axes overflow, without adding a misleading blank row when horizontal
+scrolling is absent.
+
+**Acceptance evidence to define:** Exercise a deeply expanded tree with both
+scrollbars visible, scroll to both maximum offsets, and assert final-row bounds,
+horizontal-scrollbar bounds, non-overlap, and successful final-row activation.
 
 ### AUD-031 — Open buffers must react to external file changes
 
@@ -566,8 +698,6 @@ general.
   supervision tree, the CLI startup hook, and Scenic with Quillex's viewport.
 - The Flamelex branch starts only the RadixCache stores and buffer supervision
   tree. Its comment says that the host manages Scenic.
-- The optional development Tidewave/Bandit child is appended after either
-  branch, so this is not strictly a complete "backend only" child list.
 - `CLI.chdir!()` still runs before the branch in both modes.
 - RadixCache starts `Scenic.PubSub` itself in both modes because the stores use
   retained Scenic PubSub sources even when Quillex does not start a viewport.
@@ -999,6 +1129,14 @@ all Boundary changes explicitly. A strict end-to-end subset must fail when a
 real tab click, shortcut, focus transition, or dialog interaction fails.
 
 ### AUD-018 — File navigator highlight does not follow the active buffer
+
+**Resolution (2026-08-09):** RootScene now derives the active file path from
+the retained BufferManager snapshot and sends it to the existing SideNav via
+`{:set_active, path}`. SideNav no longer assigns `active_id` optimistically on
+row press; activation is confirmed by application state on click release.
+Consequently buffer switches move the blue highlight while neutral operation
+selection remains independent. The assembled selection Spex proves this
+reverse data flow and modifier clicks prove they do not activate another file.
 
 **Observation:** Clicking a file in SideNav opens its buffer, but the
 corresponding file does not remain visibly highlighted. This makes it unclear
@@ -1619,7 +1757,7 @@ It is the highest-value next investigation.
 | AUD-007 | Resolved | SideNav uses the shared controller for measured horizontal overflow and scrolling. |
 | AUD-008 | Resolved | SideNav consumes the live editor text size rather than a private small constant. |
 | AUD-009 | Resolved | The status label sizes from its content and the remaining width is allocated to the overflow-capable TabBar. |
-| AUD-010 | Resolved | `:standalone`, `:embedded`, and `:headless` replace host-specific boot detection; supervision-shape tests cover ownership. |
+| AUD-010 | Resolved | `:standalone` and `:headless` replace host-specific boot detection; headless covers both API-only and host-composed use without a redundant supervision mode. |
 | AUD-011 | Resolved | `ScenicWidgets.ModalShell` supplies the shared overlay, centered panel, and input shield used by dialogs and FilePicker. |
 | AUD-012 | Resolved | FilePicker embeds the shared single-line TextField, including normal cursor, focus, and mouse behavior. |
 | AUD-013 | Resolved | RootScene gates application shortcuts while a modal owns input; dialog and RootScene tests cover isolation and dismissal. |

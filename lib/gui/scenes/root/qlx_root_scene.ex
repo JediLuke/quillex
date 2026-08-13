@@ -16,6 +16,10 @@ defmodule QuillEx.RootScene do
   @icon_menu_width 140
   @dropdown_width 180
 
+  @file_nav_collapse_threshold 110
+  @file_nav_min_width 160
+  @file_nav_max_width 800
+
   # the way input works is that we route input to the active buffer
   # component, which then converts it to actions, which are then then
   # propagated back up - so basically input is handled at the "lowest level"
@@ -219,21 +223,19 @@ defmodule QuillEx.RootScene do
       # Update state with new frame and saved cursor position for the renderizer
       old_state = scene.assigns.state
 
-      new_state =
+      new_state = %{
         old_state
-        |> Map.put(:frame, new_frame)
-        |> Map.put(:_restore_cursor, cursor_pos)
-        |> Map.put(:_restore_first_visible_line, first_visible_line)
+        | frame: new_frame,
+          _restore_cursor: cursor_pos,
+          _restore_first_visible_line: first_visible_line
+      }
 
       # Reuse existing graph to preserve component PIDs and avoid race conditions
       new_graph =
         QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
       # Remove the temporary restore keys from state
-      final_state =
-        new_state
-        |> Map.delete(:_restore_cursor)
-        |> Map.delete(:_restore_first_visible_line)
+      final_state = %{new_state | _restore_cursor: nil, _restore_first_visible_line: nil}
 
       new_scene =
         scene
@@ -248,10 +250,88 @@ defmodule QuillEx.RootScene do
     end
   end
 
-  # Track cursor position for scroll routing
-  def handle_input({:cursor_pos, coords}, _context, scene) do
+  # File navigator resize drag. The root scene owns this short-lived gesture;
+  # ViewStore remains authoritative for the committed width and visibility.
+  def handle_input({:cursor_pos, {x, _y} = coords}, _context, scene)
+      when scene.assigns.state.file_nav_resizing do
     state = scene.assigns.state
-    new_state = %{state | cursor_pos: coords}
+
+    max_width =
+      min(@file_nav_max_width, max(@file_nav_min_width, trunc(state.frame.size.width - 240)))
+
+    hide? = x < @file_nav_collapse_threshold
+
+    width = x |> round() |> max(@file_nav_min_width) |> min(max_width)
+
+    new_state = %{
+      state
+      | cursor_pos: coords,
+        file_nav_width: width,
+        file_nav_resize_hide?: hide?
+    }
+
+    # A drag is scene-owned preview state. Publishing every pixel through
+    # ViewStore made each motion take a GenServer cast -> retained PubSub
+    # snapshot -> full root graph push round trip. Pushing a graph while Scenic
+    # owns a pointer capture also drops that capture, so the release can vanish.
+    # Keep motion entirely local and commit/reflow once on release.
+    {:noreply, assign(scene, state: new_state)}
+  end
+
+  # RootScene requests cursor input itself, so use explicit bounds rather than
+  # relying on Scenic to choose the pill as the positional-input context. That
+  # remains reliable even when the adjacent child component overlaps its edge.
+  def handle_input({:cursor_pos, coords}, _context, scene) do
+    maybe_clear_icon_menu_hover(scene, scene.assigns.state.cursor_pos, coords)
+    update_file_nav_resize_hover(scene, coords, file_nav_resize_handle_hit?(scene, coords))
+  end
+
+  def handle_input(
+        {:cursor_button, {:btn_left, 0, _mods, _coords}},
+        _context,
+        %{assigns: %{state: %{file_nav_resizing: true}}} = scene
+      ) do
+    :ok = release_input(scene, [:cursor_pos, :cursor_button])
+    state = scene.assigns.state
+
+    scene =
+      if state.file_nav_resize_hide? do
+        Quillex.RadixCache.ViewStore.close_file_nav()
+        Quillex.RadixCache.ViewStore.show_status("File navigator hidden", :info)
+        scene
+      else
+        # Motion keeps a cheap, scene-local preview width. Render the committed
+        # geometry now against the width that is still authoritative in
+        # ViewStore; otherwise the returning snapshot compares equal to the
+        # preview and the navigator/pane children never receive their new frame.
+        committed_width = Quillex.RadixCache.ViewStore.get_state().file_nav_width
+        old_render_state = %{state | file_nav_width: committed_width}
+
+        new_graph =
+          QuillEx.RootScene.Renderizer.render(
+            scene.assigns.graph,
+            scene,
+            old_render_state,
+            state
+          )
+
+        Quillex.RadixCache.ViewStore.set_file_nav_width(state.file_nav_width)
+
+        scene =
+          scene
+          |> assign(graph: new_graph)
+          |> push_graph(new_graph)
+
+        scene
+      end
+
+    new_state = %{
+      state
+      | file_nav_resizing: false,
+        file_nav_resize_hovered: false,
+        file_nav_resize_hide?: false
+    }
+
     {:noreply, assign(scene, state: new_state)}
   end
 
@@ -281,6 +361,27 @@ defmodule QuillEx.RootScene do
   # The FilePicker already handles close-on-outside-click internally (it renders
   # a full-screen overlay and cancels when the overlay is clicked).
   def handle_input({:cursor_button, {:btn_left, 1, _mods, {click_x, click_y}}}, _context, scene) do
+    if file_nav_resize_handle_hit?(scene, {click_x, click_y}) do
+      start_file_nav_resize(scene)
+    else
+      handle_regular_left_press(scene, click_x, click_y)
+    end
+  end
+
+  defp start_file_nav_resize(scene) do
+    :ok = capture_input(scene, [:cursor_pos, :cursor_button])
+
+    state = %{
+      scene.assigns.state
+      | file_nav_resizing: true,
+        file_nav_resize_hovered: true,
+        file_nav_resize_hide?: false
+    }
+
+    {:noreply, assign(scene, state: state)}
+  end
+
+  defp handle_regular_left_press(scene, click_x, click_y) do
     state = scene.assigns.state
     frame_width = state.frame.size.width
 
@@ -303,7 +404,8 @@ defmodule QuillEx.RootScene do
     # decides which of them holds it. Skipped while a dialog is open so a
     # stray click can't pull keyboard focus out from under the dialog.
     if state.show_file_nav and click_y > @top_bar_height and
-         not state.show_unsaved_prompt and not state.show_about and not state.show_shortcuts do
+         not state.show_unsaved_prompt and not state.show_nav_delete_prompt and
+         not state.show_about and not state.show_shortcuts do
       if click_x < state.file_nav_width do
         Scenic.Scene.put_child(scene, :file_nav, :focus)
         Scenic.Scene.put_child(scene, :buffer_pane, :blur)
@@ -331,6 +433,57 @@ defmodule QuillEx.RootScene do
     {:noreply, scene}
   end
 
+  defp update_file_nav_resize_hover(scene, coords, hovered?) do
+    old_state = scene.assigns.state
+    new_state = %{old_state | cursor_pos: coords, file_nav_resize_hovered: hovered?}
+
+    if old_state.file_nav_resize_hovered == hovered? do
+      {:noreply, assign(scene, state: new_state)}
+    else
+      new_graph =
+        QuillEx.RootScene.Renderizer.render(
+          scene.assigns.graph,
+          scene,
+          old_state,
+          new_state
+        )
+
+      new_scene =
+        scene
+        |> assign(state: new_state, graph: new_graph)
+        |> push_graph(new_graph)
+
+      {:noreply, new_scene}
+    end
+  end
+
+  defp file_nav_resize_handle_hit?(scene, {x, y}) do
+    state = scene.assigns.state
+    content_height = state.frame.size.height - @top_bar_height
+    center_y = @top_bar_height + content_height * 0.9
+
+    state.show_file_nav and abs(x - state.file_nav_width) <= 16 and
+      abs(y - center_y) <= 26
+  end
+
+  # IconMenu only receives positional motion while Scenic considers one of its
+  # primitives the target. Relay the one transition it otherwise cannot see:
+  # leaving its parent-owned frame for a sibling component.
+  defp maybe_clear_icon_menu_hover(scene, previous_coords, coords) do
+    if icon_menu_point?(scene, previous_coords) and not icon_menu_point?(scene, coords) do
+      Scenic.Scene.put_child(scene, :icon_menu, :clear_hover)
+    end
+
+    :ok
+  end
+
+  defp icon_menu_point?(_scene, nil), do: false
+
+  defp icon_menu_point?(scene, {x, y}) do
+    width = scene.assigns.state.frame.size.width
+    x >= width - @icon_menu_width and x <= width and y >= 0 and y <= @top_bar_height
+  end
+
   # Dispatch a single buffer action to the currently active buffer.
   # Calls the Buffer.Process synchronously, then pushes the resulting state
   # to the BufferPane (TextField) for an immediate UI update.  Also updates
@@ -355,6 +508,7 @@ defmodule QuillEx.RootScene do
       # or answering a dialog mutates the file behind their back (Ctrl+D
       # would delete a line of the document mid-search).
       state.show_search_bar or state.show_unsaved_prompt or
+        state.show_nav_delete_prompt or
         Map.get(state, :show_about, false) or Map.get(state, :show_shortcuts, false) or
           state.show_file_picker ->
         {:noreply, scene}
@@ -366,6 +520,7 @@ defmodule QuillEx.RootScene do
 
   defp keyboard_overlay_open?(state) do
     state.show_search_bar or state.show_unsaved_prompt or state.show_file_picker or
+      state.show_nav_delete_prompt or
       Map.get(state, :show_about, false) or Map.get(state, :show_shortcuts, false)
   end
 
@@ -486,17 +641,7 @@ defmodule QuillEx.RootScene do
     Wormhole.capture(fn ->
       old_state = scene.assigns.state
 
-      new_state =
-        Enum.reduce(actions, old_state, fn action, acc_state ->
-          RootScene.Reducer.process(acc_state, action)
-          |> case do
-            :ignore ->
-              acc_state
-
-            new_acc_state ->
-              new_acc_state
-          end
-        end)
+      new_state = Enum.reduce(actions, old_state, &RootScene.Reducer.process(&2, &1))
 
       # Reuse existing graph to preserve component PIDs and avoid race conditions
       # during rapid buffer switches. Pass old_state to enable smart component updates
@@ -757,10 +902,24 @@ defmodule QuillEx.RootScene do
     old_state = scene.assigns.state
     new_state = merge_view(old_state, view)
 
-    if editor_layout_changed?(old_state, new_state) do
-      update_editor_settings(scene, new_state)
-    else
-      {:noreply, render_snapshot(scene, new_state)}
+    result =
+      if editor_layout_changed?(old_state, new_state) do
+        update_editor_settings(scene, new_state)
+      else
+        {:noreply, render_snapshot(scene, new_state)}
+      end
+
+    case result do
+      {:noreply, new_scene} when old_state.file_nav_revision != new_state.file_nav_revision ->
+        if new_state.show_file_nav do
+          tree = Quillex.Utils.FileTree.build(new_state.file_nav_path || File.cwd!())
+          Scenic.Scene.put_child(new_scene, :file_nav, {:update_tree, tree})
+        end
+
+        {:noreply, new_scene}
+
+      other ->
+        other
     end
   end
 
@@ -797,6 +956,7 @@ defmodule QuillEx.RootScene do
     :show_file_nav,
     :file_nav_path,
     :file_nav_width,
+    :file_nav_revision,
     :status_message,
     :status_severity
   ]
@@ -1042,6 +1202,53 @@ defmodule QuillEx.RootScene do
   def handle_event({:sidebar, :collapse, _item_id}, _from, scene), do: {:noreply, scene}
   def handle_event({:sidebar, :hover, _item_id}, _from, scene), do: {:noreply, scene}
 
+  def handle_event({:sidebar, :move_requested, paths, target}, _from, scene) do
+    case Quillex.Files.NavigatorOps.move(paths, target) do
+      {:ok, moves} ->
+        Quillex.RadixCache.ViewStore.show_status(
+          "Moved #{length(moves)} #{entry_word(length(moves))} to #{Path.basename(target)}",
+          :info
+        )
+
+      {:error, reason} ->
+        Quillex.RadixCache.ViewStore.show_status(
+          "Move failed: #{format_nav_error(reason)}",
+          :error
+        )
+    end
+
+    {:noreply, scene}
+  end
+
+  def handle_event({:sidebar, :delete_requested, []}, _from, scene), do: {:noreply, scene}
+
+  def handle_event({:sidebar, :delete_requested, paths}, _from, scene) do
+    state = scene.assigns.state
+    count = length(paths)
+
+    graph =
+      scene.assigns.graph
+      |> ScenicWidgets.ConfirmDialog.add_to_graph(
+        %{
+          frame: state.frame,
+          title: "Delete #{count} #{entry_word(count)}?",
+          message: "This permanently deletes the selected files and directories.",
+          buttons: [{:discard, "Delete"}, {:cancel, "Cancel"}]
+        },
+        id: :nav_delete_prompt
+      )
+
+    new_state = %{state | pending_nav_delete: paths, show_nav_delete_prompt: true}
+
+    new_scene =
+      scene
+      |> assign(state: new_state, graph: graph)
+      |> push_graph(graph)
+
+    Scenic.Scene.put_child(new_scene, :buffer_pane, :blur)
+    {:noreply, new_scene}
+  end
+
   # ===========================================================================
   # Unsaved-changes dialog responses
   # ===========================================================================
@@ -1087,6 +1294,30 @@ defmodule QuillEx.RootScene do
 
     Scenic.Scene.put_child(new_scene, :buffer_pane, :focus)
     {:noreply, new_scene}
+  end
+
+  def handle_event({:confirm_dialog_response, :nav_delete_prompt, :discard}, _from, scene) do
+    paths = scene.assigns.state.pending_nav_delete
+
+    case Quillex.Files.NavigatorOps.delete(paths) do
+      {:ok, deleted} ->
+        Quillex.RadixCache.ViewStore.show_status(
+          "Deleted #{length(deleted)} #{entry_word(length(deleted))}",
+          :info
+        )
+
+      {:error, reason} ->
+        Quillex.RadixCache.ViewStore.show_status(
+          "Delete failed: #{format_nav_error(reason)}",
+          :error
+        )
+    end
+
+    {:noreply, hide_nav_delete_prompt(scene)}
+  end
+
+  def handle_event({:confirm_dialog_response, :nav_delete_prompt, :cancel}, _from, scene) do
+    {:noreply, hide_nav_delete_prompt(scene)}
   end
 
   def handle_event({:confirm_dialog_response, :quit_prompt, :discard}, _from, scene) do
@@ -1278,7 +1509,7 @@ defmodule QuillEx.RootScene do
 
   # Display a transient notification message at the bottom of the viewport.
   # `severity` is :info | :warning | :error — controls background colour.
-  # The message auto-clears after 5 seconds via a {:clear_status_message, ref} timer.
+  # The message auto-clears after eight seconds via ViewStore's timer.
   #
   # Multiple rapid calls replace the previous message safely: each call stamps
   # the state with a fresh ref, and only the matching timer can clear it.
@@ -1328,19 +1559,11 @@ defmodule QuillEx.RootScene do
     Scenic.Scene.put_child(scene, :icon_menu, {:update_menus, new_menus})
 
     # Add cursor position and first visible line for restoration after re-render
-    new_state =
-      if cursor_pos do
-        Map.put(new_state, :_restore_cursor, cursor_pos)
-      else
-        new_state
-      end
-
-    new_state =
-      if first_visible_line do
-        Map.put(new_state, :_restore_first_visible_line, first_visible_line)
-      else
-        new_state
-      end
+    new_state = %{
+      new_state
+      | _restore_cursor: cursor_pos,
+        _restore_first_visible_line: first_visible_line
+    }
 
     # Reuse existing graph to preserve component PIDs and avoid race conditions
     old_state = scene.assigns.state
@@ -1349,10 +1572,7 @@ defmodule QuillEx.RootScene do
       QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
     # Remove the temporary restore keys from state
-    final_state =
-      new_state
-      |> Map.delete(:_restore_cursor)
-      |> Map.delete(:_restore_first_visible_line)
+    final_state = %{new_state | _restore_cursor: nil, _restore_first_visible_line: nil}
 
     new_scene =
       scene
@@ -1855,4 +2075,28 @@ defmodule QuillEx.RootScene do
         {:noreply, scene}
     end
   end
+
+  defp hide_nav_delete_prompt(scene) do
+    state = %{scene.assigns.state | pending_nav_delete: [], show_nav_delete_prompt: false}
+    graph = Scenic.Graph.delete(scene.assigns.graph, :nav_delete_prompt)
+    new_scene = scene |> assign(state: state, graph: graph) |> push_graph(graph)
+    Scenic.Scene.put_child(new_scene, :buffer_pane, :focus)
+    new_scene
+  end
+
+  defp entry_word(1), do: "entry"
+  defp entry_word(_count), do: "entries"
+
+  defp format_nav_error({:destination_exists, path}),
+    do: "#{Path.basename(path)} already exists"
+
+  defp format_nav_error({:missing_source, path}), do: "#{Path.basename(path)} no longer exists"
+  defp format_nav_error({:invalid_target, path}), do: "#{path} is not a directory"
+  defp format_nav_error(:move_into_self), do: "a directory cannot be moved into itself"
+  defp format_nav_error(:already_in_target), do: "the selection is already in that directory"
+
+  defp format_nav_error({:move_into_descendant, _source, _target}),
+    do: "a directory cannot be moved into its descendant"
+
+  defp format_nav_error(reason), do: inspect(reason)
 end

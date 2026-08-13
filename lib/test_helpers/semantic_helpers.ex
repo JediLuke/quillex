@@ -19,26 +19,28 @@ defmodule Quillex.TestHelpers.SemanticHelpers do
   def find_by_type_all_graphs(viewport, type) do
     semantic_data = :ets.tab2list(viewport.semantic_table)
 
-    elements = Enum.flat_map(semantic_data, fn
-      # Format 2: {{scene_name, entry_id}, %Entry{}}
-      {{_scene_name, _entry_id}, %Scenic.Semantic.Compiler.Entry{type: entry_type} = entry} when entry_type == type ->
-        [entry_to_element(entry)]
+    elements =
+      Enum.flat_map(semantic_data, fn
+        # Format 2: {{scene_name, entry_id}, %Entry{}}
+        {{_scene_name, _entry_id}, %Scenic.Semantic.Compiler.Entry{type: entry_type} = entry}
+        when entry_type == type ->
+          [entry_to_element(entry)]
 
-      # Format 1: {graph_key, %{elements: %{id => elem}}}
-      {_graph_key, %{elements: elements}} ->
-        elements
-        |> Map.values()
-        |> Enum.filter(fn elem ->
-          Map.get(Map.get(elem, :semantic, %{}) || %{}, :type) == type
-        end)
+        # Format 1: {graph_key, %{elements: %{id => elem}}}
+        {_graph_key, %{elements: elements}} ->
+          elements
+          |> Map.values()
+          |> Enum.filter(fn elem ->
+            Map.get(Map.get(elem, :semantic, %{}) || %{}, :type) == type
+          end)
 
-      _ ->
-        []
-    end)
+        _ ->
+          []
+      end)
 
     {:ok, elements}
   end
-  
+
   @doc """
   Find the first text buffer across all graphs.
   """
@@ -118,7 +120,8 @@ defmodule Quillex.TestHelpers.SemanticHelpers do
       semantic_data
       |> Enum.flat_map(fn
         # Format 2: {{scene_name, entry_id}, %Entry{}}
-        {{_scene_name, _entry_id}, %Scenic.Semantic.Compiler.Entry{type: entry_type} = entry} when entry_type == type ->
+        {{_scene_name, _entry_id}, %Scenic.Semantic.Compiler.Entry{type: entry_type} = entry}
+        when entry_type == type ->
           elem = entry_to_element(entry)
           if filter_fn.(elem), do: [{0, elem}], else: []
 
@@ -185,20 +188,16 @@ defmodule Quillex.TestHelpers.SemanticHelpers do
   end
 
   defp find_buffer_text_field(viewport) do
-    case find_by_type_all_graphs(viewport, :text_field) do
-      {:ok, elements} ->
-        case Enum.find(elements, fn elem ->
-               Map.get(elem.semantic || %{}, :field_id) == :buffer_pane
-             end) do
-          nil -> {:error, :no_text_buffer}
-          buffer -> {:ok, buffer}
-        end
+    {:ok, elements} = find_by_type_all_graphs(viewport, :text_field)
 
-      error ->
-        error
+    case Enum.find(elements, fn elem ->
+           Map.get(elem.semantic || %{}, :field_id) == :buffer_pane
+         end) do
+      nil -> {:error, :no_text_buffer}
+      buffer -> {:ok, buffer}
     end
   end
-  
+
   @doc """
   Get text content from any text buffer in the viewport.
   """
@@ -208,7 +207,7 @@ defmodule Quillex.TestHelpers.SemanticHelpers do
       error -> error
     end
   end
-  
+
   @doc """
   Wait for buffer content to match expected text.
   """
@@ -223,7 +222,7 @@ defmodule Quillex.TestHelpers.SemanticHelpers do
 
     wait_for_content_loop(viewport, expected_text, end_time, buffer_id)
   end
-  
+
   defp wait_for_content_loop(viewport, expected_text, end_time, buffer_id) do
     buffer_lookup =
       if buffer_id do
@@ -243,6 +242,7 @@ defmodule Quillex.TestHelpers.SemanticHelpers do
             case Scenic.ViewPort.info(:main_viewport) do
               {:ok, fresh_viewport} ->
                 wait_for_content_loop(fresh_viewport, expected_text, end_time, buffer_id)
+
               _ ->
                 {:error, :viewport_not_found}
             end
@@ -250,7 +250,7 @@ defmodule Quillex.TestHelpers.SemanticHelpers do
             {:error, {:timeout, "Expected: '#{expected_text}', Got: '#{buffer.content}'"}}
           end
         end
-        
+
       error ->
         if System.monotonic_time(:millisecond) < end_time do
           Process.sleep(50)
@@ -258,6 +258,7 @@ defmodule Quillex.TestHelpers.SemanticHelpers do
           case Scenic.ViewPort.info(:main_viewport) do
             {:ok, fresh_viewport} ->
               wait_for_content_loop(fresh_viewport, expected_text, end_time, buffer_id)
+
             _ ->
               {:error, :viewport_not_found}
           end
@@ -266,30 +267,32 @@ defmodule Quillex.TestHelpers.SemanticHelpers do
         end
     end
   end
-  
+
   @doc """
   Find elements with a specific semantic role across all graphs.
   """
   def find_by_role(viewport, role) do
     # Get all semantic data
     semantic_data = :ets.tab2list(viewport.semantic_table)
-    
-    elements = Enum.flat_map(semantic_data, fn {_graph_key, info} ->
-      case info do
-        %{elements: elements} ->
-          elements
-          |> Map.values()
-          |> Enum.filter(fn elem ->
-            Map.get(elem.semantic || %{}, :role) == role
-          end)
-        _ ->
-          []
-      end
-    end)
-    
+
+    elements =
+      Enum.flat_map(semantic_data, fn {_graph_key, info} ->
+        case info do
+          %{elements: elements} ->
+            elements
+            |> Map.values()
+            |> Enum.filter(fn elem ->
+              Map.get(elem.semantic || %{}, :role) == role
+            end)
+
+          _ ->
+            []
+        end
+      end)
+
     {:ok, elements}
   end
-  
+
   @doc """
   Get the current cursor position from the buffer's semantic data.
   Returns {line, column} or nil if not found.
@@ -318,6 +321,7 @@ defmodule Quillex.TestHelpers.SemanticHelpers do
     case Scenic.ViewPort.info(:main_viewport) do
       {:ok, viewport} ->
         get_cursor_position(viewport)
+
       _ ->
         nil
     end
@@ -327,10 +331,12 @@ defmodule Quillex.TestHelpers.SemanticHelpers do
     case find_text_buffer(viewport) do
       {:ok, buffer} ->
         semantic = buffer.semantic || %{}
+
         case semantic[:cursor_position] do
           {line, col} -> {line, col}
           _ -> nil
         end
+
       _ ->
         nil
     end
@@ -344,6 +350,7 @@ defmodule Quillex.TestHelpers.SemanticHelpers do
     case Scenic.ViewPort.info(:main_viewport) do
       {:ok, viewport} ->
         get_selection(viewport)
+
       _ ->
         nil
     end
@@ -354,6 +361,7 @@ defmodule Quillex.TestHelpers.SemanticHelpers do
       {:ok, buffer} ->
         semantic = buffer.semantic || %{}
         semantic[:selection]
+
       _ ->
         nil
     end
@@ -366,9 +374,11 @@ defmodule Quillex.TestHelpers.SemanticHelpers do
     semantic_data = :ets.tab2list(viewport.semantic_table)
 
     IO.puts("\n=== ALL SEMANTIC ELEMENTS ===")
+
     for {graph_key, info} <- semantic_data do
       if match?(%{elements: elements} when map_size(elements) > 0, info) do
         IO.puts("\nGraph: #{inspect(graph_key)}")
+
         for {id, elem} <- info.elements do
           if elem.semantic && map_size(elem.semantic) > 0 do
             IO.puts("  Element #{id}: #{inspect(elem.semantic)}")
@@ -397,6 +407,7 @@ defmodule Quillex.TestHelpers.SemanticHelpers do
       {:ok, buffer} ->
         scroll = get_in(buffer, [:semantic, :scroll]) || %{}
         {scroll[:offset_x] || 0, scroll[:offset_y] || 0}
+
       _ ->
         {0, 0}
     end
@@ -415,6 +426,7 @@ defmodule Quillex.TestHelpers.SemanticHelpers do
     case find_text_buffer(viewport) do
       {:ok, buffer} ->
         get_in(buffer, [:semantic, :scroll])
+
       _ ->
         nil
     end
@@ -564,6 +576,7 @@ defmodule Quillex.TestHelpers.SemanticHelpers do
       {:ok, tab_bar} ->
         semantic = tab_bar.semantic || %{}
         semantic[:tab_count] || 0
+
       _ ->
         nil
     end
@@ -583,6 +596,7 @@ defmodule Quillex.TestHelpers.SemanticHelpers do
         semantic = tab_bar.semantic || %{}
         tabs = semantic[:tabs] || []
         Enum.map(tabs, & &1[:label])
+
       _ ->
         []
     end
@@ -601,6 +615,7 @@ defmodule Quillex.TestHelpers.SemanticHelpers do
       {:ok, tab_bar} ->
         semantic = tab_bar.semantic || %{}
         semantic[:selected_id]
+
       _ ->
         nil
     end
@@ -621,10 +636,11 @@ defmodule Quillex.TestHelpers.SemanticHelpers do
         tabs = semantic[:tabs] || []
         selected_id = semantic[:selected_id]
 
-        case Enum.find(tabs, & &1[:id] == selected_id) do
+        case Enum.find(tabs, &(&1[:id] == selected_id)) do
           nil -> nil
           tab -> tab[:label]
         end
+
       _ ->
         nil
     end
@@ -733,22 +749,28 @@ defmodule Quillex.TestHelpers.SemanticHelpers do
           tabs = semantic[:tabs] || []
 
           # Find tab matching the label - prefer exact match, fall back to substring
-          exact_match = Enum.find(tabs, fn tab ->
-            to_string(tab[:label]) == label
-          end)
+          exact_match =
+            Enum.find(tabs, fn tab ->
+              to_string(tab[:label]) == label
+            end)
 
-          match = exact_match || Enum.find(tabs, fn tab ->
-            tab_label = to_string(tab[:label])
-            String.contains?(tab_label, label) or
-              String.contains?(label, tab_label)
-          end)
+          match =
+            exact_match ||
+              Enum.find(tabs, fn tab ->
+                tab_label = to_string(tab[:label])
+
+                String.contains?(tab_label, label) or
+                  String.contains?(label, tab_label)
+              end)
 
           if match do
             tab_id_str = to_string(match[:id])
             semantic_id = "tab_bar_#{tab_id_str}"
             Tools.click_element(%{"element_id" => semantic_id})
           else
-            {:error, {:not_found, "No tab matching '#{label}'. Available: #{inspect(Enum.map(tabs, & &1[:label]))}"}}
+            {:error,
+             {:not_found,
+              "No tab matching '#{label}'. Available: #{inspect(Enum.map(tabs, & &1[:label]))}"}}
           end
 
         _ ->
@@ -768,15 +790,19 @@ defmodule Quillex.TestHelpers.SemanticHelpers do
           semantic = tab_bar.semantic || %{}
           tabs = semantic[:tabs] || []
 
-          exact_match = Enum.find(tabs, fn tab ->
-            to_string(tab[:label]) == label
-          end)
+          exact_match =
+            Enum.find(tabs, fn tab ->
+              to_string(tab[:label]) == label
+            end)
 
-          match = exact_match || Enum.find(tabs, fn tab ->
-            tab_label = to_string(tab[:label])
-            String.contains?(tab_label, label) or
-              String.contains?(label, tab_label)
-          end)
+          match =
+            exact_match ||
+              Enum.find(tabs, fn tab ->
+                tab_label = to_string(tab[:label])
+
+                String.contains?(tab_label, label) or
+                  String.contains?(label, tab_label)
+              end)
 
           if match do
             tab_id_str = to_string(match[:id])

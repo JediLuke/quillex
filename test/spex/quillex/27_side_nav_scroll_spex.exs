@@ -176,9 +176,51 @@ defmodule Quillex.SideNavScrollSpex do
   defp clicked?(id), do: id in Process.get(:clicked_dirs, [])
   defp mark_clicked(id), do: Process.put(:clicked_dirs, [id | Process.get(:clicked_dirs, [])])
 
+  defp side_nav_state do
+    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    {:ok, child} = Scenic.Scene.child(root, :file_nav)
+    pid = if is_list(child), do: List.first(child), else: child
+    :sys.get_state(pid).assigns.state
+  end
+
   spex "The file navigator scrolls under the wheel",
     description: "Vertical and horizontal wheel events over the sidebar move its contents",
     tags: [:phase_27, :side_nav, :scroll] do
+    scenario "Overflowing directories reveal their scrollbars immediately" do
+      when_ "directories are expanded until the navigator overflows", context do
+        open_nav_overflowing()
+        {:ok, context}
+      end
+
+      then_ "the scrollbar is already visible without a wheel event", context do
+        state = side_nav_state()
+
+        assert state.scroll.content_height > state.scroll.viewport_height
+        assert state.scroll.scrollbar_visible
+        assert state.scroll.scrollbar_opacity == 255
+
+        root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+        {:ok, child} = Scenic.Scene.child(root, :file_nav)
+        nav_pid = if is_list(child), do: List.first(child), else: child
+        graph = :sys.get_state(nav_pid).assigns.graph
+        [thumb] = Scenic.Graph.get(graph, {:scrollbar_y_thumb, :default})
+        [scrollbar_group] = Scenic.Graph.get(graph, {:scrollbar_y_group, :default})
+        [content_scissor] = Scenic.Graph.get(graph, :sidebar_scroll_group_scissor)
+
+        assert Scenic.Primitive.get_style(thumb, :fill) ==
+                 {:color, {:color_rgba, {185, 190, 205, 255}}}
+
+        # Keep the bar away from the navigator's outer edge, where the pane
+        # border and resize grip otherwise make it look absent.
+        assert Scenic.Primitive.get_transform(scrollbar_group, :translate) == {236, 2}
+
+        assert Scenic.Primitive.get_style(content_scissor, :scissor) ==
+                 state.frame.size.box
+
+        {:ok, context}
+      end
+    end
+
     scenario "Wheel over the sidebar scrolls it vertically" do
       given_ "the file navigator is open and showing rows", context do
         open_nav_overflowing()
@@ -255,6 +297,195 @@ defmodule Quillex.SideNavScrollSpex do
         {:ok, context}
       end
     end
+
+    scenario "Dragging the vertical scrollbar thumb scrolls the navigator" do
+      given_ "an overflowing navigator reset to its top edge", context do
+        open_nav_overflowing()
+        Probes.send_scroll(0, 10_000, @nav_x, @nav_y)
+        Process.sleep(500)
+
+        {:ok, Map.put(context, :before, nav_rows())}
+      end
+
+      when_ "we grab its vertical thumb and drag it downward", context do
+        {_, viewport_h} = Quillex.TestHelpers.ViewportResizer.viewport_size()
+
+        %{entry: %{screen_bounds: %{left: left, top: top, width: width}}} =
+          SemanticProbe.dump({:scrollbar_y_thumb, :default})
+
+        x = left + width / 2
+        grab_y = @top_bar_h + top + 10
+        drop_y = trunc(viewport_h * 0.55)
+
+        Probes.mouse_down(x, grab_y)
+        Process.sleep(100)
+        Probes.send_mouse_move(x, drop_y)
+        Process.sleep(100)
+        Probes.mouse_up(x, drop_y)
+        Process.sleep(600)
+
+        {:ok, context}
+      end
+
+      then_ "the visible rows move upward", context do
+        after_rows = nav_rows()
+
+        moved? =
+          Enum.zip(context.before, after_rows)
+          |> Enum.any?(fn {{id_a, top_a, _}, {id_b, top_b, _}} ->
+            id_a == id_b and top_b < top_a
+          end)
+
+        assert moved?,
+               "dragging the navigator's vertical scrollbar thumb did not move its rows"
+
+        {:ok, context}
+      end
+    end
+
+    scenario "Clicking empty vertical scrollbar track pages the navigator" do
+      given_ "an overflowing navigator reset to its top edge", context do
+        open_nav_overflowing()
+        Probes.send_scroll(0, 10_000, @nav_x, @nav_y)
+        Process.sleep(500)
+
+        {:ok, Map.put(context, :before, nav_rows())}
+      end
+
+      when_ "we click the track well below its thumb", context do
+        {_, viewport_h} = Quillex.TestHelpers.ViewportResizer.viewport_size()
+
+        %{entry: %{screen_bounds: %{left: left, width: width}}} =
+          SemanticProbe.dump({:scrollbar_y_track, :default})
+
+        Probes.click(left + width / 2, trunc(viewport_h * 0.75))
+        Process.sleep(600)
+        {:ok, context}
+      end
+
+      then_ "the visible rows page upward", context do
+        after_rows = nav_rows()
+
+        moved? =
+          Enum.zip(context.before, after_rows)
+          |> Enum.any?(fn {{id_a, top_a, _}, {id_b, top_b, _}} ->
+            id_a == id_b and top_b < top_a
+          end)
+
+        assert moved?, "clicking below the navigator thumb did not page its rows"
+        {:ok, context}
+      end
+    end
+
+    scenario "Clicking empty horizontal scrollbar track pages the navigator" do
+      given_ "a horizontally overflowing navigator reset to its left edge", context do
+        open_nav_overflowing()
+        Probes.send_scroll(10_000, 0, @nav_x, @nav_y)
+        Process.sleep(500)
+
+        state = side_nav_state()
+        assert state.scroll.content_width > state.scroll.viewport_width
+        assert state.scroll.offset_x == 0
+        {:ok, Map.merge(context, %{before: nav_rows(), before_offset: state.scroll.offset_x})}
+      end
+
+      when_ "we click the track well to the right of its thumb", context do
+        %{
+          entry: %{
+            screen_bounds: %{left: left, top: top, width: width, height: height}
+          }
+        } = SemanticProbe.dump({:scrollbar_x_track, :default})
+
+        %{
+          entry: %{
+            screen_bounds: %{left: thumb_left, width: thumb_width}
+          }
+        } = SemanticProbe.dump({:scrollbar_x_thumb, :default})
+
+        # Use the primitive's measured screen bounds and click halfway through
+        # the actual empty segment. This also validates that the track and thumb
+        # geometry published by the assembled graph agree.
+        thumb_right = thumb_left + thumb_width
+        track_right = left + width
+        assert thumb_right < track_right
+        click_x = thumb_right + (track_right - thumb_right) / 2
+        # Child-graph semantic bounds are component-local in this Scenic
+        # version. Project the measured track bounds through the SideNav frame.
+        state = side_nav_state()
+        click_y = state.frame.pin.y + top + height / 2
+        {:ok, viewport} = Scenic.ViewPort.info(:main_viewport)
+
+        Scenic.ViewPort.Input.send(
+          viewport,
+          {:cursor_button, {:btn_left, 1, [], {click_x, click_y}}}
+        )
+
+        Scenic.ViewPort.Input.send(
+          viewport,
+          {:cursor_button, {:btn_left, 0, [], {click_x, click_y}}}
+        )
+
+        Process.sleep(600)
+
+        {:ok,
+         Map.merge(context, %{track_bounds: {left, top, width, height}, click: {click_x, click_y}})}
+      end
+
+      then_ "the visible rows page left", context do
+        after_rows = nav_rows()
+        final_offset = side_nav_state().scroll.offset_x
+
+        moved? =
+          Enum.zip(context.before, after_rows)
+          |> Enum.any?(fn {{id_a, _, left_a}, {id_b, _, left_b}} ->
+            id_a == id_b and left_b < left_a
+          end)
+
+        assert final_offset > context.before_offset,
+               "horizontal track click #{inspect(context.click)} in #{inspect(context.track_bounds)} did not change offset: #{context.before_offset} -> #{final_offset}"
+
+        assert moved?,
+               "horizontal offset moved to #{final_offset}, but rendered rows did not page left"
+
+        {:ok, context}
+      end
+    end
+
+    scenario "The final row clears the horizontal scrollbar" do
+      given_ "a navigator overflowing on both axes", context do
+        open_nav_overflowing()
+        state = side_nav_state()
+        assert state.scroll.content_width > state.scroll.viewport_width
+        assert state.scroll.content_height > state.scroll.viewport_height
+        {:ok, context}
+      end
+
+      when_ "we scroll to the very bottom", context do
+        Probes.send_scroll(0, -10_000, @nav_x, @nav_y)
+        Process.sleep(600)
+        {:ok, context}
+      end
+
+      then_ "the last row ends above the horizontal scrollbar", context do
+        state = side_nav_state()
+
+        last_row_bottom =
+          state.item_bounds
+          |> Map.values()
+          |> Enum.map(&(&1.y + &1.height))
+          |> Enum.max()
+          |> Kernel.-(state.scroll.offset_y)
+          |> Kernel.+(state.frame.pin.y)
+
+        # ScrollRenderer places its 12px bar 2px above the frame bottom.
+        scrollbar_top = state.frame.pin.y + state.frame.size.height - 14
+
+        assert last_row_bottom < scrollbar_top,
+               "last row bottom #{last_row_bottom} overlaps scrollbar top #{scrollbar_top}"
+
+        {:ok, context}
+      end
+    end
   end
 
   spex "The navigator's text is smaller than the editor's",
@@ -315,9 +546,7 @@ defmodule Quillex.SideNavScrollSpex do
         Process.sleep(200)
 
         :ok =
-          Quillex.TestHelpers.FileOpener.open_file(
-            Path.expand("biblio/spinozas_ethics_p1.txt")
-          )
+          Quillex.TestHelpers.FileOpener.open_file(Path.expand("biblio/spinozas_ethics_p1.txt"))
 
         Process.sleep(900)
 

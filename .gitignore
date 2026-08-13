@@ -35,3 +35,6 @@ spex_failures.jsonl
 
 # Compiled binary — source + Makefile are tracked, binary is not.
 tools/window_pinner
+
+# Repository-local scratch space used by tests and development tools.
+/tmp/

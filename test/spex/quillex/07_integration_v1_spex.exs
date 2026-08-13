@@ -1517,14 +1517,38 @@ defmodule Quillex.IntegrationV1Spex do
         {:ok, context}
       end
 
-      then_ "the selection should be preserved", context do
+      then_ "the selection should be preserved and the selected text should reach the clipboard",
+            context do
         case wait_for_active_selection() do
           {:ok, _buffer, _selection} ->
+            assert File.read!("/tmp/quillex_test_clipboard") == "rld",
+                   "Ctrl+C must write the selected text to the configured clipboard backend"
+
             {:ok, context}
 
           _ ->
             flunk("Could not get semantic selection")
         end
+      end
+    end
+
+    scenario "Paste copied text with Ctrl+V" do
+      given_ "the previous scenario copied 'rld'", context do
+        Probes.send_keys("end", [])
+        Process.sleep(100)
+        {:ok, context}
+      end
+
+      when_ "we press Ctrl+V at the end of the line", context do
+        Probes.send_keys("v", [:ctrl])
+        Process.sleep(300)
+        {:ok, context}
+      end
+
+      then_ "the copied text should be inserted", context do
+        {:ok, _} = wait_for_active_buffer_content("Worldrld")
+        assert active_buffer_content() == "Worldrld"
+        {:ok, context}
       end
     end
 

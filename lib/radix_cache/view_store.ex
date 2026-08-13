@@ -7,12 +7,26 @@ defmodule Quillex.RadixCache.ViewStore do
 
   RootScene subscribes and re-renders from snapshots. Action functions are
   casts — they never block the GUI process.
+
+  ## Transient status bar
+
+  Features can show a short notification in the colored strip at the bottom
+  of the editor through the store action:
+
+      ViewStore.show_status("Reloaded notes.ex from disk", :info)
+
+  The supported severities are `:info`, `:warning`, and `:error`; the root
+  renderizer maps them to the strip's background color. A notification is
+  replaced by the next one and clears itself after eight seconds. Call this
+  action directly from application processes. RootScene has a private wrapper
+  only for scene event handlers that must also return a Scenic callback tuple.
   """
   use GenServer
 
   alias Quillex.RadixCache.Sources
 
-  @status_clear_ms 5_000
+  @status_clear_ms 8_000
+  @file_nav_width_range 160..800
 
   @initial %{
     # Editor settings (View menu toggles)
@@ -24,6 +38,7 @@ defmodule Quillex.RadixCache.ViewStore do
     show_file_nav: false,
     file_nav_path: nil,
     file_nav_width: 250,
+    file_nav_revision: 0,
     # Search bar (flags owned here from Phase 6b)
     show_search_bar: false,
     show_replace: false,
@@ -57,6 +72,19 @@ defmodule Quillex.RadixCache.ViewStore do
   @doc "Close the file navigator. The counterpart to open_file_nav/0 — toggling is not the same thing when you need a known state."
   def close_file_nav, do: GenServer.cast(__MODULE__, :close_file_nav)
 
+  @doc "Set the remembered file-navigator width in pixels."
+  def set_file_nav_width(width) when is_integer(width) and width in @file_nav_width_range do
+    GenServer.cast(__MODULE__, {:set_file_nav_width, width})
+  end
+
+  @doc "Notify subscribers that the filesystem tree beneath the navigator root changed."
+  def refresh_file_nav, do: GenServer.cast(__MODULE__, :refresh_file_nav)
+
+  @doc "Set the root directory displayed by the file navigator."
+  def set_file_nav_path(path) when is_binary(path) do
+    GenServer.cast(__MODULE__, {:set_file_nav_path, Path.expand(path)})
+  end
+
   def set_tab_width(n) when n in [2, 3, 4, 8] do
     GenServer.cast(__MODULE__, {:set_tab_width, n})
   end
@@ -65,7 +93,7 @@ defmodule Quillex.RadixCache.ViewStore do
     GenServer.cast(__MODULE__, {:set_text_size, n})
   end
 
-  @doc "Show a transient status message; the store clears it after 5s."
+  @doc "Show a transient status-bar message; the store clears it after eight seconds."
   def show_status(message, severity)
       when is_binary(message) and severity in [:info, :warning, :error] do
     GenServer.cast(__MODULE__, {:show_status, message, severity})
@@ -109,6 +137,25 @@ defmodule Quillex.RadixCache.ViewStore do
 
   def handle_cast(:open_file_nav, state) do
     {:noreply, publish(state, %{state.view | show_file_nav: true})}
+  end
+
+  def handle_cast({:set_file_nav_width, width}, state) do
+    {:noreply, publish(state, %{state.view | file_nav_width: width})}
+  end
+
+  def handle_cast(:refresh_file_nav, state) do
+    {:noreply,
+     publish(state, %{state.view | file_nav_revision: state.view.file_nav_revision + 1})}
+  end
+
+  def handle_cast({:set_file_nav_path, path}, state) do
+    new_view = %{
+      state.view
+      | file_nav_path: path,
+        file_nav_revision: state.view.file_nav_revision + 1
+    }
+
+    {:noreply, publish(state, new_view)}
   end
 
   def handle_cast({:set_tab_width, n}, state) do

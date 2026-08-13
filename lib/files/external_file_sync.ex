@@ -2,8 +2,8 @@ defmodule Quillex.Files.ExternalFileSync do
   @moduledoc """
   Keeps open file-backed buffers synchronized with their files on disk.
 
-  The service is part of the common buffer backend, so it runs in standalone,
-  embedded, and headless modes. It polls with ordinary Elixir/OTP file APIs;
+  The service is part of the common buffer backend, so it runs in standalone
+  and headless modes. It polls with ordinary Elixir/OTP file APIs;
   no platform watcher, NIF, or GUI process owns document synchronization.
 
   Each open canonical path has a remembered disk-content digest. A changed

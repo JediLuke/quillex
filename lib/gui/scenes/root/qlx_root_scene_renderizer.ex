@@ -1,7 +1,7 @@
 defmodule QuillEx.RootScene.Renderizer do
   require Logger
 
-  import Scenic.Primitives, only: [group: 3, rect: 3, text: 3]
+  import Scenic.Primitives, only: [group: 3, rect: 3, rrect: 3, text: 3]
 
   alias Quillex.Utils.FileTree
   alias Quillex.Utils.SideNavThemes
@@ -114,6 +114,7 @@ defmodule QuillEx.RootScene.Renderizer do
       |> Scenic.Graph.delete(:buffer_pane)
       |> Scenic.Graph.delete(:status_bar)
       |> Scenic.Graph.delete(:file_nav)
+      |> Scenic.Graph.delete(:file_nav_resize_handle_group)
       |> Scenic.Graph.delete(:search_bar)
       |> Scenic.Graph.delete(:tab_bar)
       |> Scenic.Graph.delete(:cursor_pos_label)
@@ -122,15 +123,19 @@ defmodule QuillEx.RootScene.Renderizer do
       |> do_create_buffer_pane(state, actual_buffer_frame)
       |> maybe_create_status_bar(state, status_bar_frame)
       |> maybe_create_search_bar(state, search_bar_frame)
+      |> maybe_create_file_nav_resize_handle(state, file_nav_frame)
       |> render_top_bar(scene, old_state, state, top_bar_frame)
     else
       # Incremental updates - z-order preserved
       apply_buffer_pane_settings(scene, old_state, state, actual_buffer_frame)
+      apply_file_nav_frame(scene, old_state, state, file_nav_frame)
 
       graph
+      |> maybe_move_buffer_pane(old_state, state, actual_buffer_frame)
       |> maybe_update_file_nav(state, file_nav_frame)
       |> maybe_update_status_bar(state, status_bar_frame)
       |> maybe_update_search_bar(state, search_bar_frame)
+      |> maybe_update_file_nav_resize_handle(state, file_nav_frame)
       |> render_top_bar(scene, old_state, state, top_bar_frame)
     end
   end
@@ -177,7 +182,8 @@ defmodule QuillEx.RootScene.Renderizer do
     changed? =
       old_state.show_line_numbers != state.show_line_numbers or
         old_state.word_wrap != state.word_wrap or
-        old_state.tab_width != state.tab_width
+        old_state.tab_width != state.tab_width or
+        old_state.file_nav_width != state.file_nav_width
 
     if changed? do
       Scenic.Scene.put_child(
@@ -191,6 +197,26 @@ defmodule QuillEx.RootScene.Renderizer do
            frame: frame
          }}
       )
+    end
+
+    :ok
+  end
+
+  defp maybe_move_buffer_pane(graph, old_state, state, frame) do
+    if old_state.file_nav_width != state.file_nav_width do
+      Scenic.Graph.modify(graph, :buffer_pane, fn primitive ->
+        Scenic.Primitive.put_transform(primitive, :translate, frame.pin.point)
+      end)
+    else
+      graph
+    end
+  end
+
+  defp apply_file_nav_frame(_scene, _old_state, _state, nil), do: :ok
+
+  defp apply_file_nav_frame(scene, old_state, state, frame) do
+    if old_state.file_nav_width != state.file_nav_width do
+      Scenic.Scene.put_child(scene, :file_nav, {:update_frame, frame})
     end
 
     :ok
@@ -280,6 +306,49 @@ defmodule QuillEx.RootScene.Renderizer do
       _existing ->
         graph
     end
+  end
+
+  defp maybe_create_file_nav_resize_handle(graph, _state, nil), do: graph
+
+  defp maybe_create_file_nav_resize_handle(graph, state, %Widgex.Frame{} = frame) do
+    hit_width = 32
+    hit_height = 52
+    bubble_size = if state.file_nav_resize_hovered or state.file_nav_resizing, do: 28, else: 24
+    boundary_x = frame.pin.x + frame.size.width
+    center_y = frame.pin.y + frame.size.height * 0.9
+    active? = state.file_nav_resize_hovered or state.file_nav_resizing
+    fill = if active?, do: {72, 91, 126}, else: {55, 60, 72}
+    stroke = if active?, do: {150, 174, 220}, else: {105, 115, 135}
+
+    group(
+      graph,
+      fn g ->
+        g
+        |> rect({hit_width, hit_height},
+          id: :file_nav_resize_handle,
+          fill: {:color, {0, 0, 0, 0}},
+          input: [:cursor_pos, :cursor_button]
+        )
+        |> rrect({bubble_size, bubble_size, bubble_size / 2},
+          fill: fill,
+          stroke: {1, stroke},
+          translate: {(hit_width - bubble_size) / 2, (hit_height - bubble_size) / 2}
+        )
+        |> text("↔",
+          fill: if(active?, do: {225, 232, 245}, else: {180, 188, 205}),
+          font_size: 18,
+          translate: {7, 33}
+        )
+      end,
+      id: :file_nav_resize_handle_group,
+      translate: {boundary_x - hit_width / 2, center_y - hit_height / 2}
+    )
+  end
+
+  defp maybe_update_file_nav_resize_handle(graph, state, frame) do
+    graph
+    |> Scenic.Graph.delete(:file_nav_resize_handle_group)
+    |> maybe_create_file_nav_resize_handle(state, frame)
   end
 
   # Create status bar (transient notification strip at bottom of content area)
@@ -598,8 +667,6 @@ defmodule QuillEx.RootScene.Renderizer do
     # the new one has not yet requested input, and anything typed or clicked
     # in that window is lost. Settings alone therefore no longer force a
     # rebuild.
-    settings_changed = false
-
     # Recreate if search bar, replace mode, or file nav visibility changed (affects buffer frame size)
     layout_changed =
       old_state.show_search_bar != new_state.show_search_bar or
@@ -615,7 +682,7 @@ defmodule QuillEx.RootScene.Renderizer do
     # resize" bug from the 2026-07-31 QA notes.
     frame_changed = old_state.frame != new_state.frame
 
-    settings_changed or layout_changed or status_bar_changed or frame_changed
+    layout_changed or status_bar_changed or frame_changed
   end
 
   # Helper to create the buffer_pane TextField

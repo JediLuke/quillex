@@ -11,7 +11,7 @@
 #
 # What it does, in order:
 #   1. checks Elixir and Erlang are present
-#   2. installs GLFW, GLEW, pkg-config and a C compiler via your package manager
+#   2. installs GUI libraries and a platform clipboard command
 #   3. checks the sibling forks, if you're developing across them
 #   4. fetches and compiles everything
 #   5. packages the editor, so `qlx` runs straight away
@@ -66,7 +66,7 @@ if ! command -v mix > /dev/null 2>&1; then
   cat >&2 <<'EOF'
   No `mix` on PATH.
 
-  Quillex needs Elixir 1.15+ and Erlang/OTP 26+. Either install them, or if
+  Quillex needs Elixir 1.20+ and Erlang/OTP 27+. Either install them, or if
   you use a version manager, make sure its shims are on PATH — asdf's live in
   ~/.asdf/shims and are only added by a line in your shell profile.
 
@@ -127,6 +127,45 @@ fi
 
 # SCENIC_LOCAL_TARGET does not need setting: scenic_driver_local's compiler
 # task picks glfw on a desktop and cairo-fb on a framebuffer device by itself.
+
+# Scenic does not currently expose the host clipboard. Quillex stays pure
+# Elixir by talking to the platform clipboard through a short-lived Port.
+# macOS provides pbcopy/pbpaste; Linux needs one of these small command-line
+# clients. Prefer the native Wayland client when the session advertises it.
+if [ "$(uname -s)" = Linux ] &&
+   ! command -v wl-copy > /dev/null 2>&1 &&
+   ! command -v xclip > /dev/null 2>&1 &&
+   ! command -v xsel > /dev/null 2>&1; then
+  if [ -n "${WAYLAND_DISPLAY:-}" ]; then
+    clipboard_package=wl-clipboard
+  else
+    clipboard_package=xclip
+  fi
+
+  if command -v apt-get > /dev/null 2>&1; then
+    clipboard_installer="apt-get install -y $clipboard_package"
+  elif command -v dnf > /dev/null 2>&1; then
+    clipboard_installer="dnf install -y $clipboard_package"
+  elif command -v pacman > /dev/null 2>&1; then
+    clipboard_installer="pacman -S --needed --noconfirm $clipboard_package"
+  elif command -v zypper > /dev/null 2>&1; then
+    clipboard_installer="zypper install -y $clipboard_package"
+  else
+    die "install wl-clipboard (Wayland) or xclip/xsel (X11) for copy and paste"
+  fi
+
+  if [ "$(id -u)" -ne 0 ]; then
+    command -v sudo > /dev/null 2>&1 || die "need root to install $clipboard_package, and there's no sudo"
+    clipboard_installer="sudo $clipboard_installer"
+  fi
+
+  note "clipboard integration needs $clipboard_package; this will run:"
+  note "    $clipboard_installer"
+  confirm "install it?" || die "declined — copy and paste require wl-clipboard, xclip, or xsel"
+  $clipboard_installer
+else
+  note "system clipboard command is present"
+fi
 
 # ── 3. The sibling forks ────────────────────────────────────────────────────
 # Only relevant when developing across the constellation. By default mix.exs

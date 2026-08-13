@@ -13,15 +13,14 @@ defmodule QuillEx.AppRuntimeModeTest do
 
   test "runtime modes have explicit supervision shapes" do
     assert Enum.any?(QuillEx.App.children_for(:standalone), &match?({Scenic, _}, &1))
-    refute Enum.any?(QuillEx.App.children_for(:embedded), &match?({Scenic, _}, &1))
     refute Enum.any?(QuillEx.App.children_for(:headless), &match?({Scenic, _}, &1))
 
     assert Enum.any?(
-             QuillEx.App.children_for(:embedded),
+             QuillEx.App.children_for(:headless),
              &match?({Quillex.Buffers.TopSupervisor, _}, &1)
            )
 
-    for mode <- [:standalone, :embedded, :headless] do
+    for mode <- [:standalone, :headless] do
       assert Enum.any?(
                QuillEx.App.children_for(mode),
                &match?({Quillex.Files.ExternalFileSync, _}, &1)
@@ -31,6 +30,11 @@ defmodule QuillEx.AppRuntimeModeTest do
 
   test "invalid modes fail explicitly" do
     Application.put_env(:quillex, :runtime_mode, :host_product)
+    assert_raise ArgumentError, fn -> QuillEx.App.runtime_mode() end
+  end
+
+  test "the removed embedded mode fails explicitly" do
+    Application.put_env(:quillex, :runtime_mode, :embedded)
     assert_raise ArgumentError, fn -> QuillEx.App.runtime_mode() end
   end
 end

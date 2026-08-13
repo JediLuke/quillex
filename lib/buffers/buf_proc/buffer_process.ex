@@ -134,37 +134,66 @@ defmodule Quillex.Buffer.Process do
   defp apply_effect_boundary(%{selection: nil} = state, {:cut, :selection}), do: state
 
   defp apply_effect_boundary(state, {:copy, :selection}) do
-    state |> selected_text() |> Quillex.Buffer.ClipboardAdapter.copy!()
+    state |> selected_text() |> copy_to_clipboard()
     state
   end
 
   defp apply_effect_boundary(state, {:cut, :selection}) do
-    state |> selected_text() |> Quillex.Buffer.ClipboardAdapter.copy!()
-    Quillex.Buffer.Process.Reducer.process(state, {:delete, :selection})
+    case state |> selected_text() |> Quillex.Buffer.ClipboardAdapter.copy_result() do
+      :ok ->
+        Quillex.Buffer.Process.Reducer.process(state, {:delete, :selection})
+
+      {:error, reason} ->
+        clipboard_failed(:cut, reason)
+        state
+    end
   end
 
   defp apply_effect_boundary(state, {:yank, :line, :under_cursor}) do
-    state.data |> Enum.at(state.cursor.line - 1, "") |> Quillex.Buffer.ClipboardAdapter.copy!()
+    state.data |> Enum.at(state.cursor.line - 1, "") |> copy_to_clipboard()
     state
   end
 
   defp apply_effect_boundary(state, {:paste, :at_cursor}) do
-    Quillex.Buffer.Process.Reducer.process(state, {
-      :insert,
-      Quillex.Buffer.ClipboardAdapter.paste!(),
-      :at_cursor
-    })
+    case Quillex.Buffer.ClipboardAdapter.paste_result() do
+      text when is_binary(text) ->
+        Quillex.Buffer.Process.Reducer.process(state, {:insert, text, :at_cursor})
+
+      {:error, reason} ->
+        clipboard_failed(:paste, reason)
+        state
+    end
   end
 
   defp apply_effect_boundary(state, {:paste, :line, :at_cursor}) do
-    Quillex.Buffer.Process.Reducer.process(
-      state,
-      {:insert, :line, Quillex.Buffer.ClipboardAdapter.paste!(), :below_cursor_line}
-    )
+    case Quillex.Buffer.ClipboardAdapter.paste_result() do
+      text when is_binary(text) ->
+        Quillex.Buffer.Process.Reducer.process(
+          state,
+          {:insert, :line, text, :below_cursor_line}
+        )
+
+      {:error, reason} ->
+        clipboard_failed(:paste, reason)
+        state
+    end
   end
 
   defp apply_effect_boundary(state, action),
     do: Quillex.Buffer.Process.Reducer.process(state, action)
+
+  defp copy_to_clipboard(text) do
+    case Quillex.Buffer.ClipboardAdapter.copy_result(text) do
+      :ok -> :ok
+      {:error, reason} -> clipboard_failed(:copy, reason)
+    end
+  end
+
+  defp clipboard_failed(operation, reason) do
+    label = operation |> Atom.to_string() |> String.capitalize()
+    Quillex.RadixCache.ViewStore.show_status("#{label} failed: #{reason}", :error)
+    :error
+  end
 
   defp selected_text(%{data: lines, selection: %{start: start_pos, end: end_pos}}) do
     {{start_line, start_col}, {end_line, end_col}} =

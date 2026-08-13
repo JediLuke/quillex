@@ -2,8 +2,10 @@ defmodule Quillex.Buffer.ClipboardAdapter do
   @moduledoc """
   Copy and paste from system clipboard.
 
-  Wraps ports to system-specific utilities responsible for clipboard access. It uses the default
-  clipboard utilities on macOS, Linux and Windows but can be configured to call any executable.
+  Wraps ports to system-specific utilities responsible for clipboard access.
+  On Linux it prefers `wl-copy`/`wl-paste` in a Wayland session, then falls
+  back to `xclip` or `xsel`. macOS uses `pbcopy`/`pbpaste`. Commands can be
+  overridden through the `:quillex, :clipboard_commands` application config.
   """
 
   @doc """
@@ -25,9 +27,13 @@ defmodule Quillex.Buffer.ClipboardAdapter do
   """
   @spec copy(iodata) :: iodata
   def copy(value) do
-    copy(:os.type(), value)
+    copy_result(value)
     value
   end
+
+  @doc "Copy to the system clipboard and return `:ok` or an error tuple."
+  @spec copy_result(iodata) :: :ok | {:error, String.t()}
+  def copy_result(value), do: copy(:os.type(), value)
 
   @doc """
   Copy `value` to system clipboard but throw exception if it fails.
@@ -39,7 +45,7 @@ defmodule Quillex.Buffer.ClipboardAdapter do
   """
   @spec copy!(iodata) :: iodata | no_return
   def copy!(value) do
-    case copy(:os.type(), value) do
+    case copy_result(value) do
       :ok ->
         value
 
@@ -54,7 +60,7 @@ defmodule Quillex.Buffer.ClipboardAdapter do
   end
 
   defp copy({:unix, _os_name}, value) do
-    command = command(:unix, :copy, {"xclip", []})
+    command = command(:unix, :copy, default_unix_command(:copy))
     execute(command, value)
   end
 
@@ -78,7 +84,7 @@ defmodule Quillex.Buffer.ClipboardAdapter do
   """
   @spec paste() :: String.t()
   def paste do
-    case paste(:os.type()) do
+    case paste_result() do
       {:error, _reason} ->
         nil
 
@@ -86,6 +92,10 @@ defmodule Quillex.Buffer.ClipboardAdapter do
         output
     end
   end
+
+  @doc "Read the system clipboard and return its contents or an error tuple."
+  @spec paste_result() :: String.t() | {:error, String.t()}
+  def paste_result, do: paste(:os.type())
 
   @doc """
   Return the contents of system clipboard but throw exception if it fails.
@@ -97,7 +107,7 @@ defmodule Quillex.Buffer.ClipboardAdapter do
   """
   @spec paste!() :: String.t() | no_return
   def paste! do
-    case paste(:os.type()) do
+    case paste_result() do
       {:error, reason} ->
         raise reason
 
@@ -112,7 +122,7 @@ defmodule Quillex.Buffer.ClipboardAdapter do
   end
 
   defp paste({:unix, _os_name}) do
-    command = command(:unix, :paste, {"xclip", ["-o"]})
+    command = command(:unix, :paste, default_unix_command(:paste))
     execute(command)
   end
 
@@ -126,9 +136,49 @@ defmodule Quillex.Buffer.ClipboardAdapter do
     get_in(quillex, [platform, operation]) || legacy[operation] || default
   end
 
+  defp default_unix_command(operation) do
+    wayland? = System.get_env("WAYLAND_DISPLAY") not in [nil, ""]
+
+    candidates =
+      case {operation, wayland?} do
+        {:copy, true} ->
+          [
+            {"wl-copy", []},
+            {"xclip", ["-selection", "clipboard"]},
+            {"xsel", ["--clipboard", "--input"]}
+          ]
+
+        {:paste, true} ->
+          [
+            {"wl-paste", ["--no-newline"]},
+            {"xclip", ["-selection", "clipboard", "-o"]},
+            {"xsel", ["--clipboard", "--output"]}
+          ]
+
+        {:copy, false} ->
+          [
+            {"xclip", ["-selection", "clipboard"]},
+            {"xsel", ["--clipboard", "--input"]},
+            {"wl-copy", []}
+          ]
+
+        {:paste, false} ->
+          [
+            {"xclip", ["-selection", "clipboard", "-o"]},
+            {"xsel", ["--clipboard", "--output"]},
+            {"wl-paste", ["--no-newline"]}
+          ]
+      end
+
+    Enum.find(candidates, fn {executable, _args} -> System.find_executable(executable) end) ||
+      {:unavailable,
+       "No system clipboard tool found; install wl-clipboard (Wayland) or xclip/xsel (X11)"}
+  end
+
   # Ports
 
   defp execute(nil), do: {:error, "Unsupported operating system"}
+  defp execute({:unavailable, reason}), do: {:error, reason}
 
   defp execute({executable, args}) when is_binary(executable) and is_list(args) do
     case System.find_executable(executable) do
@@ -147,6 +197,7 @@ defmodule Quillex.Buffer.ClipboardAdapter do
   end
 
   defp execute(nil, _), do: {:error, "Unsupported operating system"}
+  defp execute({:unavailable, reason}, _value), do: {:error, reason}
 
   defp execute({executable, args}, value) when is_binary(executable) and is_list(args) do
     case System.find_executable(executable) do

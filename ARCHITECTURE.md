@@ -12,9 +12,9 @@ moduledoc (in `../scenic-widget-contrib`).
 
 ## Runtime ownership and public buffer contract
 
-`config :quillex, runtime_mode:` selects `:standalone`, `:embedded`, or
-`:headless`. Only standalone owns the Scenic viewport and its deferred-close
-coordinator. Embedded and headless modes keep VM lifetime with the host.
+`config :quillex, runtime_mode:` selects `:standalone` or `:headless`. Only
+standalone owns the Scenic viewport and its deferred-close coordinator.
+Headless starts the backend services and keeps VM lifetime with the host.
 
 External consumers use `Quillex.Buffer.Ref` for identity and
 `Quillex.Buffer.Snapshot` for immutable document reads. Scroll offsets and

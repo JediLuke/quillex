@@ -21,9 +21,10 @@ its widget library, but `mix.exs` names the exact revision of each and Mix
 fetches them from GitHub — you do not need to know they exist, or clone them.
 
 The install script checks you have Elixir, installs the system libraries
-Scenic renders through (GLFW, GLEW, pkg-config and a C compiler) using your
-package manager, compiles everything, and offers to put `qlx` on your PATH.
-It asks before doing anything; `--yes` skips the questions.
+Scenic renders through (GLFW, GLEW, pkg-config and a C compiler), and installs
+a clipboard command (`wl-clipboard` on Wayland or `xclip` on X11) using your
+package manager. It then compiles everything and offers to put `qlx` on your
+PATH. It asks before doing anything; `--yes` skips the questions.
 
 Then either `qlx .` for the editor, or `iex -S mix` for a shell with it
 running.
@@ -92,9 +93,9 @@ qlx: build it now? [Y/n]
 one-line warning rather than silence, because a stale binary is a confusing
 way to lose an afternoon.
 
-Nothing in that build listens on a port. The development tooling — scenic_mcp
-and Tidewave — is dev-only and never enters it, and `rel/env.sh.eex` turns
-Erlang distribution off, so no epmd either. An editor someone was handed
+Nothing in that build listens on a port. The development-only `scenic_mcp`
+tooling never enters it, and `rel/env.sh.eex` turns Erlang distribution off,
+so no epmd either. An editor someone was handed
 shouldn't be holding a socket open. It also means you can run as many Quillex
 windows as you like, with nothing left for them to collide over.
 
@@ -115,18 +116,18 @@ than flashing an empty one first.
 
 ## Requirements
 
-- **Elixir** 1.15+ and **Erlang/OTP** 26+
+- **Elixir** 1.20+ and **Erlang/OTP** 27+
 - **Git**
 - **macOS**: [Homebrew](https://brew.sh)
 - **Linux**: `gcc`, `make`, and a package manager
 
 ## Library and headless use
 
-Configure `config :quillex, runtime_mode: :standalone | :embedded | :headless`
-before starting the application. Standalone owns its window and close
-lifecycle; embedded starts buffer/store services without claiming the host VM;
-headless omits Scenic and works solely through `Quillex.Buffer`, whose public
-read contract is `Quillex.Buffer.Ref` and immutable `Quillex.Buffer.Snapshot`.
+Configure `config :quillex, runtime_mode: :standalone | :headless` before
+starting the application. Standalone owns its window and close lifecycle.
+Headless starts the buffer/store backend without Scenic; callers can use
+`Quillex.Buffer` directly or compose their own host UI. Its public read contract
+is `Quillex.Buffer.Ref` and immutable `Quillex.Buffer.Snapshot`.
 
 An embedding host supplies its own viewport and decides when its supervision
 tree stops. Flamelex's older adapter must migrate separately; Quillex no longer

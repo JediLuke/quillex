@@ -171,8 +171,7 @@ slowly" QA report)**
   from TextField's update path (contrib must not depend on Quillex) with
   PerfMonitor attaching to them. Then tighten the budgets from data.
 - The dev build already logs a perf summary every 5s — when slowness is
-  observed live, `Quillex.PerfMonitor.stats()` (iex/Tidewave) is the
-  first diagnostic.
+  observed live, `Quillex.PerfMonitor.stats()` from IEx is the first diagnostic.
 - **The in-run degradation story (closed out 2026-08-01, small hours).**
   Three findings, each real, found in sequence while chasing shifting
   suite flakes — together they are the full A8 answer:
@@ -279,8 +278,8 @@ it. **Intrinsic limit:** prod deliberately excludes scenic_mcp, so the
 a human pass on a clean machine (the final 1.0 sign-off).
 
 - Exercise the `releases/0` bundle on a clean machine/container: fonts and
-  `Scenic.Assets.Static` inside the release, `xclip` absence handled
-  (Clipboard shells out — decide degrade-or-message at the boundary),
+  `Scenic.Assets.Static` inside the release, clipboard-tool absence handled
+  (the installer provisions it and the runtime reports a status-bar error),
   `on_close: :stop_system` verified.
 - `qlx` install story: `bin/qlx` symlink instructions in README, or a
   `mix quillex.install` task that does it.
