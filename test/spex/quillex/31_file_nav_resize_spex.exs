@@ -27,8 +27,12 @@ defmodule Quillex.FileNavResizeSpex do
     @top_bar_h + trunc((root_state.frame.size.height - @top_bar_h) * 0.9)
   end
 
-  defp drag_handle(from_x, to_x, opts \\ []) do
+  defp drag_handle(from_x, to_x, opts) do
     y = handle_y()
+    Probes.send_mouse_move(from_x, y)
+    Process.sleep(100)
+    assert resize_bubble_fill() == {:color, {:color_rgba, {72, 91, 126, 255}}}
+
     Probes.mouse_down(from_x, y)
     Process.sleep(100)
 
@@ -37,6 +41,8 @@ defmodule Quillex.FileNavResizeSpex do
     assert root_state.file_nav_resizing,
            "resize pill did not capture the press at #{inspect({from_x, y})}"
 
+    assert resize_bubble_fill() == {:color, {:color_rgba, {205, 216, 236, 255}}}
+
     root_scene = :sys.get_state(Process.whereis(QuillEx.RootScene))
     assert {:ok, captures} = Scenic.Scene.fetch_captures(root_scene)
     assert :cursor_button in captures
@@ -44,6 +50,20 @@ defmodule Quillex.FileNavResizeSpex do
 
     Probes.send_mouse_move(to_x, y)
     Process.sleep(150)
+
+    if live_width = Keyword.get(opts, :live_width) do
+      root_scene = :sys.get_state(Process.whereis(QuillEx.RootScene))
+      {:ok, child} = Scenic.Scene.child(root_scene, :file_nav)
+      nav_pid = if is_list(child), do: List.first(child), else: child
+      nav_state = :sys.get_state(nav_pid).assigns.state
+
+      assert nav_state.frame.size.width == live_width,
+             "navigator did not resize during the captured drag"
+
+      assert {:ok, captures} = Scenic.Scene.fetch_captures(root_scene)
+      assert :cursor_button in captures
+      assert :cursor_pos in captures
+    end
 
     if Keyword.get(opts, :expect_collapse, false) do
       root_state = :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state
@@ -57,6 +77,16 @@ defmodule Quillex.FileNavResizeSpex do
 
     root_state = :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state
     refute root_state.file_nav_resizing, "resize gesture did not receive mouse-up"
+
+    unless Keyword.get(opts, :expect_collapse, false) do
+      assert resize_bubble_fill() == {:color, {:color_rgba, {55, 60, 72, 255}}}
+    end
+  end
+
+  defp resize_bubble_fill do
+    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    [bubble] = Scenic.Graph.get(root.assigns.graph, :file_nav_resize_bubble)
+    Scenic.Primitive.get_style(bubble, :fill)
   end
 
   spex "The file navigator divider resizes and collapses",
@@ -74,11 +104,21 @@ defmodule Quillex.FileNavResizeSpex do
         {:ok, nav_pid} = Scenic.Scene.child(root, :file_nav)
         {:ok, pane_pid} = Scenic.Scene.child(root, :buffer_pane)
 
+        for id <- [
+              :file_nav_resize_arrow_shaft,
+              :file_nav_resize_arrow_left_up,
+              :file_nav_resize_arrow_left_down,
+              :file_nav_resize_arrow_right_up,
+              :file_nav_resize_arrow_right_down
+            ] do
+          assert [_line] = Scenic.Graph.get(root.assigns.graph, id)
+        end
+
         {:ok, Map.merge(context, %{nav_pid: nav_pid, pane_pid: pane_pid})}
       end
 
       when_ "the resize pill is dragged to the right", context do
-        drag_handle(250, 340)
+        drag_handle(250, 340, live_width: 340)
         {:ok, context}
       end
 

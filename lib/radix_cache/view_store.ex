@@ -20,6 +20,11 @@ defmodule Quillex.RadixCache.ViewStore do
   replaced by the next one and clears itself after eight seconds. Call this
   action directly from application processes. RootScene has a private wrapper
   only for scene event handlers that must also return a Scenic callback tuple.
+
+  Low-level, successful editor operations use `show_action_feedback/1` instead.
+  Those messages share the same strip and lifetime, but respect the optional
+  **View → Action Feedback** toggle. Errors and ordinary status notifications
+  always remain visible regardless of that preference.
   """
   use GenServer
 
@@ -42,6 +47,8 @@ defmodule Quillex.RadixCache.ViewStore do
     # Search bar (flags owned here from Phase 6b)
     show_search_bar: false,
     show_replace: false,
+    # Optional low-level confirmations such as copy, paste and undo.
+    show_action_feedback: true,
     # Modal dialogs (owned here from Phase 6b)
     show_file_picker: false,
     show_unsaved_prompt: false,
@@ -65,6 +72,7 @@ defmodule Quillex.RadixCache.ViewStore do
   def toggle_line_numbers, do: GenServer.cast(__MODULE__, :toggle_line_numbers)
   def toggle_word_wrap, do: GenServer.cast(__MODULE__, :toggle_word_wrap)
   def toggle_file_nav, do: GenServer.cast(__MODULE__, :toggle_file_nav)
+  def toggle_action_feedback, do: GenServer.cast(__MODULE__, :toggle_action_feedback)
 
   @doc "Show the file-navigator sidebar. Idempotent, unlike `toggle_file_nav/0`."
   def open_file_nav, do: GenServer.cast(__MODULE__, :open_file_nav)
@@ -99,6 +107,11 @@ defmodule Quillex.RadixCache.ViewStore do
     GenServer.cast(__MODULE__, {:show_status, message, severity})
   end
 
+  @doc "Show low-level editor feedback when the View preference is enabled."
+  def show_action_feedback(message) when is_binary(message) do
+    GenServer.cast(__MODULE__, {:show_action_feedback, message})
+  end
+
   @doc """
   Synchronous heartbeat: returns after all casts queued before this call have
   been processed. Lets tests observe a burst of casts deterministically.
@@ -129,6 +142,11 @@ defmodule Quillex.RadixCache.ViewStore do
 
   def handle_cast(:toggle_file_nav, state) do
     {:noreply, publish(state, %{state.view | show_file_nav: not state.view.show_file_nav})}
+  end
+
+  def handle_cast(:toggle_action_feedback, state) do
+    {:noreply,
+     publish(state, %{state.view | show_action_feedback: not state.view.show_action_feedback})}
   end
 
   def handle_cast(:close_file_nav, state) do
@@ -167,6 +185,20 @@ defmodule Quillex.RadixCache.ViewStore do
   end
 
   def handle_cast({:show_status, message, severity}, state) do
+    show_status_now(state, message, severity)
+  end
+
+  def handle_cast(
+        {:show_action_feedback, _message},
+        %{view: %{show_action_feedback: false}} = state
+      ),
+      do: {:noreply, state}
+
+  def handle_cast({:show_action_feedback, message}, state) do
+    show_status_now(state, message, :info)
+  end
+
+  defp show_status_now(state, message, severity) do
     ref = make_ref()
     Process.send_after(self(), {:clear_status, ref}, @status_clear_ms)
 

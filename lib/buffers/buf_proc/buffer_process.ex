@@ -134,13 +134,19 @@ defmodule Quillex.Buffer.Process do
   defp apply_effect_boundary(%{selection: nil} = state, {:cut, :selection}), do: state
 
   defp apply_effect_boundary(state, {:copy, :selection}) do
-    state |> selected_text() |> copy_to_clipboard()
+    text = selected_text(state)
+
+    if copy_to_clipboard(text) == :ok do
+      action_feedback("Copied #{feedback_preview(text)}")
+    end
+
     state
   end
 
   defp apply_effect_boundary(state, {:cut, :selection}) do
     case state |> selected_text() |> Quillex.Buffer.ClipboardAdapter.copy_result() do
       :ok ->
+        action_feedback("Cut #{state |> selected_text() |> feedback_preview()}")
         Quillex.Buffer.Process.Reducer.process(state, {:delete, :selection})
 
       {:error, reason} ->
@@ -157,6 +163,7 @@ defmodule Quillex.Buffer.Process do
   defp apply_effect_boundary(state, {:paste, :at_cursor}) do
     case Quillex.Buffer.ClipboardAdapter.paste_result() do
       text when is_binary(text) ->
+        action_feedback("Pasted #{feedback_preview(text)}")
         Quillex.Buffer.Process.Reducer.process(state, {:insert, text, :at_cursor})
 
       {:error, reason} ->
@@ -168,6 +175,8 @@ defmodule Quillex.Buffer.Process do
   defp apply_effect_boundary(state, {:paste, :line, :at_cursor}) do
     case Quillex.Buffer.ClipboardAdapter.paste_result() do
       text when is_binary(text) ->
+        action_feedback("Pasted line #{feedback_preview(text)}")
+
         Quillex.Buffer.Process.Reducer.process(
           state,
           {:insert, :line, text, :below_cursor_line}
@@ -179,8 +188,17 @@ defmodule Quillex.Buffer.Process do
     end
   end
 
-  defp apply_effect_boundary(state, action),
-    do: Quillex.Buffer.Process.Reducer.process(state, action)
+  defp apply_effect_boundary(state, action) do
+    new_state = Quillex.Buffer.Process.Reducer.process(state, action)
+
+    case action do
+      :undo when new_state != state -> action_feedback("Applied undo")
+      :redo when new_state != state -> action_feedback("Applied redo")
+      _ -> :ok
+    end
+
+    new_state
+  end
 
   defp copy_to_clipboard(text) do
     case Quillex.Buffer.ClipboardAdapter.copy_result(text) do
@@ -193,6 +211,18 @@ defmodule Quillex.Buffer.Process do
     label = operation |> Atom.to_string() |> String.capitalize()
     Quillex.RadixCache.ViewStore.show_status("#{label} failed: #{reason}", :error)
     :error
+  end
+
+  defp action_feedback(message), do: Quillex.RadixCache.ViewStore.show_action_feedback(message)
+
+  defp feedback_preview(text) do
+    preview =
+      text
+      |> String.replace(~r/\s+/, " ")
+      |> String.slice(0, 40)
+
+    suffix = if String.length(text) > 40, do: "…", else: ""
+    "'#{preview}#{suffix}'"
   end
 
   defp selected_text(%{data: lines, selection: %{start: start_pos, end: end_pos}}) do

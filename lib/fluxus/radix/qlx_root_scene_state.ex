@@ -25,6 +25,7 @@ defmodule QuillEx.RootScene.State do
             word_wrap: false,
             tab_width: 4,
             text_size: 24,
+            show_action_feedback: true,
             # File navigator sidebar
             show_file_nav: false,
             file_nav_path: nil,

@@ -59,6 +59,7 @@ defmodule QuillEx.RootScene do
     scene =
       scene
       |> assign(state: state)
+      |> assign(resize_scheduler: Quillex.GUI.ResizeScheduler.new())
       |> assign(graph: graph)
       |> push_graph(graph)
 
@@ -201,52 +202,46 @@ defmodule QuillEx.RootScene do
         _context,
         scene
       ) do
-    current_frame = scene.assigns.state.frame
-    current_size = {current_frame.size.width, current_frame.size.height}
+    current = scene.assigns.state.frame.size.box
 
-    # Only re-render if size actually changed (avoids double-render on bootup)
-    if current_size != new_vp_size do
+    if current == new_vp_size do
+      {:noreply, scene}
+    else
+      {scheduler, action} =
+        Quillex.GUI.ResizeScheduler.enqueue(scene.assigns.resize_scheduler, new_vp_size)
+
+      if action == :schedule, do: Process.send_after(self(), :apply_pending_viewport_resize, 16)
+      {:noreply, assign(scene, resize_scheduler: scheduler)}
+    end
+  end
+
+  def handle_info(:apply_pending_viewport_resize, scene) do
+    {size, scheduler} = Quillex.GUI.ResizeScheduler.take(scene.assigns.resize_scheduler)
+    scene = assign(scene, resize_scheduler: scheduler)
+
+    case size do
+      nil ->
+        {:noreply, scene}
+
+      size ->
+        Quillex.PerfMonitor.measure(:viewport_resize, fn -> resize_viewport(scene, size) end)
+    end
+  end
+
+  defp resize_viewport(scene, new_vp_size) do
+    old_state = scene.assigns.state
+    current_size = old_state.frame.size.box
+
+    if current_size == new_vp_size do
+      {:noreply, scene}
+    else
       Logger.debug("#{__MODULE__} reshape: #{inspect(current_size)} -> #{inspect(new_vp_size)}")
+      new_state = %{old_state | frame: Widgex.Frame.new(pin: {0, 0}, size: new_vp_size)}
 
-      # With store_backed mode, Buffer.Process is the source of truth.
-      # TextField sends all changes directly to Buffer, so we don't need to sync.
-      # Just get the current cursor position from the buffer for restoration.
-      cursor_pos = get_buffer_cursor(scene)
-
-      # The pane IS recreated on reshape, so save the scroll position to
-      # restore into the new instance.
-      first_visible_line = get_first_visible_line(scene)
-
-      # Create new frame with the resized dimensions
-      new_frame = Widgex.Frame.new(pin: {0, 0}, size: new_vp_size)
-
-      # Update state with new frame and saved cursor position for the renderizer
-      old_state = scene.assigns.state
-
-      new_state = %{
-        old_state
-        | frame: new_frame,
-          _restore_cursor: cursor_pos,
-          _restore_first_visible_line: first_visible_line
-      }
-
-      # Reuse existing graph to preserve component PIDs and avoid race conditions
-      new_graph =
+      graph =
         QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
-      # Remove the temporary restore keys from state
-      final_state = %{new_state | _restore_cursor: nil, _restore_first_visible_line: nil}
-
-      new_scene =
-        scene
-        |> assign(state: final_state)
-        |> assign(graph: new_graph)
-        |> push_graph(new_graph)
-
-      {:noreply, new_scene}
-    else
-      # Size unchanged, don't re-render (handles the double-call on bootup)
-      {:noreply, scene}
+      {:noreply, scene |> assign(state: new_state, graph: graph) |> push_graph(graph)}
     end
   end
 
@@ -270,12 +265,24 @@ defmodule QuillEx.RootScene do
         file_nav_resize_hide?: hide?
     }
 
-    # A drag is scene-owned preview state. Publishing every pixel through
-    # ViewStore made each motion take a GenServer cast -> retained PubSub
-    # snapshot -> full root graph push round trip. Pushing a graph while Scenic
-    # owns a pointer capture also drops that capture, so the release can vanish.
-    # Keep motion entirely local and commit/reflow once on release.
-    {:noreply, assign(scene, state: new_state)}
+    # Keep the gesture scene-owned so ViewStore receives one durable commit on
+    # release, while incrementally reframing the existing children for live
+    # feedback. Renderizer's width path preserves both component PIDs; it only
+    # updates their frames/transforms and the divider graph.
+    new_graph =
+      QuillEx.RootScene.Renderizer.render(
+        scene.assigns.graph,
+        scene,
+        state,
+        new_state
+      )
+
+    new_scene =
+      scene
+      |> assign(state: new_state, graph: new_graph)
+      |> push_graph(new_graph)
+
+    {:noreply, new_scene}
   end
 
   # RootScene requests cursor input itself, so use explicit bounds rather than
@@ -300,28 +307,7 @@ defmodule QuillEx.RootScene do
         Quillex.RadixCache.ViewStore.show_status("File navigator hidden", :info)
         scene
       else
-        # Motion keeps a cheap, scene-local preview width. Render the committed
-        # geometry now against the width that is still authoritative in
-        # ViewStore; otherwise the returning snapshot compares equal to the
-        # preview and the navigator/pane children never receive their new frame.
-        committed_width = Quillex.RadixCache.ViewStore.get_state().file_nav_width
-        old_render_state = %{state | file_nav_width: committed_width}
-
-        new_graph =
-          QuillEx.RootScene.Renderizer.render(
-            scene.assigns.graph,
-            scene,
-            old_render_state,
-            state
-          )
-
         Quillex.RadixCache.ViewStore.set_file_nav_width(state.file_nav_width)
-
-        scene =
-          scene
-          |> assign(graph: new_graph)
-          |> push_graph(new_graph)
-
         scene
       end
 
@@ -332,7 +318,14 @@ defmodule QuillEx.RootScene do
         file_nav_resize_hide?: false
     }
 
-    {:noreply, assign(scene, state: new_state)}
+    graph = QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, state, new_state)
+
+    new_scene =
+      scene
+      |> assign(state: new_state, graph: graph)
+      |> push_graph(graph)
+
+    {:noreply, new_scene}
   end
 
   # Scroll is not routed from here. Both scrollable children — the buffer pane
@@ -371,14 +364,23 @@ defmodule QuillEx.RootScene do
   defp start_file_nav_resize(scene) do
     :ok = capture_input(scene, [:cursor_pos, :cursor_button])
 
+    old_state = scene.assigns.state
+
     state = %{
-      scene.assigns.state
+      old_state
       | file_nav_resizing: true,
         file_nav_resize_hovered: true,
         file_nav_resize_hide?: false
     }
 
-    {:noreply, assign(scene, state: state)}
+    graph = QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, state)
+
+    new_scene =
+      scene
+      |> assign(state: state, graph: graph)
+      |> push_graph(graph)
+
+    {:noreply, new_scene}
   end
 
   defp handle_regular_left_press(scene, click_x, click_y) do
@@ -953,6 +955,7 @@ defmodule QuillEx.RootScene do
     :word_wrap,
     :tab_width,
     :text_size,
+    :show_action_feedback,
     :show_file_nav,
     :file_nav_path,
     :file_nav_width,
@@ -965,7 +968,14 @@ defmodule QuillEx.RootScene do
 
   defp editor_layout_changed?(old_state, new_state) do
     Enum.any?(
-      [:show_line_numbers, :word_wrap, :tab_width, :text_size, :show_file_nav],
+      [
+        :show_line_numbers,
+        :word_wrap,
+        :tab_width,
+        :text_size,
+        :show_file_nav,
+        :show_action_feedback
+      ],
       fn key -> Map.get(old_state, key) != Map.get(new_state, key) end
     )
   end
@@ -1058,6 +1068,10 @@ defmodule QuillEx.RootScene do
 
       "word_wrap" ->
         Quillex.RadixCache.ViewStore.toggle_word_wrap()
+        {:noreply, scene}
+
+      "action_feedback" ->
+        Quillex.RadixCache.ViewStore.toggle_action_feedback()
         {:noreply, scene}
 
       "toggle_fold" ->

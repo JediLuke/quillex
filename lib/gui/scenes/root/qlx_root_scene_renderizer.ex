@@ -1,7 +1,7 @@
 defmodule QuillEx.RootScene.Renderizer do
   require Logger
 
-  import Scenic.Primitives, only: [group: 3, rect: 3, rrect: 3, text: 3]
+  import Scenic.Primitives, only: [group: 3, line: 3, rect: 3, rrect: 3, text: 3]
 
   alias Quillex.Utils.FileTree
   alias Quillex.Utils.SideNavThemes
@@ -86,41 +86,43 @@ defmodule QuillEx.RootScene.Renderizer do
     needs_reorder = needs_buffer_pane_recreation?(old_state, state)
 
     if needs_reorder do
-      # Rebuild the overlay children for z-order, but NEVER the buffer pane.
+      # Rebuild overlay children for z-order. Preserve the buffer pane when
+      # only transient chrome (currently the status strip) changed.
       #
       # Recreating it opens a window where the outgoing TextField is still
       # alive and focused while the incoming one has not yet registered for
       # input: keystrokes there are lost, or applied to the document by the
       # dying instance (that is how search-bar keystrokes edited the file).
       #
-      # The pane keeps its original — earliest, therefore bottom — position
-      # in the graph, and every overlay is recreated after it, so they still
-      # render on top by construction.
+      # A genuine geometry transition still recreates it until cursor-state
+      # preservation across those transitions is fully unified with PaneStore.
       #
-      # Three prerequisites were cleared to make this viable — no synchronous
-      # reads into the pane, full recomputation of frame-derived values, and
-      # virtualised rendering — and with them the in-place path runs clean in
-      # isolation (29/29). Wiring it across the WHOLE suite, however, made two
-      # cursor scenarios fail consistently (cursor preservation across a buffer
-      # switch, and click-to-position): a surviving pane keeps its own cursor,
-      # where a recreated one is rebuilt from the buffer's, and the two can
-      # disagree. Reconciling that (make the pane's cursor strictly follow the
-      # store on every publish) is the remaining step; until then recreation
-      # stays, since it is measurably the more stable of the two.
-      #
-      # The input-corruption window is closed independently by blurring BEFORE
-      # the re-render — see do_show_search_bar.
+      # The pane follows the stable PaneStore source, including cursor and
+      # active-buffer changes, so it survives transient chrome rebuilds.
+      # Keeping that process alive is important for pointer input too:
+      # deleting it during the short-lived "opened file" status transition
+      # made the first wheel event disappear until a later click.
+      graph =
+        graph
+        |> Scenic.Graph.delete(:status_bar)
+        |> Scenic.Graph.delete(:file_nav)
+        |> Scenic.Graph.delete(:file_nav_resize_handle_group)
+        |> Scenic.Graph.delete(:search_bar)
+        |> Scenic.Graph.delete(:tab_bar)
+        |> Scenic.Graph.delete(:cursor_pos_label)
+        |> Scenic.Graph.delete(:icon_menu)
+
+      graph =
+        if buffer_pane_geometry_changed?(old_state, state) do
+          graph
+          |> Scenic.Graph.delete(:buffer_pane)
+          |> do_create_buffer_pane(state, actual_buffer_frame)
+        else
+          update_or_create_buffer_pane(graph, scene, state, actual_buffer_frame)
+        end
+
       graph
-      |> Scenic.Graph.delete(:buffer_pane)
-      |> Scenic.Graph.delete(:status_bar)
-      |> Scenic.Graph.delete(:file_nav)
-      |> Scenic.Graph.delete(:file_nav_resize_handle_group)
-      |> Scenic.Graph.delete(:search_bar)
-      |> Scenic.Graph.delete(:tab_bar)
-      |> Scenic.Graph.delete(:cursor_pos_label)
-      |> Scenic.Graph.delete(:icon_menu)
       |> maybe_create_file_nav(state, file_nav_frame)
-      |> do_create_buffer_pane(state, actual_buffer_frame)
       |> maybe_create_status_bar(state, status_bar_frame)
       |> maybe_create_search_bar(state, search_bar_frame)
       |> maybe_create_file_nav_resize_handle(state, file_nav_frame)
@@ -134,16 +136,14 @@ defmodule QuillEx.RootScene.Renderizer do
       |> maybe_move_buffer_pane(old_state, state, actual_buffer_frame)
       |> maybe_update_file_nav(state, file_nav_frame)
       |> maybe_update_status_bar(state, status_bar_frame)
-      |> maybe_update_search_bar(state, search_bar_frame)
+      |> maybe_update_search_bar(scene, state, search_bar_frame)
       |> maybe_update_file_nav_resize_handle(state, file_nav_frame)
       |> render_top_bar(scene, old_state, state, top_bar_frame)
     end
   end
 
-  # Kept for the day line rendering is virtualised: updates the existing pane
-  # in place (moving/resizing it) instead of recreating it, which avoids the
-  # input-loss window at the cost of a full in-component rebuild. See the
-  # note in the reorder branch for why it is not wired up yet.
+  # Update the stable pane in place (moving/resizing it) instead of recreating
+  # it. This preserves input registration, cursor focus and pending events.
   @doc false
   def update_or_create_buffer_pane(graph, scene, state, frame) do
     case Scenic.Graph.get(graph, :buffer_pane) do
@@ -183,7 +183,8 @@ defmodule QuillEx.RootScene.Renderizer do
       old_state.show_line_numbers != state.show_line_numbers or
         old_state.word_wrap != state.word_wrap or
         old_state.tab_width != state.tab_width or
-        old_state.file_nav_width != state.file_nav_width
+        old_state.file_nav_width != state.file_nav_width or
+        old_state.frame != state.frame
 
     if changed? do
       Scenic.Scene.put_child(
@@ -203,7 +204,7 @@ defmodule QuillEx.RootScene.Renderizer do
   end
 
   defp maybe_move_buffer_pane(graph, old_state, state, frame) do
-    if old_state.file_nav_width != state.file_nav_width do
+    if old_state.file_nav_width != state.file_nav_width or old_state.frame != state.frame do
       Scenic.Graph.modify(graph, :buffer_pane, fn primitive ->
         Scenic.Primitive.put_transform(primitive, :translate, frame.pin.point)
       end)
@@ -215,7 +216,7 @@ defmodule QuillEx.RootScene.Renderizer do
   defp apply_file_nav_frame(_scene, _old_state, _state, nil), do: :ok
 
   defp apply_file_nav_frame(scene, old_state, state, frame) do
-    if old_state.file_nav_width != state.file_nav_width do
+    if old_state.file_nav_width != state.file_nav_width or old_state.frame != state.frame do
       Scenic.Scene.put_child(scene, :file_nav, {:update_frame, frame})
     end
 
@@ -242,7 +243,7 @@ defmodule QuillEx.RootScene.Renderizer do
   end
 
   # Update search bar (add/remove) without full rebuild
-  defp maybe_update_search_bar(graph, _state, nil) do
+  defp maybe_update_search_bar(graph, _scene, _state, nil) do
     # Search bar should be hidden
     case Scenic.Graph.get(graph, :search_bar) do
       [] -> graph
@@ -250,7 +251,7 @@ defmodule QuillEx.RootScene.Renderizer do
     end
   end
 
-  defp maybe_update_search_bar(graph, state, %Widgex.Frame{} = frame) do
+  defp maybe_update_search_bar(graph, scene, state, %Widgex.Frame{} = frame) do
     case Scenic.Graph.get(graph, :search_bar) do
       [] ->
         # Need to add search bar - but this changes z-order!
@@ -258,6 +259,7 @@ defmodule QuillEx.RootScene.Renderizer do
         maybe_create_search_bar(graph, state, frame)
 
       _existing ->
+        Scenic.Scene.put_child(scene, :search_bar, {:update_frame, frame})
         graph
     end
   end
@@ -313,12 +315,21 @@ defmodule QuillEx.RootScene.Renderizer do
   defp maybe_create_file_nav_resize_handle(graph, state, %Widgex.Frame{} = frame) do
     hit_width = 32
     hit_height = 52
-    bubble_size = if state.file_nav_resize_hovered or state.file_nav_resizing, do: 28, else: 24
+    bubble_size = if state.file_nav_resizing, do: 28, else: 24
     boundary_x = frame.pin.x + frame.size.width
     center_y = frame.pin.y + frame.size.height * 0.9
-    active? = state.file_nav_resize_hovered or state.file_nav_resizing
-    fill = if active?, do: {72, 91, 126}, else: {55, 60, 72}
-    stroke = if active?, do: {150, 174, 220}, else: {105, 115, 135}
+
+    {fill, stroke, arrow} =
+      cond do
+        state.file_nav_resizing ->
+          {{205, 216, 236}, {235, 241, 250}, {42, 52, 72}}
+
+        state.file_nav_resize_hovered ->
+          {{72, 91, 126}, {150, 174, 220}, {225, 232, 245}}
+
+        true ->
+          {{55, 60, 72}, {105, 115, 135}, {180, 188, 205}}
+      end
 
     group(
       graph,
@@ -330,15 +341,16 @@ defmodule QuillEx.RootScene.Renderizer do
           input: [:cursor_pos, :cursor_button]
         )
         |> rrect({bubble_size, bubble_size, bubble_size / 2},
+          id: :file_nav_resize_bubble,
           fill: fill,
           stroke: {1, stroke},
           translate: {(hit_width - bubble_size) / 2, (hit_height - bubble_size) / 2}
         )
-        |> text("↔",
-          fill: if(active?, do: {225, 232, 245}, else: {180, 188, 205}),
-          font_size: 18,
-          translate: {7, 33}
-        )
+        |> line({{9, 26}, {23, 26}}, id: :file_nav_resize_arrow_shaft, stroke: {2, arrow})
+        |> line({{9, 26}, {13, 22}}, id: :file_nav_resize_arrow_left_up, stroke: {2, arrow})
+        |> line({{9, 26}, {13, 30}}, id: :file_nav_resize_arrow_left_down, stroke: {2, arrow})
+        |> line({{23, 26}, {19, 22}}, id: :file_nav_resize_arrow_right_up, stroke: {2, arrow})
+        |> line({{23, 26}, {19, 30}}, id: :file_nav_resize_arrow_right_down, stroke: {2, arrow})
       end,
       id: :file_nav_resize_handle_group,
       translate: {boundary_x - hit_width / 2, center_y - hit_height / 2}
@@ -425,11 +437,11 @@ defmodule QuillEx.RootScene.Renderizer do
 
     graph
     |> render_tab_bar(scene, old_state, state, tab_bar_frame)
-    |> render_cursor_pos_label(cursor_label_frame)
-    |> render_icon_menu(state, icon_menu_frame)
+    |> render_cursor_pos_label(scene, old_state, state, cursor_label_frame)
+    |> render_icon_menu(scene, old_state, state, icon_menu_frame)
   end
 
-  defp render_cursor_pos_label(graph, frame) do
+  defp render_cursor_pos_label(graph, scene, old_state, state, frame) do
     case Scenic.Graph.get(graph, :cursor_pos_label) do
       [] ->
         graph
@@ -444,7 +456,10 @@ defmodule QuillEx.RootScene.Renderizer do
         )
 
       _existing ->
-        graph
+        if old_state && old_state.frame != state.frame,
+          do: Scenic.Scene.put_child(scene, :cursor_pos_label, {:update_frame, frame})
+
+        move_component(graph, :cursor_pos_label, frame)
     end
   end
 
@@ -456,7 +471,10 @@ defmodule QuillEx.RootScene.Renderizer do
         do_create_tab_bar(graph, state, frame)
 
       {_existing, false} ->
-        graph
+        if old_state.frame != state.frame,
+          do: Scenic.Scene.put_child(scene, :tab_bar, {:update_frame, frame})
+
+        move_component(graph, :tab_bar, frame)
 
       {_existing, true} ->
         # Message the surviving TabBar instead of delete+recreate: recreation
@@ -464,11 +482,15 @@ defmodule QuillEx.RootScene.Renderizer do
         # can kill a TabBar mid-init.
         {tabs, selected_id} = derive_tabs(state)
         Scenic.Scene.put_child(scene, :tab_bar, {:set_tabs, tabs, selected_id})
-        graph
+
+        if old_state.frame != state.frame,
+          do: Scenic.Scene.put_child(scene, :tab_bar, {:update_frame, frame})
+
+        move_component(graph, :tab_bar, frame)
     end
   end
 
-  defp render_icon_menu(graph, state, frame) do
+  defp render_icon_menu(graph, scene, old_state, state, frame) do
     case Scenic.Graph.get(graph, :icon_menu) do
       [] ->
         menus = build_menus(state)
@@ -488,8 +510,17 @@ defmodule QuillEx.RootScene.Renderizer do
         )
 
       _existing ->
-        graph
+        if old_state && old_state.frame != state.frame,
+          do: Scenic.Scene.put_child(scene, :icon_menu, {:update_frame, frame})
+
+        move_component(graph, :icon_menu, frame)
     end
+  end
+
+  defp move_component(graph, id, frame) do
+    Scenic.Graph.modify(graph, id, fn primitive ->
+      Scenic.Primitive.put_transform(primitive, :translate, frame.pin.point)
+    end)
   end
 
   # Check if tab bar needs recreation
@@ -604,6 +635,11 @@ defmodule QuillEx.RootScene.Renderizer do
           %Toggle{id: "file_nav", label: "File Navigator", checked?: state.show_file_nav},
           %Toggle{id: "line_numbers", label: "Line Numbers", checked?: state.show_line_numbers},
           %Toggle{id: "word_wrap", label: "Word Wrap", checked?: state.word_wrap},
+          %Toggle{
+            id: "action_feedback",
+            label: "Action Feedback",
+            checked?: state.show_action_feedback
+          },
           %Slider{id: "text_size", label: "Text Size", value: state.text_size, min: 12, max: 32},
           %Item{id: "toggle_fold", label: Quillex.Commands.menu_label(:toggle_fold)},
           %Item{id: "unfold_all", label: Quillex.Commands.menu_label(:unfold_all)},
@@ -668,21 +704,24 @@ defmodule QuillEx.RootScene.Renderizer do
     # in that window is lost. Settings alone therefore no longer force a
     # rebuild.
     # Recreate if search bar, replace mode, or file nav visibility changed (affects buffer frame size)
+    # Recreate if status bar appears or disappears (carves @status_bar_height from content area)
+    status_bar_changed = old_state.status_message == nil != (new_state.status_message == nil)
+
+    buffer_pane_geometry_changed?(old_state, new_state) or status_bar_changed
+  end
+
+  defp buffer_pane_geometry_changed?(nil, _new_state), do: true
+
+  defp buffer_pane_geometry_changed?(old_state, new_state) do
     layout_changed =
       old_state.show_search_bar != new_state.show_search_bar or
         Map.get(old_state, :show_replace, false) != Map.get(new_state, :show_replace, false) or
         old_state.show_file_nav != new_state.show_file_nav
 
-    # Recreate if status bar appears or disappears (carves @status_bar_height from content area)
-    status_bar_changed = old_state.status_message == nil != (new_state.status_message == nil)
-
-    # Recreate if the root frame changed (window resize / reshape). Every
-    # child's frame is derived from it, so the incremental branch would leave
-    # all of them rendered at their old sizes — the "internal app doesn't
-    # resize" bug from the 2026-07-31 QA notes.
-    frame_changed = old_state.frame != new_state.frame
-
-    layout_changed or status_bar_changed or frame_changed
+    # Viewport reshapes are intentionally NOT a recreation trigger. They arrive
+    # in bursts while the user drags the window and every surviving child has
+    # an in-place frame update path.
+    layout_changed
   end
 
   # Helper to create the buffer_pane TextField
