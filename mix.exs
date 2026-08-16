@@ -71,7 +71,7 @@ defmodule Quillex.MixProject do
         :scenic_widget_contrib,
         "../scenic-widget-contrib",
         "https://github.com/JediLuke/scenic-widget-contrib.git",
-        "5ddfd65f932b02ae78b65548c6f5510572a96533"
+        "44af43f5c41ded5d1afae2c3ba2f809860a40a96"
       ),
       {:elixir_uuid, "~> 1.2"},
       {:font_metrics, "~> 0.5"},
@@ -82,6 +82,17 @@ defmodule Quillex.MixProject do
       {:elixir_make, "~> 0.6", override: true},
       {:boundary, "~> 0.10", runtime: false},
       {:jason, "~> 1.4"},
+
+      # Syntax highlighting: pure-Elixir lexers (no NIFs). Each package
+      # registers its languages/extensions with Makeup.Registry on start.
+      {:makeup, "~> 1.2"},
+      {:makeup_elixir, "~> 1.0"},
+      {:makeup_erlang, "~> 1.1"},
+      {:makeup_eex, "~> 2.0"},
+      {:makeup_json, "~> 1.0"},
+      {:makeup_js, "~> 0.1.0"},
+      {:makeup_c, "~> 0.1.1"},
+      {:makeup_diff, "~> 0.1.1"},
 
       # dev tools
       constellation_dep(

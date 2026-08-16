@@ -33,7 +33,9 @@ defmodule Quillex.RadixCache.Supervisor do
       {Quillex.RadixCache.PaneStore, []},
       # Project searches run off-process so typing never waits on ripgrep.
       {Task.Supervisor, name: Quillex.Search.TaskSupervisor},
-      {Quillex.RadixCache.ProjectSearchStore, []}
+      {Quillex.RadixCache.ProjectSearchStore, []},
+      # Follows the pane; must start after PaneStore has registered its source.
+      {Quillex.RadixCache.HighlightStore, []}
     ]
 
     Supervisor.init(children, strategy: :one_for_one)

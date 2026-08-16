@@ -182,6 +182,7 @@ defmodule QuillEx.RootScene.Renderizer do
              wrap_mode: if(state.word_wrap, do: :word, else: :none),
              tab_width: state.tab_width,
              font: Quillex.GUI.Theme.editor_font(state.text_size),
+             highlight_styles: highlight_styles(state),
              frame: frame
            }}
         )
@@ -210,6 +211,7 @@ defmodule QuillEx.RootScene.Renderizer do
         old_state.word_wrap != state.word_wrap or
         old_state.tab_width != state.tab_width or
         old_state.text_size != state.text_size or
+        old_state.syntax_highlighting != state.syntax_highlighting or
         old_state.chrome_zoom != state.chrome_zoom or
         old_state.file_nav_width != state.file_nav_width or
         old_state.frame != state.frame or
@@ -233,6 +235,7 @@ defmodule QuillEx.RootScene.Renderizer do
            wrap_mode: if(state.word_wrap, do: :word, else: :none),
            tab_width: state.tab_width,
            font: Quillex.GUI.Theme.editor_font(state.text_size),
+           highlight_styles: highlight_styles(state),
            frame: frame
          }}
       )
@@ -260,6 +263,9 @@ defmodule QuillEx.RootScene.Renderizer do
 
     :ok
   end
+
+  defp highlight_styles(%{syntax_highlighting: true}), do: Quillex.GUI.Theme.highlight_styles()
+  defp highlight_styles(_state), do: %{}
 
   @doc "Is anything showing in the sidebar slot?"
   def side_pane_open?(state), do: state.show_file_nav or state.show_project_search
@@ -785,6 +791,13 @@ defmodule QuillEx.RootScene.Renderizer do
             tooltip: "Draw a subtle vertical guide beneath the current column."
           },
           %Toggle{
+            id: "syntax_highlighting",
+            label: "Syntax Highlighting",
+            checked?: state.syntax_highlighting,
+            tooltip:
+              "Mark keywords, names, strings and comments by weight, slant and underline (no colour needed)."
+          },
+          %Toggle{
             id: "action_feedback",
             label: "Action Feedback",
             checked?: state.show_action_feedback,
@@ -926,6 +939,10 @@ defmodule QuillEx.RootScene.Renderizer do
         dispatch: Quillex.RadixCache.PaneStore,
         source: Quillex.RadixCache.PaneStore.source(),
         buffer_id: buf.uuid,
+        # Token spans for whatever the pane shows, from the highlight store;
+        # the style map says how each class is drawn (empty = plain text).
+        highlight_source: Quillex.RadixCache.HighlightStore.source(),
+        highlight_styles: highlight_styles(state),
         show_line_numbers: state.show_line_numbers,
         show_matching_brace: state.show_matching_brace,
         highlight_current_line: state.highlight_current_line,

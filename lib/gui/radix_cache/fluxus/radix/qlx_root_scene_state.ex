@@ -31,6 +31,7 @@ defmodule QuillEx.RootScene.State do
             fold_level: 1,
             show_action_feedback: true,
             show_menu_shortcuts: true,
+            syntax_highlighting: true,
             chrome_zoom: 100,
             # File navigator sidebar
             show_file_nav: false,

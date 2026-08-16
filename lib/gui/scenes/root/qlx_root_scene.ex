@@ -1066,6 +1066,7 @@ defmodule QuillEx.RootScene do
     :file_nav_width,
     :file_nav_revision,
     :show_project_search,
+    :syntax_highlighting,
     :status_message,
     :status_severity
   ]
@@ -1085,6 +1086,7 @@ defmodule QuillEx.RootScene do
         :chrome_zoom,
         :show_file_nav,
         :show_project_search,
+        :syntax_highlighting,
         :show_action_feedback
       ],
       fn key -> Map.get(old_state, key) != Map.get(new_state, key) end
@@ -1151,6 +1153,11 @@ defmodule QuillEx.RootScene do
 
   def handle_event({:menu_value_changed, "action_feedback", _checked?}, _from, scene) do
     Quillex.RadixCache.ViewStore.toggle_action_feedback()
+    {:noreply, scene}
+  end
+
+  def handle_event({:menu_value_changed, "syntax_highlighting", _checked?}, _from, scene) do
+    Quillex.RadixCache.ViewStore.toggle_syntax_highlighting()
     {:noreply, scene}
   end
 
@@ -1246,6 +1253,10 @@ defmodule QuillEx.RootScene do
 
       "action_feedback" ->
         Quillex.RadixCache.ViewStore.toggle_action_feedback()
+        {:noreply, scene}
+
+      "syntax_highlighting" ->
+        Quillex.RadixCache.ViewStore.toggle_syntax_highlighting()
         {:noreply, scene}
 
       "toggle_fold" ->

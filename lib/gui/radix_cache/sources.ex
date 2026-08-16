@@ -16,6 +16,9 @@ defmodule Quillex.RadixCache.Sources do
   @doc "Project-wide search: query, scope, results (`Quillex.RadixCache.ProjectSearchStore`)."
   def project_search, do: :radix_project_search
 
+  @doc "Token spans for the pane's document (`Quillex.RadixCache.HighlightStore`)."
+  def highlights, do: :radix_highlights
+
   @doc "Per-buffer store source: the full BufState snapshot for one buffer"
   def buffer(uuid) when is_binary(uuid), do: :"radix_buf_#{uuid}"
 

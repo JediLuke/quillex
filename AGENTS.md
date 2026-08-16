@@ -49,6 +49,8 @@ of `Quillex-BasePrompt.md` for the full picture):
 - `ViewStore` → `:radix_view` (editor settings, file nav, status message)
 - `ProjectSearchStore` → `:radix_project_search` (project-wide search: query,
   scope, grouped results; searches run in a task off the store)
+- `HighlightStore` → `:radix_highlights` (token spans for the pane's document,
+  lexed with Makeup off-process; the TextField subscribes as `highlight_source`)
 - `PaneStore` → `:radix_pane_main` (what the pane displays; the TextField's
   stable source + dispatch — typing and buffer switches never touch RootScene)
 

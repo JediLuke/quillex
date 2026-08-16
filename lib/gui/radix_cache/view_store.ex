@@ -44,6 +44,8 @@ defmodule Quillex.RadixCache.ViewStore do
     text_size: 24,
     fold_level: 1,
     show_menu_shortcuts: true,
+    # Structural syntax highlighting (weight/slant/underline by token class)
+    syntax_highlighting: true,
     chrome_zoom: 100,
     # File navigator sidebar
     show_file_nav: false,
@@ -91,6 +93,7 @@ defmodule Quillex.RadixCache.ViewStore do
   def toggle_file_nav, do: GenServer.cast(__MODULE__, :toggle_file_nav)
   def toggle_action_feedback, do: GenServer.cast(__MODULE__, :toggle_action_feedback)
   def toggle_menu_shortcuts, do: GenServer.cast(__MODULE__, :toggle_menu_shortcuts)
+  def toggle_syntax_highlighting, do: GenServer.cast(__MODULE__, :toggle_syntax_highlighting)
 
   @doc "Show the file-navigator sidebar. Idempotent, unlike `toggle_file_nav/0`."
   def open_file_nav, do: GenServer.cast(__MODULE__, :open_file_nav)
@@ -201,6 +204,11 @@ defmodule Quillex.RadixCache.ViewStore do
   def handle_cast(:toggle_menu_shortcuts, state) do
     {:noreply,
      publish(state, %{state.view | show_menu_shortcuts: not state.view.show_menu_shortcuts})}
+  end
+
+  def handle_cast(:toggle_syntax_highlighting, state) do
+    {:noreply,
+     publish(state, %{state.view | syntax_highlighting: not state.view.syntax_highlighting})}
   end
 
   def handle_cast(:close_file_nav, state) do
