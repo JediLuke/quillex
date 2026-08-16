@@ -64,6 +64,30 @@ defmodule Quillex.InputFocusRoutingSpex do
     if file_nav_visible?(), do: toggle_file_nav()
   end
 
+  defp buffer_pane_pid do
+    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    {:ok, child} = Scenic.Scene.child(root, :buffer_pane)
+    if is_list(child), do: List.first(child), else: child
+  end
+
+  defp buffer_pane_state, do: :sys.get_state(buffer_pane_pid()).assigns.state
+
+  defp wait_for_buffer_switch(previous_id, attempts \\ 100)
+
+  defp wait_for_buffer_switch(_previous_id, 0),
+    do: flunk("buffer pane did not receive the newly opened file")
+
+  defp wait_for_buffer_switch(previous_id, attempts) do
+    state = buffer_pane_state()
+
+    if state.buffer_id != previous_id do
+      state
+    else
+      Process.sleep(20)
+      wait_for_buffer_switch(previous_id, attempts - 1)
+    end
+  end
+
   spex "Keyboard focus is exclusive between editor and file nav",
     description:
       "Enter (and other keys) typed into the editor must not activate items in the file nav sidebar",
@@ -120,12 +144,15 @@ defmodule Quillex.InputFocusRoutingSpex do
         Process.sleep(200)
 
         :ok =
-          Quillex.TestHelpers.FileOpener.open_file(
-            Path.expand("biblio/spinozas_ethics_p1.txt")
-          )
+          Quillex.TestHelpers.FileOpener.open_file(Path.expand("biblio/spinozas_ethics_p1.txt"))
 
         Process.sleep(800)
         ensure_file_nav_visible()
+
+        # A document opened earlier in this VM comes back at its remembered
+        # viewport (buffer-view restore); this scenario needs the top.
+        Probes.send_keys("home", [:ctrl])
+        Process.sleep(300)
 
         # ScriptInspector = actually-drawn text; the semantic table holds the
         # whole document regardless of scroll and cannot detect scrolling.
@@ -169,6 +196,67 @@ defmodule Quillex.InputFocusRoutingSpex do
       then_ "the project tree is no longer rendered", context do
         refute file_nav_visible?()
         Quillex.TestHelpers.Invariants.assert_invariants!()
+        {:ok, context}
+      end
+    end
+  end
+
+  spex "A newly opened file scrolls without activation",
+    description:
+      "The wheel works over the editor immediately after a buffer switch, without a click",
+    tags: [:scroll, :buffer_switch, :focus] do
+    scenario "wheel immediately after opening a tall file", _context do
+      given_ "the navigator owns focus before a tall file is opened", context do
+        ensure_file_nav_visible()
+
+        :ok = Quillex.TestHelpers.FileOpener.open_file(Path.expand("mix.exs"))
+        Process.sleep(300)
+
+        root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+        Scenic.Scene.put_child(root, :buffer_pane, :blur)
+        Scenic.Scene.put_child(root, :file_nav, :focus)
+        Process.sleep(100)
+
+        previous_id = buffer_pane_state().buffer_id
+
+        :ok =
+          Quillex.TestHelpers.FileOpener.open_file(Path.expand("biblio/spinozas_ethics_p1.txt"))
+
+        state = wait_for_buffer_switch(previous_id)
+        assert state.scroll.offset_y == 0
+
+        # File-open/reload notifications alter the pane's available height.
+        # That chrome transition must resize the live component, not delete it
+        # during the exact moment the user's first wheel event can arrive.
+        pane_pid = buffer_pane_pid()
+        Quillex.RadixCache.ViewStore.show_status("Opened file", :info)
+        Quillex.RadixCache.ViewStore.sync()
+        Process.sleep(50)
+        assert buffer_pane_pid() == pane_pid
+
+        {:ok, Map.put(context, :frame, buffer_pane_state().frame)}
+      end
+
+      when_ "the wheel moves over the text pane without clicking it first", context do
+        frame = context.frame
+        # Exercise the pane's left edge. Scenic transforms this to local x=10;
+        # the old bug compared that against the parent-space frame.pin.x and
+        # silently rejected the wheel until a click moved focus.
+        x = frame.pin.x + 10
+        y = frame.pin.y + trunc(frame.size.height * 0.5)
+        Probes.send_mouse_move(x, y)
+        Probes.send_scroll(0, -5, x, y)
+        Process.sleep(250)
+        {:ok, context}
+      end
+
+      then_ "the document viewport has moved", context do
+        assert buffer_pane_state().scroll.offset_y > 0,
+               "wheel input was ignored until the TextField was clicked"
+
+        :ok = Quillex.TestHelpers.FileOpener.open_file(Path.expand("mix.exs"))
+        Process.sleep(250)
+        ensure_file_nav_hidden()
         {:ok, context}
       end
     end

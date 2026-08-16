@@ -87,8 +87,7 @@ flowchart TD
     C["2. RadixCache.Supervisor<br/>starts Scenic.PubSub itself,<br/>then ViewStore, then PaneStore"] --> D
     D["3. Buffers.TopSupervisor<br/>Registry → BufferManager → DynamicSupervisor"] --> E
     E["4. QuillEx.CLI child_spec<br/>opens the qlx file arg, returns :ignore"] --> F
-    F["5. Scenic<br/>viewport + RootScene + GLFW driver"] --> G
-    G["6. Bandit/Tidewave :31337<br/>dev only, compile-time gated"]
+    F["5. Scenic<br/>viewport + RootScene + GLFW driver"]
 ```
 
 - **`chdir!` runs before everything** because `ViewStore.init` seeds

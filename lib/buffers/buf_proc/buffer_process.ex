@@ -31,6 +31,19 @@ defmodule Quillex.Buffer.Process do
     {:reply, {:ok, state}, state}
   end
 
+  # The cleanliness check and replacement share this process turn. A watcher
+  # must not fetch "clean", race a keystroke, and then overwrite that edit.
+  def handle_call({:reload_from_disk_if_clean, _lines}, _from, %{dirty?: true} = state) do
+    {:reply, {:error, :dirty}, state}
+  end
+
+  def handle_call({:reload_from_disk_if_clean, lines}, _from, state) when is_list(lines) do
+    case apply_actions(state, [{:reload_from_disk, lines}]) do
+      {:ok, new_state} -> {:reply, {:ok, new_state}, new_state}
+      {:error, reason} -> {:reply, {:error, reason}, state}
+    end
+  end
+
   def handle_call({:action, actions}, _from, state) when is_list(actions) do
     if read_only_violation?(state, actions) do
       {:reply, {:error, :read_only}, state}
@@ -92,12 +105,22 @@ defmodule Quillex.Buffer.Process do
       end)
 
     with {:ok, new_state} <- result do
+      # Whatever changed the text — typing, undo, a reload from disk, a
+      # project-wide replace — the active search must describe the text as
+      # it is now. Stale positions drew highlights on lines that no longer
+      # held the match (or held nothing at all).
+      new_state = Quillex.Buffer.Core.Search.resync(new_state, state)
+
       # Edge-cast display metadata to the buffer-list store only on transition,
       # so the tab bar's Refs stay fresh without per-keystroke list publishes
-      if new_state.dirty? != state.dirty? or new_state.name != state.name do
+      if new_state.dirty? != state.dirty? or new_state.name != state.name or
+           new_state.source != state.source or
+           new_state.external_change != state.external_change do
         Quillex.Buffer.BufferManager.update_buffer_meta(new_state.uuid, %{
           dirty?: new_state.dirty?,
-          name: new_state.name
+          name: new_state.name,
+          path: source_path(new_state.source),
+          external_change: new_state.external_change
         })
       end
 
@@ -107,6 +130,9 @@ defmodule Quillex.Buffer.Process do
     end
   end
 
+  defp source_path(%{filepath: path}) when is_binary(path), do: path
+  defp source_path(_source), do: nil
+
   # Clipboard access is an effect and therefore belongs at the process shell,
   # never in the pure editing reducer. Effectful commands are translated into
   # ordinary document actions only after their side effect succeeds.
@@ -114,37 +140,96 @@ defmodule Quillex.Buffer.Process do
   defp apply_effect_boundary(%{selection: nil} = state, {:cut, :selection}), do: state
 
   defp apply_effect_boundary(state, {:copy, :selection}) do
-    state |> selected_text() |> Quillex.Buffer.ClipboardAdapter.copy!()
+    text = selected_text(state)
+
+    if copy_to_clipboard(text) == :ok do
+      action_feedback("Copied #{feedback_preview(text)}")
+    end
+
     state
   end
 
   defp apply_effect_boundary(state, {:cut, :selection}) do
-    state |> selected_text() |> Quillex.Buffer.ClipboardAdapter.copy!()
-    Quillex.Buffer.Process.Reducer.process(state, {:delete, :selection})
+    case state |> selected_text() |> Quillex.Buffer.ClipboardAdapter.copy_result() do
+      :ok ->
+        action_feedback("Cut #{state |> selected_text() |> feedback_preview()}")
+        Quillex.Buffer.Process.Reducer.process(state, {:delete, :selection})
+
+      {:error, reason} ->
+        clipboard_failed(:cut, reason)
+        state
+    end
   end
 
   defp apply_effect_boundary(state, {:yank, :line, :under_cursor}) do
-    state.data |> Enum.at(state.cursor.line - 1, "") |> Quillex.Buffer.ClipboardAdapter.copy!()
+    state.data |> Enum.at(state.cursor.line - 1, "") |> copy_to_clipboard()
     state
   end
 
   defp apply_effect_boundary(state, {:paste, :at_cursor}) do
-    Quillex.Buffer.Process.Reducer.process(state, {
-      :insert,
-      Quillex.Buffer.ClipboardAdapter.paste!(),
-      :at_cursor
-    })
+    case Quillex.Buffer.ClipboardAdapter.paste_result() do
+      text when is_binary(text) ->
+        action_feedback("Pasted #{feedback_preview(text)}")
+        Quillex.Buffer.Process.Reducer.process(state, {:insert, text, :at_cursor})
+
+      {:error, reason} ->
+        clipboard_failed(:paste, reason)
+        state
+    end
   end
 
   defp apply_effect_boundary(state, {:paste, :line, :at_cursor}) do
-    Quillex.Buffer.Process.Reducer.process(
-      state,
-      {:insert, :line, Quillex.Buffer.ClipboardAdapter.paste!(), :below_cursor_line}
-    )
+    case Quillex.Buffer.ClipboardAdapter.paste_result() do
+      text when is_binary(text) ->
+        action_feedback("Pasted line #{feedback_preview(text)}")
+
+        Quillex.Buffer.Process.Reducer.process(
+          state,
+          {:insert, :line, text, :below_cursor_line}
+        )
+
+      {:error, reason} ->
+        clipboard_failed(:paste, reason)
+        state
+    end
   end
 
-  defp apply_effect_boundary(state, action),
-    do: Quillex.Buffer.Process.Reducer.process(state, action)
+  defp apply_effect_boundary(state, action) do
+    new_state = Quillex.Buffer.Process.Reducer.process(state, action)
+
+    case action do
+      :undo when new_state != state -> action_feedback("Applied undo")
+      :redo when new_state != state -> action_feedback("Applied redo")
+      _ -> :ok
+    end
+
+    new_state
+  end
+
+  defp copy_to_clipboard(text) do
+    case Quillex.Buffer.ClipboardAdapter.copy_result(text) do
+      :ok -> :ok
+      {:error, reason} -> clipboard_failed(:copy, reason)
+    end
+  end
+
+  defp clipboard_failed(operation, reason) do
+    label = operation |> Atom.to_string() |> String.capitalize()
+    Quillex.RadixCache.ViewStore.show_status("#{label} failed: #{reason}", :error)
+    :error
+  end
+
+  defp action_feedback(message), do: Quillex.RadixCache.ViewStore.show_action_feedback(message)
+
+  defp feedback_preview(text) do
+    preview =
+      text
+      |> String.replace(~r/\s+/, " ")
+      |> String.slice(0, 40)
+
+    suffix = if String.length(text) > 40, do: "…", else: ""
+    "'#{preview}#{suffix}'"
+  end
 
   defp selected_text(%{data: lines, selection: %{start: start_pos, end: end_pos}}) do
     {{start_line, start_col}, {end_line, end_col}} =

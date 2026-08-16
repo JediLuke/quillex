@@ -136,6 +136,38 @@ defmodule QuillEx.RootSceneTest do
     end
   end
 
+  describe "Renderizer.build_menus/1 — reusable tab-width slider" do
+    test "view menu exposes one stepped slider from 2 through 12" do
+      state = %QuillEx.RootScene.State{tab_width: 6}
+      menus = QuillEx.RootScene.Renderizer.build_menus(state)
+      view_menu = Enum.find(menus, &(&1.id == :view))
+
+      assert %ScenicWidgets.Menu.Model.Slider{
+               id: "tab_width",
+               label: "Tab Stops",
+               value: 6,
+               min: 2,
+               max: 12,
+               step: 1
+             } = Enum.find(view_menu.items, &(&1.id == "tab_width"))
+
+      refute Enum.any?(view_menu.items, &String.starts_with?(&1.id, "tab_width_"))
+    end
+  end
+
+  describe "Renderizer.build_menus/1 — menu shortcut visibility" do
+    test "view menu exposes the persisted in-place toggle" do
+      state = %QuillEx.RootScene.State{show_menu_shortcuts: false}
+      menus = QuillEx.RootScene.Renderizer.build_menus(state)
+      view_menu = Enum.find(menus, &(&1.id == :view))
+
+      assert %ScenicWidgets.Menu.Model.Toggle{
+               id: "menu_shortcuts",
+               checked?: false
+             } = Enum.find(view_menu.items, &(&1.id == "menu_shortcuts"))
+    end
+  end
+
   # ---------------------------------------------------------------------------
   # Ctrl+H / Find & Replace  and  Ctrl+F / Find
   # ---------------------------------------------------------------------------

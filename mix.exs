@@ -1,20 +1,22 @@
-defmodule QuillEx.MixProject do
+defmodule Quillex.MixProject do
   use Mix.Project
 
   def project do
     [
       app: :quillex,
       version: "0.7.4",
-      elixir: "~> 1.12",
-      build_embedded: true,
+      elixir: "~> 1.20",
       start_permanent: Mix.env() == :prod,
       elixirc_paths: elixirc_paths(Mix.env()),
       compilers: [:boundary] ++ Mix.compilers() ++ spex_compilers(),
       spex: [pattern: "test/spex/**/*_spex.exs", boundary: Quillex.Spex],
-      preferred_cli_env: [spex: :test, run_spex: :test],
       releases: releases(),
       deps: deps()
     ]
+  end
+
+  def cli do
+    [preferred_envs: [spex: :test, run_spex: :test]]
   end
 
   # `mix release` bundles the app, its deps and the ERTS into
@@ -55,7 +57,7 @@ defmodule QuillEx.MixProject do
         :scenic,
         "../scenic",
         "https://github.com/Jediluke/scenic.git",
-        "6ee4b8c52d16621a05463284dfa1155667c9aeea",
+        "731293499f98ae4364db796468fb8a4ecbd714a2",
         override: true
       ),
       constellation_dep(
@@ -69,7 +71,7 @@ defmodule QuillEx.MixProject do
         :scenic_widget_contrib,
         "../scenic-widget-contrib",
         "https://github.com/JediLuke/scenic-widget-contrib.git",
-        "4e50782454d6f73d114f17e959bb39df4d8e4278"
+        "5ddfd65f932b02ae78b65548c6f5510572a96533"
       ),
       {:elixir_uuid, "~> 1.2"},
       {:font_metrics, "~> 0.5"},
@@ -98,9 +100,7 @@ defmodule QuillEx.MixProject do
         only: [:dev, :test],
         override: true
       ),
-      {:stream_data, "~> 0.6", only: [:test, :dev]},
-      {:tidewave, "~> 0.1", only: :dev},
-      {:bandit, "~> 1.0", only: :dev}
+      {:stream_data, "~> 0.6", only: [:test, :dev]}
     ]
   end
 

@@ -91,6 +91,24 @@ defmodule Quillex.Buffer.Process.Reducer do
     %{buf | data: lines}
   end
 
+  # Replace a clean document after its backing file changes. External reloads
+  # are a new baseline, not an undoable user edit. Preserve the cursor where
+  # possible, clamp it into the new document, and clear stale selection/history.
+  def process(%BufState{} = buf, {:reload_from_disk, lines}) when is_list(lines) do
+    cursor = {buf.cursor.line, buf.cursor.col}
+
+    %{
+      buf
+      | data: lines,
+        selection: nil,
+        dirty?: false,
+        external_change: nil,
+        undo_stack: [],
+        redo_stack: []
+    }
+    |> Navigation.move_cursor(cursor)
+  end
+
   # Set the cursor position directly (used for syncing from TextField on resize/switch)
   # Also clears selection since clicking to position cursor should deselect
   def process(%Quillex.Structs.BufState{} = buf, {:set_cursor, {line, col}})
@@ -217,6 +235,31 @@ defmodule Quillex.Buffer.Process.Reducer do
     end
   end
 
+  def process(%BufState{cursor: cursor} = buf, {:unindent, tab_width})
+      when is_integer(tab_width) and tab_width > 0 do
+    line = Enum.at(buf.data, cursor.line - 1, "")
+
+    remove =
+      cond do
+        String.starts_with?(line, "\t") ->
+          1
+
+        true ->
+          min(tab_width, length(Regex.run(~r/^ */, line) |> List.first() |> String.graphemes()))
+      end
+
+    if remove == 0 do
+      buf
+    else
+      new_line = String.slice(line, remove..-1//1) || ""
+
+      buf
+      |> History.push()
+      |> Map.update!(:data, &List.replace_at(&1, cursor.line - 1, new_line))
+      |> Navigation.move_cursor({cursor.line, max(1, cursor.col - remove)})
+    end
+  end
+
   def process(%BufState{cursor: c} = buf, {:insert, :line, clipboard_text, :below_cursor_line}) do
     # minus one index for zero based index but then plus one cause it's the next line, so they cancel and it's just c.line
     buf_with_undo = History.push(buf)
@@ -324,7 +367,16 @@ defmodule Quillex.Buffer.Process.Reducer do
 
   # Mark buffer clean without writing to disk (used by FileAPI after it writes directly)
   def process(%Quillex.Structs.BufState{} = buf, :mark_clean) do
-    %{buf | dirty?: false}
+    %{buf | dirty?: false, external_change: nil}
+  end
+
+  def process(%BufState{} = buf, {:mark_external_change, change})
+      when change in [:modified, :deleted] do
+    %{buf | external_change: change}
+  end
+
+  def process(%BufState{} = buf, :clear_external_change) do
+    %{buf | external_change: nil}
   end
 
   # Update buffer name and source file path without writing to disk.

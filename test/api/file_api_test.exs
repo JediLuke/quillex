@@ -106,6 +106,18 @@ defmodule Quillex.API.FileAPITest do
     :ok
   end
 
+  describe "open/1 text boundary" do
+    test "rejects an executable-like binary without creating a buffer" do
+      path = Path.join(@tmp_dir, "binary_#{System.unique_integer([:positive])}")
+      File.write!(path, <<0x7F, "ELF", 2, 1, 1, 0, 0, 0xFF, 0xFE>>)
+      before = length(Quillex.Buffer.list())
+
+      assert {:error, message} = FileAPI.open(path)
+      assert message =~ "not UTF-8 text"
+      assert length(Quillex.Buffer.list()) == before
+    end
+  end
+
   describe "check_file_status/2 — comparison kernel" do
     test ":unchanged when buffer lines match file content exactly" do
       path = Path.join(@tmp_dir, "unchanged_#{System.unique_integer([:positive])}.txt")

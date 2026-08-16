@@ -27,6 +27,39 @@ defmodule Quillex.Utils.FileTree do
     end
   end
 
+  @doc "A deterministic structural signature of entries visible in the navigator."
+  def signature(path) when is_binary(path) do
+    if File.dir?(path) do
+      path
+      |> visible_paths(path)
+      |> Enum.sort()
+      |> :erlang.phash2()
+    else
+      :missing
+    end
+  end
+
+  defp visible_paths(path, root) do
+    case File.ls(path) do
+      {:ok, entries} ->
+        entries
+        |> Enum.filter(&should_show?(&1, path))
+        |> Enum.flat_map(fn entry ->
+          full_path = Path.join(path, entry)
+          relative = Path.relative_to(full_path, root)
+
+          if File.dir?(full_path) do
+            [{:directory, relative} | visible_paths(full_path, root)]
+          else
+            [{:file, relative}]
+          end
+        end)
+
+      {:error, reason} ->
+        [{:unreadable, Path.relative_to(path, root), reason}]
+    end
+  end
+
   defp build_tree(path, _name) do
     entries =
       path
@@ -48,6 +81,7 @@ defmodule Quillex.Utils.FileTree do
   defp build_item(path, name) do
     if File.dir?(path) do
       children = build_tree(path, name)
+
       %Item{
         id: path,
         title: name,

@@ -47,6 +47,8 @@ of `Quillex-BasePrompt.md` for the full picture):
 - `Buffer.Process` → `:"radix_buf_<uuid>"` (per-buffer text state)
 - `BufferManager` → `:radix_buffers` (buffer list, active buffer, dirty flags)
 - `ViewStore` → `:radix_view` (editor settings, file nav, status message)
+- `ProjectSearchStore` → `:radix_project_search` (project-wide search: query,
+  scope, grouped results; searches run in a task off the store)
 - `PaneStore` → `:radix_pane_main` (what the pane displays; the TextField's
   stable source + dispatch — typing and buffer switches never touch RootScene)
 

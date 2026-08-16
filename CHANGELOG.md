@@ -1,5 +1,44 @@
 # Changelog
 
+## Unreleased
+
+- Added project-wide find and replace. Ctrl+Shift+F (Edit → Find in Project)
+  opens the same top-right find popup plus a results pane in the sidebar slot;
+  the popup's query drives both the active buffer and the project search, so
+  the two never disagree. Results are grouped by file with `line:col` rows
+  that open the file at the match; a SCOPE tree ticks directories in and out;
+  Ctrl+Shift+H / "All" replaces across every in-scope file — open buffers are
+  edited in place (undoable, unsaved), everything else is rewritten on disk.
+  Search runs off-process through a `Quillex.Search.Backend` behaviour:
+  ripgrep when installed, a pure-Elixir walk otherwise
+  (`config :quillex, search_backend: :auto | :ripgrep | :elixir`).
+- Fixed find/replace on large wrapped documents freezing for seconds per
+  keystroke: every match in the document was a primitive, each re-wrapping
+  its line, and the whole document was re-wrapped twice per edit. Match
+  and selection highlights are now virtualised to the render window and
+  positioned through the cached display projection; wrapping is memoised per
+  line, so an edit re-wraps only what it touched. Spinoza with word wrap:
+  10s → ~40ms per keystroke in the search box.
+- Fixed search columns being byte offsets: after any multibyte character
+  (an em dash) highlights sat two characters right of the match and Replace
+  would have spliced the wrong text. Search now uses caseless regex scanning
+  with grapheme columns (7× faster too).
+- Find UX: the current match is revealed centred when it is off screen; find
+  starts at the match under or after the cursor; Replace advances past the
+  replacement (a case-insensitive "the" → "THE" no longer re-hits itself);
+  navigating a wrapped document no longer scrolls sideways; a jump to a far
+  match no longer leaves rows unrendered; Ctrl+H works while the search bar
+  has focus; the match counter fits four digits.
+
+- Added supervised external-file synchronization in every runtime mode. Clean
+  open buffers reload automatically when their canonical files change, including
+  inactive tabs, and the status bar reports the reload.
+- External changes never overwrite dirty buffers. Modified or deleted backing
+  files set durable conflict metadata (and a tab `!` marker), while Quillex's
+  own saves are recognized without producing a false conflict.
+- External reload now uses an atomic buffer-process cleanliness check, so a
+  keystroke racing the disk watcher cannot be overwritten.
+
 ## 0.7.4 — 2026-08-03
 
 - Fixed every shifted character being discarded — capitals and all shifted

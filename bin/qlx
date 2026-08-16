@@ -20,8 +20,7 @@
 # build isn't there yet, qlx offers to make it. Sources newer than the build
 # are reported, not silently ignored: `qlx --rebuild` picks them up.
 #
-# MIX_ENV=dev qlx runs from source instead, with the development tooling
-# (scenic_mcp, Tidewave) and the ports it listens on.
+# MIX_ENV=dev qlx runs from source instead, with scenic_mcp development tooling.
 #
 # Install by symlinking this onto your PATH — the script resolves its own
 # location, so the link can live anywhere:
@@ -145,8 +144,8 @@ if [ -n "${MIX_ENV:-}" ] && [ "$MIX_ENV" != prod ]; then
   export MIX_ENV
   require_mix
 
-  # In dev and test the MCP and Tidewave servers bind fixed ports (see
-  # config/dev.exs), so a second BEAM dies on :eaddrinuse — and detached, it
+  # In dev and test the MCP server binds a fixed port (see config/dev.exs), so
+  # a second BEAM dies on :eaddrinuse — and detached, it
   # would die somewhere you never look. Ask the port directly: bash's /dev/tcp
   # needs no ss, no lsof, and doesn't guess from process names.
   if (exec 3<> /dev/tcp/127.0.0.1/9997) 2> /dev/null; then
@@ -183,6 +182,11 @@ release_bin="$project_dir/_build/prod/rel/quillex/bin/quillex"
 build_release() {
   require_mix
   echo "qlx: building Quillex — the first build takes a few minutes." >&2
+  # A rebuild must also honor dependency-pin changes in mix.exs/mix.lock.
+  # `mix release` only checks dependencies and aborts on a stale checkout; it
+  # does not fetch the locked Git revision itself. Keep this inside the
+  # explicit build path so ordinary launches remain offline and instant.
+  MIX_ENV=prod mix deps.get >&2
   MIX_ENV=prod mix release --overwrite >&2
   echo "qlx: built." >&2
 }

@@ -6,6 +6,8 @@ defmodule QuillEx.RootScene do
   # Layout constants — must stay in sync with qlx_root_scene_renderizer.ex
   @top_bar_height 35
   @search_bar_height 36
+  @search_popup_width 480
+  @search_popup_margin 12
 
   # Line height of the buffer pane text (must match BufferPane font_size).
   # Used to estimate the visible page size for Page Up / Page Down navigation.
@@ -15,6 +17,10 @@ defmodule QuillEx.RootScene do
   # and the icon_menu_width used in qlx_root_scene_renderizer.ex
   @icon_menu_width 140
   @dropdown_width 180
+
+  @file_nav_collapse_threshold 110
+  @file_nav_min_width 160
+  @file_nav_max_width 800
 
   # the way input works is that we route input to the active buffer
   # component, which then converts it to actions, which are then then
@@ -55,6 +61,7 @@ defmodule QuillEx.RootScene do
     scene =
       scene
       |> assign(state: state)
+      |> assign(resize_scheduler: Quillex.GUI.ResizeScheduler.new())
       |> assign(graph: graph)
       |> push_graph(graph)
 
@@ -64,6 +71,7 @@ defmodule QuillEx.RootScene do
     # arrive as normal updates instead of racing init
     Scenic.PubSub.subscribe(Quillex.RadixCache.Sources.buffers())
     Scenic.PubSub.subscribe(Quillex.RadixCache.Sources.view())
+    Scenic.PubSub.subscribe(Quillex.RadixCache.Sources.project_search())
 
     # Request input types for the root scene:
     # - :viewport  — resize/reshape events
@@ -113,6 +121,38 @@ defmodule QuillEx.RootScene do
   # If the buffer is clean (or there is no active buffer), closes immediately.
   def handle_input({:key, {:key_w, 1, [:ctrl]}}, _context, scene) do
     try_close_active_buffer(scene)
+  end
+
+  # Ctrl+Shift+F / Ctrl+Shift+H — find / replace across the project. Plain
+  # Ctrl+F/H are NOT handled here (see the note above): they come up from
+  # the focused TextField or the search bar as events. The shifted chords
+  # never do, so this is their only entry point.
+  def handle_input({:key, {key, 1, mods}}, _context, scene)
+      when key in [:key_f, :key_h] and is_list(mods) do
+    if :shift in mods and Enum.any?(mods, &(&1 in [:ctrl, :meta, :super])) do
+      show_search_bar(scene, project: true, replace_mode: key == :key_h)
+    else
+      {:noreply, scene}
+    end
+  end
+
+  def handle_input({:key, {key, 1, mods}}, _context, scene)
+      when key in [:key_equal, :key_kp_add, :"key_="] do
+    if Enum.any?(mods, &(&1 in [:ctrl, :meta, :super])), do: adjust_chrome_zoom(10)
+    {:noreply, scene}
+  end
+
+  def handle_input({:key, {key, 1, mods}}, _context, scene)
+      when key in [:key_minus, :key_kp_subtract, :"key_-"] do
+    if Enum.any?(mods, &(&1 in [:ctrl, :meta, :super])), do: adjust_chrome_zoom(-10)
+    {:noreply, scene}
+  end
+
+  def handle_input({:key, {:key_0, 1, mods}}, _context, scene) do
+    if Enum.any?(mods, &(&1 in [:ctrl, :meta, :super])),
+      do: Quillex.RadixCache.ViewStore.set_chrome_zoom(100)
+
+    {:noreply, scene}
   end
 
   # Handle Ctrl+D keyboard shortcut for Delete Line.
@@ -197,62 +237,130 @@ defmodule QuillEx.RootScene do
         _context,
         scene
       ) do
-    current_frame = scene.assigns.state.frame
-    current_size = {current_frame.size.width, current_frame.size.height}
+    current = scene.assigns.state.frame.size.box
 
-    # Only re-render if size actually changed (avoids double-render on bootup)
-    if current_size != new_vp_size do
-      Logger.debug("#{__MODULE__} reshape: #{inspect(current_size)} -> #{inspect(new_vp_size)}")
-
-      # With store_backed mode, Buffer.Process is the source of truth.
-      # TextField sends all changes directly to Buffer, so we don't need to sync.
-      # Just get the current cursor position from the buffer for restoration.
-      cursor_pos = get_buffer_cursor(scene)
-
-      # The pane IS recreated on reshape, so save the scroll position to
-      # restore into the new instance.
-      first_visible_line = get_first_visible_line(scene)
-
-      # Create new frame with the resized dimensions
-      new_frame = Widgex.Frame.new(pin: {0, 0}, size: new_vp_size)
-
-      # Update state with new frame and saved cursor position for the renderizer
-      old_state = scene.assigns.state
-
-      new_state =
-        old_state
-        |> Map.put(:frame, new_frame)
-        |> Map.put(:_restore_cursor, cursor_pos)
-        |> Map.put(:_restore_first_visible_line, first_visible_line)
-
-      # Reuse existing graph to preserve component PIDs and avoid race conditions
-      new_graph =
-        QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
-
-      # Remove the temporary restore keys from state
-      final_state =
-        new_state
-        |> Map.delete(:_restore_cursor)
-        |> Map.delete(:_restore_first_visible_line)
-
-      new_scene =
-        scene
-        |> assign(state: final_state)
-        |> assign(graph: new_graph)
-        |> push_graph(new_graph)
-
-      {:noreply, new_scene}
-    else
-      # Size unchanged, don't re-render (handles the double-call on bootup)
+    if current == new_vp_size do
       {:noreply, scene}
+    else
+      {scheduler, action} =
+        Quillex.GUI.ResizeScheduler.enqueue(scene.assigns.resize_scheduler, new_vp_size)
+
+      if action == :schedule, do: Process.send_after(self(), :apply_pending_viewport_resize, 16)
+      {:noreply, assign(scene, resize_scheduler: scheduler)}
     end
   end
 
-  # Track cursor position for scroll routing
-  def handle_input({:cursor_pos, coords}, _context, scene) do
+  def handle_info(:apply_pending_viewport_resize, scene) do
+    {size, scheduler} = Quillex.GUI.ResizeScheduler.take(scene.assigns.resize_scheduler)
+    scene = assign(scene, resize_scheduler: scheduler)
+
+    case size do
+      nil ->
+        {:noreply, scene}
+
+      size ->
+        Quillex.PerfMonitor.measure(:viewport_resize, fn -> resize_viewport(scene, size) end)
+    end
+  end
+
+  defp resize_viewport(scene, new_vp_size) do
+    old_state = scene.assigns.state
+    current_size = old_state.frame.size.box
+
+    if current_size == new_vp_size do
+      {:noreply, scene}
+    else
+      Logger.debug("#{__MODULE__} reshape: #{inspect(current_size)} -> #{inspect(new_vp_size)}")
+      new_state = %{old_state | frame: Widgex.Frame.new(pin: {0, 0}, size: new_vp_size)}
+
+      graph =
+        QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+
+      {:noreply, scene |> assign(state: new_state, graph: graph) |> push_graph(graph)}
+    end
+  end
+
+  # File navigator resize drag. The root scene owns this short-lived gesture;
+  # ViewStore remains authoritative for the committed width and visibility.
+  def handle_input({:cursor_pos, {x, _y} = coords}, _context, scene)
+      when scene.assigns.state.file_nav_resizing do
     state = scene.assigns.state
-    new_state = %{state | cursor_pos: coords}
-    {:noreply, assign(scene, state: new_state)}
+
+    max_width =
+      min(@file_nav_max_width, max(@file_nav_min_width, trunc(state.frame.size.width - 240)))
+
+    hide? = x < @file_nav_collapse_threshold
+
+    width = x |> round() |> max(@file_nav_min_width) |> min(max_width)
+
+    new_state = %{
+      state
+      | cursor_pos: coords,
+        file_nav_width: width,
+        file_nav_resize_hide?: hide?
+    }
+
+    # Keep the gesture scene-owned so ViewStore receives one durable commit on
+    # release, while incrementally reframing the existing children for live
+    # feedback. Renderizer's width path preserves both component PIDs; it only
+    # updates their frames/transforms and the divider graph.
+    new_graph =
+      QuillEx.RootScene.Renderizer.render(
+        scene.assigns.graph,
+        scene,
+        state,
+        new_state
+      )
+
+    new_scene =
+      scene
+      |> assign(state: new_state, graph: new_graph)
+      |> push_graph(new_graph)
+
+    {:noreply, new_scene}
+  end
+
+  # RootScene requests cursor input itself, so use explicit bounds rather than
+  # relying on Scenic to choose the pill as the positional-input context. That
+  # remains reliable even when the adjacent child component overlaps its edge.
+  def handle_input({:cursor_pos, coords}, _context, scene) do
+    maybe_clear_icon_menu_hover(scene, scene.assigns.state.cursor_pos, coords)
+    update_file_nav_resize_hover(scene, coords, file_nav_resize_handle_hit?(scene, coords))
+  end
+
+  def handle_input(
+        {:cursor_button, {:btn_left, 0, _mods, _coords}},
+        _context,
+        %{assigns: %{state: %{file_nav_resizing: true}}} = scene
+      ) do
+    :ok = release_input(scene, [:cursor_pos, :cursor_button])
+    state = scene.assigns.state
+
+    scene =
+      if state.file_nav_resize_hide? do
+        Quillex.RadixCache.ViewStore.close_file_nav()
+        Quillex.RadixCache.ViewStore.show_status("File navigator hidden", :info)
+        scene
+      else
+        Quillex.RadixCache.ViewStore.set_file_nav_width(state.file_nav_width)
+        scene
+      end
+
+    new_state = %{
+      state
+      | file_nav_resizing: false,
+        file_nav_resize_hovered: false,
+        file_nav_resize_hide?: false
+    }
+
+    graph = QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, state, new_state)
+
+    new_scene =
+      scene
+      |> assign(state: new_state, graph: graph)
+      |> push_graph(graph)
+
+    {:noreply, new_scene}
   end
 
   # Scroll is not routed from here. Both scrollable children — the buffer pane
@@ -281,6 +389,36 @@ defmodule QuillEx.RootScene do
   # The FilePicker already handles close-on-outside-click internally (it renders
   # a full-screen overlay and cancels when the overlay is clicked).
   def handle_input({:cursor_button, {:btn_left, 1, _mods, {click_x, click_y}}}, _context, scene) do
+    if file_nav_resize_handle_hit?(scene, {click_x, click_y}) do
+      start_file_nav_resize(scene)
+    else
+      handle_regular_left_press(scene, click_x, click_y)
+    end
+  end
+
+  defp start_file_nav_resize(scene) do
+    :ok = capture_input(scene, [:cursor_pos, :cursor_button])
+
+    old_state = scene.assigns.state
+
+    state = %{
+      old_state
+      | file_nav_resizing: true,
+        file_nav_resize_hovered: true,
+        file_nav_resize_hide?: false
+    }
+
+    graph = QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, state)
+
+    new_scene =
+      scene
+      |> assign(state: state, graph: graph)
+      |> push_graph(graph)
+
+    {:noreply, new_scene}
+  end
+
+  defp handle_regular_left_press(scene, click_x, click_y) do
     state = scene.assigns.state
     frame_width = state.frame.size.width
 
@@ -302,26 +440,54 @@ defmodule QuillEx.RootScene do
     # SideNav and TextField both gate keyboard input on a focus flag; a click
     # decides which of them holds it. Skipped while a dialog is open so a
     # stray click can't pull keyboard focus out from under the dialog.
-    if state.show_file_nav and click_y > @top_bar_height and
-         not state.show_unsaved_prompt and not state.show_about and not state.show_shortcuts do
-      if click_x < state.file_nav_width do
-        Scenic.Scene.put_child(scene, :file_nav, :focus)
+    if click_y > @top_bar_height and not state.show_unsaved_prompt and
+         not state.show_nav_delete_prompt and not state.show_about and
+         not state.show_shortcuts do
+      side_pane = side_pane_id(state)
+
+      if side_pane_open?(state) and click_x < state.file_nav_width do
+        Scenic.Scene.put_child(scene, side_pane, :focus)
         Scenic.Scene.put_child(scene, :buffer_pane, :blur)
       else
-        Scenic.Scene.put_child(scene, :file_nav, :blur)
+        if side_pane_open?(state), do: Scenic.Scene.put_child(scene, side_pane, :blur)
         Scenic.Scene.put_child(scene, :buffer_pane, :focus)
       end
     end
 
     # --- Search bar ---
     # Close the search bar when the click lands below it (in the buffer area).
-    search_height = if state.show_replace, do: @search_bar_height * 2, else: @search_bar_height
+    # Clicks in the sidebar keep it: browsing project-search results while
+    # the popup stays open is the point of the pane.
+    in_side_pane? = side_pane_open?(state) and click_x < state.file_nav_width
 
-    if state.show_search_bar and click_y > @top_bar_height + search_height do
+    if state.show_search_bar and not in_side_pane? and
+         not search_popup_point?(state, {click_x, click_y}) do
       hide_search_bar(scene)
     else
       {:noreply, scene}
     end
+  end
+
+  defp search_popup_point?(state, {x, y}) do
+    margin = scaled(@search_popup_margin, state)
+
+    [_top_bar, buffer_frame] =
+      Widgex.Frame.v_split(state.frame, px: scaled(@top_bar_height, state))
+
+    popup =
+      ScenicWidgets.FloatingPanel.frame(buffer_frame,
+        placement: :top_right,
+        margin: margin,
+        size: {
+          scaled(@search_popup_width, state),
+          scaled(
+            if(state.show_replace, do: @search_bar_height * 2, else: @search_bar_height),
+            state
+          )
+        }
+      )
+
+    ScenicWidgets.FloatingPanel.contains?(popup, {x, y})
   end
 
   # Mouse clicks on child components (TextField, IconMenu, FilePicker, etc.) are
@@ -329,6 +495,62 @@ defmodule QuillEx.RootScene do
   # request_input registrations.  This catch-all handles any remaining events.
   def handle_input(_input, _context, scene) do
     {:noreply, scene}
+  end
+
+  defp adjust_chrome_zoom(delta) do
+    current = Quillex.RadixCache.ViewStore.get_state().chrome_zoom
+    Quillex.RadixCache.ViewStore.set_chrome_zoom(min(200, max(50, current + delta)))
+  end
+
+  defp update_file_nav_resize_hover(scene, coords, hovered?) do
+    old_state = scene.assigns.state
+    new_state = %{old_state | cursor_pos: coords, file_nav_resize_hovered: hovered?}
+
+    if old_state.file_nav_resize_hovered == hovered? do
+      {:noreply, assign(scene, state: new_state)}
+    else
+      new_graph =
+        QuillEx.RootScene.Renderizer.render(
+          scene.assigns.graph,
+          scene,
+          old_state,
+          new_state
+        )
+
+      new_scene =
+        scene
+        |> assign(state: new_state, graph: new_graph)
+        |> push_graph(new_graph)
+
+      {:noreply, new_scene}
+    end
+  end
+
+  defp file_nav_resize_handle_hit?(scene, {x, y}) do
+    state = scene.assigns.state
+    content_height = state.frame.size.height - @top_bar_height
+    center_y = @top_bar_height + content_height * 0.9
+
+    side_pane_open?(state) and abs(x - state.file_nav_width) <= 16 and
+      abs(y - center_y) <= 26
+  end
+
+  # IconMenu only receives positional motion while Scenic considers one of its
+  # primitives the target. Relay the one transition it otherwise cannot see:
+  # leaving its parent-owned frame for a sibling component.
+  defp maybe_clear_icon_menu_hover(scene, previous_coords, coords) do
+    if icon_menu_point?(scene, previous_coords) and not icon_menu_point?(scene, coords) do
+      Scenic.Scene.put_child(scene, :icon_menu, :clear_hover)
+    end
+
+    :ok
+  end
+
+  defp icon_menu_point?(_scene, nil), do: false
+
+  defp icon_menu_point?(scene, {x, y}) do
+    width = scene.assigns.state.frame.size.width
+    x >= width - @icon_menu_width and x <= width and y >= 0 and y <= @top_bar_height
   end
 
   # Dispatch a single buffer action to the currently active buffer.
@@ -355,6 +577,7 @@ defmodule QuillEx.RootScene do
       # or answering a dialog mutates the file behind their back (Ctrl+D
       # would delete a line of the document mid-search).
       state.show_search_bar or state.show_unsaved_prompt or
+        state.show_nav_delete_prompt or
         Map.get(state, :show_about, false) or Map.get(state, :show_shortcuts, false) or
           state.show_file_picker ->
         {:noreply, scene}
@@ -366,6 +589,7 @@ defmodule QuillEx.RootScene do
 
   defp keyboard_overlay_open?(state) do
     state.show_search_bar or state.show_unsaved_prompt or state.show_file_picker or
+      state.show_nav_delete_prompt or
       Map.get(state, :show_about, false) or Map.get(state, :show_shortcuts, false)
   end
 
@@ -486,17 +710,7 @@ defmodule QuillEx.RootScene do
     Wormhole.capture(fn ->
       old_state = scene.assigns.state
 
-      new_state =
-        Enum.reduce(actions, old_state, fn action, acc_state ->
-          RootScene.Reducer.process(acc_state, action)
-          |> case do
-            :ignore ->
-              acc_state
-
-            new_acc_state ->
-              new_acc_state
-          end
-        end)
+      new_state = Enum.reduce(actions, old_state, &RootScene.Reducer.process(&2, &1))
 
       # Reuse existing graph to preserve component PIDs and avoid race conditions
       # during rapid buffer switches. Pass old_state to enable smart component updates
@@ -694,7 +908,13 @@ defmodule QuillEx.RootScene do
 
   def handle_cast({:search_query_changed, _id, query}, scene) do
     Logger.debug("[search] query changed: #{inspect(query)}")
-    # Update state with new query
+
+    # One input, two searches: while the project pane is showing, the popup
+    # drives it too, so the pane and the buffer highlights never disagree.
+    if scene.assigns.state.show_project_search do
+      Quillex.RadixCache.ProjectSearchStore.set_query(query)
+    end
+
     new_state = %{scene.assigns.state | search_query: query}
 
     # Perform the search if query is not empty
@@ -723,13 +943,25 @@ defmodule QuillEx.RootScene do
     hide_search_bar(scene)
   end
 
+  # Ctrl+H pressed inside the (focused) search bar: grow it into replace mode.
+  def handle_cast({:replace_mode_requested, _id}, scene) do
+    show_search_bar(scene, replace_mode: true)
+  end
+
   def handle_cast({:replace_requested, _id, replacement}, scene) do
     Scenic.Scene.put_child(scene, :buffer_pane, {:action, {:replace, replacement}})
     {:noreply, scene}
   end
 
   def handle_cast({:replace_all_requested, _id, replacement}, scene) do
-    Scenic.Scene.put_child(scene, :buffer_pane, {:action, {:replace_all, replacement}})
+    # In project mode "All" means the whole project; the active buffer is one
+    # of its files and is edited through its own process by the store.
+    if scene.assigns.state.show_project_search do
+      Quillex.RadixCache.ProjectSearchStore.replace_all(replacement)
+    else
+      Scenic.Scene.put_child(scene, :buffer_pane, {:action, {:replace_all, replacement}})
+    end
+
     {:noreply, scene}
   end
 
@@ -757,11 +989,39 @@ defmodule QuillEx.RootScene do
     old_state = scene.assigns.state
     new_state = merge_view(old_state, view)
 
-    if editor_layout_changed?(old_state, new_state) do
-      update_editor_settings(scene, new_state)
-    else
-      {:noreply, render_snapshot(scene, new_state)}
+    result =
+      if editor_layout_changed?(old_state, new_state) do
+        update_editor_settings(scene, new_state)
+      else
+        {:noreply, render_snapshot(scene, new_state)}
+      end
+
+    case result do
+      {:noreply, new_scene} when old_state.file_nav_revision != new_state.file_nav_revision ->
+        if new_state.show_file_nav do
+          tree = Quillex.Utils.FileTree.build(new_state.file_nav_path || File.cwd!())
+          Scenic.Scene.put_child(new_scene, :file_nav, {:update_tree, tree})
+        end
+
+        {:noreply, new_scene}
+
+      other ->
+        other
     end
+  end
+
+  # Project-search store snapshots (:radix_project_search) — query, scope and
+  # results. The pane is a SideNav; it gets a fresh tree, nothing else moves.
+  def handle_info({{Scenic.PubSub, :data}, {:radix_project_search, snapshot, _ts}}, scene) do
+    new_state = %{scene.assigns.state | project_search: snapshot}
+    scene = assign(scene, state: new_state)
+
+    if new_state.show_project_search do
+      tree = Quillex.GUI.ProjectSearchTree.build(snapshot)
+      Scenic.Scene.put_child(scene, :project_search_pane, {:update_tree, tree})
+    end
+
+    {:noreply, scene}
   end
 
   # Scenic.PubSub lifecycle notifications — deliberately specific clauses, a
@@ -791,12 +1051,21 @@ defmodule QuillEx.RootScene do
   # the scene's in-flight dialog state.
   @view_keys [
     :show_line_numbers,
+    :show_matching_brace,
+    :highlight_current_line,
+    :highlight_current_column,
     :word_wrap,
     :tab_width,
     :text_size,
+    :fold_level,
+    :show_action_feedback,
+    :show_menu_shortcuts,
+    :chrome_zoom,
     :show_file_nav,
     :file_nav_path,
     :file_nav_width,
+    :file_nav_revision,
+    :show_project_search,
     :status_message,
     :status_severity
   ]
@@ -805,7 +1074,19 @@ defmodule QuillEx.RootScene do
 
   defp editor_layout_changed?(old_state, new_state) do
     Enum.any?(
-      [:show_line_numbers, :word_wrap, :tab_width, :text_size, :show_file_nav],
+      [
+        :show_line_numbers,
+        :show_matching_brace,
+        :highlight_current_line,
+        :highlight_current_column,
+        :word_wrap,
+        :tab_width,
+        :text_size,
+        :chrome_zoom,
+        :show_file_nav,
+        :show_project_search,
+        :show_action_feedback
+      ],
       fn key -> Map.get(old_state, key) != Map.get(new_state, key) end
     )
   end
@@ -813,6 +1094,63 @@ defmodule QuillEx.RootScene do
   # Handle events from child components (IconMenu, TabBar, etc.)
   def handle_event({:menu_value_changed, "text_size", value}, _from, scene) do
     Quillex.RadixCache.ViewStore.set_text_size(round(value))
+    {:noreply, scene}
+  end
+
+  def handle_event({:menu_value_changed, "fold_level", value}, _from, scene) do
+    level = round(value)
+    Quillex.RadixCache.ViewStore.set_fold_level(level)
+    Scenic.Scene.put_child(scene, :buffer_pane, {:action, {:fold_to_level, level}})
+    {:noreply, scene}
+  end
+
+  def handle_event({:menu_value_changed, "tab_width", value}, _from, scene) do
+    Quillex.RadixCache.ViewStore.set_tab_width(round(value))
+    {:noreply, scene}
+  end
+
+  def handle_event({:menu_value_changed, "menu_shortcuts", _checked?}, _from, scene) do
+    Quillex.RadixCache.ViewStore.toggle_menu_shortcuts()
+    {:noreply, scene}
+  end
+
+  def handle_event({:menu_value_changed, "file_nav", _checked?}, _from, scene) do
+    Quillex.RadixCache.ViewStore.toggle_file_nav()
+    {:noreply, scene}
+  end
+
+  def handle_event({:menu_value_changed, "line_numbers", _checked?}, _from, scene) do
+    Quillex.RadixCache.ViewStore.toggle_line_numbers()
+    {:noreply, scene}
+  end
+
+  def handle_event({:menu_value_changed, "matching_brace", _checked?}, _from, scene) do
+    Quillex.RadixCache.ViewStore.toggle_matching_brace()
+    {:noreply, scene}
+  end
+
+  def handle_event({:menu_value_changed, "current_line_highlight", _checked?}, _from, scene) do
+    Quillex.RadixCache.ViewStore.toggle_current_line_highlight()
+    {:noreply, scene}
+  end
+
+  def handle_event({:menu_value_changed, "current_column_highlight", _checked?}, _from, scene) do
+    Quillex.RadixCache.ViewStore.toggle_current_column_highlight()
+    {:noreply, scene}
+  end
+
+  def handle_event({:menu_value_changed, "chrome_zoom", value}, _from, scene) do
+    Quillex.RadixCache.ViewStore.set_chrome_zoom(round(value))
+    {:noreply, scene}
+  end
+
+  def handle_event({:menu_value_changed, "word_wrap", _checked?}, _from, scene) do
+    Quillex.RadixCache.ViewStore.toggle_word_wrap()
+    {:noreply, scene}
+  end
+
+  def handle_event({:menu_value_changed, "action_feedback", _checked?}, _from, scene) do
+    Quillex.RadixCache.ViewStore.toggle_action_feedback()
     {:noreply, scene}
   end
 
@@ -888,6 +1226,12 @@ defmodule QuillEx.RootScene do
         Scenic.Scene.put_child(scene, :buffer_pane, {:action, :find_next})
         {:noreply, scene}
 
+      "find_in_project" ->
+        show_search_bar(scene, project: true)
+
+      "replace_in_project" ->
+        show_search_bar(scene, project: true, replace_mode: true)
+
       "file_nav" ->
         Quillex.RadixCache.ViewStore.toggle_file_nav()
         {:noreply, scene}
@@ -898,6 +1242,10 @@ defmodule QuillEx.RootScene do
 
       "word_wrap" ->
         Quillex.RadixCache.ViewStore.toggle_word_wrap()
+        {:noreply, scene}
+
+      "action_feedback" ->
+        Quillex.RadixCache.ViewStore.toggle_action_feedback()
         {:noreply, scene}
 
       "toggle_fold" ->
@@ -916,10 +1264,6 @@ defmodule QuillEx.RootScene do
           {:action, {:fold_to_level, String.to_integer(level)}}
         )
 
-        {:noreply, scene}
-
-      "tab_width_" <> n when n in ["2", "3", "4", "8"] ->
-        Quillex.RadixCache.ViewStore.set_tab_width(String.to_integer(n))
         {:noreply, scene}
 
       "about" ->
@@ -948,6 +1292,11 @@ defmodule QuillEx.RootScene do
       Logger.warning("Could not find buffer for tab: #{inspect(tab_id)}")
       {:noreply, scene}
     end
+  end
+
+  def handle_event({:tabs_reordered, tab_ids}, _from, scene) do
+    Quillex.Buffer.BufferManager.reorder_buffers(tab_ids)
+    {:noreply, scene}
   end
 
   # Handle tab close from TabBar
@@ -1022,6 +1371,28 @@ defmodule QuillEx.RootScene do
   end
 
   # Handle file navigation from SideNav (file explorer sidebar)
+  # Rows of the project-search pane (see Quillex.GUI.ProjectSearchTree).
+  def handle_event({:sidebar, :navigate, "qlx-search://" <> _ = item_id}, _from, scene) do
+    case Quillex.GUI.ProjectSearchTree.decode(item_id) do
+      :close ->
+        Quillex.RadixCache.ViewStore.close_project_search()
+        {:noreply, scene}
+
+      :status ->
+        show_search_bar(scene, project: true)
+
+      {:toggle_scope, dir} ->
+        Quillex.RadixCache.ProjectSearchStore.toggle_scope(dir)
+        {:noreply, scene}
+
+      {:match, path, line, col} ->
+        open_file_at(scene, path, {line, col})
+
+      _other ->
+        {:noreply, scene}
+    end
+  end
+
   def handle_event({:sidebar, :navigate, item_id}, _from, scene) when is_binary(item_id) do
     # item_id is the file path
     if File.regular?(item_id) do
@@ -1041,6 +1412,71 @@ defmodule QuillEx.RootScene do
   def handle_event({:sidebar, :expand, _item_id}, _from, scene), do: {:noreply, scene}
   def handle_event({:sidebar, :collapse, _item_id}, _from, scene), do: {:noreply, scene}
   def handle_event({:sidebar, :hover, _item_id}, _from, scene), do: {:noreply, scene}
+
+  def handle_event({:sidebar, :move_requested, paths, target}, _from, scene) do
+    case Quillex.Files.NavigatorOps.move(paths, target) do
+      {:ok, moves} ->
+        Quillex.RadixCache.ViewStore.show_status(
+          "Moved #{length(moves)} #{entry_word(length(moves))} to #{Path.basename(target)}",
+          :info
+        )
+
+      {:error, reason} ->
+        Quillex.RadixCache.ViewStore.show_status(
+          "Move failed: #{format_nav_error(reason)}",
+          :error
+        )
+    end
+
+    {:noreply, scene}
+  end
+
+  def handle_event({:sidebar, :rename_requested, path, new_name}, _from, scene) do
+    case Quillex.Files.NavigatorOps.rename(path, new_name) do
+      {:ok, {_old_path, new_path}} ->
+        Quillex.RadixCache.ViewStore.show_status(
+          "Renamed to #{Path.basename(new_path)}",
+          :info
+        )
+
+      {:error, reason} ->
+        Quillex.RadixCache.ViewStore.show_status(
+          "Rename failed: #{format_nav_error(reason)}",
+          :error
+        )
+    end
+
+    {:noreply, scene}
+  end
+
+  def handle_event({:sidebar, :delete_requested, []}, _from, scene), do: {:noreply, scene}
+
+  def handle_event({:sidebar, :delete_requested, paths}, _from, scene) do
+    state = scene.assigns.state
+    count = length(paths)
+
+    graph =
+      scene.assigns.graph
+      |> ScenicWidgets.ConfirmDialog.add_to_graph(
+        %{
+          frame: state.frame,
+          title: "Delete #{count} #{entry_word(count)}?",
+          message: "This permanently deletes the selected files and directories.",
+          buttons: [{:discard, "Delete"}, {:cancel, "Cancel"}]
+        },
+        id: :nav_delete_prompt
+      )
+
+    new_state = %{state | pending_nav_delete: paths, show_nav_delete_prompt: true}
+
+    new_scene =
+      scene
+      |> assign(state: new_state, graph: graph)
+      |> push_graph(graph)
+
+    Scenic.Scene.put_child(new_scene, :buffer_pane, :blur)
+    {:noreply, new_scene}
+  end
 
   # ===========================================================================
   # Unsaved-changes dialog responses
@@ -1089,6 +1525,30 @@ defmodule QuillEx.RootScene do
     {:noreply, new_scene}
   end
 
+  def handle_event({:confirm_dialog_response, :nav_delete_prompt, :discard}, _from, scene) do
+    paths = scene.assigns.state.pending_nav_delete
+
+    case Quillex.Files.NavigatorOps.delete(paths) do
+      {:ok, deleted} ->
+        Quillex.RadixCache.ViewStore.show_status(
+          "Deleted #{length(deleted)} #{entry_word(length(deleted))}",
+          :info
+        )
+
+      {:error, reason} ->
+        Quillex.RadixCache.ViewStore.show_status(
+          "Delete failed: #{format_nav_error(reason)}",
+          :error
+        )
+    end
+
+    {:noreply, hide_nav_delete_prompt(scene)}
+  end
+
+  def handle_event({:confirm_dialog_response, :nav_delete_prompt, :cancel}, _from, scene) do
+    {:noreply, hide_nav_delete_prompt(scene)}
+  end
+
   def handle_event({:confirm_dialog_response, :quit_prompt, :discard}, _from, scene) do
     new_scene = hide_quit_prompt(scene)
     Quillex.Lifecycle.Coordinator.discard_and_quit()
@@ -1131,8 +1591,13 @@ defmodule QuillEx.RootScene do
   # the pane compares against its own. Until that conversion exists, send the
   # boolean — a rect in the wrong space matches nothing, and the menu clicks
   # it should suppress end up moving the document cursor.
-  def handle_event({:dropdown_opened, _menu_id, _bounds}, _from, scene) do
-    Scenic.Scene.put_child(scene, :buffer_pane, {:set_overlay_open, true})
+  def handle_event({:dropdown_opened, _menu_id, bounds}, _from, scene) when is_map(bounds) do
+    Scenic.Scene.put_child(
+      scene,
+      :buffer_pane,
+      {:set_overlay_open, dropdown_bounds_in_pane(scene.assigns.state, bounds)}
+    )
+
     {:noreply, scene}
   end
 
@@ -1145,6 +1610,29 @@ defmodule QuillEx.RootScene do
     Scenic.Scene.put_child(scene, :buffer_pane, {:set_overlay_open, false})
     {:noreply, scene}
   end
+
+  # IconMenu reports dropdown bounds in its own local coordinate space, while
+  # TextField receives pointer coordinates in the pane's local space. Preserve
+  # the precise rectangle instead of reducing it to `true`: the latter makes
+  # the first click outside a persistent toggle menu look like a menu click and
+  # silently drops it.
+  defp dropdown_bounds_in_pane(state, bounds) do
+    {root_x, root_y} = state.frame.pin.point
+    icon_x = root_x + state.frame.size.width - scaled(@icon_menu_width, state)
+    pane_x = root_x + if(side_pane_open?(state), do: state.file_nav_width, else: 0)
+
+    # Find/Replace floats over the pane and does not move it.
+    pane_y = root_y + scaled(@top_bar_height, state)
+
+    %{
+      x: icon_x + bounds.x - pane_x,
+      y: root_y + bounds.y - pane_y,
+      width: bounds.width,
+      height: bounds.height
+    }
+  end
+
+  defp scaled(value, state), do: max(1, round(value * state.chrome_zoom / 100))
 
   # Catch-all for unhandled events
   def handle_event(event, _from, scene) do
@@ -1278,7 +1766,7 @@ defmodule QuillEx.RootScene do
 
   # Display a transient notification message at the bottom of the viewport.
   # `severity` is :info | :warning | :error — controls background colour.
-  # The message auto-clears after 5 seconds via a {:clear_status_message, ref} timer.
+  # The message auto-clears after eight seconds via ViewStore's timer.
   #
   # Multiple rapid calls replace the previous message safely: each call stamps
   # the state with a fresh ref, and only the matching timer can clear it.
@@ -1328,19 +1816,11 @@ defmodule QuillEx.RootScene do
     Scenic.Scene.put_child(scene, :icon_menu, {:update_menus, new_menus})
 
     # Add cursor position and first visible line for restoration after re-render
-    new_state =
-      if cursor_pos do
-        Map.put(new_state, :_restore_cursor, cursor_pos)
-      else
-        new_state
-      end
-
-    new_state =
-      if first_visible_line do
-        Map.put(new_state, :_restore_first_visible_line, first_visible_line)
-      else
-        new_state
-      end
+    new_state = %{
+      new_state
+      | _restore_cursor: cursor_pos,
+        _restore_first_visible_line: first_visible_line
+    }
 
     # Reuse existing graph to preserve component PIDs and avoid race conditions
     old_state = scene.assigns.state
@@ -1349,10 +1829,7 @@ defmodule QuillEx.RootScene do
       QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
     # Remove the temporary restore keys from state
-    final_state =
-      new_state
-      |> Map.delete(:_restore_cursor)
-      |> Map.delete(:_restore_first_visible_line)
+    final_state = %{new_state | _restore_cursor: nil, _restore_first_visible_line: nil}
 
     new_scene =
       scene
@@ -1370,44 +1847,104 @@ defmodule QuillEx.RootScene do
   # Shows the search bar and optionally pre-fills with word under cursor.
   # Options:
   # - replace_mode: true to show replace row (Ctrl+H)
+  # - project: true to also open the project-search pane (Ctrl+Shift+F) and
+  #   drive it from the same popup
   defp show_search_bar(scene, opts \\ []) do
-    alias ScenicWidgets.TextField.State, as: TFState
     replace_mode = Keyword.get(opts, :replace_mode, false)
-
-    # Pre-fill the search with the word under the cursor — read from the
-    # BUFFER (the source of truth), not by calling synchronously into the
-    # live TextField. That call blocks on whatever the component is
-    # rendering; on a large document it timed out and crashed the scene.
-    initial_query =
-      with buf_ref when not is_nil(buf_ref) <- scene.assigns.state.active_buf,
-           {:ok, buf_state} <- Quillex.Buffer.Process.fetch_buf(buf_ref),
-           %{line: line, col: col} <- buf_state.cursor do
-        TFState.word_at(buf_state.data, {line, col}) || ""
-      else
-        _ -> ""
-      end
-
+    project? = Keyword.get(opts, :project, false)
     old_state = scene.assigns.state
 
-    # If search bar is already showing and we're toggling replace mode, just update replace
-    if old_state.show_search_bar and replace_mode do
-      new_state = %{old_state | show_replace: true}
+    # Pre-fill: what the popup already holds beats what the pane remembers,
+    # which beats the word under the cursor.
+    initial_query =
+      cond do
+        old_state.show_search_bar and old_state.search_query != "" ->
+          old_state.search_query
 
-      new_graph =
-        QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+        project? and Quillex.RadixCache.ProjectSearchStore.get_state().query != "" ->
+          Quillex.RadixCache.ProjectSearchStore.get_state().query
 
-      new_scene =
-        scene
-        |> assign(state: new_state)
-        |> assign(graph: new_graph)
-        |> push_graph(new_graph)
+        true ->
+          word_under_cursor(old_state)
+      end
 
-      Scenic.Scene.put_child(new_scene, :search_bar, :enable_replace_mode)
-      {:noreply, new_scene}
-    else
-      do_show_search_bar(scene, old_state, initial_query, replace_mode)
+    if project? do
+      root = old_state.file_nav_path || File.cwd!()
+      Quillex.RadixCache.ProjectSearchStore.set_root(root)
+      Quillex.RadixCache.ProjectSearchStore.set_query(initial_query)
+      Quillex.RadixCache.ViewStore.open_project_search()
+    end
+
+    cond do
+      # Already showing: grow into replace mode (and keep everything else)
+      old_state.show_search_bar and replace_mode ->
+        new_state = %{old_state | show_replace: true}
+
+        new_graph =
+          QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+
+        new_scene =
+          scene
+          |> assign(state: new_state)
+          |> assign(graph: new_graph)
+          |> push_graph(new_graph)
+
+        Scenic.Scene.put_child(new_scene, :search_bar, :enable_replace_mode)
+        {:noreply, new_scene}
+
+      # Already showing and the pane just joined it: nothing to rebuild
+      old_state.show_search_bar and project? ->
+        {:noreply, scene}
+
+      true ->
+        do_show_search_bar(scene, old_state, initial_query, replace_mode)
     end
   end
+
+  # The word under the cursor — read from the BUFFER (the source of truth),
+  # not by calling synchronously into the live TextField. That call blocks on
+  # whatever the component is rendering; on a large document it timed out
+  # and crashed the scene.
+  defp word_under_cursor(state) do
+    alias ScenicWidgets.TextField.State, as: TFState
+
+    with buf_ref when not is_nil(buf_ref) <- state.active_buf,
+         {:ok, buf_state} <- Quillex.Buffer.Process.fetch_buf(buf_ref),
+         %{line: line, col: col} <- buf_state.cursor do
+      TFState.word_at(buf_state.data, {line, col}) || ""
+    else
+      _ -> ""
+    end
+  end
+
+  # Open (or switch to) a file and put the cursor on {line, col} — how a
+  # project-search result is visited. The cursor is set on the buffer after
+  # activation, so the pane reveals it as an ordinary cursor move.
+  defp open_file_at(scene, path, {line, col}) do
+    case Quillex.API.FileAPI.open(path) do
+      {:ok, %{buffer_ref: buf_ref}} ->
+        {:ok, _snapshot} = Quillex.Buffer.dispatch(buf_ref, [{:set_cursor, {line, col}}])
+        Scenic.Scene.put_child(scene, :project_search_pane, :blur)
+
+        # While the popup is up it owns the keyboard: focusing the pane would
+        # lift its overlay gate and the next keystroke would land in BOTH the
+        # search box and the document.
+        unless scene.assigns.state.show_search_bar do
+          Scenic.Scene.put_child(scene, :buffer_pane, :focus)
+        end
+
+        {:noreply, scene}
+
+      {:error, reason} ->
+        Quillex.RadixCache.ViewStore.show_status(to_string(reason), :warning)
+        {:noreply, scene}
+    end
+  end
+
+  defp side_pane_open?(state), do: state.show_file_nav or state.show_project_search
+
+  defp side_pane_id(%{show_project_search: true}), do: :project_search_pane
+  defp side_pane_id(_state), do: :file_nav
 
   defp do_show_search_bar(scene, old_state, initial_query, replace_mode) do
     new_state = %{
@@ -1852,7 +2389,32 @@ defmodule QuillEx.RootScene do
 
       {:error, reason} ->
         Logger.warning("Failed to open file: #{reason}")
+        Quillex.RadixCache.ViewStore.show_status(to_string(reason), :warning)
         {:noreply, scene}
     end
   end
+
+  defp hide_nav_delete_prompt(scene) do
+    state = %{scene.assigns.state | pending_nav_delete: [], show_nav_delete_prompt: false}
+    graph = Scenic.Graph.delete(scene.assigns.graph, :nav_delete_prompt)
+    new_scene = scene |> assign(state: state, graph: graph) |> push_graph(graph)
+    Scenic.Scene.put_child(new_scene, :buffer_pane, :focus)
+    new_scene
+  end
+
+  defp entry_word(1), do: "entry"
+  defp entry_word(_count), do: "entries"
+
+  defp format_nav_error({:destination_exists, path}),
+    do: "#{Path.basename(path)} already exists"
+
+  defp format_nav_error({:missing_source, path}), do: "#{Path.basename(path)} no longer exists"
+  defp format_nav_error({:invalid_target, path}), do: "#{path} is not a directory"
+  defp format_nav_error(:move_into_self), do: "a directory cannot be moved into itself"
+  defp format_nav_error(:already_in_target), do: "the selection is already in that directory"
+
+  defp format_nav_error({:move_into_descendant, _source, _target}),
+    do: "a directory cannot be moved into its descendant"
+
+  defp format_nav_error(reason), do: inspect(reason)
 end

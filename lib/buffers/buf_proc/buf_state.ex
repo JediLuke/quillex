@@ -14,6 +14,7 @@ defmodule Quillex.Structs.BufState do
           selection: selection(),
           read_only?: boolean(),
           dirty?: boolean(),
+          external_change: nil | :modified | :deleted,
           undo_stack: list(),
           redo_stack: list(),
           undo_max_size: pos_integer(),
@@ -40,6 +41,8 @@ defmodule Quillex.Structs.BufState do
     read_only?: false,
     # a `dirty` buffer is one which is changed / modified in memory but not yet written to disk
     dirty?: false,
+    # Set by ExternalFileSync when disk changes cannot be applied safely.
+    external_change: nil,
 
     # ===== UNDO/REDO STATE (Single Source of Truth) =====
     # List of {data, cursor, selection} snapshots for undo (most recent first)
@@ -86,6 +89,7 @@ defmodule Quillex.Structs.BufState do
       selection: nil,
       read_only?: read_only?,
       dirty?: false,
+      external_change: nil,
       # Undo/Redo - start with empty stacks
       undo_stack: [],
       redo_stack: [],

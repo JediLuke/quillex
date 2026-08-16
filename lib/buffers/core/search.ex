@@ -4,19 +4,41 @@ defmodule Quillex.Buffer.Core.Search do
   alias Quillex.Buffer.Core.Navigation
   alias Quillex.Structs.BufState
 
-  def set(%BufState{} = buf, query) when is_binary(query) and query != "" do
-    %{
-      buf
-      | search_query: query,
-        search_matches: matches(buf.data, query),
-        search_current_index: 0
-    }
+  # Incremental search: the current match is the first one that ends after
+  # the cursor — the one under it, when the query came from the word there,
+  # or the next one down the document — and the cursor goes to it so the
+  # view reveals it. Wraps to the first match when nothing follows.
+  def set(%BufState{cursor: %{line: line, col: col}} = buf, query)
+      when is_binary(query) and query != "" do
+    found = matches(buf.data, query)
+
+    index =
+      Enum.find_index(found, fn {l, c, text} -> {l, c + String.length(text)} > {line, col} end) ||
+        0
+
+    apply_matches(%{buf | search_query: query}, found, index)
   end
 
   def set(%BufState{} = buf, _),
     do: %{buf | search_query: nil, search_matches: [], search_current_index: 0}
 
   def clear(%BufState{} = buf), do: set(buf, nil)
+
+  @doc """
+  Recompute the matches after the text changed underneath an active search.
+
+  Keeps the current-match index (clamped) and does NOT move the cursor —
+  the user was editing, not navigating. A no-op when nothing relevant changed.
+  """
+  def resync(%BufState{search_query: nil} = buf, _previous), do: buf
+  def resync(%BufState{data: data} = buf, %BufState{data: data}), do: buf
+
+  def resync(%BufState{} = buf, _previous) do
+    found = matches(buf.data, buf.search_query)
+    index = if found == [], do: 0, else: min(buf.search_current_index, length(found) - 1)
+    %{buf | search_matches: found, search_current_index: index}
+  end
+
   def next(%BufState{search_matches: []} = buf), do: buf
 
   def next(%BufState{search_matches: found, search_current_index: index} = buf),
@@ -32,10 +54,17 @@ defmodule Quillex.Buffer.Core.Search do
   def replace(%BufState{} = buf, replacement) when is_binary(replacement) do
     case Enum.at(buf.search_matches, buf.search_current_index) do
       {line, col, matched} ->
-        buf
-        |> Quillex.Buffer.Core.History.push()
-        |> replace_at(line, col, matched, replacement)
-        |> refresh(buf.search_query, buf.search_current_index)
+        replaced =
+          replace_at(Quillex.Buffer.Core.History.push(buf), line, col, matched, replacement)
+
+        # Land on the next match AFTER the text we just wrote. Keeping the same
+        # index is wrong when the replacement itself still matches (a
+        # case-insensitive "the" → "THE"): Enter would replace the same spot
+        # forever. Wraps to the first match when nothing follows.
+        found = matches(replaced.data, buf.search_query)
+        after_replacement = {line, col + String.length(replacement)}
+        next = Enum.find_index(found, fn {l, c, _} -> {l, c} >= after_replacement end) || 0
+        apply_matches(replaced, found, next)
 
       nil ->
         buf
@@ -55,15 +84,19 @@ defmodule Quillex.Buffer.Core.Search do
     refresh(updated, buf.search_query, 0)
   end
 
+  @doc """
+  Every case-insensitive occurrence of `query`, as `{line, col, matched_text}`
+  with 1-based grapheme columns, in document order.
+  """
   def matches(lines, query) when is_list(lines) and is_binary(query) do
-    query_lower = String.downcase(query)
-    query_length = String.length(query)
+    # Caseless matching on the ORIGINAL line, not on a downcased copy: for
+    # some scripts downcasing changes the byte length, and positions found in
+    # the copy would not line up with the text they are meant to describe.
+    {:ok, regex} = Regex.compile(Regex.escape(query), "iu")
 
     lines
     |> Enum.with_index(1)
-    |> Enum.flat_map(fn {line, line_number} ->
-      matches_in_line(line, String.downcase(line), query_lower, query_length, line_number, 1, [])
-    end)
+    |> Enum.flat_map(fn {line, line_number} -> matches_in_line(line, regex, line_number) end)
   end
 
   defp replace_at(buf, line, col, matched, replacement) do
@@ -80,9 +113,15 @@ defmodule Quillex.Buffer.Core.Search do
 
   defp refresh(buf, query, desired_index) do
     found = matches(buf.data, query)
-    index = if found == [], do: 0, else: min(desired_index, length(found) - 1)
-    updated = %{buf | search_matches: found, search_current_index: index}
-    if found == [], do: updated, else: move_to(updated, index)
+    apply_matches(buf, found, desired_index)
+  end
+
+  defp apply_matches(buf, [], _desired_index),
+    do: %{buf | search_matches: [], search_current_index: 0}
+
+  defp apply_matches(buf, found, desired_index) do
+    index = min(desired_index, length(found) - 1)
+    move_to(%{buf | search_matches: found, search_current_index: index}, index)
   end
 
   defp move_to(%BufState{search_matches: found} = buf, index) do
@@ -97,25 +136,20 @@ defmodule Quillex.Buffer.Core.Search do
     end
   end
 
-  defp matches_in_line(line, lower, query, query_length, line_number, col, acc) do
-    case :binary.match(lower, query) do
-      {position, _length} ->
-        match_col = col + position
-        matched = String.slice(line, position, query_length)
-        offset = position + query_length
+  # The scan yields BYTE offsets; columns are graphemes. Convert incrementally,
+  # counting only the text between consecutive matches — a byte offset used as
+  # a column put every highlight after an em dash two characters to the right
+  # (and would have made Replace splice the wrong characters out).
+  defp matches_in_line(line, regex, line_number) do
+    # A caseless unicode scan raises on invalid UTF-8; such a line holds no
+    # text we could match anyway.
+    scanned = if String.valid?(line), do: Regex.scan(regex, line, return: :index), else: []
 
-        matches_in_line(
-          String.slice(line, offset..-1//1),
-          String.slice(lower, offset..-1//1),
-          query,
-          query_length,
-          line_number,
-          match_col + query_length,
-          [{line_number, match_col, matched} | acc]
-        )
-
-      :nomatch ->
-        Enum.reverse(acc)
-    end
+    scanned
+    |> Enum.map_reduce({0, 1}, fn [{byte_start, byte_len}], {prev_byte, prev_col} ->
+      col = prev_col + String.length(binary_part(line, prev_byte, byte_start - prev_byte))
+      {{line_number, col, binary_part(line, byte_start, byte_len)}, {byte_start, col}}
+    end)
+    |> elem(0)
   end
 end

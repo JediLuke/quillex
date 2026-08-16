@@ -42,18 +42,32 @@ defmodule Quillex.Utils.SideNavThemes do
   def dark do
     %{
       # Colors - Dark theme (merlinex-inspired)
-      background: {35, 37, 47},              # Dark blue-gray (list_bg)
-      text: {220, 220, 230},                 # Light gray text
-      active_bg: {60, 80, 120},              # Blue-tinted active background
-      active_bar: {100, 160, 220},           # Bright blue accent bar
-      hover_bg: {55, 58, 70},                # Slightly lighter hover
-      chevron: {140, 140, 150},              # Medium gray chevrons
-      focus_ring: {100, 160, 220},           # Blue focus ring
-      border: {50, 52, 62},                  # Subtle border
+      # Dark blue-gray (list_bg)
+      background: {35, 37, 47},
+      # Light gray text
+      text: {220, 220, 230},
+      # Blue-tinted active background
+      active_bg: {60, 80, 120},
+      # Bright blue accent bar
+      active_bar: {100, 160, 220},
+      # Quiet neutral operation selection
+      selection_bg: {48, 51, 62},
+      # Slightly lighter hover
+      hover_bg: {55, 58, 70},
+      # Medium gray chevrons
+      chevron: {140, 140, 150},
+      # Blue focus ring
+      focus_ring: {100, 160, 220},
+      # Subtle border
+      border: {50, 52, 62},
+      # Clearly visible over the dark pane
+      scrollbar_color: {185, 190, 205},
 
       # Dimensions
-      item_height: 26,                       # Compact but readable
-      indent: 14,                            # Indentation per level
+      # Compact but readable
+      item_height: 26,
+      # Indentation per level
+      indent: 14,
       font: :roboto,
       font_size: 13,
       line_height: 18,
@@ -81,10 +95,12 @@ defmodule Quillex.Utils.SideNavThemes do
       text: :white,
       active_bg: {70, 70, 80},
       active_bar: :cyan,
+      selection_bg: {58, 58, 66},
       hover_bg: {55, 55, 60},
       chevron: {150, 150, 150},
       focus_ring: :cyan,
       border: {60, 60, 65},
+      scrollbar_color: {190, 190, 200},
 
       # Dimensions
       item_height: 24,
@@ -116,10 +132,12 @@ defmodule Quillex.Utils.SideNavThemes do
       text: {34, 34, 34},
       active_bg: {229, 242, 255},
       active_bar: {76, 86, 106},
+      selection_bg: {214, 218, 224},
       hover_bg: {240, 240, 245},
       chevron: {80, 80, 80},
       focus_ring: {0, 112, 214},
       border: {220, 220, 225},
+      scrollbar_color: {105, 110, 125},
 
       # Dimensions
       item_height: 28,
@@ -150,5 +168,6 @@ defmodule Quillex.Utils.SideNavThemes do
   def get(:dark), do: dark()
   def get(:bare_bones), do: bare_bones()
   def get(:light), do: light()
-  def get(_), do: dark()  # Default to dark theme
+  # Default to dark theme
+  def get(_), do: dark()
 end
