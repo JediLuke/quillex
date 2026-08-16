@@ -291,10 +291,6 @@ defmodule Quillex.TestHelpers.SemanticHelpers do
   end
   
   @doc """
-  Get the current cursor position from the buffer's semantic data.
-  Returns {line, column} or nil if not found.
-  """
-  @doc """
   The buffer pane's actual frame `%{x:, y:, width:, height:}` in window
   coords, from the TextField's semantic metadata. Spex must derive
   window-size-dependent click coordinates (scrollbars, right-edge UI) from

@@ -11,10 +11,13 @@ defmodule QuillEx.MixProject do
       elixirc_paths: elixirc_paths(Mix.env()),
       compilers: [:boundary] ++ Mix.compilers() ++ spex_compilers(),
       spex: [pattern: "test/spex/**/*_spex.exs", boundary: Quillex.Spex],
-      preferred_cli_env: [spex: :test, run_spex: :test],
       releases: releases(),
       deps: deps()
     ]
+  end
+
+  def cli do
+    [preferred_envs: [spex: :test, run_spex: :test]]
   end
 
   # `mix release` bundles the app, its deps and the ERTS into

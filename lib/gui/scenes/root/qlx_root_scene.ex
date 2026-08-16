@@ -489,13 +489,6 @@ defmodule QuillEx.RootScene do
       new_state =
         Enum.reduce(actions, old_state, fn action, acc_state ->
           RootScene.Reducer.process(acc_state, action)
-          |> case do
-            :ignore ->
-              acc_state
-
-            new_acc_state ->
-              new_acc_state
-          end
         end)
 
       # Reuse existing graph to preserve component PIDs and avoid race conditions
@@ -515,12 +508,6 @@ defmodule QuillEx.RootScene do
     dispatch_toggle(toggle)
     {:noreply, scene}
   end
-
-  defp dispatch_toggle(:toggle_line_numbers),
-    do: Quillex.RadixCache.ViewStore.toggle_line_numbers()
-
-  defp dispatch_toggle(:toggle_word_wrap), do: Quillex.RadixCache.ViewStore.toggle_word_wrap()
-  defp dispatch_toggle(:toggle_file_nav), do: Quillex.RadixCache.ViewStore.toggle_file_nav()
 
   # Buffer-list actions are store dispatches: BufferManager owns that state,
   # and the scene re-renders when the :radix_buffers snapshot arrives.
@@ -733,6 +720,12 @@ defmodule QuillEx.RootScene do
     {:noreply, scene}
   end
 
+  defp dispatch_toggle(:toggle_line_numbers),
+    do: Quillex.RadixCache.ViewStore.toggle_line_numbers()
+
+  defp dispatch_toggle(:toggle_word_wrap), do: Quillex.RadixCache.ViewStore.toggle_word_wrap()
+  defp dispatch_toggle(:toggle_file_nav), do: Quillex.RadixCache.ViewStore.toggle_file_nav()
+
   # Buffer-list store snapshots (:radix_buffers) — the single path by which
   # the open-buffers list, active buffer, and dirty flags reach the scene.
   def handle_info(
@@ -768,6 +761,27 @@ defmodule QuillEx.RootScene do
   # catch-all on {{Scenic.PubSub, _}, _} would swallow :data updates.
   def handle_info({{Scenic.PubSub, :registered}, _}, scene), do: {:noreply, scene}
   def handle_info({{Scenic.PubSub, :unregistered}, _}, scene), do: {:noreply, scene}
+
+  def handle_info({:quit_requested, dirty_buffers}, scene) do
+    names = Enum.map_join(dirty_buffers, "\n", &"• #{&1.name || "untitled"}")
+    state = %{scene.assigns.state | show_unsaved_prompt: true, quit_dirty_buffers: dirty_buffers}
+
+    graph =
+      ScenicWidgets.ConfirmDialog.add_to_graph(
+        scene.assigns.graph,
+        %{
+          frame: state.frame,
+          title: "Unsaved Changes",
+          message: "The following buffers have unsaved changes:\n\n#{names}",
+          buttons: [{:discard, "Quit Without Saving"}, {:cancel, "Cancel"}]
+        },
+        id: :quit_prompt
+      )
+
+    new_scene = scene |> assign(state: state) |> assign(graph: graph) |> push_graph(graph)
+    Scenic.Scene.put_child(new_scene, :buffer_pane, :blur)
+    {:noreply, new_scene}
+  end
 
   # The single render path for store snapshots: diff-render against the
   # previous state, preserving component PIDs where the Renderizer allows.
@@ -1745,27 +1759,6 @@ defmodule QuillEx.RootScene do
     Scenic.Scene.put_child(new_scene, :buffer_pane, :focus)
 
     new_scene
-  end
-
-  def handle_info({:quit_requested, dirty_buffers}, scene) do
-    names = Enum.map_join(dirty_buffers, "\n", &"• #{&1.name || "untitled"}")
-    state = %{scene.assigns.state | show_unsaved_prompt: true, quit_dirty_buffers: dirty_buffers}
-
-    graph =
-      ScenicWidgets.ConfirmDialog.add_to_graph(
-        scene.assigns.graph,
-        %{
-          frame: state.frame,
-          title: "Unsaved Changes",
-          message: "The following buffers have unsaved changes:\n\n#{names}",
-          buttons: [{:discard, "Quit Without Saving"}, {:cancel, "Cancel"}]
-        },
-        id: :quit_prompt
-      )
-
-    new_scene = scene |> assign(state: state) |> assign(graph: graph) |> push_graph(graph)
-    Scenic.Scene.put_child(new_scene, :buffer_pane, :blur)
-    {:noreply, new_scene}
   end
 
   defp hide_quit_prompt(scene) do
