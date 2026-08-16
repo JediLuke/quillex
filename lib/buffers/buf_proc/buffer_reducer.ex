@@ -235,6 +235,31 @@ defmodule Quillex.Buffer.Process.Reducer do
     end
   end
 
+  def process(%BufState{cursor: cursor} = buf, {:unindent, tab_width})
+      when is_integer(tab_width) and tab_width > 0 do
+    line = Enum.at(buf.data, cursor.line - 1, "")
+
+    remove =
+      cond do
+        String.starts_with?(line, "\t") ->
+          1
+
+        true ->
+          min(tab_width, length(Regex.run(~r/^ */, line) |> List.first() |> String.graphemes()))
+      end
+
+    if remove == 0 do
+      buf
+    else
+      new_line = String.slice(line, remove..-1//1) || ""
+
+      buf
+      |> History.push()
+      |> Map.update!(:data, &List.replace_at(&1, cursor.line - 1, new_line))
+      |> Navigation.move_cursor({cursor.line, max(1, cursor.col - remove)})
+    end
+  end
+
   def process(%BufState{cursor: c} = buf, {:insert, :line, clipboard_text, :below_cursor_line}) do
     # minus one index for zero based index but then plus one cause it's the next line, so they cancel and it's just c.line
     buf_with_undo = History.push(buf)

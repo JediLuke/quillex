@@ -11,7 +11,7 @@ defmodule Quillex.BufferSupervisor do
     # Check if file exists before attempting to read it
     case File.exists?(filepath) do
       true ->
-        case File.read(filepath) do
+        case Quillex.Files.TextFile.read(filepath) do
           {:ok, file_content} ->
             lines = String.split(file_content, "\n")
 

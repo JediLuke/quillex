@@ -126,7 +126,7 @@ defmodule Quillex.Buffer do
   def reload(buf_ref) do
     with {:ok, snapshot} <- fetch(buf_ref),
          path when is_binary(path) <- snapshot.ref.path,
-         {:ok, content} <- File.read(path),
+         {:ok, content} <- Quillex.Files.TextFile.read(path),
          lines = String.split(content, "\n"),
          {:ok, updated} <- dispatch(buf_ref, {:reload_from_disk, lines}) do
       {:ok, updated}

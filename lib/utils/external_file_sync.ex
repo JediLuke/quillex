@@ -196,7 +196,7 @@ defmodule Quillex.Files.ExternalFileSync do
   end
 
   defp disk_state(path) do
-    case File.read(path) do
+    case Quillex.Files.TextFile.read(path) do
       {:ok, content} -> {:ok, digest(content), content}
       {:error, :enoent} -> :missing
       {:error, reason} -> {:error, reason}

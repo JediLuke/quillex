@@ -60,6 +60,15 @@ defmodule Quillex.FileNavResizeSpex do
       assert nav_state.frame.size.width == live_width,
              "navigator did not resize during the captured drag"
 
+      if pane_width = Keyword.get(opts, :pane_width_during_drag) do
+        {:ok, pane_child} = Scenic.Scene.child(root_scene, :buffer_pane)
+        pane_pid = child_pid(pane_child)
+        pane_state = :sys.get_state(pane_pid).assigns.state
+
+        assert pane_state.frame.size.width == pane_width,
+               "the TextField was expensively reframed before mouse-up"
+      end
+
       assert {:ok, captures} = Scenic.Scene.fetch_captures(root_scene)
       assert :cursor_button in captures
       assert :cursor_pos in captures
@@ -102,7 +111,9 @@ defmodule Quillex.FileNavResizeSpex do
 
         root = :sys.get_state(Process.whereis(QuillEx.RootScene))
         {:ok, nav_pid} = Scenic.Scene.child(root, :file_nav)
-        {:ok, pane_pid} = Scenic.Scene.child(root, :buffer_pane)
+        {:ok, pane_child} = Scenic.Scene.child(root, :buffer_pane)
+        pane_pid = child_pid(pane_child)
+        pane_width = :sys.get_state(pane_pid).assigns.state.frame.size.width
 
         for id <- [
               :file_nav_resize_arrow_shaft,
@@ -114,11 +125,15 @@ defmodule Quillex.FileNavResizeSpex do
           assert [_line] = Scenic.Graph.get(root.assigns.graph, id)
         end
 
-        {:ok, Map.merge(context, %{nav_pid: nav_pid, pane_pid: pane_pid})}
+        {:ok, Map.merge(context, %{nav_pid: nav_pid, pane_pid: pane_pid, pane_width: pane_width})}
       end
 
       when_ "the resize pill is dragged to the right", context do
-        drag_handle(250, 340, live_width: 340)
+        drag_handle(250, 340,
+          live_width: 340,
+          pane_width_during_drag: context.pane_width
+        )
+
         {:ok, context}
       end
 
@@ -129,7 +144,10 @@ defmodule Quillex.FileNavResizeSpex do
 
         root = :sys.get_state(Process.whereis(QuillEx.RootScene))
         assert Scenic.Scene.child(root, :file_nav) == {:ok, context.nav_pid}
-        assert Scenic.Scene.child(root, :buffer_pane) == {:ok, context.pane_pid}
+        {:ok, pane_child} = Scenic.Scene.child(root, :buffer_pane)
+        assert child_pid(pane_child) == context.pane_pid
+        pane_state = :sys.get_state(context.pane_pid).assigns.state
+        assert pane_state.frame.size.width == context.pane_width - 90
         {:ok, context}
       end
     end
@@ -159,4 +177,7 @@ defmodule Quillex.FileNavResizeSpex do
       end
     end
   end
+
+  defp child_pid([pid | _]) when is_pid(pid), do: pid
+  defp child_pid(pid) when is_pid(pid), do: pid
 end

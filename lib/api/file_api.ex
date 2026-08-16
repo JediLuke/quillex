@@ -25,6 +25,7 @@ defmodule Quillex.API.FileAPI do
   """
 
   alias Quillex.Buffer
+  alias Quillex.Files.TextFile
 
   @doc """
   Opens a file in the text editor.
@@ -62,7 +63,7 @@ defmodule Quillex.API.FileAPI do
   end
 
   defp do_open_new(file_path) do
-    case File.read(file_path) do
+    case TextFile.read(file_path) do
       {:ok, content} ->
         # File exists, create buffer with content.
         # Buffer.new/1 triggers BufferManager which broadcasts {:new_buffer_opened, buf_ref}
@@ -105,6 +106,9 @@ defmodule Quillex.API.FileAPI do
            bytes: 0,
            created: true
          }}
+
+      {:error, :binary_file} ->
+        {:error, "Cannot open #{Path.basename(file_path)}: file is not UTF-8 text"}
 
       {:error, reason} ->
         {:error, "Failed to open #{file_path}: #{reason}"}
@@ -284,7 +288,7 @@ defmodule Quillex.API.FileAPI do
         {:error, "Buffer has no associated file path"}
 
       {:ok, %{file_path: file_path, buffer_ref: buf_ref}} ->
-        case File.read(file_path) do
+        case TextFile.read(file_path) do
           {:ok, content} ->
             new_lines = String.split(content, "\n")
             # Send three actions as a list so the buffer process applies them atomically:
@@ -305,6 +309,9 @@ defmodule Quillex.API.FileAPI do
 
           {:error, :enoent} ->
             {:error, "File has been deleted from disk"}
+
+          {:error, :binary_file} ->
+            {:error, "Cannot reload #{Path.basename(file_path)}: file is not UTF-8 text"}
 
           {:error, reason} ->
             {:error, "Failed to read #{file_path}: #{reason}"}
@@ -360,7 +367,7 @@ defmodule Quillex.API.FileAPI do
   """
   def check_file_status(buffer_lines, file_path)
       when is_list(buffer_lines) and is_binary(file_path) do
-    case File.read(file_path) do
+    case TextFile.read(file_path) do
       {:ok, disk_content} ->
         disk_lines = String.split(disk_content, "\n")
 
@@ -372,6 +379,9 @@ defmodule Quillex.API.FileAPI do
 
       {:error, :enoent} ->
         {:ok, :deleted}
+
+      {:error, :binary_file} ->
+        {:error, :binary_file}
 
       {:error, reason} ->
         {:error, "Failed to read #{file_path}: #{reason}"}

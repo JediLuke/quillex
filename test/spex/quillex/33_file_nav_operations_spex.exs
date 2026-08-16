@@ -100,6 +100,22 @@ defmodule Quillex.FileNavOperationsSpex do
     Process.sleep(250)
   end
 
+  defp choose_context_action(row) do
+    %{context_menu: %{x: x, y: y}, frame: frame} = nav_state()
+    left = min(x, max(frame.size.width - 150 - 4, 4))
+    top = min(y, max(frame.size.height - 60 - 4, 4))
+    point = {frame.pin.x + left + 30, frame.pin.y + top + row * 30 + 15}
+    pointer(:btn_left, 1, [], point)
+    pointer(:btn_left, 0, [], point)
+    Process.sleep(200)
+  end
+
+  defp type_codepoints(text) do
+    text
+    |> String.graphemes()
+    |> Enum.each(&ScenicMcp.Probes.send_codepoint(&1, []))
+  end
+
   defp drag(source, target) do
     from = row_center(source)
     to = row_center(target)
@@ -199,6 +215,32 @@ defmodule Quillex.FileNavOperationsSpex do
       end
     end
 
+    scenario "Clicking a binary file is rejected before it reaches the editor" do
+      given_ "an executable-like file is visible", context do
+        binary = Path.join(context.root, "window_pinner")
+        File.write!(binary, <<0x7F, "ELF", 2, 1, 1, 0, 0, 0xFF, 0xFE>>)
+        refresh_tree()
+
+        {:ok,
+         Map.merge(context, %{
+           binary: binary,
+           buffer_count: length(Quillex.Buffer.list())
+         })}
+      end
+
+      when_ "the binary row is clicked", context do
+        click(context.binary)
+        ViewStore.sync()
+        {:ok, context}
+      end
+
+      then_ "no buffer is created and the status bar explains the rejection", context do
+        assert length(Quillex.Buffer.list()) == context.buffer_count
+        assert ViewStore.get_state().status_message =~ "not UTF-8 text"
+        {:ok, context}
+      end
+    end
+
     scenario "Selected files drag into a directory" do
       given_ "two files are selected for an operation", context do
         alpha = Path.join(context.root, "alpha.txt")
@@ -252,10 +294,7 @@ defmodule Quillex.FileNavOperationsSpex do
         assert nav_state().context_menu == nil
 
         right_click(context.doomed)
-        %{context_menu: %{x: x, y: y}, frame: frame} = nav_state()
-        pointer(:btn_left, 1, [], {frame.pin.x + x + 30, frame.pin.y + y + 15})
-        pointer(:btn_left, 0, [], {frame.pin.x + x + 30, frame.pin.y + y + 15})
-        Process.sleep(300)
+        choose_context_action(1)
         {:ok, context}
       end
 
@@ -275,6 +314,34 @@ defmodule Quillex.FileNavOperationsSpex do
       then_ "the file is removed and the prompt closes", context do
         refute File.exists?(context.doomed)
         refute root_state().show_nav_delete_prompt
+        {:ok, context}
+      end
+    end
+
+    scenario "A directory is renamed inline from its row" do
+      given_ "a directory is visible", context do
+        directory = Path.join(context.root, "rename-me")
+        File.mkdir_p!(directory)
+        File.write!(Path.join(directory, "child.txt"), "child")
+        refresh_tree()
+        {:ok, Map.put(context, :rename_directory, directory)}
+      end
+
+      when_ "Rename is chosen and a new name is entered", context do
+        right_click(context.rename_directory)
+        choose_context_action(0)
+        assert nav_state().renaming_id == context.rename_directory
+
+        type_codepoints("renamed-directory")
+        ScenicMcp.Probes.send_keys("enter", [])
+        Process.sleep(700)
+        {:ok, Map.put(context, :renamed_directory, Path.join(context.root, "renamed-directory"))}
+      end
+
+      then_ "the row and its contents move to the new path", context do
+        refute File.exists?(context.rename_directory)
+        assert File.read!(Path.join(context.renamed_directory, "child.txt")) == "child"
+        assert String.starts_with?(ViewStore.get_state().status_message, "Renamed")
         {:ok, context}
       end
     end

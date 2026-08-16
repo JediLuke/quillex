@@ -54,4 +54,37 @@ defmodule Quillex.Files.NavigatorOpsTest do
     refute File.exists?(file)
     refute File.exists?(directory)
   end
+
+  @tag :tmp_dir
+  test "renames files and directories without changing their parent", %{tmp_dir: root} do
+    file = Path.join(root, "before.txt")
+    directory = Path.join(root, "before-dir")
+    File.write!(file, "text")
+    File.mkdir_p!(directory)
+    File.write!(Path.join(directory, "nested.txt"), "nested")
+
+    assert {:ok, {^file, renamed_file}} = NavigatorOps.rename(file, "after.txt")
+    assert renamed_file == Path.join(root, "after.txt")
+    assert File.read!(renamed_file) == "text"
+
+    assert {:ok, {^directory, renamed_directory}} = NavigatorOps.rename(directory, "after-dir")
+    assert File.read!(Path.join(renamed_directory, "nested.txt")) == "nested"
+  end
+
+  @tag :tmp_dir
+  test "rename rejects invalid names and collisions without touching disk", %{tmp_dir: root} do
+    source = Path.join(root, "source.txt")
+    existing = Path.join(root, "existing.txt")
+    File.write!(source, "source")
+    File.write!(existing, "existing")
+
+    assert {:error, :empty_name} = NavigatorOps.rename(source, "   ")
+    assert {:error, :invalid_name} = NavigatorOps.rename(source, "nested/name.txt")
+
+    assert {:error, {:destination_exists, ^existing}} =
+             NavigatorOps.rename(source, "existing.txt")
+
+    assert File.read!(source) == "source"
+    assert File.read!(existing) == "existing"
+  end
 end

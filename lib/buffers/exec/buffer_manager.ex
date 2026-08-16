@@ -49,6 +49,10 @@ defmodule Quillex.Buffer.BufferManager do
     GenServer.cast(__MODULE__, {:activate_buffer, buf_ref_or_n})
   end
 
+  @doc "Reorder open buffers by UUID, preserving the active buffer."
+  def reorder_buffers(uuids) when is_list(uuids),
+    do: GenServer.cast(__MODULE__, {:reorder_buffers, uuids})
+
   def internal_ref(%{uuid: uuid}) do
     list_buffers() |> Enum.find(&(&1.uuid == uuid))
   end
@@ -176,6 +180,13 @@ defmodule Quillex.Buffer.BufferManager do
     end
   end
 
+  def handle_cast({:reorder_buffers, uuids}, state) do
+    case reorder_state(state, uuids) do
+      {:ok, new_state} -> {:noreply, publish(new_state)}
+      :invalid_order -> {:noreply, state}
+    end
+  end
+
   def handle_cast({:buffer_meta, uuid, meta}, state) do
     merge = fn
       %Quillex.Buffer.Ref{uuid: ^uuid} = ref -> struct(ref, meta)
@@ -213,6 +224,18 @@ defmodule Quillex.Buffer.BufferManager do
     case Enum.at(state.buffers, n - 1) do
       nil -> :not_found
       %Quillex.Buffer.Ref{} = buf_ref -> activate_state(state, buf_ref)
+    end
+  end
+
+  @doc false
+  def reorder_state(state, uuids) do
+    current = Enum.map(state.buffers, & &1.uuid)
+
+    if length(uuids) == length(current) and MapSet.new(uuids) == MapSet.new(current) do
+      by_uuid = Map.new(state.buffers, &{&1.uuid, &1})
+      {:ok, %{state | buffers: Enum.map(uuids, &Map.fetch!(by_uuid, &1))}}
+    else
+      :invalid_order
     end
   end
 
