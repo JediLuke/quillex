@@ -105,6 +105,12 @@ defmodule Quillex.Buffer.Process do
       end)
 
     with {:ok, new_state} <- result do
+      # Whatever changed the text — typing, undo, a reload from disk, a
+      # project-wide replace — the active search must describe the text as
+      # it is now. Stale positions drew highlights on lines that no longer
+      # held the match (or held nothing at all).
+      new_state = Quillex.Buffer.Core.Search.resync(new_state, state)
+
       # Edge-cast display metadata to the buffer-list store only on transition,
       # so the tab bar's Refs stay fresh without per-keystroke list publishes
       if new_state.dirty? != state.dirty? or new_state.name != state.name or

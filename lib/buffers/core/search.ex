@@ -23,6 +23,22 @@ defmodule Quillex.Buffer.Core.Search do
     do: %{buf | search_query: nil, search_matches: [], search_current_index: 0}
 
   def clear(%BufState{} = buf), do: set(buf, nil)
+
+  @doc """
+  Recompute the matches after the text changed underneath an active search.
+
+  Keeps the current-match index (clamped) and does NOT move the cursor —
+  the user was editing, not navigating. A no-op when nothing relevant changed.
+  """
+  def resync(%BufState{search_query: nil} = buf, _previous), do: buf
+  def resync(%BufState{data: data} = buf, %BufState{data: data}), do: buf
+
+  def resync(%BufState{} = buf, _previous) do
+    found = matches(buf.data, buf.search_query)
+    index = if found == [], do: 0, else: min(buf.search_current_index, length(found) - 1)
+    %{buf | search_matches: found, search_current_index: index}
+  end
+
   def next(%BufState{search_matches: []} = buf), do: buf
 
   def next(%BufState{search_matches: found, search_current_index: index} = buf),
@@ -125,8 +141,11 @@ defmodule Quillex.Buffer.Core.Search do
   # a column put every highlight after an em dash two characters to the right
   # (and would have made Replace splice the wrong characters out).
   defp matches_in_line(line, regex, line_number) do
-    regex
-    |> Regex.scan(line, return: :index)
+    # A caseless unicode scan raises on invalid UTF-8; such a line holds no
+    # text we could match anyway.
+    scanned = if String.valid?(line), do: Regex.scan(regex, line, return: :index), else: []
+
+    scanned
     |> Enum.map_reduce({0, 1}, fn [{byte_start, byte_len}], {prev_byte, prev_col} ->
       col = prev_col + String.length(binary_part(line, prev_byte, byte_start - prev_byte))
       {{line_number, col, binary_part(line, byte_start, byte_len)}, {byte_start, col}}

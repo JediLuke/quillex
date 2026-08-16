@@ -98,6 +98,25 @@ defmodule Quillex.Buffer.Core.SearchTest do
     end
   end
 
+  describe "resync/2" do
+    test "recomputes matches after the text changed, without moving the cursor" do
+      before = buf(["the cat", "the hat"]) |> Search.set("the")
+      after_edit = %{before | data: ["cat", "the hat"]}
+
+      synced = Search.resync(after_edit, before)
+      assert synced.search_matches == [{2, 1, "the"}]
+      assert synced.search_current_index == 0
+      assert synced.cursor == before.cursor
+    end
+
+    test "is a no-op without an active search or when the text is unchanged" do
+      b = buf(["the"])
+      assert Search.resync(b, b) == b
+      b2 = Search.set(b, "the")
+      assert Search.resync(b2, b2) == b2
+    end
+  end
+
   describe "replace_all/2" do
     test "replaces every match, right to left, as one undo step" do
       b = buf(["the the", "x the"]) |> Search.set("the") |> Search.replace_all("a")

@@ -81,23 +81,32 @@ defmodule Quillex.Search.Backend.Elixir do
 
   defp matches_in_file(path, query) do
     case File.read(path) do
-      {:ok, content} ->
-        lines = String.split(content, "\n")
+      # Not UTF-8 (Latin-1, UTF-16, a NUL-free binary): not a text file we
+      # can search — the caseless unicode scan raises on invalid bytes.
+      {:ok, content} when not is_binary(content) or byte_size(content) == 0 ->
+        []
 
-        lines
-        |> Search.matches(query)
-        |> Enum.map(fn {line, col, matched} ->
-          %Match{
-            path: path,
-            line: line,
-            col: col,
-            text: Enum.at(lines, line - 1) |> String.trim_trailing("\r"),
-            matched: matched
-          }
-        end)
+      {:ok, content} ->
+        if String.valid?(content), do: matches_in_lines(path, query, content), else: []
 
       {:error, _} ->
         []
     end
+  end
+
+  defp matches_in_lines(path, query, content) do
+    lines = String.split(content, "\n")
+
+    lines
+    |> Search.matches(query)
+    |> Enum.map(fn {line, col, matched} ->
+      %Match{
+        path: path,
+        line: line,
+        col: col,
+        text: Enum.at(lines, line - 1) |> String.trim_trailing("\r"),
+        matched: matched
+      }
+    end)
   end
 end

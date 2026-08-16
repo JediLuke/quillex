@@ -16,6 +16,8 @@ defmodule Quillex.Search.ProjectTest do
     File.write!(Path.join(root, "vendor/c.txt"), "the vendor")
     File.write!(Path.join(root, "_build/d.txt"), "the build")
     File.write!(Path.join(root, "bin.dat"), <<0, 1, 2, "the", 0>>)
+    # Latin-1: no NUL bytes, but not UTF-8 — must be skipped, not crash the scan
+    File.write!(Path.join(root, "latin1.txt"), <<"caf", 0xE9, " the">>)
     on_exit(fn -> File.rm_rf!(root) end)
     {:ok, root: root}
   end
@@ -54,6 +56,13 @@ defmodule Quillex.Search.ProjectTest do
 
           {:ok, matches} = @backend.search(root, "the", max_results: 2)
           assert length(matches) == 2
+        end
+      end
+
+      test "skips files that are not valid UTF-8", %{root: root} do
+        if @backend.available?() do
+          {:ok, matches} = @backend.search(root, "the", [])
+          refute Enum.any?(matches, &String.ends_with?(&1.path, "latin1.txt"))
         end
       end
 
