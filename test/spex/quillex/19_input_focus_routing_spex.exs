@@ -149,6 +149,11 @@ defmodule Quillex.InputFocusRoutingSpex do
         Process.sleep(800)
         ensure_file_nav_visible()
 
+        # A document opened earlier in this VM comes back at its remembered
+        # viewport (buffer-view restore); this scenario needs the top.
+        Probes.send_keys("home", [:ctrl])
+        Process.sleep(300)
+
         # ScriptInspector = actually-drawn text; the semantic table holds the
         # whole document regardless of scroll and cannot detect scrolling.
         assert Quillex.TestHelpers.ScriptInspector.rendered_text_contains?("CONCERNING GOD"),
@@ -234,7 +239,10 @@ defmodule Quillex.InputFocusRoutingSpex do
 
       when_ "the wheel moves over the text pane without clicking it first", context do
         frame = context.frame
-        x = frame.pin.x + trunc(frame.size.width * 0.5)
+        # Exercise the pane's left edge. Scenic transforms this to local x=10;
+        # the old bug compared that against the parent-space frame.pin.x and
+        # silently rejected the wheel until a click moved focus.
+        x = frame.pin.x + 10
         y = frame.pin.y + trunc(frame.size.height * 0.5)
         Probes.send_mouse_move(x, y)
         Probes.send_scroll(0, -5, x, y)
