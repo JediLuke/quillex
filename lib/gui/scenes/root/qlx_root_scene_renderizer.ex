@@ -584,13 +584,6 @@ defmodule QuillEx.RootScene.Renderizer do
     # publishes a different document (same for buffer-process restarts: the
     # pane dispatch target is the PaneStore, never a raw buffer pid).
 
-    # Editor settings are applied IN PLACE (see apply_buffer_pane_settings/3):
-    # recreating the pane opens a window where the old TextField has died and
-    # the new one has not yet requested input, and anything typed or clicked
-    # in that window is lost. Settings alone therefore no longer force a
-    # rebuild.
-    settings_changed = false
-
     # Recreate if search bar, replace mode, or file nav visibility changed (affects buffer frame size)
     layout_changed =
       old_state.show_search_bar != new_state.show_search_bar or
@@ -606,7 +599,7 @@ defmodule QuillEx.RootScene.Renderizer do
     # resize" bug from the 2026-07-31 QA notes.
     frame_changed = old_state.frame != new_state.frame
 
-    settings_changed or layout_changed or status_bar_changed or frame_changed
+    layout_changed or status_bar_changed or frame_changed
   end
 
   # Helper to create the buffer_pane TextField
