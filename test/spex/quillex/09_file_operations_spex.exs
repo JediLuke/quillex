@@ -56,14 +56,6 @@ defmodule Quillex.FileOperationsSpex do
     SemanticHelpers.get_selected_tab_label()
   end
 
-  # Create a new buffer via menu
-  defp create_new_buffer do
-    Probes.click_element("icon_menu_file")
-    Process.sleep(300)
-    Probes.click_element("icon_menu_file_new")
-    Process.sleep(500)
-  end
-
   # Close the active buffer via menu
   defp close_active_buffer do
     Probes.click_element("icon_menu_file")
@@ -123,19 +115,6 @@ defmodule Quillex.FileOperationsSpex do
     # Type new filename
     Probes.send_text(filename)
     Process.sleep(200)
-  end
-
-  # Click Save button in file picker
-  defp click_save_button do
-    # The save button should be clickable
-    Probes.click_element("save_button")
-    Process.sleep(500)
-  end
-
-  # Click Cancel button in file picker
-  defp click_cancel_button do
-    Probes.click_element("cancel_button")
-    Process.sleep(300)
   end
 
   # Press Escape to close dialog

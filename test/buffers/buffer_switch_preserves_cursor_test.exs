@@ -39,12 +39,8 @@ defmodule Quillex.Buffers.BufferSwitchPreservesCursorTest do
   alias Widgex.Frame
   alias Widgex.Scroll.ScrollState
 
-  # IBMPlexMono is the default TextField font; load metrics from the TTF that
-  # ships with scenic_widget_contrib so the click handler's downstream
-  # `click_to_cursor → string_width` call can complete in :direct mode (where
-  # the reducer is expected to fall through to the existing positioning path).
   @font_ttf Path.expand(
-              "../../../scenic-widget-contrib/assets/fonts/IBMPlexMono-Regular.ttf",
+              "../../deps/scenic/assets/fonts/roboto_mono.ttf",
               __DIR__
             )
 
@@ -78,7 +74,7 @@ defmodule Quillex.Buffers.BufferSwitchPreservesCursorTest do
       line_number_width: 40,
       tab_width: 4,
       wrap_mode: :none,
-      font: %{name: :ibm_plex_mono, size: 20, metrics: font_metrics()},
+      font: %{name: :roboto_mono, size: 20, metrics: font_metrics()},
       colors: %{
         text: :white,
         background: :medium_slate_blue,

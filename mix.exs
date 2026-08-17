@@ -11,6 +11,7 @@ defmodule QuillEx.MixProject do
       elixirc_paths: elixirc_paths(Mix.env()),
       compilers: [:boundary] ++ Mix.compilers() ++ spex_compilers(),
       spex: [pattern: "test/spex/**/*_spex.exs", boundary: Quillex.Spex],
+      test_ignore_filters: [~r/_spex\.exs$/, ~r/test_helpers/],
       releases: releases(),
       deps: deps()
     ]
@@ -101,7 +102,7 @@ defmodule QuillEx.MixProject do
         only: [:dev, :test],
         override: true
       ),
-      {:stream_data, "~> 0.6", only: [:test, :dev]},
+      {:stream_data, "~> 1.4", only: [:test, :dev]},
       {:tidewave, "~> 0.1", only: :dev},
       {:bandit, "~> 1.0", only: :dev}
     ]

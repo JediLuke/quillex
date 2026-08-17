@@ -147,12 +147,18 @@ defmodule Mix.Tasks.RunSpexTest do
     end
 
     test "maybe_start_window_pinner/0 returns a port when binary exists and DISPLAY is set" do
+      import ExUnit.CaptureIO
+
       pinner_path = Path.join([File.cwd!(), "tools", "window_pinner"])
 
       if File.exists?(pinner_path) and is_binary(System.get_env("DISPLAY")) do
-        port = Mix.Tasks.RunSpex.maybe_start_window_pinner()
+        capture_io(fn ->
+          port = Mix.Tasks.RunSpex.maybe_start_window_pinner()
+          send(self(), {:port, port})
+        end)
+
+        assert_received {:port, port}
         assert is_port(port), "Expected a port, got: #{inspect(port)}"
-        # Clean up: stop the port so we don't leave a running pinner.
         Mix.Tasks.RunSpex.stop_window_pinner(port)
       else
         :ok
@@ -160,11 +166,19 @@ defmodule Mix.Tasks.RunSpexTest do
     end
 
     test "maybe_start_window_pinner/0 returns nil when DISPLAY is unset" do
+      import ExUnit.CaptureIO
+
       original_display = System.get_env("DISPLAY")
 
       try do
         System.delete_env("DISPLAY")
-        result = Mix.Tasks.RunSpex.maybe_start_window_pinner()
+
+        capture_io(fn ->
+          result = Mix.Tasks.RunSpex.maybe_start_window_pinner()
+          send(self(), {:result, result})
+        end)
+
+        assert_received {:result, result}
         assert result == nil, "Expected nil when DISPLAY is unset, got: #{inspect(result)}"
       after
         case original_display do

@@ -1,6 +1,8 @@
 defmodule Quillex.BufferContractTest do
   use ExUnit.Case, async: false
 
+  import ExUnit.CaptureLog
+
   alias Quillex.Buffer
   alias Quillex.Buffer.{Ref, Snapshot}
 
@@ -38,8 +40,10 @@ defmodule Quillex.BufferContractTest do
     assert {:ok, ref} = Buffer.open(%{source: %{filepath: path}, data: ["alpha", "beta"]})
     assert {:ok, before} = Buffer.fetch(ref)
 
-    assert {:error, {:invalid_action, :not_a_real_action, _}} =
-             Buffer.dispatch(ref, :not_a_real_action)
+    capture_log(fn ->
+      assert {:error, {:invalid_action, :not_a_real_action, _}} =
+               Buffer.dispatch(ref, :not_a_real_action)
+    end)
 
     assert {:ok, after_snapshot} = Buffer.fetch(ref)
     assert after_snapshot == before
