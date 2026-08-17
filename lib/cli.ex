@@ -1,4 +1,4 @@
-defmodule QuillEx.CLI do
+defmodule Quillex.CLI do
   @moduledoc """
   Support for launching Quillex from a shell: `qlx`, `qlx notes.txt`, `qlx .`
 
@@ -10,7 +10,7 @@ defmodule QuillEx.CLI do
 
   Two hooks, and their boot order is the whole design:
 
-    * `chdir!/0` runs at the top of `QuillEx.App.start/2`, before any child
+    * `chdir!/0` runs at the top of `Quillex.App.start/2`, before any child
       starts. Everything downstream reads `File.cwd!()` — the file-nav sidebar
       most of all, which ViewStore seeds in its `init` — so the VM's cwd has
       to be the user's cwd before the stores boot, not after.

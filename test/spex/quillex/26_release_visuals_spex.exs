@@ -81,7 +81,7 @@ defmodule Quillex.ReleaseVisualsSpex do
         {:ok, _} = Quillex.Buffer.dispatch(ref, {:insert, "unsaved", :at_cursor})
 
         send(
-          Process.whereis(QuillEx.RootScene),
+          Process.whereis(Quillex.RootScene),
           {:quit_requested, Quillex.Buffer.dirty_buffers()}
         )
 

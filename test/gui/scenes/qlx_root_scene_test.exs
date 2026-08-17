@@ -1,6 +1,6 @@
-defmodule QuillEx.RootSceneTest do
+defmodule Quillex.RootSceneTest do
   use ExUnit.Case
-  alias QuillEx.RootScene
+  alias Quillex.RootScene
 
   # Minimal scene struct needed by the handlers under test.
   # RootScene functions only read scene.assigns.state and scene.assigns.graph;
@@ -8,7 +8,7 @@ defmodule QuillEx.RootSceneTest do
   defp bare_scene do
     %{
       assigns: %{
-        state: %QuillEx.RootScene.State{
+        state: %Quillex.RootScene.State{
           active_buf: nil,
           show_line_numbers: true,
           word_wrap: false
@@ -50,7 +50,7 @@ defmodule QuillEx.RootSceneTest do
 
       scene = %{
         assigns: %{
-          state: %QuillEx.RootScene.State{
+          state: %Quillex.RootScene.State{
             active_buf: fake_buf_ref,
             show_line_numbers: true,
             word_wrap: false
@@ -91,7 +91,7 @@ defmodule QuillEx.RootSceneTest do
 
       scene = %{
         assigns: %{
-          state: %QuillEx.RootScene.State{
+          state: %Quillex.RootScene.State{
             active_buf: fake_buf_ref,
             show_line_numbers: true,
             word_wrap: false
@@ -111,8 +111,8 @@ defmodule QuillEx.RootSceneTest do
 
   describe "Renderizer.build_menus/1 — File menu includes reload item" do
     test "file menu contains the reload item" do
-      state = %QuillEx.RootScene.State{}
-      menus = QuillEx.RootScene.Renderizer.build_menus(state)
+      state = %Quillex.RootScene.State{}
+      menus = Quillex.RootScene.Renderizer.build_menus(state)
       file_menu = Enum.find(menus, fn m -> m.id == :file end)
       assert file_menu != nil, "File menu must exist"
       item_ids = Enum.map(file_menu.items, & &1.id)
@@ -122,8 +122,8 @@ defmodule QuillEx.RootSceneTest do
     end
 
     test "reload item is positioned after verify item in the file menu" do
-      state = %QuillEx.RootScene.State{}
-      menus = QuillEx.RootScene.Renderizer.build_menus(state)
+      state = %Quillex.RootScene.State{}
+      menus = Quillex.RootScene.Renderizer.build_menus(state)
       file_menu = Enum.find(menus, fn m -> m.id == :file end)
       item_ids = Enum.map(file_menu.items, & &1.id)
       verify_pos = Enum.find_index(item_ids, &(&1 == "verify"))
@@ -175,15 +175,15 @@ defmodule QuillEx.RootSceneTest do
 
   describe "RootScene.Reducer :open_replace action" do
     test "sets show_search_bar and show_replace to true" do
-      state = %QuillEx.RootScene.State{show_search_bar: false, show_replace: false}
-      new_state = QuillEx.RootScene.Reducer.process(state, :open_replace)
+      state = %Quillex.RootScene.State{show_search_bar: false, show_replace: false}
+      new_state = Quillex.RootScene.Reducer.process(state, :open_replace)
       assert new_state.show_search_bar == true
       assert new_state.show_replace == true
     end
 
     test "is idempotent when bar is already open" do
-      state = %QuillEx.RootScene.State{show_search_bar: true, show_replace: true}
-      new_state = QuillEx.RootScene.Reducer.process(state, :open_replace)
+      state = %Quillex.RootScene.State{show_search_bar: true, show_replace: true}
+      new_state = Quillex.RootScene.Reducer.process(state, :open_replace)
       assert new_state.show_search_bar == true
       assert new_state.show_replace == true
     end
@@ -511,7 +511,7 @@ defmodule QuillEx.RootSceneTest do
 
   describe "RootScene.Reducer :close_replace action" do
     test "clears show_search_bar, show_replace, and search state" do
-      state = %QuillEx.RootScene.State{
+      state = %Quillex.RootScene.State{
         show_search_bar: true,
         show_replace: true,
         search_query: "hello",
@@ -519,7 +519,7 @@ defmodule QuillEx.RootSceneTest do
         search_total_matches: 5
       }
 
-      new_state = QuillEx.RootScene.Reducer.process(state, :close_replace)
+      new_state = Quillex.RootScene.Reducer.process(state, :close_replace)
       assert new_state.show_search_bar == false
       assert new_state.show_replace == false
       assert new_state.search_query == ""
@@ -528,7 +528,7 @@ defmodule QuillEx.RootSceneTest do
     end
 
     test "is idempotent when bar is already closed" do
-      state = %QuillEx.RootScene.State{
+      state = %Quillex.RootScene.State{
         show_search_bar: false,
         show_replace: false,
         search_query: "",
@@ -536,7 +536,7 @@ defmodule QuillEx.RootSceneTest do
         search_total_matches: 0
       }
 
-      new_state = QuillEx.RootScene.Reducer.process(state, :close_replace)
+      new_state = Quillex.RootScene.Reducer.process(state, :close_replace)
       assert new_state.show_search_bar == false
       assert new_state.show_replace == false
     end
@@ -612,10 +612,10 @@ defmodule QuillEx.RootSceneTest do
   describe "Renderizer.needs_buffer_pane_recreation? via render/4 — status_bar_changed" do
     test "render/4 returns graph unchanged when state.frame is nil (guard)" do
       # Both old and new states have frame: nil — guard fires, graph returned as-is
-      old_state = %QuillEx.RootScene.State{frame: nil, status_message: nil}
-      new_state = %QuillEx.RootScene.State{frame: nil, status_message: "File unchanged on disk"}
+      old_state = %Quillex.RootScene.State{frame: nil, status_message: nil}
+      new_state = %Quillex.RootScene.State{frame: nil, status_message: "File unchanged on disk"}
       graph = %Scenic.Graph{}
-      result = QuillEx.RootScene.Renderizer.render(graph, nil, old_state, new_state)
+      result = Quillex.RootScene.Renderizer.render(graph, nil, old_state, new_state)
       assert result == graph
     end
 
@@ -623,16 +623,16 @@ defmodule QuillEx.RootSceneTest do
       # We verify the check indirectly: render/4 with frame: nil always returns graph unchanged.
       # The important thing is the function compiles and the path exists.
       # Full layout behaviour is validated in spex integration tests.
-      old_state = %QuillEx.RootScene.State{frame: nil, status_message: nil}
-      new_state_with_msg = %QuillEx.RootScene.State{frame: nil, status_message: "hello"}
-      new_state_nil_msg = %QuillEx.RootScene.State{frame: nil, status_message: nil}
+      old_state = %Quillex.RootScene.State{frame: nil, status_message: nil}
+      new_state_with_msg = %Quillex.RootScene.State{frame: nil, status_message: "hello"}
+      new_state_nil_msg = %Quillex.RootScene.State{frame: nil, status_message: nil}
       graph = %Scenic.Graph{}
 
       # Both transitions return the graph unchanged (nil-frame guard) — confirms render/4 accepts them
-      assert QuillEx.RootScene.Renderizer.render(graph, nil, old_state, new_state_with_msg) ==
+      assert Quillex.RootScene.Renderizer.render(graph, nil, old_state, new_state_with_msg) ==
                graph
 
-      assert QuillEx.RootScene.Renderizer.render(
+      assert Quillex.RootScene.Renderizer.render(
                graph,
                nil,
                new_state_with_msg,

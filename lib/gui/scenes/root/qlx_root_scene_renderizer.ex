@@ -1,4 +1,4 @@
-defmodule QuillEx.RootScene.Renderizer do
+defmodule Quillex.RootScene.Renderizer do
   require Logger
 
   import Scenic.Primitives, only: [group: 3, rect: 3, text: 3]
@@ -35,7 +35,7 @@ defmodule QuillEx.RootScene.Renderizer do
   # Guard: no frame means we cannot lay out components yet.  This happens during
   # process startup or in unit-test contexts where a bare state struct (frame: nil)
   # is passed.  Return the graph unchanged so callers don't crash.
-  def render(%Scenic.Graph{} = graph, _scene, _old_state, %QuillEx.RootScene.State{frame: nil}) do
+  def render(%Scenic.Graph{} = graph, _scene, _old_state, %Quillex.RootScene.State{frame: nil}) do
     graph
   end
 
@@ -43,7 +43,7 @@ defmodule QuillEx.RootScene.Renderizer do
         %Scenic.Graph{} = graph,
         scene,
         old_state,
-        %QuillEx.RootScene.State{} = state
+        %Quillex.RootScene.State{} = state
       ) do
     # Split frame: top bar and buffer pane below
     [top_bar_frame, buffer_frame] = Widgex.Frame.v_split(state.frame, px: @top_bar_height)
@@ -488,7 +488,7 @@ defmodule QuillEx.RootScene.Renderizer do
   @doc """
   Build menus with current toggle states from state.
   """
-  def build_menus(%QuillEx.RootScene.State{} = state) do
+  def build_menus(%Quillex.RootScene.State{} = state) do
     alias ScenicWidgets.Menu.Model.{Item, Radio, Slider, Toggle}
 
     [

@@ -303,7 +303,7 @@ defmodule Quillex.ReplaceSpex do
         Probes.send_keys("escape", [])
         Process.sleep(200)
 
-        # Undo the replace — QuillEx uses the canonical Ctrl+Z binding
+        # Undo the replace — Quillex uses the canonical Ctrl+Z binding
         Probes.send_keys("z", [:ctrl])
         Process.sleep(500)
 

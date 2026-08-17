@@ -957,7 +957,7 @@ defmodule Quillex.TestHelpers.SemanticHelpers do
   `{:error, reason}` if the buffer pane cannot be located.
   """
   def buffer_pane_focus_info do
-    case Process.whereis(QuillEx.RootScene) do
+    case Process.whereis(Quillex.RootScene) do
       nil ->
         {:error, :root_scene_not_registered}
 

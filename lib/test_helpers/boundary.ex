@@ -10,7 +10,7 @@ defmodule Quillex.TestHelpers do
   for assertions about what's visible on screen.
   """
   use Boundary,
-    deps: [Quillex, ScenicMcp],
+    deps: [Quillex],
     exports: [
       SemanticHelpers,
       TextAssertions,

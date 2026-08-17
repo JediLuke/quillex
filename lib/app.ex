@@ -1,6 +1,6 @@
-defmodule QuillEx.App do
+defmodule Quillex.App do
   @moduledoc """
-  QuillEx is a simple text-editor, written in Elixir, using the Scenic gfx lib.
+  Quillex is a simple text-editor, written in Elixir, using the Scenic gfx lib.
   """
 
   @tidewave_port 31337
@@ -12,7 +12,7 @@ defmodule QuillEx.App do
 
     # Working-directory adoption is standalone shell policy. Embedded and
     # headless hosts retain ownership of their process-wide current directory.
-    if mode == :standalone, do: QuillEx.CLI.chdir!()
+    if mode == :standalone, do: Quillex.CLI.chdir!()
 
     children = children_for(mode)
 
@@ -45,7 +45,7 @@ defmodule QuillEx.App do
       {Quillex.RadixCache.Supervisor, []},
       {Quillex.Buffers.TopSupervisor, []},
       {Quillex.Lifecycle.Coordinator, []},
-      {QuillEx.CLI, []},
+      {Quillex.CLI, []},
       {Scenic, [scenic_config()]}
     ]
   end
@@ -77,7 +77,7 @@ defmodule QuillEx.App do
     [
       name: :main_viewport,
       size: window_size,
-      default_scene: {QuillEx.RootScene, []},
+      default_scene: {Quillex.RootScene, []},
       drivers: [
         # valid options are: [:name, :limit_ms, :layer, :opacity, :debug, :antialias, :calibration, :position, :window, :cursor, :key_map, :on_close]
         [

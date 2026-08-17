@@ -1,4 +1,4 @@
-defmodule QuillEx.MixProject do
+defmodule Quillex.MixProject do
   use Mix.Project
 
   def project do
@@ -64,7 +64,7 @@ defmodule QuillEx.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      mod: {QuillEx.App, []},
+      mod: {Quillex.App, []},
       extra_applications: if(Mix.env() in [:dev, :test], do: [:scenic_mcp], else: [])
     ]
   end

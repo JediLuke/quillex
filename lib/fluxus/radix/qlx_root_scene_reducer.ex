@@ -1,5 +1,5 @@
-defmodule QuillEx.RootScene.Reducer do
-  def process(%QuillEx.RootScene.State{} = state, :new_buffer) do
+defmodule Quillex.RootScene.Reducer do
+  def process(%Quillex.RootScene.State{} = state, :new_buffer) do
     # this is why we dont need to wait for a callback when opening a new buffer
     # via the _actions_, and it's why we should use actions for making a new buffer fvia the API
 
@@ -24,12 +24,12 @@ defmodule QuillEx.RootScene.Reducer do
   # Open the find-and-replace bar (Ctrl+H).
   # Sets both show_search_bar and show_replace to true so the renderizer
   # draws the full search + replace panel.
-  def process(%QuillEx.RootScene.State{} = state, :open_replace) do
+  def process(%Quillex.RootScene.State{} = state, :open_replace) do
     %{state | show_search_bar: true, show_replace: true}
   end
 
   # Close the find-and-replace bar — clears all search/replace UI state.
-  def process(%QuillEx.RootScene.State{} = state, :close_replace) do
+  def process(%Quillex.RootScene.State{} = state, :close_replace) do
     %{
       state
       | show_search_bar: false,

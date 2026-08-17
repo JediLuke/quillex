@@ -1,7 +1,7 @@
 defmodule Mix.Tasks.RunSpex do
-  @shortdoc "Run QuillEx spex integration tests with GLFW Scenic driver"
+  @shortdoc "Run Quillex spex integration tests with GLFW Scenic driver"
   @moduledoc """
-  Runs the QuillEx spex integration tests with the GLFW Scenic driver.
+  Runs the Quillex spex integration tests with the GLFW Scenic driver.
 
   This is a convenience wrapper around `mix spex` that ensures the
   `SCENIC_LOCAL_TARGET` environment variable is set to `"glfw"`, which is

@@ -8,7 +8,7 @@ defmodule Quillex.WordNavigationSpex do
 
   The underlying logic lives in `Quillex.Buffer.Utils.next_word_coords/1` and
   `prev_word_coords/1`.  These spex tests confirm that the keyboard wiring in
-  `QuillEx.RootScene` (handle_input Ctrl+Left/Right clauses) correctly reaches
+  `Quillex.RootScene` (handle_input Ctrl+Left/Right clauses) correctly reaches
   those helpers and that the cursor position is updated in the semantic layer.
 
   Column arithmetic: all columns are 1-based.
