@@ -113,6 +113,21 @@ tree reads the working directory. A file argument is opened into a buffer
 ahead of Scenic, so the editor comes up with your file already in it rather
 than flashing an empty one first.
 
+## Development
+
+### Pre-commit hook
+
+A `mix precommit` alias runs the fast gate: format check, stale dep check,
+and the unit/property test suite. Wire it into Git so it runs automatically:
+
+```bash
+echo 'mix precommit' > .git/hooks/pre-commit
+chmod +x .git/hooks/pre-commit
+```
+
+For the thorough gate (everything above plus the GUI spex suite), run
+`mix check` manually — spex need a running desktop and take longer.
+
 ## Requirements
 
 - **Elixir** 1.15+ and **Erlang/OTP** 26+

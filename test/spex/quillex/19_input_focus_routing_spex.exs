@@ -24,7 +24,7 @@ defmodule Quillex.InputFocusRoutingSpex do
   alias ScenicMcp.Probes
   alias ScenicMcp.Query
 
-  # Test window is 2000x1200 (see QuillEx.App.window_size/0 for :test).
+  # Test window is 2000x1200 (see Quillex.App.window_size/0 for :test).
   # The file nav occupies the left 250px below the 35px top bar.
   @nav_point {125, 500}
   @buffer_point {900, 600}
@@ -120,9 +120,7 @@ defmodule Quillex.InputFocusRoutingSpex do
         Process.sleep(200)
 
         :ok =
-          Quillex.TestHelpers.FileOpener.open_file(
-            Path.expand("biblio/spinozas_ethics_p1.txt")
-          )
+          Quillex.TestHelpers.FileOpener.open_file(Path.expand("biblio/spinozas_ethics_p1.txt"))
 
         Process.sleep(800)
         ensure_file_nav_visible()

@@ -1,4 +1,4 @@
-defmodule QuillEx.Assets do
+defmodule Quillex.Assets do
   use Scenic.Assets.Static,
     otp_app: :quillex,
     alias: [

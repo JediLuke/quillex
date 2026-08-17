@@ -1,4 +1,4 @@
-defmodule QuillEx.MixProject do
+defmodule Quillex.MixProject do
   use Mix.Project
 
   def project do
@@ -11,13 +11,33 @@ defmodule QuillEx.MixProject do
       elixirc_paths: elixirc_paths(Mix.env()),
       compilers: [:boundary] ++ Mix.compilers() ++ spex_compilers(),
       spex: [pattern: "test/spex/**/*_spex.exs", boundary: Quillex.Spex],
+      test_ignore_filters: [~r/_spex\.exs$/, ~r/test_helpers/],
+      aliases: aliases(),
       releases: releases(),
       deps: deps()
     ]
   end
 
   def cli do
-    [preferred_envs: [spex: :test, run_spex: :test]]
+    [preferred_envs: [spex: :test, run_spex: :test, precommit: :test, check: :test]]
+  end
+
+  defp aliases do
+    [
+      precommit: [
+        "compile --all-warnings --warnings-as-errors",
+        "format --check-formatted",
+        "deps.unlock --unused",
+        "test"
+      ],
+      check: [
+        "compile --all-warnings --warnings-as-errors",
+        "format --check-formatted",
+        "deps.unlock --unused",
+        "test",
+        "cmd scripts/run_spex_quiet.sh"
+      ]
+    ]
   end
 
   # `mix release` bundles the app, its deps and the ERTS into
@@ -46,7 +66,7 @@ defmodule QuillEx.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      mod: {QuillEx.App, []},
+      mod: {Quillex.App, []},
       extra_applications: if(Mix.env() in [:dev, :test], do: [:scenic_mcp], else: [])
     ]
   end
@@ -101,7 +121,7 @@ defmodule QuillEx.MixProject do
         only: [:dev, :test],
         override: true
       ),
-      {:stream_data, "~> 0.6", only: [:test, :dev]},
+      {:stream_data, "~> 1.4", only: [:test, :dev]},
       {:tidewave, "~> 0.1", only: :dev},
       {:bandit, "~> 1.0", only: :dev}
     ]

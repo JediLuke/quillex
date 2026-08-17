@@ -11,5 +11,5 @@ defmodule Quillex.Spex do
         boundary: Quillex.Spex
       ]
   """
-  use Boundary, deps: [Quillex, Quillex.TestHelpers, ScenicMcp, SexySpex], exports: []
+  use Boundary, deps: [Quillex, Quillex.TestHelpers], exports: []
 end

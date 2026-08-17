@@ -28,7 +28,6 @@ defmodule Quillex.FindSpex do
     # Wait for scene to fully initialize
     Process.sleep(2000)
 
-
     # Known LAYOUT to start from (overlays dismissed, file navigator
     # closed) without touching buffers — an open navigator shifts the
     # editor pane 250px right and makes fixed-x clicks miss it.
@@ -39,7 +38,6 @@ defmodule Quillex.FindSpex do
   spex "Open Search Bar - Ctrl+F",
     description: "Validates that Ctrl+F opens the search bar",
     tags: [:phase_6, :find, :keyboard] do
-
     # =========================================================================
     # 1. OPEN SEARCH BAR
     # =========================================================================
@@ -71,7 +69,8 @@ defmodule Quillex.FindSpex do
 
       when_ "we press Ctrl+F", context do
         Probes.send_keys("f", [:ctrl])
-        Process.sleep(500)  # Increased wait time for search bar to render
+        # Increased wait time for search bar to render
+        Process.sleep(500)
         {:ok, context}
       end
 
@@ -82,12 +81,15 @@ defmodule Quillex.FindSpex do
 
         # The search bar renders: < prev, match count (0/0), > next
         # Also check for "Search..." placeholder
-        visible_check = Query.text_visible?("<") or
-                       Query.text_visible?(">") or
-                       Query.text_visible?("0/0") or
-                       Query.text_visible?("Search...")
+        visible_check =
+          Query.text_visible?("<") or
+            Query.text_visible?(">") or
+            Query.text_visible?("0/0") or
+            Query.text_visible?("Search...")
 
-        assert visible_check, "Search bar should be visible (nav buttons, match count, or placeholder)"
+        assert visible_check,
+               "Search bar should be visible (nav buttons, match count, or placeholder)"
+
         :ok
       end
     end
@@ -96,7 +98,6 @@ defmodule Quillex.FindSpex do
   spex "Search Bar Text Entry",
     description: "Validates typing in the search bar",
     tags: [:phase_6, :find, :input] do
-
     # =========================================================================
     # 2. TYPE IN SEARCH BAR
     # =========================================================================
@@ -153,7 +154,8 @@ defmodule Quillex.FindSpex do
         Process.sleep(100)
         # Open search bar - will pre-fill with "apple"
         Probes.send_keys("f", [:ctrl])
-        Process.sleep(400)  # Wait for search to complete
+        # Wait for search to complete
+        Process.sleep(400)
         {:ok, context}
       end
 
@@ -166,7 +168,8 @@ defmodule Quillex.FindSpex do
         # Should show current match position and total
         # Format is "1/3" for first of three matches
         assert Query.text_visible?("/3") or Query.text_visible?("3"),
-          "Match count should show 3 matches"
+               "Match count should show 3 matches"
+
         :ok
       end
     end
@@ -175,7 +178,6 @@ defmodule Quillex.FindSpex do
   spex "Navigate Matches - Enter",
     description: "Validates Enter navigates to next match",
     tags: [:phase_6, :find, :navigation] do
-
     # =========================================================================
     # 4. NEXT MATCH WITH ENTER
     # =========================================================================
@@ -220,7 +222,8 @@ defmodule Quillex.FindSpex do
         # After pressing Enter twice from match 1, should be at match 3
         # (or wrapped around depending on implementation)
         assert Query.text_visible?("/3") or Query.text_visible?("3"),
-          "Should still show 3 total matches"
+               "Should still show 3 total matches"
+
         :ok
       end
     end
@@ -229,7 +232,6 @@ defmodule Quillex.FindSpex do
   spex "Navigate Matches - Shift+Enter",
     description: "Validates Shift+Enter navigates to previous match",
     tags: [:phase_6, :find, :navigation] do
-
     # =========================================================================
     # 5. PREVIOUS MATCH WITH SHIFT+ENTER
     # =========================================================================
@@ -271,7 +273,8 @@ defmodule Quillex.FindSpex do
       then_ "we should move to previous match" do
         # Match position should have changed, but still show 3 total
         assert Query.text_visible?("/3") or Query.text_visible?("3"),
-          "Should still show 3 total matches"
+               "Should still show 3 total matches"
+
         :ok
       end
     end
@@ -280,7 +283,6 @@ defmodule Quillex.FindSpex do
   spex "Close Search Bar - Escape",
     description: "Validates Escape closes the search bar",
     tags: [:phase_6, :find, :close] do
-
     # =========================================================================
     # 6. CLOSE WITH ESCAPE
     # =========================================================================
@@ -307,7 +309,9 @@ defmodule Quillex.FindSpex do
         Probes.send_text("Z")
         Process.sleep(100)
         # If search bar was closed, Z should appear in main editor
-        assert Query.text_visible?("Z"), "'Z' should be visible in main editor after closing search"
+        assert Query.text_visible?("Z"),
+               "'Z' should be visible in main editor after closing search"
+
         :ok
       end
     end
@@ -333,7 +337,8 @@ defmodule Quillex.FindSpex do
       when_ "we click the close button", context do
         # The close button is at the left of the search bar
         # Assuming search bar is near top of window
-        Probes.click(16, 50)  # Approximate position of X button
+        # Approximate position of X button
+        Probes.click(16, 50)
         Process.sleep(200)
         {:ok, context}
       end
@@ -351,7 +356,6 @@ defmodule Quillex.FindSpex do
   spex "Search Bar Backspace",
     description: "Validates backspace works in search bar",
     tags: [:phase_6, :find, :input] do
-
     # =========================================================================
     # 8. BACKSPACE IN SEARCH BAR
     # =========================================================================
@@ -395,7 +399,6 @@ defmodule Quillex.FindSpex do
   spex "Re-open Search Bar",
     description: "Validates Ctrl+F reopens search bar after closing",
     tags: [:phase_6, :find, :reopen] do
-
     # =========================================================================
     # 9. REOPEN SEARCH BAR
     # =========================================================================
@@ -411,18 +414,22 @@ defmodule Quillex.FindSpex do
 
       when_ "we press Ctrl+F again", context do
         Probes.send_keys("f", [:ctrl])
-        Process.sleep(500)  # Increased wait time
+        # Increased wait time
+        Process.sleep(500)
         {:ok, context}
       end
 
       then_ "search bar should reopen" do
         # Search bar should be visible again
-        visible_check = Query.text_visible?("<") or
-                       Query.text_visible?(">") or
-                       Query.text_visible?("0/0") or
-                       Query.text_visible?("Search...")
+        visible_check =
+          Query.text_visible?("<") or
+            Query.text_visible?(">") or
+            Query.text_visible?("0/0") or
+            Query.text_visible?("Search...")
 
-        assert visible_check, "Search bar should be visible (nav buttons, match count, or placeholder)"
+        assert visible_check,
+               "Search bar should be visible (nav buttons, match count, or placeholder)"
+
         :ok
       end
     end
@@ -431,7 +438,6 @@ defmodule Quillex.FindSpex do
   spex "Find No Matches",
     description: "Validates behavior when no matches found",
     tags: [:phase_6, :find, :no_match] do
-
     # =========================================================================
     # 10. NO MATCHES FOUND
     # =========================================================================
@@ -454,7 +460,8 @@ defmodule Quillex.FindSpex do
         Probes.send_keys("f", [:ctrl])
         Process.sleep(300)
         Probes.send_text("xyz123")
-        Process.sleep(500)  # More time for search to complete and update
+        # More time for search to complete and update
+        Process.sleep(500)
         {:ok, context}
       end
 
@@ -471,7 +478,6 @@ defmodule Quillex.FindSpex do
   spex "Find Case Sensitivity",
     description: "Validates case-sensitive search behavior",
     tags: [:phase_6, :find, :case] do
-
     # =========================================================================
     # 11. CASE SENSITIVE SEARCH
     # =========================================================================
@@ -501,7 +507,8 @@ defmodule Quillex.FindSpex do
       then_ "only lowercase 'hello' should match" do
         # Should find exactly 1 match (the lowercase one)
         assert Query.text_visible?("1") or Query.text_visible?("/1"),
-          "Should find 1 lowercase match"
+               "Should find 1 lowercase match"
+
         :ok
       end
     end
@@ -510,7 +517,6 @@ defmodule Quillex.FindSpex do
   spex "Search Bar Focus",
     description: "Validates search bar receives keyboard focus",
     tags: [:phase_6, :find, :focus] do
-
     # =========================================================================
     # 12. SEARCH BAR HAS FOCUS
     # =========================================================================

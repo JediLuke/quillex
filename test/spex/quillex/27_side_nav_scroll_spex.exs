@@ -138,13 +138,6 @@ defmodule Quillex.SideNavScrollSpex do
     end
   end
 
-  defp child_count(id) do
-    case id |> path_of() |> File.ls() do
-      {:ok, entries} -> length(entries)
-      _ -> 0
-    end
-  end
-
   # Row GROUPS are registered as atoms (:"row_<abs path>"). The clickable rects
   # inside them are registered as {:row_click, path} tuples and match the same
   # regex — counting those doubled the apparent row count and broke atom-only
@@ -315,9 +308,7 @@ defmodule Quillex.SideNavScrollSpex do
         Process.sleep(200)
 
         :ok =
-          Quillex.TestHelpers.FileOpener.open_file(
-            Path.expand("biblio/spinozas_ethics_p1.txt")
-          )
+          Quillex.TestHelpers.FileOpener.open_file(Path.expand("biblio/spinozas_ethics_p1.txt"))
 
         Process.sleep(900)
 

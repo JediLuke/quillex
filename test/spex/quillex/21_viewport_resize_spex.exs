@@ -20,7 +20,7 @@ defmodule Quillex.ViewportResizeSpex do
   alias ScenicMcp.Query
   alias Quillex.TestHelpers.ViewportResizer
 
-  # The :test window boots at 2000x1200 (QuillEx.App.window_size/0).
+  # The :test window boots at 2000x1200 (Quillex.App.window_size/0).
   @boot_size {2000, 1200}
   @shrunk_size {1400, 900}
 

@@ -89,6 +89,13 @@ defmodule Quillex.IntegrationV1Spex do
     wait_for_empty_buffer(2_000)
   end
 
+  defp trigger_action(:toggle_word_wrap) do
+    Probes.click_element("icon_menu_view")
+    Process.sleep(200)
+    Probes.click_element("icon_menu_view_word_wrap")
+    Process.sleep(300)
+  end
+
   # Poll until the active buffer reads empty twice in a row (one read can
   # report "" for a document whose semantic entry is merely late).
   defp wait_for_empty_buffer(timeout_ms) do
@@ -122,13 +129,6 @@ defmodule Quillex.IntegrationV1Spex do
       _ ->
         :ok
     end
-  end
-
-  defp trigger_action(:toggle_word_wrap) do
-    Probes.click_element("icon_menu_view")
-    Process.sleep(200)
-    Probes.click_element("icon_menu_view_word_wrap")
-    Process.sleep(300)
   end
 
   # UI-based: Get tab count from semantic viewport

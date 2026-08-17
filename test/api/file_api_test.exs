@@ -7,10 +7,10 @@ defmodule Quillex.API.FileAPITest do
   # ---------------------------------------------------------------------------
   #
   # verify_file_integrity/0 calls get_active_buffer_data/0, which calls
-  # Buffer.active_buf/0 → GenServer.call(QuillEx.RootScene, :get_active_buffer).
+  # Buffer.active_buf/0 → GenServer.call(Quillex.RootScene, :get_active_buffer).
   #
-  # In the standard test environment QuillEx.App starts the full supervision
-  # tree INCLUDING Scenic (QuillEx.RootScene). The default buffer is created
+  # In the standard test environment Quillex.App starts the full supervision
+  # tree INCLUDING Scenic (Quillex.RootScene). The default buffer is created
   # on startup with no file path. Therefore verify_file_integrity/0 returns
   # {:ok, :no_file} — NOT {:error, _} — in the normal test run.
   #
@@ -52,7 +52,7 @@ defmodule Quillex.API.FileAPITest do
   # ---------------------------------------------------------------------------
   #
   # reload/0 calls get_active_buffer_data/0 which goes through Buffer.active_buf/0
-  # → GenServer.call(QuillEx.RootScene, :get_active_buffer), the same path as
+  # → GenServer.call(Quillex.RootScene, :get_active_buffer), the same path as
   # verify_file_integrity/0.
   #
   # With a running app and the default unnamed buffer (no file path):

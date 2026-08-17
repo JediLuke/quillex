@@ -71,6 +71,7 @@ defmodule Mix.Tasks.RunSpexTest do
       # lookup Mix performs internally when you run `mix run_spex`. If it
       # returns nil, the task would show as "Unknown task run_spex" on the CLI.
       task_module = Mix.Task.get("run_spex")
+
       assert task_module == Mix.Tasks.RunSpex,
              "Mix.Task.get(\"run_spex\") must return Mix.Tasks.RunSpex, got: #{inspect(task_module)}"
     end
@@ -85,6 +86,7 @@ defmodule Mix.Tasks.RunSpexTest do
              "Mix.Tasks.RunSpex must declare @preferred_cli_env"
 
       env = List.first(List.flatten(preferred_env_values))
+
       assert env == :test,
              "@preferred_cli_env must be :test, got: #{inspect(env)}"
     end
@@ -125,6 +127,7 @@ defmodule Mix.Tasks.RunSpexTest do
       for value <- ["headless", "wayland", "x11", "custom_driver"] do
         System.put_env("SCENIC_LOCAL_TARGET", value)
         Mix.Tasks.RunSpex.maybe_set_scenic_target()
+
         assert System.get_env("SCENIC_LOCAL_TARGET") == value,
                "Pre-existing value '#{value}' should not be overridden"
       end
@@ -147,12 +150,18 @@ defmodule Mix.Tasks.RunSpexTest do
     end
 
     test "maybe_start_window_pinner/0 returns a port when binary exists and DISPLAY is set" do
+      import ExUnit.CaptureIO
+
       pinner_path = Path.join([File.cwd!(), "tools", "window_pinner"])
 
       if File.exists?(pinner_path) and is_binary(System.get_env("DISPLAY")) do
-        port = Mix.Tasks.RunSpex.maybe_start_window_pinner()
+        capture_io(fn ->
+          port = Mix.Tasks.RunSpex.maybe_start_window_pinner()
+          send(self(), {:port, port})
+        end)
+
+        assert_received {:port, port}
         assert is_port(port), "Expected a port, got: #{inspect(port)}"
-        # Clean up: stop the port so we don't leave a running pinner.
         Mix.Tasks.RunSpex.stop_window_pinner(port)
       else
         :ok
@@ -160,11 +169,19 @@ defmodule Mix.Tasks.RunSpexTest do
     end
 
     test "maybe_start_window_pinner/0 returns nil when DISPLAY is unset" do
+      import ExUnit.CaptureIO
+
       original_display = System.get_env("DISPLAY")
 
       try do
         System.delete_env("DISPLAY")
-        result = Mix.Tasks.RunSpex.maybe_start_window_pinner()
+
+        capture_io(fn ->
+          result = Mix.Tasks.RunSpex.maybe_start_window_pinner()
+          send(self(), {:result, result})
+        end)
+
+        assert_received {:result, result}
         assert result == nil, "Expected nil when DISPLAY is unset, got: #{inspect(result)}"
       after
         case original_display do

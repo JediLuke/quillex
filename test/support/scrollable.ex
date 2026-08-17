@@ -44,27 +44,27 @@ defmodule Quillex.Scrollable do
   import Scenic.Scene, only: [assign: 3]
 
   @type scroll_config :: %{
-    content_size_fn: (-> {integer(), integer()}),
-    viewport_size: {integer(), integer()},
-    overflow_x: :auto | :scroll | :hidden,
-    overflow_y: :auto | :scroll | :hidden,
-    scroll_speed: integer(),
-    scrollbar_width: integer(),
-    auto_hide: boolean(),
-    fade_timeout: integer()
-  }
+          content_size_fn: (-> {integer(), integer()}),
+          viewport_size: {integer(), integer()},
+          overflow_x: :auto | :scroll | :hidden,
+          overflow_y: :auto | :scroll | :hidden,
+          scroll_speed: integer(),
+          scrollbar_width: integer(),
+          auto_hide: boolean(),
+          fade_timeout: integer()
+        }
 
   @type scroll_state :: %{
-    offset: {integer(), integer()},
-    content_size: {integer(), integer()},
-    viewport_size: {integer(), integer()},
-    config: scroll_config(),
-    scrollbars_visible: boolean(),
-    fade_timer: reference() | nil,
-    dragging: nil | :vertical | :horizontal,
-    drag_start: {integer(), integer()} | nil,
-    hover: nil | :v_thumb | :h_thumb | :v_track | :h_track
-  }
+          offset: {integer(), integer()},
+          content_size: {integer(), integer()},
+          viewport_size: {integer(), integer()},
+          config: scroll_config(),
+          scrollbars_visible: boolean(),
+          fade_timer: reference() | nil,
+          dragging: nil | :vertical | :horizontal,
+          drag_start: {integer(), integer()} | nil,
+          hover: nil | :v_thumb | :h_thumb | :v_track | :h_track
+        }
 
   @default_config %{
     overflow_x: :auto,
@@ -83,11 +83,12 @@ defmodule Quillex.Scrollable do
     full_config = Map.merge(@default_config, config)
 
     # Get initial content size
-    {content_w, content_h} = if full_config.content_size_fn do
-      full_config.content_size_fn.()
-    else
-      {0, 0}
-    end
+    {content_w, content_h} =
+      if full_config.content_size_fn do
+        full_config.content_size_fn.()
+      else
+        {0, 0}
+      end
 
     scroll_state = %{
       offset: {0, 0},
@@ -160,17 +161,17 @@ defmodule Quillex.Scrollable do
     end
   end
 
-
   @doc """
   Update content size and refresh scroll state.
   """
   @spec update_content_size(Scenic.Scene.t(), {integer(), integer()}) :: Scenic.Scene.t()
   def update_content_size(scene, new_size) do
     if Map.has_key?(scene.assigns, :scroll) do
-      scroll = scene.assigns.scroll
-      |> Map.put(:content_size, new_size)
-      |> constrain_scroll_offset()
-      |> update_scrollbar_visibility()
+      scroll =
+        scene.assigns.scroll
+        |> Map.put(:content_size, new_size)
+        |> constrain_scroll_offset()
+        |> update_scrollbar_visibility()
 
       assign(scene, :scroll, scroll)
     else
@@ -189,23 +190,26 @@ defmodule Quillex.Scrollable do
       {scroll_x, scroll_y} = scroll.offset
 
       # Calculate required scroll adjustment
-      new_scroll_x = cond do
-        x + scroll_x < margin -> -(x - margin)
-        x + scroll_x > viewport_w - margin -> -(x - viewport_w + margin)
-        true -> scroll_x
-      end
+      new_scroll_x =
+        cond do
+          x + scroll_x < margin -> -(x - margin)
+          x + scroll_x > viewport_w - margin -> -(x - viewport_w + margin)
+          true -> scroll_x
+        end
 
-      new_scroll_y = cond do
-        y + scroll_y < margin -> -(y - margin)
-        y + scroll_y > viewport_h - margin -> -(y - viewport_h + margin)
-        true -> scroll_y
-      end
+      new_scroll_y =
+        cond do
+          y + scroll_y < margin -> -(y - margin)
+          y + scroll_y > viewport_h - margin -> -(y - viewport_h + margin)
+          true -> scroll_y
+        end
 
       if {new_scroll_x, new_scroll_y} != {scroll_x, scroll_y} do
-        new_scroll = scroll
-        |> Map.put(:offset, {new_scroll_x, new_scroll_y})
-        |> constrain_scroll_offset()
-        |> show_scrollbars_temporarily()
+        new_scroll =
+          scroll
+          |> Map.put(:offset, {new_scroll_x, new_scroll_y})
+          |> constrain_scroll_offset()
+          |> show_scrollbars_temporarily()
 
         assign(scene, :scroll, new_scroll)
       else
@@ -224,14 +228,15 @@ defmodule Quillex.Scrollable do
     speed = scroll.config.scroll_speed
 
     new_offset = {
-      scroll_x - (h_delta * speed),
-      scroll_y - (v_delta * speed)
+      scroll_x - h_delta * speed,
+      scroll_y - v_delta * speed
     }
 
-    new_scroll = scroll
-    |> Map.put(:offset, new_offset)
-    |> constrain_scroll_offset()
-    |> show_scrollbars_temporarily()
+    new_scroll =
+      scroll
+      |> Map.put(:offset, new_offset)
+      |> constrain_scroll_offset()
+      |> show_scrollbars_temporarily()
 
     assign(scene, :scroll, new_scroll)
   end
@@ -257,9 +262,10 @@ defmodule Quillex.Scrollable do
     scroll = scene.assigns.scroll
 
     if scroll.dragging do
-      new_scroll = scroll
-      |> Map.put(:dragging, nil)
-      |> Map.put(:drag_start, nil)
+      new_scroll =
+        scroll
+        |> Map.put(:dragging, nil)
+        |> Map.put(:drag_start, nil)
 
       {:handled, assign(scene, :scroll, new_scroll)}
     else
@@ -273,11 +279,12 @@ defmodule Quillex.Scrollable do
     case scroll.dragging do
       nil ->
         # Update hover state
-        new_hover = cond do
-          hit_test_scrollbar({x, y}, scroll, :vertical) -> :v_thumb
-          hit_test_scrollbar({x, y}, scroll, :horizontal) -> :h_thumb
-          true -> nil
-        end
+        new_hover =
+          cond do
+            hit_test_scrollbar({x, y}, scroll, :vertical) -> :v_thumb
+            hit_test_scrollbar({x, y}, scroll, :horizontal) -> :h_thumb
+            true -> nil
+          end
 
         if new_hover != scroll.hover do
           new_scroll = Map.put(scroll, :hover, new_hover)
@@ -318,11 +325,12 @@ defmodule Quillex.Scrollable do
     end
 
     # Set new timer if auto-hide enabled
-    timer = if scroll.config.auto_hide do
-      Process.send_after(self(), :hide_scrollbars, scroll.config.fade_timeout)
-    else
-      nil
-    end
+    timer =
+      if scroll.config.auto_hide do
+        Process.send_after(self(), :hide_scrollbars, scroll.config.fade_timeout)
+      else
+        nil
+      end
 
     scroll
     |> Map.put(:scrollbars_visible, true)
@@ -374,6 +382,7 @@ defmodule Quillex.Scrollable do
   end
 
   defp render_vertical_scrollbar(graph, _scroll, false), do: graph
+
   defp render_vertical_scrollbar(graph, scroll, true) do
     {_content_w, content_h} = scroll.content_size
     {viewport_w, viewport_h} = scroll.viewport_size
@@ -383,19 +392,23 @@ defmodule Quillex.Scrollable do
     # Calculate scrollbar dimensions
     scrollable_height = content_h - viewport_h
     thumb_height = max(30, viewport_h * viewport_h / content_h)
-    thumb_y = if scrollable_height > 0 do
-      -scroll_y * (viewport_h - thumb_height) / scrollable_height
-    else
-      0
-    end
+
+    thumb_y =
+      if scrollable_height > 0 do
+        -scroll_y * (viewport_h - thumb_height) / scrollable_height
+      else
+        0
+      end
 
     # VS Code style colors
     track_alpha = if scroll.scrollbars_visible, do: 40, else: 0
-    thumb_alpha = case {scroll.dragging, scroll.hover} do
-      {:vertical, _} -> 180
-      {_, :v_thumb} -> 120
-      _ -> if scroll.scrollbars_visible, do: 100, else: 0
-    end
+
+    thumb_alpha =
+      case {scroll.dragging, scroll.hover} do
+        {:vertical, _} -> 180
+        {_, :v_thumb} -> 120
+        _ -> if scroll.scrollbars_visible, do: 100, else: 0
+      end
 
     graph
     |> Primitives.rect({bar_width, viewport_h},
@@ -411,6 +424,7 @@ defmodule Quillex.Scrollable do
   end
 
   defp render_horizontal_scrollbar(graph, _scroll, false), do: graph
+
   defp render_horizontal_scrollbar(graph, scroll, true) do
     {content_w, _content_h} = scroll.content_size
     {viewport_w, viewport_h} = scroll.viewport_size
@@ -420,19 +434,23 @@ defmodule Quillex.Scrollable do
     # Calculate scrollbar dimensions
     scrollable_width = content_w - viewport_w
     thumb_width = max(30, viewport_w * viewport_w / content_w)
-    thumb_x = if scrollable_width > 0 do
-      -scroll_x * (viewport_w - thumb_width) / scrollable_width
-    else
-      0
-    end
+
+    thumb_x =
+      if scrollable_width > 0 do
+        -scroll_x * (viewport_w - thumb_width) / scrollable_width
+      else
+        0
+      end
 
     # VS Code style colors
     track_alpha = if scroll.scrollbars_visible, do: 40, else: 0
-    thumb_alpha = case {scroll.dragging, scroll.hover} do
-      {:horizontal, _} -> 180
-      {_, :h_thumb} -> 120
-      _ -> if scroll.scrollbars_visible, do: 100, else: 0
-    end
+
+    thumb_alpha =
+      case {scroll.dragging, scroll.hover} do
+        {:horizontal, _} -> 180
+        {_, :h_thumb} -> 120
+        _ -> if scroll.scrollbars_visible, do: 100, else: 0
+      end
 
     graph
     |> Primitives.rect({viewport_w, bar_width},
@@ -453,8 +471,8 @@ defmodule Quillex.Scrollable do
     bar_width = scroll.config.scrollbar_width
 
     if content_h > viewport_h &&
-       x >= viewport_w - bar_width && x <= viewport_w &&
-       y >= 0 && y <= viewport_h do
+         x >= viewport_w - bar_width && x <= viewport_w &&
+         y >= 0 && y <= viewport_h do
       :hit
     else
       nil
@@ -467,8 +485,8 @@ defmodule Quillex.Scrollable do
     bar_width = scroll.config.scrollbar_width
 
     if content_w > viewport_w &&
-       y >= viewport_h - bar_width && y <= viewport_h &&
-       x >= 0 && x <= viewport_w do
+         y >= viewport_h - bar_width && y <= viewport_h &&
+         x >= 0 && x <= viewport_w do
       :hit
     else
       nil

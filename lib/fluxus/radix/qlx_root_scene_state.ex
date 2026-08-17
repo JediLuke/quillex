@@ -1,4 +1,4 @@
-defmodule QuillEx.RootScene.State do
+defmodule Quillex.RootScene.State do
   @moduledoc """
   RootScene's working state — a local view assembled from the RadixCache
   stores plus scene-owned transient interaction state.

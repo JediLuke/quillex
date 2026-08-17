@@ -1,4 +1,4 @@
-defmodule QuillEx.AppRuntimeModeTest do
+defmodule Quillex.AppRuntimeModeTest do
   use ExUnit.Case, async: false
 
   setup do
@@ -12,18 +12,18 @@ defmodule QuillEx.AppRuntimeModeTest do
   end
 
   test "runtime modes have explicit supervision shapes" do
-    assert Enum.any?(QuillEx.App.children_for(:standalone), &match?({Scenic, _}, &1))
-    refute Enum.any?(QuillEx.App.children_for(:embedded), &match?({Scenic, _}, &1))
-    refute Enum.any?(QuillEx.App.children_for(:headless), &match?({Scenic, _}, &1))
+    assert Enum.any?(Quillex.App.children_for(:standalone), &match?({Scenic, _}, &1))
+    refute Enum.any?(Quillex.App.children_for(:embedded), &match?({Scenic, _}, &1))
+    refute Enum.any?(Quillex.App.children_for(:headless), &match?({Scenic, _}, &1))
 
     assert Enum.any?(
-             QuillEx.App.children_for(:embedded),
+             Quillex.App.children_for(:embedded),
              &match?({Quillex.Buffers.TopSupervisor, _}, &1)
            )
   end
 
   test "invalid modes fail explicitly" do
     Application.put_env(:quillex, :runtime_mode, :host_product)
-    assert_raise ArgumentError, fn -> QuillEx.App.runtime_mode() end
+    assert_raise ArgumentError, fn -> Quillex.App.runtime_mode() end
   end
 end
