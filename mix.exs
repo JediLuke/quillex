@@ -25,11 +25,13 @@ defmodule Quillex.MixProject do
   defp aliases do
     [
       precommit: [
+        "compile --all-warnings --warnings-as-errors",
         "format --check-formatted",
         "deps.unlock --unused",
         "test"
       ],
       check: [
+        "compile --all-warnings --warnings-as-errors",
         "format --check-formatted",
         "deps.unlock --unused",
         "test",
