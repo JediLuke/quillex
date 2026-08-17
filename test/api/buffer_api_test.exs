@@ -10,6 +10,7 @@ defmodule Quillex.APITests.BufferAPITest do
       result = capture_log(fn -> send(self(), FileAPI.verify_file_integrity()) end)
       assert is_binary(result)
       assert_received result_value
+
       assert match?({:ok, _}, result_value) or match?({:error, _}, result_value),
              "Expected {:ok, _} or {:error, _}, got: #{inspect(result_value)}"
     end

@@ -48,6 +48,7 @@ defmodule Quillex.Utils.FileTree do
   defp build_item(path, name) do
     if File.dir?(path) do
       children = build_tree(path, name)
+
       %Item{
         id: path,
         title: name,

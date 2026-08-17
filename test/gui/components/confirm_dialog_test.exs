@@ -19,8 +19,8 @@ defmodule ScenicWidgets.ConfirmDialogTest do
   describe "validate/1 — success" do
     test "accepts a fully populated data map" do
       data = %{
-        frame:   @sample_frame,
-        title:   "Unsaved Changes",
+        frame: @sample_frame,
+        title: "Unsaved Changes",
         message: "Save changes before closing?",
         buttons: @sample_buttons
       }
@@ -30,8 +30,8 @@ defmodule ScenicWidgets.ConfirmDialogTest do
 
     test "accepts a single-button list" do
       data = %{
-        frame:   @sample_frame,
-        title:   "Confirm",
+        frame: @sample_frame,
+        title: "Confirm",
         message: "Are you sure?",
         buttons: [{:ok, "OK"}]
       }
@@ -41,8 +41,8 @@ defmodule ScenicWidgets.ConfirmDialogTest do
 
     test "accepts two-button list" do
       data = %{
-        frame:   @sample_frame,
-        title:   "Delete",
+        frame: @sample_frame,
+        title: "Delete",
         message: "This cannot be undone.",
         buttons: [{:confirm, "Delete"}, {:cancel, "Cancel"}]
       }
@@ -52,11 +52,11 @@ defmodule ScenicWidgets.ConfirmDialogTest do
 
     test "passes through extra keys untouched" do
       data = %{
-        frame:   @sample_frame,
-        title:   "Hi",
+        frame: @sample_frame,
+        title: "Hi",
         message: "Hello world",
         buttons: [{:ok, "OK"}],
-        id:      :my_dialog
+        id: :my_dialog
       }
 
       assert {:ok, returned} = ConfirmDialog.validate(data)
@@ -112,28 +112,24 @@ defmodule ScenicWidgets.ConfirmDialogTest do
     end
 
     test "returns error when a button tuple has a non-atom action" do
-      data = %{frame: @sample_frame, title: "T", message: "M",
-               buttons: [{"save", "Save"}]}
+      data = %{frame: @sample_frame, title: "T", message: "M", buttons: [{"save", "Save"}]}
       assert {:error, msg} = ConfirmDialog.validate(data)
       assert String.contains?(msg, "atom")
     end
 
     test "returns error when a button tuple has a non-string label" do
-      data = %{frame: @sample_frame, title: "T", message: "M",
-               buttons: [{:save, :not_a_string}]}
+      data = %{frame: @sample_frame, title: "T", message: "M", buttons: [{:save, :not_a_string}]}
       assert {:error, msg} = ConfirmDialog.validate(data)
       assert String.contains?(msg, "string")
     end
 
     test "returns error when a button entry is not a tuple" do
-      data = %{frame: @sample_frame, title: "T", message: "M",
-               buttons: [:bad]}
+      data = %{frame: @sample_frame, title: "T", message: "M", buttons: [:bad]}
       assert {:error, _} = ConfirmDialog.validate(data)
     end
 
     test "returns error when a button entry is a 3-tuple" do
-      data = %{frame: @sample_frame, title: "T", message: "M",
-               buttons: [{:save, "Save", :extra}]}
+      data = %{frame: @sample_frame, title: "T", message: "M", buttons: [{:save, "Save", :extra}]}
       assert {:error, _} = ConfirmDialog.validate(data)
     end
   end
@@ -191,7 +187,7 @@ defmodule ScenicWidgets.ConfirmDialogTest do
     end
 
     test "each subsequent button x is offset by button_width + button_spacing" do
-      bounds  = ConfirmDialog.button_bounds([{:a, "A"}, {:b, "B"}, {:c, "C"}])
+      bounds = ConfirmDialog.button_bounds([{:a, "A"}, {:b, "B"}, {:c, "C"}])
       [{_, x0, _, _, _}, {_, x1, _, _, _}, {_, x2, _, _, _}] = bounds
       step = x1 - x0
       assert_in_delta step, x2 - x1, 0.001
@@ -208,14 +204,14 @@ defmodule ScenicWidgets.ConfirmDialogTest do
     end
 
     test "three-button row is centred within the dialog width" do
-      bounds            = ConfirmDialog.button_bounds(@sample_buttons)
+      bounds = ConfirmDialog.button_bounds(@sample_buttons)
       [{_, x0, _, _, _} | _] = bounds
       {_, x2, _, bw, _} = List.last(bounds)
       # row spans from x0 to x2 + button_width
-      row_start  = x0
-      row_end    = x2 + bw
+      row_start = x0
+      row_end = x2 + bw
       # midpoint of row should equal midpoint of @dialog_width = 420
-      mid_row    = (row_start + row_end) / 2
+      mid_row = (row_start + row_end) / 2
       mid_dialog = 420 / 2
       assert_in_delta mid_row, mid_dialog, 0.001
     end

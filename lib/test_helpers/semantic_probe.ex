@@ -70,8 +70,11 @@ defmodule Quillex.TestHelpers.SemanticProbe do
     with {:ok, vp} <- viewport() do
       match? = fn key -> Regex.match?(pattern, inspect(key)) end
 
-      index_ids = vp.semantic_index |> :ets.tab2list() |> Enum.map(&elem(&1, 0)) |> Enum.filter(match?)
-      table_keys = vp.semantic_table |> :ets.tab2list() |> Enum.map(&elem(&1, 0)) |> Enum.filter(match?)
+      index_ids =
+        vp.semantic_index |> :ets.tab2list() |> Enum.map(&elem(&1, 0)) |> Enum.filter(match?)
+
+      table_keys =
+        vp.semantic_table |> :ets.tab2list() |> Enum.map(&elem(&1, 0)) |> Enum.filter(match?)
 
       %{
         index: Enum.sort_by(index_ids, &inspect/1),

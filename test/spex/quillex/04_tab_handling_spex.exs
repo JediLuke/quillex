@@ -39,7 +39,6 @@ defmodule Quillex.TabHandlingSpex do
     # Wait for scene to fully initialize
     Process.sleep(2000)
 
-
     # Known LAYOUT to start from (overlays dismissed, file navigator
     # closed) without touching buffers — an open navigator shifts the
     # editor pane 250px right and makes fixed-x clicks miss it.
@@ -50,7 +49,6 @@ defmodule Quillex.TabHandlingSpex do
   spex "Tab Insertion - Basic",
     description: "Validates that pressing Tab inserts a tab character",
     tags: [:phase_4, :tabs, :input] do
-
     # =========================================================================
     # 1. TAB AT END OF LINE
     # =========================================================================
@@ -127,6 +125,7 @@ defmodule Quillex.TabHandlingSpex do
           Probes.send_keys("left", [])
           Process.sleep(30)
         end
+
         Probes.send_keys("tab", [])
         Process.sleep(100)
         {:ok, context}
@@ -136,6 +135,7 @@ defmodule Quillex.TabHandlingSpex do
         # HelloWorld should no longer appear as a single word
         refute Query.text_visible?("HelloWorld"),
                "'HelloWorld' should not appear as single word after tab insertion"
+
         assert Query.text_visible?("Hello"), "'Hello' should be visible"
         assert Query.text_visible?("World"), "'World' should be visible"
         :ok
@@ -146,7 +146,6 @@ defmodule Quillex.TabHandlingSpex do
   spex "Tab Width - Rendering",
     description: "Validates that tab width setting affects rendering",
     tags: [:phase_4, :tabs, :settings] do
-
     # =========================================================================
     # 4. MULTIPLE TABS ALIGNMENT
     # =========================================================================
@@ -216,7 +215,6 @@ defmodule Quillex.TabHandlingSpex do
   spex "Tab Cursor Positioning",
     description: "Validates cursor position is correct after tab operations",
     tags: [:phase_4, :tabs, :cursor] do
-
     # =========================================================================
     # 6. CURSOR AFTER TAB INSERTION
     # =========================================================================
@@ -231,11 +229,14 @@ defmodule Quillex.TabHandlingSpex do
       end
 
       when_ "we move between A and B, press Tab, then type 'X'", context do
-        Probes.send_keys("left", [])  # Move cursor between A and B
+        # Move cursor between A and B
+        Probes.send_keys("left", [])
         Process.sleep(50)
-        Probes.send_keys("tab", [])   # Insert tab
+        # Insert tab
+        Probes.send_keys("tab", [])
         Process.sleep(50)
-        Probes.send_text("X")         # Type X at cursor position
+        # Type X at cursor position
+        Probes.send_text("X")
         Process.sleep(100)
         {:ok, context}
       end
@@ -293,7 +294,6 @@ defmodule Quillex.TabHandlingSpex do
   spex "Tab Width Changes",
     description: "Validates behavior when tab width setting changes",
     tags: [:phase_4, :tabs, :settings_change] do
-
     # =========================================================================
     # 8. EXISTING TABS RE-RENDER ON WIDTH CHANGE
     # =========================================================================
@@ -325,7 +325,6 @@ defmodule Quillex.TabHandlingSpex do
   spex "Tab Stop Alignment - Bug Regression",
     description: "Validates tabs go to proper tab stops regardless of column parity",
     tags: [:phase_4, :tabs, :regression, :bug] do
-
     # =========================================================================
     # BUG: Tab from odd column should go to next tab stop, not just even column
     # =========================================================================
@@ -463,9 +462,9 @@ defmodule Quillex.TabHandlingSpex do
   end
 
   spex "Dynamic Tab Width Changes",
-    description: "Validates cursor position stays relative to surrounding text when tab width changes",
+    description:
+      "Validates cursor position stays relative to surrounding text when tab width changes",
     tags: [:phase_4, :tabs, :dynamic, :regression, :bug] do
-
     # =========================================================================
     # BUG: When tab width changes, cursor should stay between same characters
     # =========================================================================
@@ -546,6 +545,7 @@ defmodule Quillex.TabHandlingSpex do
           Probes.send_keys("left", [])
           Process.sleep(20)
         end
+
         Process.sleep(100)
         {:ok, context}
       end

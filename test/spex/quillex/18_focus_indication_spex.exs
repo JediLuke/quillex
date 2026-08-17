@@ -37,9 +37,9 @@ defmodule Quillex.FocusIndicationSpex do
   end
 
   spex "Editor has focus border on startup",
-    description: "Buffer pane renders the focused border color when the app starts and no overlay is open",
+    description:
+      "Buffer pane renders the focused border color when the app starts and no overlay is open",
     tags: [:phase_18, :focus, :startup] do
-
     scenario "Buffer pane is focused on startup" do
       given_ "Quillex has just launched with no overlays", context do
         Process.sleep(300)
@@ -58,13 +58,13 @@ defmodule Quillex.FocusIndicationSpex do
         %{focus_info: info} = context
 
         assert info.focused? == true,
-          "Buffer pane should be focused on startup, got: #{inspect(info)}"
+               "Buffer pane should be focused on startup, got: #{inspect(info)}"
 
         assert info.focused_border == @focused_border,
-          "focused_border color should be #{inspect(@focused_border)}, got: #{inspect(info.focused_border)}"
+               "focused_border color should be #{inspect(@focused_border)}, got: #{inspect(info.focused_border)}"
 
         assert info.current_border == @focused_border,
-          "Current border should be the focused amber color when focused, got: #{inspect(info.current_border)}"
+               "Current border should be the focused amber color when focused, got: #{inspect(info.current_border)}"
 
         {:ok, context}
       end
@@ -72,9 +72,9 @@ defmodule Quillex.FocusIndicationSpex do
   end
 
   spex "Opening search bar transfers focus away from buffer",
-    description: "Pressing Ctrl+F blurs the buffer pane and switches the border to the unfocused color",
+    description:
+      "Pressing Ctrl+F blurs the buffer pane and switches the border to the unfocused color",
     tags: [:phase_18, :focus, :search] do
-
     scenario "Ctrl+F moves focus out of the buffer pane" do
       given_ "Quillex is running and the buffer pane is focused", context do
         Process.sleep(300)
@@ -82,7 +82,8 @@ defmodule Quillex.FocusIndicationSpex do
         Process.sleep(200)
         # Sanity check — buffer should own focus before we open search
         assert SemanticHelpers.buffer_pane_focused?() == true,
-          "precondition: buffer pane must be focused before opening search"
+               "precondition: buffer pane must be focused before opening search"
+
         {:ok, context}
       end
 
@@ -96,13 +97,13 @@ defmodule Quillex.FocusIndicationSpex do
         info = SemanticHelpers.buffer_pane_focus_info()
 
         assert info.focused? == false,
-          "Buffer pane should lose focus when search bar opens, got: #{inspect(info)}"
+               "Buffer pane should lose focus when search bar opens, got: #{inspect(info)}"
 
         assert info.border == @unfocused_border,
-          "border color should be #{inspect(@unfocused_border)}, got: #{inspect(info.border)}"
+               "border color should be #{inspect(@unfocused_border)}, got: #{inspect(info.border)}"
 
         assert info.current_border == @unfocused_border,
-          "Current border should be the dim unfocused color, got: #{inspect(info.current_border)}"
+               "Current border should be the dim unfocused color, got: #{inspect(info.current_border)}"
 
         # Reuse the search-bar visibility check from 06_find_spex.exs
         visible_check =
@@ -120,7 +121,6 @@ defmodule Quillex.FocusIndicationSpex do
   spex "Escape restores focus to the buffer pane",
     description: "Dismissing the search bar returns focus (and the amber border) to the editor",
     tags: [:phase_18, :focus, :escape] do
-
     scenario "Escape after Ctrl+F restores buffer focus" do
       given_ "the search bar is open and the buffer pane has lost focus", context do
         Process.sleep(300)
@@ -132,7 +132,7 @@ defmodule Quillex.FocusIndicationSpex do
         info = SemanticHelpers.buffer_pane_focus_info()
 
         assert info.focused? == false,
-          "precondition: buffer pane must be unfocused while search bar is open, got: #{inspect(info)}"
+               "precondition: buffer pane must be unfocused while search bar is open, got: #{inspect(info)}"
 
         {:ok, context}
       end
@@ -147,10 +147,10 @@ defmodule Quillex.FocusIndicationSpex do
         info = SemanticHelpers.buffer_pane_focus_info()
 
         assert info.focused? == true,
-          "Buffer pane should regain focus after Escape closes the search bar, got: #{inspect(info)}"
+               "Buffer pane should regain focus after Escape closes the search bar, got: #{inspect(info)}"
 
         assert info.current_border == @focused_border,
-          "Current border should be the focused amber color after Escape, got: #{inspect(info.current_border)}"
+               "Current border should be the focused amber color after Escape, got: #{inspect(info.current_border)}"
 
         :ok
       end

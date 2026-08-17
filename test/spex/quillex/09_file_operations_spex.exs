@@ -34,7 +34,6 @@ defmodule Quillex.FileOperationsSpex do
     # Wait for scene to fully initialize
     Process.sleep(2000)
 
-
     # Known LAYOUT to start from (overlays dismissed, file navigator
     # closed) without touching buffers — an open navigator shifts the
     # editor pane 250px right and makes fixed-x clicks miss it.
@@ -130,7 +129,6 @@ defmodule Quillex.FileOperationsSpex do
   spex "File Operations - Save As Dialog Opens",
     description: "Validates that File -> Save As opens a save dialog",
     tags: [:file_operations, :save_as, :ui] do
-
     scenario "Save As menu item opens file picker in save mode" do
       given_ "we have a buffer with some content", context do
         close_buffers_until_one_remains()
@@ -149,6 +147,7 @@ defmodule Quillex.FileOperationsSpex do
         # In save mode, we should see "File name:" label
         assert file_picker_visible?(),
                "File picker should be visible with 'File name:' label"
+
         :ok
       end
 
@@ -156,6 +155,7 @@ defmodule Quillex.FileOperationsSpex do
         # Save button should be visible
         assert Query.text_visible?("Save") or Query.text_visible?("Cancel"),
                "Save/Cancel buttons should be visible"
+
         :ok
       end
 
@@ -166,8 +166,10 @@ defmodule Quillex.FileOperationsSpex do
 
       then_ "the dialog should close" do
         Process.sleep(300)
+
         refute file_picker_visible?(),
                "File picker should be closed after Escape"
+
         :ok
       end
     end
@@ -176,7 +178,6 @@ defmodule Quillex.FileOperationsSpex do
   spex "File Operations - Save As Cancellation",
     description: "Validates that cancelling Save As doesn't save the file",
     tags: [:file_operations, :save_as, :cancel] do
-
     scenario "Cancelling Save As does not create a file" do
       given_ "we open Save As dialog with content", context do
         close_buffers_until_one_remains()
@@ -193,8 +194,10 @@ defmodule Quillex.FileOperationsSpex do
 
       then_ "no file should have been created" do
         test_file = Path.join(@test_save_dir, "cancelled_file.txt")
+
         refute File.exists?(test_file),
                "File should not exist after cancellation"
+
         :ok
       end
     end
@@ -203,7 +206,6 @@ defmodule Quillex.FileOperationsSpex do
   spex "File Operations - Save As Success",
     description: "Validates that Save As successfully saves a file",
     tags: [:file_operations, :save_as, :save] do
-
     scenario "Save As creates a file with correct content" do
       given_ "we have a buffer with specific content", context do
         close_buffers_until_one_remains()
@@ -246,6 +248,7 @@ defmodule Quillex.FileOperationsSpex do
         # For now, check that the dialog closed
         refute file_picker_visible?(),
                "File picker should close after save"
+
         :ok
       end
 
@@ -263,7 +266,6 @@ defmodule Quillex.FileOperationsSpex do
   spex "File Operations - Save As With Existing File",
     description: "Validates Save As behavior with an existing file",
     tags: [:file_operations, :save_as, :overwrite] do
-
     scenario "Save As can overwrite an existing file" do
       given_ "we have an existing file", context do
         # Create a test file
@@ -301,6 +303,7 @@ defmodule Quillex.FileOperationsSpex do
         # This depends on the file picker navigating to the right directory
         refute file_picker_visible?(),
                "File picker should close after save"
+
         :ok
       end
 
@@ -319,7 +322,6 @@ defmodule Quillex.FileOperationsSpex do
   spex "File Operations - Save Dialog Keyboard Navigation",
     description: "Validates keyboard navigation in the save dialog",
     tags: [:file_operations, :save_as, :keyboard] do
-
     scenario "Typing in filename field works correctly" do
       given_ "the Save As dialog is open", context do
         close_buffers_until_one_remains()
@@ -343,9 +345,11 @@ defmodule Quillex.FileOperationsSpex do
       then_ "the filename should appear in the input" do
         # The typed filename should be visible in the dialog
         rendered = Query.rendered_text()
+
         assert String.contains?(rendered, "my_new_file.txt") or
-               String.contains?(rendered, "my_new_file"),
+                 String.contains?(rendered, "my_new_file"),
                "Typed filename should be visible in dialog"
+
         :ok
       end
 
@@ -357,6 +361,7 @@ defmodule Quillex.FileOperationsSpex do
       then_ "the dialog should close without saving" do
         refute file_picker_visible?(),
                "Dialog should close on Escape"
+
         :ok
       end
     end

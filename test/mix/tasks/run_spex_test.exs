@@ -71,6 +71,7 @@ defmodule Mix.Tasks.RunSpexTest do
       # lookup Mix performs internally when you run `mix run_spex`. If it
       # returns nil, the task would show as "Unknown task run_spex" on the CLI.
       task_module = Mix.Task.get("run_spex")
+
       assert task_module == Mix.Tasks.RunSpex,
              "Mix.Task.get(\"run_spex\") must return Mix.Tasks.RunSpex, got: #{inspect(task_module)}"
     end
@@ -85,6 +86,7 @@ defmodule Mix.Tasks.RunSpexTest do
              "Mix.Tasks.RunSpex must declare @preferred_cli_env"
 
       env = List.first(List.flatten(preferred_env_values))
+
       assert env == :test,
              "@preferred_cli_env must be :test, got: #{inspect(env)}"
     end
@@ -125,6 +127,7 @@ defmodule Mix.Tasks.RunSpexTest do
       for value <- ["headless", "wayland", "x11", "custom_driver"] do
         System.put_env("SCENIC_LOCAL_TARGET", value)
         Mix.Tasks.RunSpex.maybe_set_scenic_target()
+
         assert System.get_env("SCENIC_LOCAL_TARGET") == value,
                "Pre-existing value '#{value}' should not be overridden"
       end

@@ -42,18 +42,28 @@ defmodule Quillex.Utils.SideNavThemes do
   def dark do
     %{
       # Colors - Dark theme (merlinex-inspired)
-      background: {35, 37, 47},              # Dark blue-gray (list_bg)
-      text: {220, 220, 230},                 # Light gray text
-      active_bg: {60, 80, 120},              # Blue-tinted active background
-      active_bar: {100, 160, 220},           # Bright blue accent bar
-      hover_bg: {55, 58, 70},                # Slightly lighter hover
-      chevron: {140, 140, 150},              # Medium gray chevrons
-      focus_ring: {100, 160, 220},           # Blue focus ring
-      border: {50, 52, 62},                  # Subtle border
+      # Dark blue-gray (list_bg)
+      background: {35, 37, 47},
+      # Light gray text
+      text: {220, 220, 230},
+      # Blue-tinted active background
+      active_bg: {60, 80, 120},
+      # Bright blue accent bar
+      active_bar: {100, 160, 220},
+      # Slightly lighter hover
+      hover_bg: {55, 58, 70},
+      # Medium gray chevrons
+      chevron: {140, 140, 150},
+      # Blue focus ring
+      focus_ring: {100, 160, 220},
+      # Subtle border
+      border: {50, 52, 62},
 
       # Dimensions
-      item_height: 26,                       # Compact but readable
-      indent: 14,                            # Indentation per level
+      # Compact but readable
+      item_height: 26,
+      # Indentation per level
+      indent: 14,
       font: :roboto,
       font_size: 13,
       line_height: 18,
@@ -150,5 +160,6 @@ defmodule Quillex.Utils.SideNavThemes do
   def get(:dark), do: dark()
   def get(:bare_bones), do: bare_bones()
   def get(:light), do: light()
-  def get(_), do: dark()  # Default to dark theme
+  # Default to dark theme
+  def get(_), do: dark()
 end

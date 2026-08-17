@@ -30,8 +30,13 @@ defmodule QuillEx.RootScene.Reducer do
 
   # Close the find-and-replace bar — clears all search/replace UI state.
   def process(%QuillEx.RootScene.State{} = state, :close_replace) do
-    %{state | show_search_bar: false, show_replace: false, search_query: "",
-              search_current_match: 0, search_total_matches: 0}
+    %{
+      state
+      | show_search_bar: false,
+        show_replace: false,
+        search_query: "",
+        search_current_match: 0,
+        search_total_matches: 0
+    }
   end
-
 end

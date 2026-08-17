@@ -26,7 +26,6 @@ defmodule Quillex.ViewSettingsSpex do
     # Wait for scene to fully initialize
     Process.sleep(2000)
 
-
     # Known LAYOUT to start from (overlays dismissed, file navigator
     # closed) without touching buffers — an open navigator shifts the
     # editor pane 250px right and makes fixed-x clicks miss it.
@@ -119,10 +118,12 @@ defmodule Quillex.ViewSettingsSpex do
 
     if index >= 1 and index <= length(labels) do
       label = Enum.at(labels, index - 1)
+
       case SemanticHelpers.click_tab_by_label(label) do
         {:ok, _} ->
           Process.sleep(300)
           true
+
         _ ->
           false
       end
@@ -161,7 +162,6 @@ defmodule Quillex.ViewSettingsSpex do
   spex "View Settings - Line Numbers Toggle",
     description: "Validates that line numbers can be toggled on and off via UI",
     tags: [:phase_4, :view_settings, :line_numbers] do
-
     # =========================================================================
     # 1. LINE NUMBERS ARE VISIBLE BY DEFAULT
     # =========================================================================
@@ -176,18 +176,21 @@ defmodule Quillex.ViewSettingsSpex do
       then_ "line number '1' should be visible in the UI" do
         assert Query.text_visible?("1"),
                "Line number 1 should be visible by default"
+
         :ok
       end
 
       then_ "line number '2' should be visible for second line" do
         assert Query.text_visible?("2"),
                "Line number 2 should be visible for second line"
+
         :ok
       end
 
       then_ "line number '3' should be visible for third line" do
         assert Query.text_visible?("3"),
                "Line number 3 should be visible for third line"
+
         :ok
       end
     end
@@ -200,6 +203,7 @@ defmodule Quillex.ViewSettingsSpex do
       given_ "line numbers are currently visible", context do
         assert Query.text_visible?("1"),
                "Line number 1 should be visible initially"
+
         {:ok, context}
       end
 
@@ -223,10 +227,13 @@ defmodule Quillex.ViewSettingsSpex do
 
       then_ "line numbers should be visible again" do
         Process.sleep(200)
+
         assert Query.text_visible?("1"),
                "Line number 1 should be visible after toggle on"
+
         assert Query.text_visible?("2"),
                "Line number 2 should be visible after toggle on"
+
         :ok
       end
     end
@@ -235,7 +242,6 @@ defmodule Quillex.ViewSettingsSpex do
   spex "View Settings - Word Wrap Toggle",
     description: "Validates that word wrap toggle affects text layout via UI",
     tags: [:phase_4, :view_settings, :word_wrap] do
-
     # =========================================================================
     # 3. WORD WRAP TOGGLE BEHAVIOR
     # =========================================================================
@@ -244,7 +250,9 @@ defmodule Quillex.ViewSettingsSpex do
       given_ "we have a very long line of text", context do
         clear_buffer()
         # Type a line that exceeds typical editor width
-        long_text = "This is a very long line of text that should definitely exceed the width of the editor window and test word wrap behavior when enabled"
+        long_text =
+          "This is a very long line of text that should definitely exceed the width of the editor window and test word wrap behavior when enabled"
+
         type_text(long_text)
         Process.sleep(200)
         {:ok, context}
@@ -253,6 +261,7 @@ defmodule Quillex.ViewSettingsSpex do
       then_ "the beginning of the text should be visible" do
         assert Query.text_visible?("This is a very long"),
                "Beginning of long line should be visible"
+
         :ok
       end
 
@@ -263,8 +272,10 @@ defmodule Quillex.ViewSettingsSpex do
 
       then_ "the text should still be visible (layout may change)" do
         Process.sleep(200)
+
         assert Query.text_visible?("This is a very long"),
                "Text should remain visible after word wrap toggle"
+
         :ok
       end
 
@@ -275,8 +286,10 @@ defmodule Quillex.ViewSettingsSpex do
 
       then_ "the text should still be visible" do
         Process.sleep(200)
+
         assert Query.text_visible?("This is a very long"),
                "Text should remain visible after second toggle"
+
         :ok
       end
     end
@@ -285,7 +298,6 @@ defmodule Quillex.ViewSettingsSpex do
   spex "View Settings - Word Wrap Scroll Behavior",
     description: "Validates that word wrap correctly handles long documents and scroll position",
     tags: [:phase_4, :view_settings, :word_wrap, :scroll] do
-
     # =========================================================================
     # LONG DOCUMENT SCROLL BEHAVIOR WITH WORD WRAP
     # =========================================================================
@@ -299,14 +311,18 @@ defmodule Quillex.ViewSettingsSpex do
         Enum.each(1..50, fn i ->
           if rem(i, 5) == 0 do
             # Every 5th line is a long paragraph
-            long_text = "Line #{i}: This is a much longer line that will definitely need to wrap when word wrap is enabled because it contains a lot of text that exceeds the typical editor viewport width and continues on and on."
+            long_text =
+              "Line #{i}: This is a much longer line that will definitely need to wrap when word wrap is enabled because it contains a lot of text that exceeds the typical editor viewport width and continues on and on."
+
             type_text(long_text)
           else
             type_text("Line #{i}: Short content")
           end
+
           Probes.send_keys("enter", [])
           Process.sleep(10)
         end)
+
         type_text("Line 51: THE END MARKER")
         Process.sleep(500)
 
@@ -327,6 +343,7 @@ defmodule Quillex.ViewSettingsSpex do
         # The end marker should be visible
         assert Query.text_visible?("THE END MARKER"),
                "End of document should be reachable with word wrap enabled"
+
         :ok
       end
 
@@ -338,6 +355,7 @@ defmodule Quillex.ViewSettingsSpex do
         # Line 1 should be visible
         assert Query.text_visible?("Line 1:"),
                "Beginning of document should be reachable"
+
         :ok
       end
     end
@@ -353,11 +371,13 @@ defmodule Quillex.ViewSettingsSpex do
           Probes.send_keys("down", [])
           Process.sleep(10)
         end)
+
         Process.sleep(300)
 
         # Verify we're at line 25 area
         assert Query.text_visible?("Line 25:") or Query.text_visible?("Line 26:"),
                "Should be viewing around line 25"
+
         {:ok, context}
       end
 
@@ -369,8 +389,10 @@ defmodule Quillex.ViewSettingsSpex do
 
       then_ "the same content area should still be visible" do
         # Line 25 area should still be visible (scroll position preserved)
-        assert Query.text_visible?("Line 25:") or Query.text_visible?("Line 26:") or Query.text_visible?("Line 24:"),
+        assert Query.text_visible?("Line 25:") or Query.text_visible?("Line 26:") or
+                 Query.text_visible?("Line 24:"),
                "Content around line 25 should still be visible after word wrap toggle"
+
         :ok
       end
 
@@ -382,17 +404,19 @@ defmodule Quillex.ViewSettingsSpex do
 
       then_ "the same content area should still be visible" do
         # Should still see the same area
-        assert Query.text_visible?("Line 25:") or Query.text_visible?("Line 26:") or Query.text_visible?("Line 24:"),
+        assert Query.text_visible?("Line 25:") or Query.text_visible?("Line 26:") or
+                 Query.text_visible?("Line 24:"),
                "Content around line 25 should still be visible after toggling back"
+
         :ok
       end
     end
   end
 
   spex "View Settings - Cursor Preservation",
-    description: "Validates that cursor position is preserved when switching buffers (verified via marker insertion)",
+    description:
+      "Validates that cursor position is preserved when switching buffers (verified via marker insertion)",
     tags: [:phase_4, :view_settings, :cursor_preservation] do
-
     # =========================================================================
     # 4. CURSOR POSITION SAVED WHEN SWITCHING AWAY
     # =========================================================================
@@ -422,6 +446,7 @@ defmodule Quillex.ViewSettingsSpex do
           Probes.send_keys("right", [])
           Process.sleep(80)
         end
+
         # Extra settle time to ensure cursor position is committed to Buffer.Process
         Process.sleep(200)
 
@@ -445,8 +470,10 @@ defmodule Quillex.ViewSettingsSpex do
 
         # The text should now show "LineX one content" (X inserted at position 5)
         rendered = Query.rendered_text()
+
         assert String.contains?(rendered, "LineX") or String.contains?(rendered, "Line X"),
                "Cursor should have preserved position. 'X' should appear after 'Line'. Text: #{String.slice(rendered, 0, 100)}"
+
         :ok
       end
     end
@@ -497,8 +524,10 @@ defmodule Quillex.ViewSettingsSpex do
         # The asterisk should appear after "Bu" making "Bu*ffer two text"
         assert String.contains?(rendered, "*"),
                "Marker character should appear in buffer 2"
+
         assert String.contains?(rendered, "Bu*") or String.contains?(rendered, "uffer"),
                "Marker should be near beginning of 'Buffer two text'. Text: #{String.slice(rendered, 0, 100)}"
+
         :ok
       end
     end
@@ -531,6 +560,7 @@ defmodule Quillex.ViewSettingsSpex do
           assert line >= 1, "Cursor line should be >= 1"
           assert col >= 1, "Cursor column should be >= 1"
         end
+
         :ok
       end
 
@@ -551,6 +581,7 @@ defmodule Quillex.ViewSettingsSpex do
           # After "Hello World" (11 chars), cursor should be at column 12
           assert col > 1, "Cursor should be past column 1 at end of 'Hello World'"
         end
+
         :ok
       end
     end

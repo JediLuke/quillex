@@ -12,13 +12,30 @@ defmodule QuillEx.MixProject do
       compilers: [:boundary] ++ Mix.compilers() ++ spex_compilers(),
       spex: [pattern: "test/spex/**/*_spex.exs", boundary: Quillex.Spex],
       test_ignore_filters: [~r/_spex\.exs$/, ~r/test_helpers/],
+      aliases: aliases(),
       releases: releases(),
       deps: deps()
     ]
   end
 
   def cli do
-    [preferred_envs: [spex: :test, run_spex: :test]]
+    [preferred_envs: [spex: :test, run_spex: :test, precommit: :test, check: :test]]
+  end
+
+  defp aliases do
+    [
+      precommit: [
+        "format --check-formatted",
+        "deps.unlock --unused",
+        "test"
+      ],
+      check: [
+        "format --check-formatted",
+        "deps.unlock --unused",
+        "test",
+        "cmd scripts/run_spex_quiet.sh"
+      ]
+    ]
   end
 
   # `mix release` bundles the app, its deps and the ERTS into

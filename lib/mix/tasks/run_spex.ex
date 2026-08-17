@@ -100,7 +100,10 @@ defmodule Mix.Tasks.RunSpex do
 
     cond do
       not File.exists?(pinner_path) ->
-        Mix.shell().info("  window_pinner not found at tools/window_pinner, skipping desktop pinning")
+        Mix.shell().info(
+          "  window_pinner not found at tools/window_pinner, skipping desktop pinning"
+        )
+
         nil
 
       System.get_env("DISPLAY") in [nil, ""] ->
@@ -108,7 +111,10 @@ defmodule Mix.Tasks.RunSpex do
         nil
 
       true ->
-        Mix.shell().info("  Starting window_pinner (pinning Quillex windows to current desktop)...")
+        Mix.shell().info(
+          "  Starting window_pinner (pinning Quillex windows to current desktop)..."
+        )
+
         Port.open({:spawn_executable, pinner_path}, [:binary, :exit_status, :stderr_to_stdout])
     end
   end
