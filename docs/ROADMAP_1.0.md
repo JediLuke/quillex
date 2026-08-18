@@ -512,14 +512,40 @@ redesign — asserted, not assumed, in `45_themes_spex.exs`.
 a palette missing one token would otherwise not fail until the surface that
 reads it happened to be drawn.
 
-## 7. Menubar polish
+## 7. Menubar polish — ✅ DONE 2026-08-18
 
-Chiefly the **fold controls**. They work; the arrangement doesn't. "Set Fold
-Level" sits alone under `view_folding_divider` at the bottom of View, after
-Zoom. Regroup so folding reads as a group rather than an afterthought.
+**Folding is a group now.** `Toggle Fold`, `Unfold All` and `Set Fold Level`
+sit together under their own divider, above the sizing controls rather than
+stranded after Zoom. View reads top to bottom as: what is on screen → how the
+text is drawn → folding → sizes → theme → preferences about the interface.
 
-While in there: a deliberate pass over grouping and divider placement generally,
-now that View has grown to ~10 toggles plus three steppers.
+File and Edit got the same treatment. File separates opening, writing,
+reconciling with disk, and closing; Edit separates history, clipboard,
+in-buffer find, project find, and navigation. Both were undivided runs in
+which `Save As…` looked as routine as `Save`.
+
+**The visual pass found two bugs the code could not show.** Both were the same
+mistake: a dropdown hangs *below* the icon bar and extends leftward from it, so
+the bar is not what bounds it.
+
+- **Width.** The maximum was clamped to the IconMenu's own frame — a 140px icon
+  strip — which forced the maximum below the minimum, so every dropdown came
+  out exactly `dropdown_width` wide and every longer label was truncated. Two
+  pairs of View rows were *literally indistinguishable*: "Highlight Current…"
+  twice and "Alchemical Dance …" twice. Discoverability failure of the purest
+  kind, and invisible from the menu-building code.
+- **Height.** A dropdown was drawn at whatever height its rows added up to,
+  with no bound. Rows past the bottom of the window cannot be clicked, so a
+  feature that *is* in the menu is still unreachable. Adding the Theme group
+  pushed View past the edge at 130% chrome zoom. It is now clamped, scissored
+  and scrollable.
+
+`46_menu_layout_spex.exs` asserts the grouping of all three menus, that every
+dropdown and every row of it fits inside the window (at 100% *and* at 130%
+zoom), and that no label is drawn truncated — which cannot be checked by
+looking for a trailing ellipsis, since `Open File…` and `Go to Line…` end in
+one by convention. What it means is that the text DRAWN differs from the label
+in the model.
 
 ## 8. Discoverability sweep
 
@@ -613,7 +639,7 @@ flowchart TB
     S4["4. SearchPane ✅"] --> S7["7. Menubar polish"]
     S5b["5b. Cursor in display space ✅"] --> S11
     S6["6. Themes ✅"] --> S7
-    S7 --> S8["8. Discoverability sweep"]
+    S7["7. Menubar polish ✅"] --> S8["8. Discoverability sweep"]
     S8 --> S10["10. Docs + diagrams"]
     S10 --> S11["11. Demo spex<br/>(final gate)"]
 ```

@@ -86,7 +86,7 @@ defmodule Quillex.MenuSliderSpex do
   end
 
   spex "View controls are grouped by visual dividers",
-    description: "Boolean, typography, and folding controls form three readable sections",
+    description: "Each group of controls is drawn under a divider that separates it",
     tags: [:phase_37, :menu, :divider, :view] do
     scenario "Opening View renders the grouped menu" do
       when_ "the View menu is opened", context do
@@ -94,17 +94,22 @@ defmodule Quillex.MenuSliderSpex do
         {:ok, context}
       end
 
-      then_ "two divider lines separate toggles, sliders, and folding", context do
+      # WHAT the groups are, and in what order, is 46_menu_layout_spex.exs's
+      # business — this one only cares that the dividers are really drawn and
+      # that each one sits above the group it introduces.
+      then_ "divider lines are drawn above the group each introduces", context do
         {_pid, component} = icon_menu_state()
         graph = component.assigns.graph
         bounds = component.assigns.state.dropdown_bounds.view.items
 
-        assert Scenic.Graph.get!(graph, {:menu_divider, "view_display_divider"})
         assert Scenic.Graph.get!(graph, {:menu_divider, "view_folding_divider"})
-        assert bounds["menu_shortcuts"].y < bounds["view_display_divider"].y
-        assert bounds["view_display_divider"].y < bounds["text_size"].y
-        assert bounds["tab_width"].y < bounds["view_folding_divider"].y
+        assert Scenic.Graph.get!(graph, {:menu_divider, "view_display_divider"})
+        assert Scenic.Graph.get!(graph, {:menu_divider, "view_theme_divider"})
+
         assert bounds["view_folding_divider"].y < bounds["toggle_fold"].y
+        assert bounds["view_display_divider"].y < bounds["text_size"].y
+        assert bounds["text_size"].y < bounds["tab_width"].y
+        assert bounds["view_theme_divider"].y < bounds["theme_heading"].y
         {:ok, context}
       end
     end

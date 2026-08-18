@@ -670,7 +670,9 @@ defmodule QuillEx.RootScene.Renderizer do
               icon_font_size: scaled(16, state),
               dropdown_item_height: scaled(28, state),
               dropdown_slider_height: scaled(52, state),
-              dropdown_font_size: scaled(13, state)
+              dropdown_font_size: scaled(13, state),
+              max_dropdown_height: max_dropdown_height(state),
+              max_dropdown_width: max_dropdown_width(state)
             })
         }
 
@@ -834,10 +836,15 @@ defmodule QuillEx.RootScene.Renderizer do
         icon: :file,
         tooltip: "File commands",
         items: [
+          # Open a document, write a document, reconcile with disk, close.
+          # Four jobs, four groups — the run of seven undivided rows read as
+          # one list in which Save As and Verify File looked equally routine.
           command_item.(:new),
           command_item.(:open),
+          %Divider{id: "file_write_divider"},
           command_item.(:save),
           command_item.(:save_as),
+          %Divider{id: "file_disk_divider"},
           %Item{
             id: "verify",
             label: "Verify File",
@@ -848,6 +855,7 @@ defmodule QuillEx.RootScene.Renderizer do
             label: "Reload from Disk",
             tooltip: "Discard buffer contents and reread the file from disk."
           },
+          %Divider{id: "file_close_divider"},
           command_item.(:close)
         ]
       },
@@ -858,12 +866,17 @@ defmodule QuillEx.RootScene.Renderizer do
         items: [
           command_item.(:undo),
           command_item.(:redo),
+          %Divider{id: "edit_clipboard_divider"},
           command_item.(:cut),
           command_item.(:copy),
           command_item.(:paste),
+          %Divider{id: "edit_find_divider"},
           command_item.(:find),
           command_item.(:find_replace),
           command_item.(:find_next),
+          # Searching one buffer and searching the whole project are different
+          # jobs on different surfaces; the divider says so.
+          %Divider{id: "edit_project_divider"},
           command_item.(:find_in_project),
           command_item.(:replace_in_project),
           %Divider{id: "edit_navigate_divider"},
@@ -875,12 +888,15 @@ defmodule QuillEx.RootScene.Renderizer do
         icon: :view,
         tooltip: "View and editor controls",
         items: [
+          # What is on screen, then how the text itself is drawn, then folding,
+          # then sizes, then the palette, then preferences about the interface.
           %Toggle{
             id: "file_nav",
             label: "File Navigator",
             checked?: state.show_file_nav,
             tooltip: "Show or hide the project file navigator."
           },
+          %Divider{id: "view_text_divider"},
           %Toggle{
             id: "line_numbers",
             label: "Line Numbers",
@@ -918,17 +934,19 @@ defmodule QuillEx.RootScene.Renderizer do
             tooltip:
               "Mark keywords, names, strings and comments by weight, slant and underline (no colour needed)."
           },
-          %Toggle{
-            id: "action_feedback",
-            label: "Action Feedback",
-            checked?: state.show_action_feedback,
-            tooltip: "Show low-level confirmations such as copied text, undo, and reload actions."
-          },
-          %Toggle{
-            id: "menu_shortcuts",
-            label: "Keyboard Shortcuts in Menus",
-            checked?: state.show_menu_shortcuts,
-            tooltip: "Show or hide the right-aligned shortcut column in menus."
+          # Folding is three controls that belong together and read as one
+          # idea. They used to sit alone below Zoom, after everything else,
+          # which made "Set Fold Level" look like an afterthought rather than
+          # the third member of a group.
+          %Divider{id: "view_folding_divider"},
+          command_item.(:toggle_fold),
+          command_item.(:unfold_all),
+          %Select{
+            id: "fold_level",
+            label: "Set Fold Level",
+            value: state.fold_level,
+            options: [1, 2, 3, 4],
+            tooltip: "Collapse all code blocks at the selected nesting level or deeper."
           },
           %Divider{id: "view_display_divider"},
           %Slider{
@@ -958,18 +976,23 @@ defmodule QuillEx.RootScene.Renderizer do
             tooltip:
               "Scale application chrome independently from editor text. Ctrl/Cmd + or - changes it; Ctrl/Cmd 0 resets it."
           },
+          # A bare list of five palette names needs a noun over it; the other
+          # groups are legible from their rows and get a divider instead.
           %Divider{id: "view_theme_divider"},
           %Item{id: "theme_heading", label: "Theme", enabled?: false},
           theme_items(state),
-          %Divider{id: "view_folding_divider"},
-          command_item.(:toggle_fold),
-          command_item.(:unfold_all),
-          %Select{
-            id: "fold_level",
-            label: "Set Fold Level",
-            value: state.fold_level,
-            options: [1, 2, 3, 4],
-            tooltip: "Collapse all code blocks at the selected nesting level or deeper."
+          %Divider{id: "view_interface_divider"},
+          %Toggle{
+            id: "action_feedback",
+            label: "Action Feedback",
+            checked?: state.show_action_feedback,
+            tooltip: "Show low-level confirmations such as copied text, undo, and reload actions."
+          },
+          %Toggle{
+            id: "menu_shortcuts",
+            label: "Keyboard Shortcuts in Menus",
+            checked?: state.show_menu_shortcuts,
+            tooltip: "Show or hide the right-aligned shortcut column in menus."
           }
         ]
         |> List.flatten()
@@ -991,6 +1014,23 @@ defmodule QuillEx.RootScene.Renderizer do
   end
 
   defp scaled(value, state), do: max(1, round(value * state.chrome_zoom / 100))
+
+  # How much room a dropdown has beneath the top bar. The View menu has grown
+  # to five groups and scales with the chrome zoom, so at some combination of
+  # zoom and window height it stops fitting — and a row below the window edge
+  # cannot be clicked, which makes a feature that IS in the menu unreachable.
+  # Handing the widget the number lets it clamp and scroll instead.
+  defp max_dropdown_height(%{frame: nil}), do: nil
+
+  defp max_dropdown_height(state) do
+    max(state.frame.size.height - scaled(@top_bar_height, state) - 8, 100)
+  end
+
+  # The dropdown hangs off the right of the window and extends leftward, so
+  # what bounds it is the window — not the icon strip it is anchored to, which
+  # is 140px wide and was truncating every label longer than that.
+  defp max_dropdown_width(%{frame: nil}), do: nil
+  defp max_dropdown_width(state), do: max(state.frame.size.width - 16, 200)
 
   # Check if buffer_pane needs to be recreated based on state changes
   # Initial render
