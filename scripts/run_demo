@@ -29,7 +29,8 @@ done
 export DEMO_SPEED
 
 if [ "$DEMO_SPEED" = watch ]; then
-  echo "Playing the Quillex demo. It runs for a few minutes — watch the window."
+  echo "Playing the Quillex demo. It runs for about a quarter of an hour,"
+  echo "paced to be watched — watch the window."
   echo "(scripts/run_demo --fast runs the same script as a test.)"
   echo
 fi

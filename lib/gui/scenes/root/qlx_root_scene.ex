@@ -399,8 +399,13 @@ defmodule QuillEx.RootScene do
 
     scene =
       if state.file_nav_resize_hide? do
-        Quillex.RadixCache.ViewStore.close_file_nav()
-        Quillex.RadixCache.ViewStore.show_status("File navigator hidden", :info)
+        # Closed AND announced in one commit. Done as two casts, this
+        # published two snapshots a few milliseconds apart, and each one is a
+        # layout change: the sidebar going away, then the status strip
+        # appearing. Two full chrome rebuilds in the same breath, with the
+        # second delete landing while the first replacement was still
+        # initialising — which is how an IconMenu ended up killed mid-init.
+        Quillex.RadixCache.ViewStore.close_file_nav("File navigator hidden")
         scene
       else
         Quillex.RadixCache.ViewStore.set_file_nav_width(state.file_nav_width)

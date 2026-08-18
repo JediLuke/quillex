@@ -114,6 +114,18 @@ defmodule Quillex.RadixCache.ViewStore do
   @doc "Close the file navigator. The counterpart to open_file_nav/0 — toggling is not the same thing when you need a known state."
   def close_file_nav, do: GenServer.cast(__MODULE__, :close_file_nav)
 
+  @doc """
+  Close the file navigator and say so, in ONE published snapshot.
+
+  Closing it and raising the status message separately publishes twice a few
+  milliseconds apart, and both are layout changes — the sidebar going away,
+  then the status strip appearing. That is two full chrome rebuilds in a row,
+  and the second can delete a component the first has only just started. One
+  commit, one rebuild.
+  """
+  def close_file_nav(status) when is_binary(status),
+    do: GenServer.cast(__MODULE__, {:close_file_nav, status})
+
   @doc "Show the project-search results pane in the sidebar slot. Idempotent."
   def open_project_search, do: GenServer.cast(__MODULE__, :open_project_search)
 
@@ -246,6 +258,21 @@ defmodule Quillex.RadixCache.ViewStore do
 
   def handle_cast(:close_file_nav, state) do
     {:noreply, publish(state, %{state.view | show_file_nav: false})}
+  end
+
+  def handle_cast({:close_file_nav, status}, state) do
+    ref = make_ref()
+    Process.send_after(self(), {:clear_status, ref}, @status_clear_ms)
+
+    state =
+      publish(state, %{
+        state.view
+        | show_file_nav: false,
+          status_message: status,
+          status_severity: :info
+      })
+
+    {:noreply, %{state | status_ref: ref}}
   end
 
   def handle_cast(:open_file_nav, state) do

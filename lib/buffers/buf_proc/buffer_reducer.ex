@@ -181,6 +181,19 @@ defmodule Quillex.Buffer.Process.Reducer do
     buf |> Selection.select_to({line, col})
   end
 
+  # Shift+Home / Shift+End. The target is named rather than given, because
+  # only the buffer knows where this line actually ends — the pane's copy of
+  # the document is a mirror, and a mirror can be one buffer switch out of
+  # date.
+  def process(%Quillex.Structs.BufState{cursor: c} = buf, {:select_to, :line_start}) do
+    Selection.select_to(buf, {c.line, 1})
+  end
+
+  def process(%Quillex.Structs.BufState{cursor: c} = buf, {:select_to, :line_end}) do
+    text = Enum.at(buf.data, c.line - 1, "")
+    Selection.select_to(buf, {c.line, String.length(text) + 1})
+  end
+
   def process(%Quillex.Structs.BufState{} = buf, :clear_selection) do
     %{buf | selection: nil}
   end

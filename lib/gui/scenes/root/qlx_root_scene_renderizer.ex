@@ -128,12 +128,21 @@ defmodule QuillEx.RootScene.Renderizer do
       # entries" toast, once again when it cleared 8s later. The side pane's
       # frame is carved before the status strip (see the split above), so it is
       # not even geometrically affected by the transition that rebuilds it.
+      # The tab bar is NOT in this list either, for the same reason the side
+      # pane is not: every file operation raises a status message, a status
+      # message appearing or disappearing lands here, and the collapse of the
+      # sidebar raises one on top of its own layout change. Two rebuilds
+      # arriving in the same breath killed a TabBar mid-init — the second
+      # delete landing while the first replacement was still starting up.
+      # render_tab_bar/5 already knows how to update a surviving instance in
+      # place, and the tab bar cannot be overlapped by anything except the
+      # icon-menu dropdown, which IS recreated here and so still lands above
+      # it.
       graph =
         graph
         |> Scenic.Graph.delete(:status_bar)
         |> Scenic.Graph.delete(:file_nav_resize_handle_group)
         |> Scenic.Graph.delete(:search_bar)
-        |> Scenic.Graph.delete(:tab_bar)
         |> Scenic.Graph.delete(:cursor_pos_label)
         |> Scenic.Graph.delete(:icon_menu)
 

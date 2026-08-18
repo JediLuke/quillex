@@ -10,6 +10,11 @@ defmodule Quillex.DemoSpex do
   Run it with `scripts/run_demo` and watch; `--fast` runs the same script as a
   regression test.
 
+  It is paced to be *watched*, which means it is slow: a quarter of an hour,
+  most of it deliberate pauses on something that just changed. An audience
+  needs several seconds to find the thing that moved before they can
+  understand it; the test needs none, which is what `--fast` is for.
+
   It is both at once, deliberately: a showcase and the most complete
   integration test in the suite. **Every act asserts**, so it cannot play
   through a feature that is broken — and it has already earned that. Writing it
@@ -35,6 +40,8 @@ defmodule Quillex.DemoSpex do
     replace
   - reading code: structural syntax highlighting, folding, current line and
     column guides, word wrap
+  - the window itself: wheel scrolling, dragging the scrollbar thumb, and a
+    sidebar divider that both resizes and — dragged far enough — closes
   - looking at it: five themes, editor text size, interface zoom
   - finding out: menus for everything, and a generated shortcut reference
 
@@ -45,11 +52,15 @@ defmodule Quillex.DemoSpex do
   use SexySpex
   @moduletag timeout: 1_800_000
 
+  # The chrome above the editor. The divider's grab handle is placed relative
+  # to the content BELOW it.
+  @top_bar_height 35
+
   alias ScenicMcp.Probes
   alias Quillex.TestHelpers.AppReset
   alias Quillex.TestHelpers.SemanticHelpers
   alias Quillex.GUI.Palette
-  import Quillex.TestHelpers.Integration, only: [ensure_editor_focused: 0]
+  import Quillex.TestHelpers.Integration, only: [ensure_editor_focused: 0, buffer_pane_frame: 0]
 
   @demo_dir "/tmp/quillex_demo"
 
@@ -62,17 +73,23 @@ defmodule Quillex.DemoSpex do
 
   # A deliberate pause on something that just changed, so a room has time to
   # see it. This is the difference between demonstrating a feature and merely
-  # exercising it — an audience needs several seconds to find the thing that
-  # moved, and the test does not.
-  defp dwell(ms), do: beat(ms)
+  # exercising it — an audience needs several seconds to FIND the thing that
+  # moved before they can understand it, and the test needs none.
+  #
+  # Watched, these run half again as long as they read on the page. The demo
+  # was paced by someone who already knew where to look.
+  defp dwell(ms), do: beat(if fast?(), do: ms, else: round(ms * 1.5))
 
-  # Narration types at about twice the speed of a person. The opening is slower
-  # — that is when a room reads most closely, and when nobody yet knows what
-  # they are looking at.
-  defp per_char_ms, do: if(fast?(), do: 0, else: Process.get(:demo_pace, 9))
+  # Typing speed. A fast human types four or five characters a second; this is
+  # quicker than that, because the room is reading rather than watching the
+  # keystrokes — but nothing like the old 9ms, which put a paragraph on screen
+  # faster than anyone could start reading it.
+  defp per_char_ms, do: if(fast?(), do: 0, else: Process.get(:demo_pace, 42))
 
-  defp pace(:slow), do: Process.put(:demo_pace, 16)
-  defp pace(:normal), do: Process.put(:demo_pace, 9)
+  # The opening is slower still: that is when a room reads most closely, and
+  # when nobody yet knows what they are looking at.
+  defp pace(:slow), do: Process.put(:demo_pace, 68)
+  defp pace(:normal), do: Process.put(:demo_pace, 42)
 
   # ── Reading the editor ────────────────────────────────────────────────────
 
@@ -126,9 +143,11 @@ defmodule Quillex.DemoSpex do
     Process.sleep(60)
   end
 
+  # Keystrokes that MOVE something need to be seen moving. At 90ms a run of
+  # arrow keys was a blur; at 200 you can follow the cursor.
   defp key(k, mods \\ []) do
     Probes.send_keys(k, mods)
-    Process.sleep(if fast?(), do: 25, else: 90)
+    Process.sleep(if fast?(), do: 25, else: 200)
   end
 
   defp keys(k, mods, times), do: for(_ <- 1..times, do: key(k, mods))
@@ -374,10 +393,12 @@ defmodule Quillex.DemoSpex do
           "   2.  buffers, tabs, and the project navigator",
           "   3.  finding things — here, and across the project",
           "   4.  reading code: highlighting and folding",
-          "   5.  making it yours: text size, tab stops, themes",
+          "   5.  the window itself: scrollbars, panes, dividers",
+          "   6.  making it yours: text size, tab stops, themes",
           "",
           "If something is missing from this tour, it is missing",
-          "from Quillex."
+          "from Quillex. Read this list and you have the claims,",
+          "whether or not you stay for the proof."
         ])
 
         assert Enum.at(active_buffer().lines, 0) =~ "1.0 means"
@@ -1210,7 +1231,144 @@ defmodule Quillex.DemoSpex do
     # 5. MAKING IT YOURS
     # ════════════════════════════════════════════════════════════════════════
 
-    scenario "Act VII — making it yours" do
+    # ────────────────────────────────────────────────────────────────────────
+    # None of this is text-editor functionality. It is the furniture the
+    # editor is built out of — frames that lay themselves out, scrollbars that
+    # know how tall the document is, a divider that can be dragged and
+    # collapsed — and it is most of the code.
+    scenario "Act VII — the window and its furniture" do
+      given_ "a document taller than the window", context do
+        narrate([
+          "None of what follows is text editing.",
+          "",
+          "It is the furniture: panes that lay themselves out from a",
+          "frame, scrollbars that recompute the document's height",
+          "whenever it changes, a divider you can drag. It is most of",
+          "the code, and you only notice it when it is wrong."
+        ])
+
+        dwell(5_000)
+
+        :ok = Quillex.Buffer.activate(buffer_named("paging.txt"))
+        beat(900)
+        focus_editor()
+        dwell(2_500)
+        {:ok, context}
+      end
+
+      when_ "the wheel is turned", context do
+        %{x: x, y: y, width: w, height: h} = buffer_pane_frame()
+        mid = {x + trunc(w * 0.4), y + trunc(h * 0.5)}
+
+        # Down the document and back up, slowly enough to watch the thumb
+        # travel with it.
+        for _ <- 1..14 do
+          Probes.send_scroll(0, -3, elem(mid, 0), elem(mid, 1))
+          beat(220)
+        end
+
+        dwell(2_500)
+
+        for _ <- 1..14 do
+          Probes.send_scroll(0, 3, elem(mid, 0), elem(mid, 1))
+          beat(220)
+        end
+
+        dwell(2_000)
+        {:ok, context}
+      end
+
+      then_ "the scrollbar thumb can be grabbed and thrown", context do
+        narrate_aside([
+          "The thumb is draggable, and its LENGTH is the fraction of",
+          "the document you can see — so it grows and shrinks as the",
+          "text size changes."
+        ])
+
+        %{x: x, y: y, width: w, height: h} = buffer_pane_frame()
+        bar_x = x + w - 10
+
+        Probes.mouse_down(bar_x, y + 15)
+        beat(400)
+
+        for fraction <- [0.15, 0.3, 0.45, 0.6, 0.75] do
+          Probes.send_mouse_move(bar_x, y + trunc(h * fraction))
+          beat(300)
+        end
+
+        Probes.mouse_up(bar_x, y + trunc(h * 0.75))
+        dwell(3_000)
+
+        Probes.take_screenshot("60_demo_18_scrollbar_drag")
+        {:ok, context}
+      end
+
+      then_ "the divider resizes the sidebar, and collapses it", context do
+        narrate_aside([
+          "The sidebar divider is draggable too. Drag it past its",
+          "minimum and the sidebar closes — the same gesture that",
+          "resizes it also puts it away."
+        ])
+
+        Quillex.RadixCache.ViewStore.open_file_nav()
+        assert wait_until(fn -> root_state().show_file_nav end)
+        beat(1_200)
+
+        # The divider's grab handle is a small pill near the BOTTOM of the
+        # sidebar — 90% down the content area, not halfway down the pane. Miss
+        # it and the whole drag is inert, which is how this act first "passed"
+        # while resizing nothing at all.
+        grab_y = @top_bar_height + trunc((root_state().frame.size.height - @top_bar_height) * 0.9)
+
+        start_width = root_state().file_nav_width
+        Probes.send_mouse_move(start_width, grab_y)
+        beat(400)
+        Probes.mouse_down(start_width, grab_y)
+        beat(400)
+
+        assert root_state().file_nav_resizing,
+               "the divider did not take the press at #{inspect({start_width, grab_y})}"
+
+        # Out to a wide sidebar, back in to a narrow one. The buffer pane
+        # reflows under it the whole way.
+        for width <- [start_width, 340, 430, 500, 430, 340, 250, 190] do
+          Probes.send_mouse_move(width, grab_y)
+          beat(260)
+        end
+
+        Probes.mouse_up(190, grab_y)
+        dwell(2_500)
+
+        assert root_state().show_file_nav, "dragging within range must not close it"
+
+        assert root_state().file_nav_width != start_width,
+               "the drag should have actually resized the sidebar"
+
+        Probes.take_screenshot("60_demo_19_divider_drag")
+
+        # And now past the minimum, which closes it.
+        current = root_state().file_nav_width
+        Probes.send_mouse_move(current, grab_y)
+        beat(300)
+        Probes.mouse_down(current, grab_y)
+        beat(400)
+
+        for width <- [current, 150, 110, 70, 30] do
+          Probes.send_mouse_move(width, grab_y)
+          beat(280)
+        end
+
+        Probes.mouse_up(30, grab_y)
+        dwell(3_000)
+
+        refute root_state().show_file_nav,
+               "dragging the divider past its minimum should close the sidebar"
+
+        {:ok, context}
+      end
+    end
+
+    scenario "Act VIII — making it yours" do
       given_ "a file with some structure to look at", context do
         narrate([
           "Making it yours. All of this is in the View menu, and all",
@@ -1278,6 +1436,13 @@ defmodule Quillex.DemoSpex do
         :ok = Quillex.Buffer.activate(buffer_named("kernel.ex"))
         beat(800)
 
+        # The sidebar is part of the claim being made here — and the previous
+        # act closed it by dragging its divider off the edge, which is how
+        # this step first went looking for a component that no longer existed.
+        Quillex.RadixCache.ViewStore.open_file_nav()
+        assert wait_until(fn -> root_state().show_file_nav end)
+        beat(1_000)
+
         for {id, _label} <- Palette.themes() do
           Quillex.RadixCache.ViewStore.set_theme(id)
 
@@ -1322,7 +1487,9 @@ defmodule Quillex.DemoSpex do
           "       noticing a file that changed underneath you",
           "   3.  find here, find everywhere, dismiss and replace",
           "   4.  structural highlighting, folding, guides, wrap",
-          "   5.  text size, tab stops and five themes, live",
+          "   5.  scrollbars, a draggable divider, panes that",
+          "       reflow — the furniture, which is most of the code",
+          "   6.  text size, tab stops and five themes, live",
           "",
           "That is the whole feature list. That is what 1.0 means."
         ])

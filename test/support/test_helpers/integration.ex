@@ -197,10 +197,15 @@ defmodule Quillex.TestHelpers.Integration do
     end
   end
 
-  # The MAIN editor pane's frame, not "the latest text_buffer" — the search
-  # pane and other components publish text_buffer entries too, and clicking a
-  # frame that belongs to one of those focuses the wrong thing.
-  defp buffer_pane_frame do
+  @doc """
+  The MAIN editor pane's frame, as it is actually on screen.
+
+  Not "the latest text_buffer" — the search pane and other components publish
+  text_buffer entries too, and clicking a frame that belongs to one of those
+  focuses the wrong thing. Public because anything driving the mouse at the
+  editor needs real coordinates: clicks, scrollbar drags, the divider.
+  """
+  def buffer_pane_frame do
     {:ok, viewport} = Scenic.ViewPort.info(:main_viewport)
 
     {:ok, entries} = SemanticHelpers.find_by_type_all_graphs(viewport, :text_buffer)

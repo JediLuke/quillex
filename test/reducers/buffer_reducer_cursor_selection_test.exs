@@ -150,6 +150,36 @@ defmodule Quillex.Buffer.Process.ReducerCursorSelectionTest do
     end
   end
 
+  describe "select_to with a named target" do
+    # Shift+Home/End send :line_start / :line_end rather than coordinates: the
+    # pane's copy of the document is a mirror, and right after a buffer switch
+    # it is a mirror of the previous one. Resolving "the end of this line"
+    # there once selected into a line that was no longer on screen.
+    test "select_to :line_end reaches the end of the cursor's line" do
+      buf = %BufState{
+        data: ["copy this line", "leave this one alone"],
+        cursor: Cursor.new(1, 1),
+        selection: nil
+      }
+
+      result = Quillex.Buffer.Process.Reducer.process(buf, {:select_to, :line_end})
+
+      assert result.selection == %{start: {1, 1}, end: {1, 15}}
+    end
+
+    test "select_to :line_start reaches back to column one" do
+      buf = %BufState{
+        data: ["copy this line", "leave this one alone"],
+        cursor: Cursor.new(2, 10),
+        selection: nil
+      }
+
+      result = Quillex.Buffer.Process.Reducer.process(buf, {:select_to, :line_start})
+
+      assert result.selection == %{start: {2, 10}, end: {2, 1}}
+    end
+  end
+
   describe "word deletion" do
     # Ctrl+Backspace and Ctrl+Delete. Every backspace handler used to ignore
     # its modifiers, so both were plain character deletes.
