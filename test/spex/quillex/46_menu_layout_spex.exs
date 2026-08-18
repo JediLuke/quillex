@@ -168,7 +168,7 @@ defmodule Quillex.MenuLayoutSpex do
 
       then_ "no menu label is truncated", context do
         # A truncated label is worse than a missing one: "Highlight Current…"
-        # appeared twice in View, and "Alchemical Dance …" twice under Theme,
+        # appeared twice in View, and "Alchemical Wedding…" twice under Theme,
         # so two pairs of rows were literally indistinguishable. The cause was
         # the dropdown being clamped to the width of the icon strip it hangs
         # from rather than to the window.

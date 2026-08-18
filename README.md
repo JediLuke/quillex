@@ -37,7 +37,7 @@ level. Matching braces. Optional line and column guides. Word wrap.
 **The project.** A file navigator with drag-and-drop, spring-loaded folders and
 rename/delete. Files edited outside Quillex are noticed and offered for reload.
 
-**Looking at it.** Five themes — Alchemical Dance in dark and light, Solarized
+**Looking at it.** Five themes — Alchemical Wedding in dark and light, Solarized
 in both, and High Contrast — each driving the editor *and* the whole interface,
 because a light buffer inside a dark sidebar reads as broken rather than as a
 theme. Editor text size and interface scale adjust independently.

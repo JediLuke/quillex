@@ -535,7 +535,7 @@ the bar is not what bounds it.
   strip — which forced the maximum below the minimum, so every dropdown came
   out exactly `dropdown_width` wide and every longer label was truncated. Two
   pairs of View rows were *literally indistinguishable*: "Highlight Current…"
-  twice and "Alchemical Dance …" twice. Discoverability failure of the purest
+  twice and "Alchemical Wedding…" twice. Discoverability failure of the purest
   kind, and invisible from the menu-building code.
 - **Height.** A dropdown was drawn at whatever height its rows added up to,
   with no bound. Rows past the bottom of the window cannot be clicked, so a

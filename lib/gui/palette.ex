@@ -17,8 +17,8 @@ defmodule Quillex.GUI.Palette do
 
   | id | name |
   |---|---|
-  | `:alchemical_dark` | Alchemical Dance (Dark) — the default |
-  | `:alchemical_light` | Alchemical Dance (Light) |
+  | `:alchemical_dark` | Alchemical Wedding (Dark) — the default |
+  | `:alchemical_light` | Alchemical Wedding (Light) |
   | `:solarized_dark` | Solarized Dark |
   | `:solarized_light` | Solarized Light |
   | `:high_contrast` | High Contrast |
@@ -35,8 +35,8 @@ defmodule Quillex.GUI.Palette do
   """
 
   @themes [
-    {:alchemical_dark, "Alchemical Dance (Dark)"},
-    {:alchemical_light, "Alchemical Dance (Light)"},
+    {:alchemical_dark, "Alchemical Wedding (Dark)"},
+    {:alchemical_light, "Alchemical Wedding (Light)"},
     {:solarized_dark, "Solarized Dark"},
     {:solarized_light, "Solarized Light"},
     {:high_contrast, "High Contrast"}
