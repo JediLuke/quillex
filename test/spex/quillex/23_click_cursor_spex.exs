@@ -162,4 +162,117 @@ defmodule Quillex.ClickCursorSpex do
       end
     end
   end
+
+  spex "Clicking past the text still moves the cursor",
+    description: "Empty space in a document belongs to the document, not to nothing",
+    tags: [:phase_23, :mouse, :cursor] do
+    # This had no coverage, and so it broke: TextField discarded any click
+    # landing past the end of the clicked line's text, on the theory that it
+    # must have been meant for something drawn above the pane. A click to the
+    # right of a short line did nothing, a click below the last line did
+    # nothing, and — because focus follows a click — the editor went dead to
+    # the keyboard until you happened to hit a glyph.
+    scenario "Clicking to the right of a line puts the cursor at end of line" do
+      given_ "a buffer whose lines are short", context do
+        new_buffer_with(["short", "a somewhat longer line", "end"])
+        {:ok, context}
+      end
+
+      when_ "we click far to the right of line 1", context do
+        %{x: fx, y: fy, width: fw} = SemanticHelpers.get_buffer_frame()
+        Probes.click(fx + trunc(fw * 0.7), fy + 16)
+        Process.sleep(400)
+        {:ok, context}
+      end
+
+      then_ "the cursor sits at the end of line 1, not somewhere else", context do
+        assert {1, col} = our_buffer_cursor(),
+               "clicking right of line 1 should stay on line 1, got #{inspect(our_buffer_cursor())}"
+
+        assert col == String.length("short") + 1,
+               "clicking past the end of a line means end of line; got column #{col}"
+
+        {:ok, context}
+      end
+
+      then_ "a single click leaves no selection behind", context do
+        {:ok, snapshot} = Quillex.Buffer.fetch(active_buf())
+
+        assert snapshot.selection == nil,
+               "a single click should not select anything, got #{inspect(snapshot.selection)}"
+
+        {:ok, context}
+      end
+
+      then_ "and the editor has the keyboard, so typing lands there", context do
+        Probes.send_text("!")
+        Process.sleep(300)
+
+        assert {:ok, snapshot} = Quillex.Buffer.fetch(active_buf()),
+               "no active buffer"
+
+        assert Enum.at(snapshot.lines, 0) == "short!",
+               "typing after the click should land at end of line 1, got #{inspect(snapshot.lines)}"
+
+        {:ok, context}
+      end
+    end
+
+    scenario "Clicking below the last line puts the cursor on the last line" do
+      given_ "a short buffer with a lot of empty space beneath it", context do
+        new_buffer_with(["alpha", "beta"])
+        {:ok, context}
+      end
+
+      when_ "we click well below the last line", context do
+        %{x: fx, y: fy, width: fw, height: fh} = SemanticHelpers.get_buffer_frame()
+        Probes.click(fx + trunc(fw * 0.4), fy + trunc(fh * 0.7))
+        Process.sleep(400)
+        {:ok, context}
+      end
+
+      then_ "the cursor lands on the last line", context do
+        assert {2, _col} = our_buffer_cursor(),
+               "clicking below the text should land on the last line, got #{inspect(our_buffer_cursor())}"
+
+        {:ok, context}
+      end
+
+      then_ "and the editor has the keyboard", context do
+        Probes.send_text("!")
+        Process.sleep(300)
+
+        {:ok, snapshot} = Quillex.Buffer.fetch(active_buf())
+
+        assert Enum.join(snapshot.lines, "\n") =~ "!",
+               "typing after clicking empty space should reach the document, got #{inspect(snapshot.lines)}"
+
+        {:ok, context}
+      end
+    end
+  end
+
+  defp active_buf do
+    :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state.active_buf
+  end
+
+  # A fresh, focused buffer holding exactly these lines.
+  defp new_buffer_with(lines) do
+    {:ok, buf} = Quillex.Buffer.new(%{name: "click-target.txt", data: lines})
+    :ok = Quillex.Buffer.activate(buf)
+    Process.sleep(500)
+
+    # Focus by clicking on the LAST line's text — never the line under test,
+    # and never at a position that could resolve to the same cursor cell.
+    # Two clicks that land on the same {line, col} inside the double-click
+    # window are a double click, and the editor is right to select the word:
+    # an earlier version of this helper clicked line 1, the scenario clicked
+    # line 1 again 300ms later, and the resulting word selection looked like a
+    # bug in clicking rather than a bug in the setup.
+    %{x: fx, y: fy} = SemanticHelpers.get_buffer_frame()
+    Probes.click(fx + 90, fy + 16 + (length(lines) - 1) * 24)
+    Process.sleep(600)
+
+    buf
+  end
 end
