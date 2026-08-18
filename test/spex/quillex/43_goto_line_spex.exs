@@ -15,16 +15,18 @@ defmodule Quillex.GotoLineSpex do
   use SexySpex
 
   alias ScenicMcp.Probes
-  alias Quillex.TestHelpers.{AppReset, SemanticHelpers}
+  alias Quillex.TestHelpers.SemanticHelpers
+  import Quillex.TestHelpers.Integration, only: [fresh_editor!: 0, ensure_editor_focused: 0]
 
   @spinoza "test/fixtures/spinozas_ethics_p1.txt"
 
   setup_all do
-    {:ok, _} = Application.ensure_all_started(:quillex)
-    Process.sleep(1_500)
-    AppReset.reset!()
+    # A reset alone is not enough: Ctrl+G has to reach a FOCUSED editor, and in
+    # a full-suite run the previous file can leave the keyboard elsewhere.
+    fresh_editor!()
     {:ok, buf} = Quillex.Buffer.new(%{name: "goto.txt", data: Enum.map(1..300, &"line #{&1}")})
     Process.sleep(600)
+    ensure_editor_focused()
     {:ok, buf: buf}
   end
 
@@ -50,6 +52,7 @@ defmodule Quillex.GotoLineSpex do
       given_ "the editor is focused on a 300-line buffer", context do
         Probes.send_keys("escape", [])
         Process.sleep(200)
+        ensure_editor_focused()
         refute root_state().show_goto_line
         {:ok, context}
       end

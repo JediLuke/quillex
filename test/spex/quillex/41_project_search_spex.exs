@@ -151,7 +151,17 @@ defmodule Quillex.ProjectSearchSpex do
 
     Quillex.RadixCache.ViewStore.set_file_nav_path(root)
     Process.sleep(300)
-    on_exit(fn -> File.rm_rf!(root) end)
+
+    # Point the navigator somewhere that still exists before deleting the
+    # fixture. Left pointing at a removed directory, the next file's navigator
+    # renders an empty tree and its scenarios fail for a reason that has
+    # nothing to do with them.
+    on_exit(fn ->
+      Quillex.RadixCache.ViewStore.set_file_nav_path(File.cwd!())
+      Process.sleep(200)
+      File.rm_rf!(root)
+    end)
+
     {:ok, root: root}
   end
 

@@ -19,8 +19,8 @@ defmodule Quillex.WrappedCursorSpex do
   @moduletag timeout: 300_000
 
   alias ScenicMcp.Probes
-  alias Quillex.TestHelpers.AppReset
   alias ScenicWidgets.TextField.Renderer
+  import Quillex.TestHelpers.Integration, only: [fresh_editor!: 0, ensure_editor_focused: 0]
 
   defp root_state, do: :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state
 
@@ -65,9 +65,11 @@ defmodule Quillex.WrappedCursorSpex do
   end
 
   setup_all do
-    {:ok, _} = Application.ensure_all_started(:quillex)
-    Process.sleep(1_000)
-    AppReset.reset!()
+    # fresh_editor! rather than a reset and a fixed click: it dismisses
+    # overlays and takes focus from the pane's own frame. Every failure this
+    # spex had in a full-suite run was the same one — the editor did not have
+    # the keyboard, so Down did nothing.
+    fresh_editor!()
 
     {:ok, buf} =
       Quillex.Buffer.new(%{
@@ -95,8 +97,7 @@ defmodule Quillex.WrappedCursorSpex do
         :ok = Quillex.Buffer.activate(buf)
         Process.sleep(400)
         ensure_word_wrap()
-        Probes.click(700, 300)
-        Process.sleep(150)
+        ensure_editor_focused()
         {:ok, _} = Quillex.Buffer.dispatch(buf, [{:set_cursor, {2, 1}}])
         assert wait_until(fn -> cursor() == {2, 1} end)
 
@@ -166,8 +167,7 @@ defmodule Quillex.WrappedCursorSpex do
 
         :ok = Quillex.Buffer.activate(buf)
         Process.sleep(400)
-        Probes.click(700, 300)
-        Process.sleep(150)
+        ensure_editor_focused()
         {:ok, _} = Quillex.Buffer.dispatch(buf, [{:set_cursor, {1, 15}}])
         assert wait_until(fn -> cursor() == {1, 15} end)
         {:ok, context}
@@ -206,8 +206,7 @@ defmodule Quillex.WrappedCursorSpex do
         :ok = Quillex.Buffer.activate(buf)
         Process.sleep(400)
         ensure_word_wrap()
-        Probes.click(700, 300)
-        Process.sleep(150)
+        ensure_editor_focused()
         {:ok, context}
       end
 
