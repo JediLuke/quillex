@@ -18,6 +18,7 @@ defmodule Quillex.DemoSpex do
   alias ScenicMcp.Probes
   alias Quillex.TestHelpers.AppReset
   alias Quillex.GUI.Palette
+  import Quillex.TestHelpers.Integration, only: [ensure_editor_focused: 0]
 
   @project_root Path.expand("../../..", __DIR__)
   @demo_dir "/tmp/quillex_demo"
@@ -78,16 +79,33 @@ defmodule Quillex.DemoSpex do
   end
 
   # The narration itself: clear the buffer, then write what is about to happen.
+  #
+  # And check that it arrived. Narration needs the keyboard, and the acts that
+  # follow drive the editor through its stores instead — so without this the
+  # demo can lose focus, fall silent, and still play its remaining acts and
+  # pass. It did exactly that: the themes changed while nothing explained them.
   defp narrate(lines) do
+    lines = List.wrap(lines)
+    focus_editor()
     select_all_and_delete()
 
     lines
-    |> List.wrap()
     |> Enum.with_index()
     |> Enum.each(fn {line, i} ->
       if i > 0, do: newline()
       type(line)
     end)
+
+    first = hd(lines)
+
+    assert wait_until(fn -> Enum.at(active_buffer().lines, 0) == first end),
+           """
+           the narration never reached the buffer — the editor did not have the
+           keyboard, so this act would have played in silence.
+
+             expected line 1: #{inspect(first)}
+             buffer line 1:   #{inspect(Enum.at(active_buffer().lines, 0))}
+           """
 
     beat(1_200)
   end
@@ -119,10 +137,12 @@ defmodule Quillex.DemoSpex do
     Process.sleep(200)
   end
 
-  defp focus_editor do
-    Probes.click(900, 400)
-    Process.sleep(200)
-  end
+  # Not a fixed click. The demo opens the file navigator and the search pane as
+  # it goes, and the search pane takes the keyboard when you type into it —
+  # after which a click at some remembered coordinate may focus nothing. This
+  # derives the point from the pane's live frame and verifies the pane really
+  # holds the keyboard, raising if it does not.
+  defp focus_editor, do: ensure_editor_focused()
 
   defp menu(menu_id, item_id) do
     Probes.click_element("icon_menu_#{menu_id}")

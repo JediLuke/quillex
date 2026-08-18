@@ -126,7 +126,42 @@ defmodule Quillex.TestHelpers.Integration do
     Every scenario that types depends on this, and when it silently fails the
     symptom is a keystroke that "did nothing" several steps later — which is
     what made the old integration spex so hard to read.
+
+      pane:  #{inspect(editor_focus_state())}
+      frame: #{inspect(buffer_pane_frame())}
+      view:  #{inspect(focus_relevant_view())}
     """
+  end
+
+  @doc false
+  def editor_focus_state do
+    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+
+    case Scenic.Scene.child(root, :buffer_pane) do
+      {:ok, [pid | _]} ->
+        state = :sys.get_state(pid, 30_000).assigns.state
+        %{focused: state.focused, overlay_open: state.overlay_open}
+
+      other ->
+        %{no_buffer_pane: inspect(other)}
+    end
+  end
+
+  @doc false
+  def focus_relevant_view do
+    state = :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state
+
+    Map.take(state, [
+      :show_file_nav,
+      :show_project_search,
+      :show_search_bar,
+      :show_goto_line,
+      :show_about,
+      :show_shortcuts,
+      :show_file_picker,
+      :show_unsaved_prompt,
+      :file_nav_width
+    ])
   end
 
   def ensure_editor_focused(attempts) do

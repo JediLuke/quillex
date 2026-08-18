@@ -118,12 +118,19 @@ defmodule Quillex.Buffers.BufferSwitchPreservesCursorTest do
   end
 
   describe ":store_backed cursor_button — overlay-class click suppression" do
-    test "click far past end of line does NOT dispatch :set_cursor" do
-      # Reproduces the diagnostic trace: local coords (1805, 18). The frame
-      # is 2000 wide so `point_inside?` passes; without the fix
-      # `click_to_cursor` clamps to {1, 17} (end of "Line one content") and
-      # the reducer returns {:click_move_cursor, _, {:set_cursor, {1, 17}}}.
-      state = build_state()
+    # This block used to assert that a click landing far past the end of the
+    # clicked line's text was DISCARDED, on the theory that it must have been
+    # meant for something drawn above the pane. That guess cost more than it
+    # bought: a click anywhere in the empty part of a document was thrown away,
+    # and with it the FOCUS that click should have granted. Click below the
+    # last line of a file — most of the surface of most new files — and the
+    # editor went dead to the keyboard.
+    #
+    # Only the host knows whether something is drawn over the pane, and the
+    # host already says so through `overlay_open`. That is the whole contract
+    # now, and it is what these tests pin.
+    test "an overlay-owned click is discarded" do
+      state = build_state(overlay_open: true)
 
       action =
         Reducer.input_to_buffer_action(
@@ -132,17 +139,48 @@ defmodule Quillex.Buffers.BufferSwitchPreservesCursorTest do
         )
 
       refute match?({:click_move_cursor, _, {:set_cursor, _}}, action),
-             "Click far past end of rendered text should not produce a :set_cursor — got #{inspect(action)}"
+             "a click while an overlay owns the pointer must not move the cursor — got #{inspect(action)}"
 
       refute match?({:double_click_select, _, _}, action),
-             "Click far past end of rendered text should not produce a :double_click_select — got #{inspect(action)}"
+             "a click while an overlay owns the pointer must not select — got #{inspect(action)}"
     end
 
-    test "the suppression applies only in :store_backed mode (no regression for :direct)" do
-      # Hard-scope guard from the change request: if the fix lives in
-      # scenic_widget_contrib it must narrow to :store_backed only, so
-      # other TextField consumers (forms, single-line inputs in :direct
-      # mode) keep their existing past-EOL click → set-to-EOL behaviour.
+    test "an overlay rect discards only the clicks inside it" do
+      state = build_state(overlay_open: %{x: 1500, y: 0, width: 500, height: 200})
+
+      inside =
+        Reducer.input_to_buffer_action(
+          state,
+          {:cursor_button, {:btn_left, 1, [], {1805.0, 18.0}}}
+        )
+
+      refute match?({:click_move_cursor, _, {:set_cursor, _}}, inside),
+             "a click inside the overlay's rect must not reach the document — got #{inspect(inside)}"
+
+      outside =
+        Reducer.input_to_buffer_action(
+          state,
+          {:cursor_button, {:btn_left, 1, [], {200.0, 18.0}}}
+        )
+
+      assert match?({:click_move_cursor, _, {:set_cursor, _}}, outside),
+             "a click outside the overlay's rect belongs to the document — got #{inspect(outside)}"
+    end
+
+    test "with no overlay, a click in empty space places the cursor at end of line" do
+      state = build_state()
+
+      action =
+        Reducer.input_to_buffer_action(
+          state,
+          {:cursor_button, {:btn_left, 1, [], {1805.0, 18.0}}}
+        )
+
+      assert match?({:click_move_cursor, _, {:set_cursor, {1, 17}}}, action),
+             "clicking past the end of a line should put the cursor at EOL — got #{inspect(action)}"
+    end
+
+    test ":direct mode is unaffected" do
       state = build_state(input_mode: :direct)
 
       action =
