@@ -115,14 +115,15 @@ defmodule Quillex.MenuLayoutSpex do
         {:ok, context}
       end
 
-      then_ "Edit separates history, clipboard, find, project find, and navigation",
+      then_ "Edit separates history, clipboard, selection, find, project find, navigation",
             context do
-        assert [history, clipboard, find, project, navigate] = groups(:edit)
+        assert [history, clipboard, selection, find, project, navigate] = groups(:edit)
         assert history == ["undo", "redo"]
         assert clipboard == ["cut", "copy", "paste"]
+        assert selection == ["select_all"]
         assert find == ["find", "find_replace", "find_next"]
         assert project == ["find_in_project", "replace_in_project"]
-        assert "goto_line" in navigate
+        assert navigate == ["goto_line"]
         {:ok, context}
       end
     end

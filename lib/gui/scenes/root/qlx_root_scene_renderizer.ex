@@ -870,6 +870,8 @@ defmodule QuillEx.RootScene.Renderizer do
           command_item.(:cut),
           command_item.(:copy),
           command_item.(:paste),
+          %Divider{id: "edit_selection_divider"},
+          command_item.(:select_all),
           %Divider{id: "edit_find_divider"},
           command_item.(:find),
           command_item.(:find_replace),

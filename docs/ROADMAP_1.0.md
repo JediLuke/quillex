@@ -547,22 +547,36 @@ looking for a trailing ellipsis, since `Open File…` and `Go to Line…` end in
 one by convention. What it means is that the text DRAWN differs from the label
 in the model.
 
-## 8. Discoverability sweep
+## 8. Discoverability sweep — ✅ DONE 2026-08-18
 
-The goal in one line: *"otherwise how will users know it exists"*.
+The audit ran feature by feature. It was indeed smaller than first assumed for
+the *menus* — and larger than assumed for the **shortcut reference**, which is
+where most of what was missing turned out to live.
 
-Smaller than first assumed — Show Matching Brace, Highlight Current Line and
-Highlight Current Column are all already in View with checkboxes. (An earlier
-note claimed otherwise; it came from grepping the *state* field names rather
-than the *menu* ids, which drop the prefix and live in
-`Renderizer.build_menus/1`.)
+**Fourteen bindings existed and appeared nowhere.** Not in a menu, not in
+Help → Keyboard Shortcuts: discoverable only by guessing or by reading the
+source. Word-wise movement, `Home`/`End`, `Ctrl+Home`/`End`, page navigation,
+`Ctrl+A`, `Tab`/`Shift+Tab`, `Ctrl++`/`-`/`0`, `Shift+Arrows`, `Escape`.
 
-The job is a deliberate audit, feature by feature, asking **"can a user find
-this without being told?"** Keyboard-only features are the suspects: word-wise
-movement (`Ctrl+←/→`), page navigation, `Ctrl+Home/End`, project search,
-clipboard operations. Where a feature has no home, give it one — a menu entry,
-or a shortcut registered into Help → Keyboard Shortcuts (generated, so entries
-must be registered rather than hand-written).
+All are registered now. Most carry `menu: nil` — keyboard-only *by nature*.
+Nobody opens a menu to move one word left, and thirteen rows of cursor
+movement would bury the commands people do reach for. They still appear in the
+reference, which is the point. `Select All` was the one genuine menu gap and
+now has a row in Edit, beside the clipboard commands it belongs with.
+
+**The reference itself is now readable.** It went from 14 flat lines to 37
+grouped under six headings (File, Editing, Finding, Moving around, Selecting,
+Folding, Interface) — which meant it no longer fitted, so `PopupModal` flows a
+long body into columns and takes a monospaced `body_font`, without which the
+padding that lines the two columns up lines nothing up.
+
+`Ctrl+←` was written with arrow glyphs the dialog font does not have; both
+render as `Ctrl+Left` / `Ctrl+Right` now.
+
+`47_discoverability_spex.exs` is the audit made durable: every binding listed
+with the code that handles it, checked against the registry and against the
+generated reference, plus a check that every command claiming a menu really
+has a row there, and that the reference fits on screen.
 
 ## 9. Split `07_integration_v1_spex.exs`
 
@@ -640,7 +654,7 @@ flowchart TB
     S5b["5b. Cursor in display space ✅"] --> S11
     S6["6. Themes ✅"] --> S7
     S7["7. Menubar polish ✅"] --> S8["8. Discoverability sweep"]
-    S8 --> S10["10. Docs + diagrams"]
+    S8["8. Discoverability ✅"] --> S10["10. Docs + diagrams"]
     S10 --> S11["11. Demo spex<br/>(final gate)"]
 ```
 

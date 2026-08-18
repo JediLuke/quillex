@@ -1258,6 +1258,10 @@ defmodule QuillEx.RootScene do
         Scenic.Scene.put_child(scene, :buffer_pane, {:action, {:paste, :at_cursor}})
         {:noreply, scene}
 
+      "select_all" ->
+        Scenic.Scene.put_child(scene, :buffer_pane, {:action, :select_all})
+        {:noreply, scene}
+
       "find" ->
         # Find - show search bar
         show_search_bar(scene)
@@ -1901,7 +1905,10 @@ defmodule QuillEx.RootScene do
         %{
           frame: state.frame,
           title: "Keyboard Shortcuts",
-          body: Quillex.Commands.shortcut_lines()
+          body: Quillex.Commands.shortcut_lines(),
+          # The reference lines up its two columns with padding, which only
+          # lines up in a monospaced face.
+          body_font: :ibm_plex_mono
         },
         id: :shortcuts_dialog
       )
