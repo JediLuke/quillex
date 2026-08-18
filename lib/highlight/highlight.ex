@@ -58,7 +58,7 @@ defmodule Quillex.Highlight do
 
     {by_line, _line, _col} =
       Enum.reduce(tokens, {%{}, 1, 0}, fn {type, _meta, value}, {acc, line, col} ->
-        text = IO.chardata_to_string(value)
+        text = token_text(value)
         parts = String.split(text, "\n")
         class = class_for(type, length(parts) > 1)
         place_parts(parts, class, acc, line, col)
@@ -73,6 +73,15 @@ defmodule Quillex.Highlight do
       end
     end)
   end
+
+  # A token's value is a binary or a charlist — except for `:error`, which
+  # Makeup emits for a character it cannot lex, and where the value is a BARE
+  # codepoint. A bare integer is not chardata, so converting it directly raises
+  # and takes the whole lexing task down: one em dash, ellipsis or curly quote
+  # anywhere in a source file and that document silently loses its
+  # highlighting. Prose in moduledocs is full of them.
+  defp token_text(codepoint) when is_integer(codepoint), do: <<codepoint::utf8>>
+  defp token_text(value), do: IO.chardata_to_string(value)
 
   # Lay a token's newline-split parts onto consecutive lines.
   defp place_parts([part], class, acc, line, col) do

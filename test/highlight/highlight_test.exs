@@ -37,6 +37,29 @@ defmodule Quillex.HighlightTest do
     assert {_, [{4, 9, :string}]} = spans[5]
   end
 
+  # Makeup emits {:error, meta, codepoint} — a BARE integer, not chardata — for
+  # any character its lexer cannot place. Converting it directly raises, and
+  # since lexing runs in a supervised task, the whole document silently lost
+  # its highlighting. One em dash was enough, and prose in moduledocs is full
+  # of them.
+  test "a character the lexer cannot place does not take the lexing down" do
+    lines = ["defmodule A do", "  # an em dash — here", "  x = …", "end"]
+
+    spans = Highlight.spans(lines, Highlight.lexer_for_path("a.ex"))
+
+    assert {"defmodule A do", _} = spans[1]
+    assert {"end", [{0, 3, :keyword}]} = spans[4]
+  end
+
+  test "an unlexable character alone on a line is still counted, so later lines line up" do
+    lines = ["—", "def foo, do: :ok"]
+
+    spans = Highlight.spans(lines, Highlight.lexer_for_path("a.ex"))
+
+    assert {"def foo, do: :ok", line2} = spans[2]
+    assert {0, 3, :keyword} in line2
+  end
+
   test "class mapping" do
     assert Highlight.class_for(:keyword_declaration, false) == :keyword
     assert Highlight.class_for(:name_function, false) == :definition
