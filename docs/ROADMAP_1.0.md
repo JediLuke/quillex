@@ -408,17 +408,41 @@ nothing structurally.
 - The store's `replace_all` can return `{:error, {:bad_pattern, message}}` — the
   pane must show it, since a regex typed live is wrong most of the time.
 
-## 5. Go to Line
+## 5. Go to Line — ✅ DONE 2026-08-17
 
-`Ctrl+G`. Missing entirely — no implementation anywhere in `lib/`. It sits in
-Phase 3's "Should Have" beside Find and Replace, both long since done, so it is
-the last hole in navigation.
+`Ctrl+G` opens a digits-only prompt; Enter jumps, Backspace corrects, Escape
+abandons. Out-of-range **clamps** rather than refusing: `999999` means "the end",
+because that is what people type when they mean that.
 
-Smallest item here: an input modal (`ScenicWidgets.PopupModal` exists and is
-used by About) collecting a line number, then the existing
-`{:move_cursor, {line, col}}` action. Clamp out-of-range rather than refusing —
-`999999` should mean "end of document", because that is what people type when
-they mean that.
+Reachable three ways, per the "everything explorable via the menubar" rule:
+`Ctrl+G`, **Edit → Go to Line…**, and Help → Keyboard Shortcuts — all three from
+the single `Quillex.Commands` registry entry, which is the pattern every new
+command should follow.
+
+**Find Next moved from `Ctrl+G` to `F3`.** `Ctrl+G` is the near-universal Go to
+Line binding and `F3` the near-universal Find Next, so both ended up more
+standard, not less. The displaced handler was guarded on
+`length(matches) > 0` — it did nothing unless a search was already running, so
+no working behaviour was lost.
+
+Covered by `43_goto_line_spex.exs`, including the menubar route.
+
+> ### ⚠️ Trap for every future keybinding — read before item 4
+>
+> Quillex runs TextField in **`:store_backed`** mode. In that mode
+> `Reducer.process_input/2` **is never called**: `handle_store_backed_input/2`
+> routes every event through `Reducer.input_to_buffer_action/2` instead.
+>
+> A shortcut added to `process_input/2` — right beside the existing `@ctrl_f`
+> and `@ctrl_h` clauses, looking entirely correct — is **dead code** for
+> Quillex. Ctrl+G was written there first and did nothing.
+>
+> New TextField keybindings need BOTH:
+> 1. a clause in `input_to_buffer_action/2` returning a tagged tuple, and
+> 2. a matching branch in `handle_store_backed_input/2` that calls
+>    `send_parent_event/2` (or dispatches to the store).
+>
+> A unit test will not catch this. A spex will, immediately.
 
 ## 5b. The cursor lives in source space; the screen is in display space
 
@@ -594,9 +618,9 @@ demo plays start to finish without a stumble, 1.0 is cut.
 
 ```mermaid
 flowchart TB
+    S5["5. Go to Line ✅"]
     S9["9. Split spex 07<br/>(makes everything measurable)"] --> S11
     S4["4. SearchPane<br/>(largest)"] --> S7["7. Menubar polish"]
-    S5["5. Go to Line<br/>(smallest)"] --> S8
     S5b["5b. Cursor in display space<br/>(wrap-aware click + arrows)"] --> S11
     S6["6. Themes<br/>recon sweep first"] --> S7
     S7 --> S8["8. Discoverability sweep"]

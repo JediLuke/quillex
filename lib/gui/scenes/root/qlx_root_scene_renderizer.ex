@@ -763,7 +763,9 @@ defmodule QuillEx.RootScene.Renderizer do
           command_item.(:find_replace),
           command_item.(:find_next),
           command_item.(:find_in_project),
-          command_item.(:replace_in_project)
+          command_item.(:replace_in_project),
+          %Divider{id: "edit_navigate_divider"},
+          command_item.(:goto_line)
         ]
       },
       %{

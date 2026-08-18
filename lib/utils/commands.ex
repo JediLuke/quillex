@@ -105,9 +105,16 @@ defmodule Quillex.Commands do
     %{
       id: :find_next,
       label: "Find Next",
-      shortcut: "Ctrl+G",
+      shortcut: "F3",
       menu: :edit,
       description: "Move to the next search match."
+    },
+    %{
+      id: :goto_line,
+      label: "Go to Line…",
+      shortcut: "Ctrl+G",
+      menu: :edit,
+      description: "Jump the cursor to a line number."
     },
     %{
       id: :toggle_fold,

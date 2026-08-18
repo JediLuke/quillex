@@ -104,6 +104,42 @@ defmodule QuillEx.RootScene do
   # Additionally, "v" is not a GLFW modifier key, so the chord cannot be
   # expressed as a simultaneous modifier combination. Access via File menu only.
 
+  # Go to Line prompt owns the keyboard entirely while it is open. These clauses
+  # come FIRST so a digit does not also trip a document shortcut underneath.
+  def handle_input({:key, {key, 1, _mods}}, _context, %{assigns: %{state: %{show_goto_line: true}}} = scene) do
+    state = scene.assigns.state
+
+    case key do
+      :key_enter ->
+        commit_goto_line(scene)
+
+      :key_kp_enter ->
+        commit_goto_line(scene)
+
+      # Scenic reports Escape as :key_esc; :key_escape is accepted too so the
+      # prompt does not depend on which spelling a driver happens to send.
+      k when k in [:key_esc, :key_escape] ->
+        {:noreply, hide_goto_line(scene)}
+
+      :key_backspace ->
+        {:noreply, update_goto_line(scene, String.slice(state.goto_line_input, 0..-2//1))}
+
+      _ ->
+        case goto_line_digit(key) do
+          nil -> {:noreply, scene}
+          d -> {:noreply, update_goto_line(scene, state.goto_line_input <> d)}
+        end
+    end
+  end
+
+  # Swallow key-release and codepoint events too, so nothing leaks to the
+  # document while the prompt is up.
+  def handle_input({:key, {_key, 0, _mods}}, _context, %{assigns: %{state: %{show_goto_line: true}}} = scene),
+    do: {:noreply, scene}
+
+  def handle_input({:codepoint, _}, _context, %{assigns: %{state: %{show_goto_line: true}}} = scene),
+    do: {:noreply, scene}
+
   # Handle Ctrl+N keyboard shortcut for New Buffer
   # Creates a new empty buffer, equivalent to File → New Buffer.
   def handle_input({:key, {:key_n, 1, [:ctrl]}}, _context, scene) do
@@ -576,7 +612,8 @@ defmodule QuillEx.RootScene do
       # DOCUMENT, and firing them while the user is typing in the search bar
       # or answering a dialog mutates the file behind their back (Ctrl+D
       # would delete a line of the document mid-search).
-      state.show_search_bar or state.show_unsaved_prompt or
+      state.show_goto_line or
+        state.show_search_bar or state.show_unsaved_prompt or
         state.show_nav_delete_prompt or
         Map.get(state, :show_about, false) or Map.get(state, :show_shortcuts, false) or
           state.show_file_picker ->
@@ -588,7 +625,8 @@ defmodule QuillEx.RootScene do
   end
 
   defp keyboard_overlay_open?(state) do
-    state.show_search_bar or state.show_unsaved_prompt or state.show_file_picker or
+    state.show_goto_line or
+      state.show_search_bar or state.show_unsaved_prompt or state.show_file_picker or
       state.show_nav_delete_prompt or
       Map.get(state, :show_about, false) or Map.get(state, :show_shortcuts, false)
   end
@@ -1233,6 +1271,9 @@ defmodule QuillEx.RootScene do
         Scenic.Scene.put_child(scene, :buffer_pane, {:action, :find_next})
         {:noreply, scene}
 
+      "goto_line" ->
+        show_goto_line(scene)
+
       "find_in_project" ->
         show_search_bar(scene, project: true)
 
@@ -1341,6 +1382,107 @@ defmodule QuillEx.RootScene do
   # Find & Replace (Ctrl+H from TextField)
   def handle_event({:replace_mode_requested, _id}, _from, scene) do
     show_search_bar(scene, replace_mode: true)
+  end
+
+  # Go to Line (Ctrl+G from TextField)
+  def handle_event({:goto_line_requested, _id}, _from, scene), do: show_goto_line(scene)
+
+  # ── Go to Line ────────────────────────────────────────────────────────────
+  #
+  # The prompt takes digits only, so RootScene collects them itself instead of
+  # hosting an editable text field. Keystrokes reach here because the modal
+  # blurs the buffer pane, and `keyboard_overlay_open?/1` keeps document
+  # shortcuts from firing underneath.
+
+  defp show_goto_line(%{assigns: %{state: %{show_goto_line: true}}} = scene),
+    do: {:noreply, scene}
+
+  defp show_goto_line(scene) do
+    state = scene.assigns.state
+    new_state = %{state | show_goto_line: true, goto_line_input: ""}
+
+    new_scene =
+      scene
+      |> assign(state: new_state)
+      |> assign(graph: goto_line_graph(scene.assigns.graph, new_state))
+      |> then(&(&1 |> push_graph(&1.assigns.graph)))
+
+    Scenic.Scene.put_child(new_scene, :buffer_pane, :blur)
+    {:noreply, new_scene}
+  end
+
+  defp goto_line_graph(graph, state) do
+    typed = state.goto_line_input
+    total = length(active_buffer_lines(state))
+
+    graph
+    |> Scenic.Graph.delete(:goto_line_prompt)
+    |> ScenicWidgets.PopupModal.add_to_graph(
+      %{
+        frame: state.frame,
+        title: "Go to Line",
+        body: [
+          "Line number:  #{if typed == "", do: "_", else: typed}",
+          "",
+          "1 - #{total}      Enter to jump, Escape to cancel"
+        ]
+      },
+      id: :goto_line_prompt
+    )
+  end
+
+  defp hide_goto_line(scene) do
+    state = %{scene.assigns.state | show_goto_line: false, goto_line_input: ""}
+    graph = Scenic.Graph.delete(scene.assigns.graph, :goto_line_prompt)
+
+    new_scene = scene |> assign(state: state) |> assign(graph: graph) |> push_graph(graph)
+    Scenic.Scene.put_child(new_scene, :buffer_pane, :focus)
+    new_scene
+  end
+
+  defp active_buffer_lines(%{active_buf: nil}), do: []
+
+  defp active_buffer_lines(%{active_buf: buf_ref}) do
+    case Quillex.Buffer.fetch(buf_ref) do
+      {:ok, %{lines: lines}} -> lines
+      _ -> []
+    end
+  end
+
+  defp update_goto_line(scene, typed) do
+    new_state = %{scene.assigns.state | goto_line_input: typed}
+    graph = goto_line_graph(scene.assigns.graph, new_state)
+    scene |> assign(state: new_state) |> assign(graph: graph) |> push_graph(graph)
+  end
+
+  # Number-row and keypad digits both, since a line number is exactly what a
+  # numeric keypad is for.
+  defp goto_line_digit(key) do
+    case Atom.to_string(key) do
+      "key_" <> <<d>> when d in ?0..?9 -> <<d>>
+      "key_kp_" <> <<d>> when d in ?0..?9 -> <<d>>
+      _ -> nil
+    end
+  end
+
+  defp commit_goto_line(scene) do
+    state = scene.assigns.state
+    lines = active_buffer_lines(state)
+    scene = hide_goto_line(scene)
+
+    case Integer.parse(state.goto_line_input) do
+      {n, ""} when n >= 1 and lines != [] ->
+        # Clamp rather than refuse. 999999 is what people type when they mean
+        # "the end", and an editor that answers that with an error is being
+        # pedantic at the user's expense.
+        line = min(n, length(lines))
+        Scenic.Scene.put_child(scene, :buffer_pane, {:action, {:set_cursor, {line, 1}}})
+        Quillex.RadixCache.ViewStore.show_status("Line #{line}", :info)
+        {:noreply, scene}
+
+      _ ->
+        {:noreply, scene}
+    end
   end
 
   # NOTE: SearchBar communicates via cast_parent/2, so search/replace UI events

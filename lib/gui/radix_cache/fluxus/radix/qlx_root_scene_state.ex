@@ -54,6 +54,12 @@ defmodule QuillEx.RootScene.State do
             quit_dirty_buffers: [],
             pending_nav_delete: [],
             show_nav_delete_prompt: false,
+            # Go to Line (Ctrl+G). The digits are collected by RootScene itself
+            # rather than by a text-input component: the prompt accepts only
+            # digits, so a full editable field would be more machinery than the
+            # interaction deserves.
+            show_goto_line: false,
+            goto_line_input: "",
             # Search bar
             show_search_bar: false,
             search_query: "",
