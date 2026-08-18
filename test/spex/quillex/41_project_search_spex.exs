@@ -63,6 +63,7 @@ defmodule Quillex.ProjectSearchSpex do
   defp open_pane_with(root, query) do
     write_fixture(root)
     AppReset.reset!()
+    close_fixture_buffers(root)
     Quillex.RadixCache.ViewStore.set_file_nav_path(root)
     Process.sleep(200)
     ProjectSearchStore.set_exclude("")
@@ -73,6 +74,7 @@ defmodule Quillex.ProjectSearchSpex do
     Quillex.RadixCache.ViewStore.open_project_search()
     Process.sleep(400)
     ProjectSearchStore.set_query(query)
+    :ok = ProjectSearchStore.await_idle()
     true = wait_until(fn -> search_done?() end)
 
     # And wait for the PANE, not just the store: the rows and their buttons are
@@ -104,6 +106,19 @@ defmodule Quillex.ProjectSearchSpex do
     [{_key, entry}] = :ets.lookup(viewport.semantic_table, key)
     %{left: left, top: top, width: width, height: height} = entry.screen_bounds
     {trunc(left + width / 2), trunc(top + height / 2)}
+  end
+
+  # A buffer open on a fixture file OVERLAYS the disk results with its own
+  # content — which is correct behaviour, and ruinous for a scenario that just
+  # rewrote the fixture on disk: the previous spex's replaced text is what the
+  # search would find. AppReset keeps one buffer, and that one can be a dirty
+  # fixture file, so close them explicitly.
+  defp close_fixture_buffers(root) do
+    Quillex.Buffer.list()
+    |> Enum.filter(&(is_binary(&1.path) and String.starts_with?(&1.path, root)))
+    |> Enum.each(&Quillex.Buffer.close(&1, :discard))
+
+    Process.sleep(250)
   end
 
   # Rewritten before every spex: these scenarios replace text on disk, and the
@@ -147,6 +162,12 @@ defmodule Quillex.ProjectSearchSpex do
       when_ "Ctrl+Shift+F is pressed and a query typed into the pane", context do
         write_fixture(context.root)
         AppReset.reset!()
+        close_fixture_buffers(context.root)
+        # Give the cursor a word to sit on, so the pane really does open
+        # seeded and the assertion below has something to prove.
+        {:ok, seed_buf} = Quillex.Buffer.new(%{name: "seed.txt", data: ["haystack"]})
+        :ok = Quillex.Buffer.activate(seed_buf)
+        Process.sleep(300)
         Quillex.RadixCache.ViewStore.set_file_nav_path(context.root)
         ProjectSearchStore.set_exclude("")
         ProjectSearchStore.set_option(:case_sensitive, false)
@@ -166,12 +187,19 @@ defmodule Quillex.ProjectSearchSpex do
 
         Probes.send_text("needle")
 
+        # Typing schedules one debounced search per character. await_idle
+        # returns once none is in flight, which is the only moment the results
+        # are known to belong to the whole query rather than a prefix of it.
+        :ok = ProjectSearchStore.await_idle()
         assert wait_until(fn -> search_done?() end), "the project search should finish"
         assert wait_until(fn -> pane_files() == store_files() end)
         {:ok, context}
       end
 
       then_ "the pane's own query field holds what was typed", context do
+        # And only what was typed: the pane opens seeded with the word under
+        # the cursor, shown selected, so the first character typed replaces it
+        # rather than appending to a guess.
         assert pane_state().query == "needle"
         assert pane_state().focused, "the pane must hold the keyboard while it is up"
         {:ok, context}
@@ -179,7 +207,10 @@ defmodule Quillex.ProjectSearchSpex do
 
       then_ "results are grouped by file and skip build directories", context do
         %{status: {:done, matches, files, _ms}, files: grouped} = results()
-        assert matches == 8
+
+        assert matches == 8,
+               "found #{matches} in #{files}: #{inspect(Enum.map(grouped, &elem(&1, 0)))}"
+
         assert files == 3
         refute Enum.any?(grouped, fn {path, _} -> String.contains?(path, "_build") end)
 

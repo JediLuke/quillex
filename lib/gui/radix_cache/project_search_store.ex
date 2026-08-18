@@ -147,6 +147,7 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
        view: @initial,
        raw_files: [],
        task: nil,
+       task_query: nil,
        debounce: nil,
        dirty_debounce: nil,
        waiters: [],
@@ -272,18 +273,29 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
     Process.demonitor(ref, [:flush])
 
     state =
-      case result do
-        {:ok, files} ->
+      cond do
+        # Results for a query that is no longer the one in the box. Dropped,
+        # not published: the search that IS current is either running or about
+        # to be, and its answer is the one that belongs to this query.
+        state.task_query != {state.view.query, backend_opts(state.view)} ->
+          %{state | task: nil}
+
+        match?({:ok, _}, result) ->
+          {:ok, files} = result
           elapsed = System.monotonic_time(:millisecond) - state.started_at
 
           %{state | task: nil, raw_files: files}
           |> publish_visible(state.view, elapsed)
 
-        {:error, {:bad_pattern, message}} ->
+        match?({:error, {:bad_pattern, _}}, result) ->
+          {:error, {:bad_pattern, message}} = result
+
           %{state | task: nil, raw_files: []}
           |> publish(%{state.view | files: [], status: :idle, error: message})
 
-        {:error, reason} ->
+        true ->
+          {:error, reason} = result
+
           %{state | task: nil, raw_files: []}
           |> publish(%{state.view | files: [], status: {:error, reason}})
       end
@@ -343,7 +355,15 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
       end)
 
     state
-    |> Map.merge(%{task: task, started_at: System.monotonic_time(:millisecond)})
+    |> Map.merge(%{
+      task: task,
+      # What this task is searching for. A task started for an earlier query
+      # can finish AFTER a newer one was scheduled but before it ran — and its
+      # results would then be published under the newer query's label, which
+      # is simply wrong. Matching on the ref alone does not catch it.
+      task_query: {query, opts},
+      started_at: System.monotonic_time(:millisecond)
+    })
     |> publish(%{view | status: :searching, error: nil})
   end
 
@@ -399,7 +419,7 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
 
   defp cancel_task(%{task: task} = state) do
     Task.shutdown(task, :brutal_kill)
-    %{state | task: nil}
+    %{state | task: nil, task_query: nil}
   end
 
   defp notify_waiters(%{task: nil, debounce: nil, waiters: waiters} = state) do

@@ -320,6 +320,9 @@ The pass is **bounded** — the list below is the whole of it. When it is done,
 1.0 is cut. The demo spex is deliberately last: it can only be written once the
 feature set stops moving.
 
+> **Part II is complete as of 2026-08-18.** Items 4 through 11 are all done and
+> marked below. The demo plays start to finish; that was the gate.
+
 ## ✅ Done (committed 2026-08-17)
 
 **1. File navigator.** Drag-to-move had no feedback and could only drop onto
@@ -668,16 +671,39 @@ shipped or recorded as declined) are deleted. `AGENTS.md` still described the
 dependencies as path deps and told readers to run `mix spex` directly, which
 scatters windows across desktops; both corrected.
 
-## 11. The demo spex — *last*
+## 11. The demo spex — ✅ DONE 2026-08-18
 
-One spex that walks **every feature, top to bottom, paced to play like a
-movie**, narrating itself by typing the explanations into the buffer as it goes,
-launched by `scripts/run_demo`.
+`60_demo_spex.exs`, launched by `scripts/run_demo`. Five acts, ninety seconds:
 
-It is simultaneously a showcase and the most complete integration test in the
-suite — which is exactly why it comes last. It can only be written against a
-feature set that has stopped moving, and it is the natural final gate: if the
-demo plays start to finish without a stumble, 1.0 is cut.
+1. typing, and undo unwinding a word one edit at a time;
+2. two files in tabs, structural highlighting, Go to Line — including that it
+   clamps rather than refuses;
+3. project search: a query, a dismissal, Replace All, and the proof that the
+   dismissed occurrence survived it;
+4. all five themes in turn, each reaching the editor *and* the chrome;
+5. the shortcut reference, generated from the registry.
+
+It narrates by typing its own explanations into the buffer, a character at a
+time — a demo that pastes is a screenshot. `DEMO_SPEED=fast` (or
+`run_demo --fast`) runs the same script as a regression test.
+
+**Every act asserts.** A demo that plays through while the feature underneath
+is broken would be worse than no demo at all.
+
+It was the final gate, and it behaved like one — writing it turned up two
+things nothing else had:
+
+- **A seeded query had to be deleted by hand.** The pane opens seeded with the
+  word under the cursor, and the first character typed appended to it. Editors
+  show a seed *selected*; the pane does now.
+- **A superseded search could publish under the wrong query.** Typing schedules
+  one debounced search per character. A task started for an earlier prefix can
+  finish after a newer query is scheduled but before it runs, and its results
+  were then published labelled with the *current* query. Matching on the task
+  ref alone does not catch it; the store now stamps each task with what it is
+  searching for and drops results that no longer belong.
+
+The demo plays start to finish without a stumble. **1.0 is cut.**
 
 ## Part II sequencing
 
@@ -690,7 +716,7 @@ flowchart TB
     S6["6. Themes ✅"] --> S7
     S7["7. Menubar polish ✅"] --> S8["8. Discoverability sweep"]
     S8["8. Discoverability ✅"] --> S10["10. Docs + diagrams"]
-    S10["10. Docs + diagrams ✅"] --> S11["11. Demo spex<br/>(final gate)"]
+    S10["10. Docs + diagrams ✅"] --> S11["11. Demo spex ✅"]
 ```
 
 Item 9 is independent and worth doing early — it is what makes every later

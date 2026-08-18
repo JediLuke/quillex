@@ -67,6 +67,11 @@ PATH. It asks before doing anything; `--yes` skips the questions.
 Then either `qlx .` for the editor, or `iex -S mix` for a shell with it
 running.
 
+`scripts/run_demo` plays the whole feature set, top to bottom, narrated by the
+editor into its own buffer. It is a test as well as a showcase — it asserts as
+it goes, because a demo that plays through while the feature underneath is
+broken would be worse than no demo at all. `--fast` runs it as a test.
+
 ### Working across the forks
 
 If you are changing Quillex *and* one of the forks at the same time, pinned
