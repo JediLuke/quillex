@@ -134,6 +134,64 @@ defmodule Quillex.Search.ProjectTest do
     assert {:ok, []} = Project.search(root, "the")
   end
 
+  test "Project.replace_matches touches exactly the matches it is given", %{root: root} do
+    {:ok, files} = Project.search(root, "the")
+    {a_path, [first | _rest]} = Enum.find(files, fn {p, _} -> Path.basename(p) == "a.ex" end)
+
+    # One match out of the file's three: dismissal is the reason this exists,
+    # and a replace that reached the other two would defeat it.
+    assert {:ok, %{files: 1, matches: 1}} = Project.replace_matches([{a_path, [first]}], "a")
+    assert File.read!(a_path) == "a cat\nno match here\nTHE end — the\n"
+  end
+
+  test "Project.replace_matches skips files with nothing selected", %{root: root} do
+    path = Path.join(root, "vendor/c.txt")
+    assert {:ok, %{files: 0, matches: 0}} = Project.replace_matches([{path, []}], "a")
+    assert File.read!(path) == "the vendor"
+  end
+
+  test "an exclude glob narrows the search the same way for every backend", %{root: root} do
+    {:ok, files} = Project.search(root, "the", exclude_globs: ["**/deep/**"])
+
+    assert Enum.map(files, fn {p, _ms} -> Path.basename(p) end) == ["a.ex", "c.txt"]
+  end
+
+  test "the store hides dismissed matches from results and from replace", %{root: root} do
+    ProjectSearchStore.set_root(root)
+    ProjectSearchStore.set_query("the")
+    :ok = ProjectSearchStore.await_idle()
+    assert {:done, 5, 3, _} = eventually(&match?(%{status: {:done, 5, _, _}}, &1)).status
+
+    a_path = Path.join(root, "lib/a.ex")
+    ProjectSearchStore.dismiss_match(a_path, 1, 1)
+    ProjectSearchStore.sync()
+
+    snapshot = eventually(&match?(%{status: {:done, 4, _, _}}, &1))
+    assert {:done, 4, 3, _} = snapshot.status
+
+    ProjectSearchStore.replace_all("a")
+    :ok = ProjectSearchStore.await_idle()
+
+    # The dismissed occurrence is the only "the" left in the file.
+    assert File.read!(a_path) == "the cat\nno match here\na end — a\n"
+  end
+
+  test "dismissals are cleared when the query changes, not when a replace re-runs",
+       %{root: root} do
+    ProjectSearchStore.set_root(root)
+    ProjectSearchStore.set_query("the")
+    :ok = ProjectSearchStore.await_idle()
+    eventually(&match?(%{status: {:done, 5, _, _}}, &1))
+
+    ProjectSearchStore.dismiss_file(Path.join(root, "vendor/c.txt"))
+    ProjectSearchStore.sync()
+    assert eventually(&(MapSet.size(&1.dismissed_files) == 1)).dismissed_files |> MapSet.size() == 1
+
+    ProjectSearchStore.set_query("cat")
+    :ok = ProjectSearchStore.await_idle()
+    assert eventually(&(MapSet.size(&1.dismissed_files) == 0)).dismissed_files == MapSet.new()
+  end
+
   test "the store searches asynchronously and publishes grouped results", %{root: root} do
     ProjectSearchStore.set_root(root)
     ProjectSearchStore.set_query("the")

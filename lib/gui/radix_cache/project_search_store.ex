@@ -4,21 +4,32 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
   of searching the project tree, published as a full snapshot on the retained
   `:radix_project_search` Scenic.PubSub source.
 
-  The popup search bar is the single text input; while the project pane is
-  showing (`ViewStore` `show_project_search`) the scene forwards each query
-  change here (`set_query/1`) as well as to the active buffer, so both stay
-  in step. Searches run in a task so
-  typing never blocks on ripgrep; a newer query supersedes an in-flight one.
+  The pane owns its own query and replacement fields (`Ctrl+Shift+F`); the
+  floating find popup (`Ctrl+F`) is a separate thing searching the active
+  buffer, and the two never talk. Searches run in a task so typing never blocks
+  on ripgrep; a newer query supersedes an in-flight one.
 
   ## Snapshot
 
       %{
-        root: path,                # project root being searched
+        root: path,                    # project root being searched
         query: string,
+        exclude: string,               # gitignore-style globs, as typed
         status: :idle | :searching | {:done, match_count, file_count, ms} | {:error, term},
-        files: [{path, [Match]}],  # results grouped by file, path order
-        excluded: MapSet of dirs   # scope: subtrees the user unticked
+        files: [{path, [Match]}],      # VISIBLE results, grouped by file
+        excluded: MapSet of dirs,      # scope: subtrees the user unticked
+        dismissed: MapSet of {path, line, col},
+        dismissed_files: MapSet of path,
+        error: nil | String.t(),       # last replace failure, for the pane to show
+        case_sensitive: boolean,
+        regex: boolean
       }
+
+  `files` is what the pane draws AND what every replace path acts on. Dismissed
+  matches are removed here, at the single point where results are published, so
+  there is no way for a replace to reach one: dismissal is the safety valve
+  that makes Replace All reviewable, and a valve that only hides things is not
+  one.
   """
   use GenServer
 
@@ -26,14 +37,22 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
   alias Quillex.Search.Project
 
   @debounce_ms 150
+  # Typing in the editor re-searches only the open buffers, and not on every
+  # keystroke. Longer than the query debounce: the person is writing code, not
+  # driving the pane.
+  @dirty_debounce_ms 400
   @max_results 5_000
 
   @initial %{
     root: nil,
     query: "",
+    exclude: "",
     status: :idle,
     files: [],
     excluded: MapSet.new(),
+    dismissed: MapSet.new(),
+    dismissed_files: MapSet.new(),
+    error: nil,
     # How the query is read. Part of the snapshot because the pane draws the
     # toggles from it, and because a search is only reproducible together with
     # the options it ran under.
@@ -57,6 +76,27 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
   @doc "Set the query; the search runs shortly after (debounced while typing)."
   def set_query(query) when is_binary(query), do: GenServer.cast(__MODULE__, {:set_query, query})
 
+  @doc "Set the exclude-glob field; the search re-runs shortly after."
+  def set_exclude(field) when is_binary(field),
+    do: GenServer.cast(__MODULE__, {:set_exclude, field})
+
+  @doc "Hide one match from the results, and from every replace path."
+  def dismiss_match(path, line, col),
+    do: GenServer.cast(__MODULE__, {:dismiss_match, path, line, col})
+
+  @doc "Hide a whole file's matches."
+  def dismiss_file(path) when is_binary(path),
+    do: GenServer.cast(__MODULE__, {:dismiss_file, path})
+
+  @doc """
+  Re-search the buffers with unsaved edits and republish.
+
+  The pane is live for open buffers only: results from disk stay as the last
+  search left them, and editing a file the pane is showing updates just that
+  file. A tree walk on every keystroke is never worth it.
+  """
+  def refresh_dirty, do: GenServer.cast(__MODULE__, :refresh_dirty)
+
   @doc "Include or exclude a directory subtree from the search scope."
   def toggle_scope(dir) when is_binary(dir), do: GenServer.cast(__MODULE__, {:toggle_scope, dir})
 
@@ -72,9 +112,17 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
   def search_opts(%{case_sensitive: case_sensitive, regex: regex}),
     do: [case_sensitive: case_sensitive, regex: regex]
 
-  @doc "Replace every current match with `replacement`, then search again."
+  @doc "Replace every visible match with `replacement`, then search again."
   def replace_all(replacement) when is_binary(replacement),
     do: GenServer.cast(__MODULE__, {:replace_all, replacement})
+
+  @doc "Replace every visible match in one file."
+  def replace_file(path, replacement) when is_binary(path) and is_binary(replacement),
+    do: GenServer.cast(__MODULE__, {:replace_file, path, replacement})
+
+  @doc "Replace exactly one match."
+  def replace_match(path, line, col, replacement) when is_binary(replacement),
+    do: GenServer.cast(__MODULE__, {:replace_match, path, line, col, replacement})
 
   @doc "Synchronous heartbeat: returns once every earlier cast has been processed."
   def sync, do: GenServer.call(__MODULE__, :sync)
@@ -87,7 +135,23 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
   def init(:ok) do
     Scenic.PubSub.register(Sources.project_search())
     Scenic.PubSub.publish(Sources.project_search(), @initial)
-    {:ok, %{view: @initial, task: nil, debounce: nil, waiters: [], started_at: nil}}
+
+    # The pane is live for open buffers: editing a file the results are showing
+    # updates that file's rows. Subscribing to the pane source is how we hear
+    # about it — it publishes the document on every change, which is precisely
+    # "as you type".
+    Scenic.PubSub.subscribe(Quillex.RadixCache.PaneStore.source())
+
+    {:ok,
+     %{
+       view: @initial,
+       raw_files: [],
+       task: nil,
+       debounce: nil,
+       dirty_debounce: nil,
+       waiters: [],
+       started_at: nil
+     }}
   end
 
   def handle_call(:sync, _from, state), do: {:reply, :ok, state}
@@ -102,14 +166,18 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
 
   def handle_cast({:set_root, root}, state) do
     view = %{state.view | root: root, excluded: MapSet.new(), files: [], status: :idle}
-    {:noreply, state |> publish(view) |> schedule_search()}
+    {:noreply, state |> restart_search(view)}
   end
 
   def handle_cast({:set_query, query}, %{view: %{query: query}} = state), do: {:noreply, state}
 
-  def handle_cast({:set_query, query}, state) do
-    {:noreply, state |> publish(%{state.view | query: query}) |> schedule_search()}
-  end
+  def handle_cast({:set_query, query}, state),
+    do: {:noreply, restart_search(state, %{state.view | query: query})}
+
+  def handle_cast({:set_exclude, field}, %{view: %{exclude: field}} = state), do: {:noreply, state}
+
+  def handle_cast({:set_exclude, field}, state),
+    do: {:noreply, restart_search(state, %{state.view | exclude: field})}
 
   def handle_cast({:toggle_scope, dir}, state) do
     excluded =
@@ -117,7 +185,7 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
         do: MapSet.delete(state.view.excluded, dir),
         else: MapSet.put(state.view.excluded, dir)
 
-    {:noreply, state |> publish(%{state.view | excluded: excluded}) |> schedule_search()}
+    {:noreply, restart_search(state, %{state.view | excluded: excluded})}
   end
 
   def handle_cast({:toggle_option, option}, state) do
@@ -128,30 +196,68 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
     if Map.fetch!(view, option) == value do
       {:noreply, state}
     else
-      {:noreply, state |> publish(Map.put(view, option, value)) |> schedule_search()}
+      {:noreply, restart_search(state, Map.put(view, option, value))}
     end
   end
 
-  def handle_cast({:replace_all, replacement}, %{view: %{query: query, files: files} = view} = state)
-      when query != "" and files != [] do
-    paths = Enum.map(files, fn {path, _matches} -> path end)
+  # Dismissals do not re-run anything: they hide matches the search already
+  # found. Republishing from the raw results is the whole of it.
+  def handle_cast({:dismiss_match, path, line, col}, %{view: view} = state) do
+    dismissed = MapSet.put(view.dismissed, {path, line, col})
+    {:noreply, publish_visible(state, %{view | dismissed: dismissed})}
+  end
 
-    case Project.replace_all(paths, query, replacement, search_opts(view)) do
-      {:ok, %{files: n_files, matches: n_matches}} ->
-        Quillex.RadixCache.ViewStore.show_status(
-          "Replaced #{n_matches} #{plural(n_matches, "match", "matches")} in #{n_files} #{plural(n_files, "file", "files")}",
-          :info
-        )
+  def handle_cast({:dismiss_file, path}, %{view: view} = state) do
+    dismissed_files = MapSet.put(view.dismissed_files, path)
+    {:noreply, publish_visible(state, %{view | dismissed_files: dismissed_files})}
+  end
 
-        {:noreply, run_search_now(state)}
+  def handle_cast(:refresh_dirty, %{view: %{root: nil}} = state), do: {:noreply, state}
+  def handle_cast(:refresh_dirty, %{view: %{query: ""}} = state), do: {:noreply, state}
 
-      {:error, {:bad_pattern, message}} ->
-        Quillex.RadixCache.ViewStore.show_status("Replace failed: #{message}", :error)
-        {:noreply, state}
+  def handle_cast(:refresh_dirty, %{view: view} = state) do
+    raw = Project.refresh_dirty(state.raw_files, view.root, view.query, backend_opts(view))
+    {:noreply, publish_visible(%{state | raw_files: raw}, view)}
+  end
+
+  def handle_cast({:replace_all, replacement}, %{view: view} = state),
+    do: {:noreply, do_replace(state, view.files, replacement)}
+
+  def handle_cast({:replace_file, path, replacement}, %{view: view} = state),
+    do: {:noreply, do_replace(state, Enum.filter(view.files, &(elem(&1, 0) == path)), replacement)}
+
+  def handle_cast({:replace_match, path, line, col, replacement}, %{view: view} = state) do
+    selected =
+      view.files
+      |> Enum.filter(fn {file_path, _matches} -> file_path == path end)
+      |> Enum.map(fn {file_path, matches} ->
+        {file_path, Enum.filter(matches, &(&1.line == line and &1.col == col))}
+      end)
+
+    {:noreply, do_replace(state, selected, replacement)}
+  end
+
+  # The active document changed. Nothing to do unless a search is actually
+  # showing results this could contradict.
+  def handle_info({{Scenic.PubSub, :data}, {_pane_source, _document, _ts}}, state) do
+    if state.view.root && state.view.query != "" do
+      ref = make_ref()
+      Process.send_after(self(), {:refresh_dirty, ref}, @dirty_debounce_ms)
+      {:noreply, %{state | dirty_debounce: ref}}
+    else
+      {:noreply, state}
     end
   end
 
-  def handle_cast({:replace_all, _replacement}, state), do: {:noreply, state}
+  def handle_info({:refresh_dirty, ref}, %{dirty_debounce: ref} = state) do
+    handle_cast(:refresh_dirty, %{state | dirty_debounce: nil})
+  end
+
+  def handle_info({:refresh_dirty, _stale}, state), do: {:noreply, state}
+
+  # Scenic.PubSub lifecycle notifications for the source we subscribe to.
+  def handle_info({{Scenic.PubSub, :registered}, _}, state), do: {:noreply, state}
+  def handle_info({{Scenic.PubSub, :unregistered}, _}, state), do: {:noreply, state}
 
   # Debounce fired: start the search unless the query changed again meanwhile.
   def handle_info({:run_search, ref}, %{debounce: ref} = state) do
@@ -165,18 +271,23 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
   def handle_info({ref, result}, %{task: %Task{ref: ref}} = state) do
     Process.demonitor(ref, [:flush])
 
-    view =
+    state =
       case result do
         {:ok, files} ->
-          count = files |> Enum.map(fn {_p, ms} -> length(ms) end) |> Enum.sum()
           elapsed = System.monotonic_time(:millisecond) - state.started_at
-          %{state.view | files: files, status: {:done, count, length(files), elapsed}}
+
+          %{state | task: nil, raw_files: files}
+          |> publish_visible(state.view, elapsed)
+
+        {:error, {:bad_pattern, message}} ->
+          %{state | task: nil, raw_files: []}
+          |> publish(%{state.view | files: [], status: :idle, error: message})
 
         {:error, reason} ->
-          %{state.view | files: [], status: {:error, reason}}
+          %{state | task: nil, raw_files: []}
+          |> publish(%{state.view | files: [], status: {:error, reason}})
       end
 
-    state = publish(%{state | task: nil}, view)
     {:noreply, notify_waiters(state)}
   end
 
@@ -194,6 +305,16 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
 
   # ── Internals ──
 
+  # Anything that changes WHAT is searched starts over, dismissals included:
+  # they are judgements about a particular result set, and this is a different
+  # one. A re-run after a replace deliberately does not come through here —
+  # there, the matches the user dismissed are exactly the ones still standing.
+  defp restart_search(state, view) do
+    state
+    |> publish(%{view | dismissed: MapSet.new(), dismissed_files: MapSet.new(), error: nil})
+    |> schedule_search()
+  end
+
   defp schedule_search(state) do
     ref = make_ref()
     Process.send_after(self(), {:run_search, ref}, @debounce_ms)
@@ -202,7 +323,10 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
 
   defp run_search_now(%{view: %{query: "", root: _}} = state) do
     state = cancel_task(state)
-    state |> publish(%{state.view | files: [], status: :idle}) |> notify_waiters()
+
+    %{state | raw_files: []}
+    |> publish(%{state.view | files: [], status: :idle})
+    |> notify_waiters()
   end
 
   defp run_search_now(%{view: %{root: nil}} = state), do: state
@@ -211,10 +335,7 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
     state = cancel_task(state)
     root = view.root
     query = view.query
-    excludes = MapSet.to_list(view.excluded)
-
-    opts =
-      [excludes: excludes, max_results: @max_results] ++ search_opts(view)
+    opts = backend_opts(view)
 
     task =
       Task.Supervisor.async_nolink(Quillex.Search.TaskSupervisor, fn ->
@@ -223,7 +344,55 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
 
     state
     |> Map.merge(%{task: task, started_at: System.monotonic_time(:millisecond)})
-    |> publish(%{view | status: :searching})
+    |> publish(%{view | status: :searching, error: nil})
+  end
+
+  defp backend_opts(view) do
+    [
+      excludes: MapSet.to_list(view.excluded),
+      exclude_globs: Quillex.Search.Glob.split(view.exclude),
+      max_results: @max_results
+    ] ++ search_opts(view)
+  end
+
+  defp do_replace(state, [], _replacement), do: state
+
+  defp do_replace(state, files, replacement) do
+    {:ok, %{files: n_files, matches: n_matches}} = Project.replace_matches(files, replacement)
+
+    Quillex.RadixCache.ViewStore.show_status(
+      "Replaced #{n_matches} #{plural(n_matches, "match", "matches")} in #{n_files} #{plural(n_files, "file", "files")}",
+      :info
+    )
+
+    run_search_now(state)
+  end
+
+  # Publish the raw results minus whatever the user has dismissed. The status
+  # counts what is VISIBLE — a count that included dismissed matches would
+  # contradict the rows right underneath it.
+  defp publish_visible(state, view, elapsed \\ nil) do
+    files = visible(state.raw_files, view)
+    count = files |> Enum.map(fn {_path, matches} -> length(matches) end) |> Enum.sum()
+
+    status =
+      case {elapsed, view.status} do
+        {nil, {:done, _n, _files, ms}} -> {:done, count, length(files), ms}
+        {nil, other} -> other
+        {ms, _} -> {:done, count, length(files), ms}
+      end
+
+    publish(state, %{view | files: files, status: status, error: nil})
+  end
+
+  defp visible(raw_files, view) do
+    raw_files
+    |> Enum.reject(fn {path, _matches} -> MapSet.member?(view.dismissed_files, path) end)
+    |> Enum.map(fn {path, matches} ->
+      {path,
+       Enum.reject(matches, &MapSet.member?(view.dismissed, {&1.path, &1.line, &1.col}))}
+    end)
+    |> Enum.reject(fn {_path, matches} -> matches == [] end)
   end
 
   defp cancel_task(%{task: nil} = state), do: state

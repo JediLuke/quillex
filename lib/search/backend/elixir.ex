@@ -24,6 +24,7 @@ defmodule Quillex.Search.Backend.Elixir do
   def search(root, query, opts) when is_binary(root) and is_binary(query) do
     max_results = Keyword.get(opts, :max_results, 5_000)
     excludes = Keyword.get(opts, :excludes, [])
+    globs = opts |> Keyword.get(:exclude_globs, []) |> Quillex.Search.Glob.compile_list()
 
     # Compiled once for the whole walk, and validated here: a regex the user is
     # halfway through typing must come back as an error the pane can show, not
@@ -31,7 +32,7 @@ defmodule Quillex.Search.Backend.Elixir do
     with {:ok, regex} <- Search.compile(query, opts) do
       matches =
         root
-        |> text_files(root, excludes)
+        |> text_files(root, excludes, globs)
         |> Stream.flat_map(&matches_in_file(&1, regex))
         |> Enum.take(max_results)
 
@@ -41,7 +42,7 @@ defmodule Quillex.Search.Backend.Elixir do
     end
   end
 
-  defp text_files(dir, root, excludes) do
+  defp text_files(dir, root, excludes, globs) do
     Stream.resource(
       fn -> [dir] end,
       fn
@@ -50,7 +51,7 @@ defmodule Quillex.Search.Backend.Elixir do
 
         [path | rest] ->
           cond do
-            Backend.excluded?(path, root, excludes) and path != root ->
+            Backend.excluded?(path, root, excludes, globs) and path != root ->
               {[], rest}
 
             File.dir?(path) ->

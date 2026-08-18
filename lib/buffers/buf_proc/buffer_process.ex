@@ -255,7 +255,9 @@ defmodule Quillex.Buffer.Process do
        when action in [:delete, :newline, :indent, :unindent, :set_data, :cut],
        do: true
 
-  defp mutating_action?({action, _, _}) when action in [:insert, :replace, :replace_all], do: true
+  defp mutating_action?({action, _, _})
+       when action in [:insert, :replace, :replace_all, :replace_matches],
+       do: true
   defp mutating_action?({:insert, _, _, _}), do: true
   defp mutating_action?({:paste, _}), do: true
   defp mutating_action?({:paste, _, _}), do: true

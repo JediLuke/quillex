@@ -18,11 +18,12 @@ defmodule Quillex.Search.Backend.Ripgrep do
   def search(root, query, opts) when is_binary(root) and is_binary(query) and query != "" do
     max_results = Keyword.get(opts, :max_results, 5_000)
     excludes = Keyword.get(opts, :excludes, [])
+    exclude_globs = Keyword.get(opts, :exclude_globs, [])
 
     args =
       ["--json", "--no-messages", "--sort", "path"] ++
         match_args(opts) ++
-        glob_args(root, excludes) ++ ["--regexp", query, "--", "."]
+        glob_args(root, excludes, exclude_globs) ++ ["--regexp", query, "--", "."]
 
     # stderr is folded in so a rejected pattern can be reported in ripgrep's own
     # words. Safe for the success path: parse/2 keeps only lines that decode as
@@ -66,7 +67,7 @@ defmodule Quillex.Search.Backend.Ripgrep do
   # Every exclude becomes an anchored ignore-glob. ripgrep's globs follow
   # gitignore rules: a leading slash anchors the pattern to the search root, so
   # excluding lib/foo does not also hide lib/bar/foo.
-  defp glob_args(root, excludes) do
+  defp glob_args(root, excludes, exclude_globs) do
     always = Enum.flat_map(Backend.default_excludes(), &["--glob", "!#{&1}"])
 
     scoped =
@@ -75,7 +76,12 @@ defmodule Quillex.Search.Backend.Ripgrep do
         ["--glob", "!/#{relative}"]
       end)
 
-    always ++ scoped
+    # The exclude field is passed through verbatim: ripgrep's glob dialect is
+    # the one Quillex.Search.Glob was written to imitate, so what the user
+    # typed means the same thing to both backends.
+    typed = Enum.flat_map(exclude_globs, &["--glob", "!#{&1}"])
+
+    always ++ scoped ++ typed
   end
 
   defp parse(output, root) do

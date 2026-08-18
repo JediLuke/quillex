@@ -87,6 +87,31 @@ defmodule Quillex.Buffer.Core.Search do
   end
 
   @doc """
+  Replace exactly the given occurrences, and nothing else.
+
+  `occurrences` are `{line, col, matched_text}` tuples — the same shape
+  `matches/3` yields. This is the transition behind the search pane's per-match
+  and per-file replace buttons, where "every match" is deliberately not what is
+  wanted: matches the user dismissed must survive, and dismissal is what makes
+  a project-wide Replace All reviewable rather than an act of faith.
+
+  One history entry for the whole set, applied last-to-first so the earlier
+  columns stay valid.
+  """
+  def replace_matches(%BufState{} = buf, [], _replacement), do: buf
+
+  def replace_matches(%BufState{} = buf, occurrences, replacement)
+      when is_list(occurrences) and is_binary(replacement) do
+    occurrences
+    |> Enum.sort()
+    |> Enum.reverse()
+    |> Enum.reduce(Quillex.Buffer.Core.History.push(buf), fn {line, col, matched}, acc ->
+      replace_at(acc, line, col, matched, replacement)
+    end)
+    |> resync(buf)
+  end
+
+  @doc """
   Compile `query` into the regex a search will scan with.
 
   Options, both defaulting to `false` so the historical contract — literal,

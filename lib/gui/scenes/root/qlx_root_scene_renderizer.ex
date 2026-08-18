@@ -331,12 +331,16 @@ defmodule QuillEx.RootScene.Renderizer do
   defp maybe_create_file_nav(graph, _state, nil), do: graph
 
   defp maybe_create_file_nav(graph, %{show_project_search: true} = state, %Widgex.Frame{} = frame) do
-    tree = Quillex.GUI.ProjectSearchTree.build(project_search_snapshot(state))
-    side_nav_theme = SideNavThemes.for_editor(scaled(24, state))
-
     graph
-    |> ScenicWidgets.SideNav.add_to_graph(
-      %{frame: frame, tree: tree, active_id: nil, theme: side_nav_theme},
+    |> ScenicWidgets.SearchPane.add_to_graph(
+      %{
+        frame: frame,
+        model: Quillex.GUI.SearchPaneModel.build(project_search_snapshot(state)),
+        query: state.project_search_query,
+        focus_field: state.project_search_focus_field,
+        theme: search_pane_theme(state),
+        focused: true
+      },
       id: :project_search_pane,
       translate: frame.pin.point
     )
@@ -370,6 +374,19 @@ defmodule QuillEx.RootScene.Renderizer do
     )
   end
 
+  # The pane is chrome, so it is sized off the chrome zoom rather than the
+  # editor's text size — a 24pt document must not turn the sidebar into a
+  # billboard. Same reasoning as SideNavThemes.for_editor/1.
+  defp search_pane_theme(state) do
+    %{
+      font: :ibm_plex_mono,
+      font_size: scaled(13, state),
+      small_font_size: scaled(11, state),
+      row_height: scaled(20, state),
+      field_height: scaled(24, state)
+    }
+  end
+
   # Update the sidebar (add/remove/swap) without full rebuild
   defp maybe_update_file_nav(graph, _state, nil) do
     graph
@@ -390,10 +407,25 @@ defmodule QuillEx.RootScene.Renderizer do
 
   # The scene mirrors the store snapshot; before the first one lands, draw
   # the pane empty rather than crash on nil.
-  defp project_search_snapshot(%{project_search: nil}),
-    do: %{root: nil, query: "", status: :idle, files: [], excluded: MapSet.new()}
-
+  defp project_search_snapshot(%{project_search: nil}), do: empty_search_snapshot()
   defp project_search_snapshot(%{project_search: snapshot}), do: snapshot
+
+  @doc false
+  def empty_search_snapshot do
+    %{
+      root: nil,
+      query: "",
+      exclude: "",
+      status: :idle,
+      files: [],
+      excluded: MapSet.new(),
+      dismissed: MapSet.new(),
+      dismissed_files: MapSet.new(),
+      error: nil,
+      case_sensitive: false,
+      regex: false
+    }
+  end
 
   defp maybe_create_file_nav_resize_handle(graph, _state, nil), do: graph
 
@@ -655,7 +687,11 @@ defmodule QuillEx.RootScene.Renderizer do
     new_external = Enum.map(new_state.buffers, & &1.external_change)
     external_changed = old_external != new_external
 
-    buffers_changed or selection_changed or dirty_changed or external_changed
+    # Promotion out of the preview slot is a visible change (the label loses
+    # its italics) with no other trace in the buffer list.
+    preview_changed = old_state.preview_buf_uuid != new_state.preview_buf_uuid
+
+    buffers_changed or selection_changed or dirty_changed or external_changed or preview_changed
   end
 
   # Helper to create tab bar
@@ -671,7 +707,11 @@ defmodule QuillEx.RootScene.Renderizer do
         %{
           id: buf.uuid,
           label: label,
-          closeable: true
+          closeable: true,
+          # Italic marks the reusable preview tab — the one a search result
+          # opens into, which the next result replaces. Slant rather than
+          # colour, so it survives every theme and every kind of colour vision.
+          style: if(buf.uuid == state.preview_buf_uuid, do: :italic, else: :normal)
         }
       end)
 
@@ -691,6 +731,7 @@ defmodule QuillEx.RootScene.Renderizer do
       # the library's theme defaults to the built-in :roboto_mono; quillex ships IBM Plex
       theme: %{
         font: :ibm_plex_mono,
+        italic_font: :ibm_plex_mono_italic,
         height: scaled(35, state),
         min_tab_width: scaled(100, state),
         max_tab_width: scaled(200, state),

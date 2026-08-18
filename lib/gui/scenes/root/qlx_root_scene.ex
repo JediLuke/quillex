@@ -163,10 +163,14 @@ defmodule QuillEx.RootScene do
   # Ctrl+F/H are NOT handled here (see the note above): they come up from
   # the focused TextField or the search bar as events. The shifted chords
   # never do, so this is their only entry point.
+  #
+  # Both open the same pane. The pane carries a replacement field at all times,
+  # so there is nothing for the shifted-H variant to reveal — it exists because
+  # people's fingers know it, and it lands on the replacement field.
   def handle_input({:key, {key, 1, mods}}, _context, scene)
       when key in [:key_f, :key_h] and is_list(mods) do
     if :shift in mods and Enum.any?(mods, &(&1 in [:ctrl, :meta, :super])) do
-      show_search_bar(scene, project: true, replace_mode: key == :key_h)
+      open_project_search(scene, focus: if(key == :key_h, do: :replace, else: :query))
     else
       {:noreply, scene}
     end
@@ -947,12 +951,6 @@ defmodule QuillEx.RootScene do
   def handle_cast({:search_query_changed, _id, query}, scene) do
     Logger.debug("[search] query changed: #{inspect(query)}")
 
-    # One input, two searches: while the project pane is showing, the popup
-    # drives it too, so the pane and the buffer highlights never disagree.
-    if scene.assigns.state.show_project_search do
-      Quillex.RadixCache.ProjectSearchStore.set_query(query)
-    end
-
     new_state = %{scene.assigns.state | search_query: query}
 
     # Perform the search if query is not empty
@@ -991,15 +989,10 @@ defmodule QuillEx.RootScene do
     {:noreply, scene}
   end
 
+  # The popup is the BUFFER's find and replace, always. Project-wide replace
+  # lives in the pane, which has its own fields — two boxes, two jobs.
   def handle_cast({:replace_all_requested, _id, replacement}, scene) do
-    # In project mode "All" means the whole project; the active buffer is one
-    # of its files and is edited through its own process by the store.
-    if scene.assigns.state.show_project_search do
-      Quillex.RadixCache.ProjectSearchStore.replace_all(replacement)
-    else
-      Scenic.Scene.put_child(scene, :buffer_pane, {:action, {:replace_all, replacement}})
-    end
-
+    Scenic.Scene.put_child(scene, :buffer_pane, {:action, {:replace_all, replacement}})
     {:noreply, scene}
   end
 
@@ -1009,7 +1002,12 @@ defmodule QuillEx.RootScene do
         {{Scenic.PubSub, :data}, {:radix_buffers, %{buffers: buffers, active_buf: active}, _ts}},
         scene
       ) do
-    new_state = %{scene.assigns.state | buffers: buffers, active_buf: active}
+    new_state = %{
+      scene.assigns.state
+      | buffers: buffers,
+        active_buf: active,
+        preview_buf_uuid: surviving_preview(scene.assigns.state.preview_buf_uuid, buffers)
+    }
     new_scene = render_snapshot(scene, new_state)
 
     if new_state.show_file_nav do
@@ -1048,15 +1046,15 @@ defmodule QuillEx.RootScene do
     end
   end
 
-  # Project-search store snapshots (:radix_project_search) — query, scope and
-  # results. The pane is a SideNav; it gets a fresh tree, nothing else moves.
+  # Project-search store snapshots (:radix_project_search) — scope, options and
+  # results. The pane gets a fresh model, nothing else moves.
   def handle_info({{Scenic.PubSub, :data}, {:radix_project_search, snapshot, _ts}}, scene) do
     new_state = %{scene.assigns.state | project_search: snapshot}
     scene = assign(scene, state: new_state)
 
     if new_state.show_project_search do
-      tree = Quillex.GUI.ProjectSearchTree.build(snapshot)
-      Scenic.Scene.put_child(scene, :project_search_pane, {:update_tree, tree})
+      model = Quillex.GUI.SearchPaneModel.build(snapshot)
+      Scenic.Scene.put_child(scene, :project_search_pane, {:update_model, model})
     end
 
     {:noreply, scene}
@@ -1275,10 +1273,10 @@ defmodule QuillEx.RootScene do
         show_goto_line(scene)
 
       "find_in_project" ->
-        show_search_bar(scene, project: true)
+        open_project_search(scene, focus: :query)
 
       "replace_in_project" ->
-        show_search_bar(scene, project: true, replace_mode: true)
+        open_project_search(scene, focus: :replace)
 
       "file_nav" ->
         Quillex.RadixCache.ViewStore.toggle_file_nav()
@@ -1344,6 +1342,13 @@ defmodule QuillEx.RootScene do
       Logger.warning("Could not find buffer for tab: #{inspect(tab_id)}")
       {:noreply, scene}
     end
+  end
+
+  # Double-clicking a preview tab keeps it: the gesture every editor uses to
+  # say "I am staying here", and the counterpart to the next search result
+  # otherwise replacing it.
+  def handle_event({:tab_double_clicked, tab_id}, _from, scene) do
+    {:noreply, promote_preview(scene, tab_id)}
   end
 
   def handle_event({:tabs_reordered, tab_ids}, _from, scene) do
@@ -1523,29 +1528,67 @@ defmodule QuillEx.RootScene do
     {:noreply, new_scene}
   end
 
-  # Handle file navigation from SideNav (file explorer sidebar)
-  # Rows of the project-search pane (see Quillex.GUI.ProjectSearchTree).
-  def handle_event({:sidebar, :navigate, "qlx-search://" <> _ = item_id}, _from, scene) do
-    case Quillex.GUI.ProjectSearchTree.decode(item_id) do
-      :close ->
-        Quillex.RadixCache.ViewStore.close_project_search()
-        {:noreply, scene}
+  # ── SearchPane events ─────────────────────────────────────────────────────
+  #
+  # The pane owns its fields and its presentation; the scene owns what a search
+  # means. Every action it can take is one of these.
 
-      :status ->
-        show_search_bar(scene, project: true)
-
-      {:toggle_scope, dir} ->
-        Quillex.RadixCache.ProjectSearchStore.toggle_scope(dir)
-        {:noreply, scene}
-
-      {:match, path, line, col} ->
-        open_file_at(scene, path, {line, col})
-
-      _other ->
-        {:noreply, scene}
-    end
+  def handle_event({:search_pane, :close}, _from, scene) do
+    Quillex.RadixCache.ViewStore.close_project_search()
+    Scenic.Scene.put_child(scene, :buffer_pane, :focus)
+    {:noreply, scene}
   end
 
+  def handle_event({:search_pane, :query_changed, query}, _from, scene) do
+    Quillex.RadixCache.ProjectSearchStore.set_query(query)
+    {:noreply, assign(scene, state: %{scene.assigns.state | project_search_query: query})}
+  end
+
+  def handle_event({:search_pane, :exclude_changed, field}, _from, scene) do
+    Quillex.RadixCache.ProjectSearchStore.set_exclude(field)
+    {:noreply, scene}
+  end
+
+  def handle_event({:search_pane, :toggle_option, option}, _from, scene) do
+    Quillex.RadixCache.ProjectSearchStore.toggle_option(option)
+    {:noreply, scene}
+  end
+
+  def handle_event({:search_pane, :toggle_scope, dir}, _from, scene) do
+    Quillex.RadixCache.ProjectSearchStore.toggle_scope(dir)
+    {:noreply, scene}
+  end
+
+  def handle_event({:search_pane, :open_match, path, line, col}, _from, scene) do
+    open_preview_at(scene, path, {line, col})
+  end
+
+  def handle_event({:search_pane, :dismiss_match, path, line, col}, _from, scene) do
+    Quillex.RadixCache.ProjectSearchStore.dismiss_match(path, line, col)
+    {:noreply, scene}
+  end
+
+  def handle_event({:search_pane, :dismiss_file, path}, _from, scene) do
+    Quillex.RadixCache.ProjectSearchStore.dismiss_file(path)
+    {:noreply, scene}
+  end
+
+  def handle_event({:search_pane, :replace_match, path, line, col, replacement}, _from, scene) do
+    Quillex.RadixCache.ProjectSearchStore.replace_match(path, line, col, replacement)
+    {:noreply, scene}
+  end
+
+  def handle_event({:search_pane, :replace_file, path, replacement}, _from, scene) do
+    Quillex.RadixCache.ProjectSearchStore.replace_file(path, replacement)
+    {:noreply, scene}
+  end
+
+  def handle_event({:search_pane, :replace_all, replacement}, _from, scene) do
+    Quillex.RadixCache.ProjectSearchStore.replace_all(replacement)
+    {:noreply, scene}
+  end
+
+  # Handle file navigation from SideNav (file explorer sidebar)
   def handle_event({:sidebar, :navigate, item_id}, _from, scene) when is_binary(item_id) do
     # item_id is the file path
     if File.regular?(item_id) do
@@ -2000,33 +2043,18 @@ defmodule QuillEx.RootScene do
   # Shows the search bar and optionally pre-fills with word under cursor.
   # Options:
   # - replace_mode: true to show replace row (Ctrl+H)
-  # - project: true to also open the project-search pane (Ctrl+Shift+F) and
-  #   drive it from the same popup
+  #
+  # This is the BUFFER's find, and only that. The project pane is a separate
+  # surface with its own fields (see open_project_search/2): two boxes, two
+  # jobs, no interaction between them.
   defp show_search_bar(scene, opts \\ []) do
     replace_mode = Keyword.get(opts, :replace_mode, false)
-    project? = Keyword.get(opts, :project, false)
     old_state = scene.assigns.state
 
-    # Pre-fill: what the popup already holds beats what the pane remembers,
-    # which beats the word under the cursor.
     initial_query =
-      cond do
-        old_state.show_search_bar and old_state.search_query != "" ->
-          old_state.search_query
-
-        project? and Quillex.RadixCache.ProjectSearchStore.get_state().query != "" ->
-          Quillex.RadixCache.ProjectSearchStore.get_state().query
-
-        true ->
-          word_under_cursor(old_state)
-      end
-
-    if project? do
-      root = old_state.file_nav_path || File.cwd!()
-      Quillex.RadixCache.ProjectSearchStore.set_root(root)
-      Quillex.RadixCache.ProjectSearchStore.set_query(initial_query)
-      Quillex.RadixCache.ViewStore.open_project_search()
-    end
+      if old_state.show_search_bar and old_state.search_query != "",
+        do: old_state.search_query,
+        else: word_under_cursor(old_state)
 
     cond do
       # Already showing: grow into replace mode (and keep everything else)
@@ -2044,10 +2072,6 @@ defmodule QuillEx.RootScene do
 
         Scenic.Scene.put_child(new_scene, :search_bar, :enable_replace_mode)
         {:noreply, new_scene}
-
-      # Already showing and the pane just joined it: nothing to rebuild
-      old_state.show_search_bar and project? ->
-        {:noreply, scene}
 
       true ->
         do_show_search_bar(scene, old_state, initial_query, replace_mode)
@@ -2070,27 +2094,115 @@ defmodule QuillEx.RootScene do
     end
   end
 
-  # Open (or switch to) a file and put the cursor on {line, col} — how a
-  # project-search result is visited. The cursor is set on the buffer after
-  # activation, so the pane reveals it as an ordinary cursor move.
-  defp open_file_at(scene, path, {line, col}) do
+  # ── The project-search pane ───────────────────────────────────────────────
+
+  # Ctrl+Shift+F, Ctrl+Shift+H, and Search → Find in Project all land here.
+  # Opening seeds the query field once — from what the pane last searched for,
+  # or the word under the cursor — and hands the pane the keyboard. From then
+  # on the field is the pane's.
+  defp open_project_search(scene, opts) do
+    old_state = scene.assigns.state
+    focus = Keyword.get(opts, :focus, :query)
+    remembered = Quillex.RadixCache.ProjectSearchStore.get_state().query
+
+    seed =
+      cond do
+        remembered != "" -> remembered
+        true -> word_under_cursor(old_state)
+      end
+
+    root = old_state.file_nav_path || File.cwd!()
+    Quillex.RadixCache.ProjectSearchStore.set_root(root)
+    Quillex.RadixCache.ProjectSearchStore.set_query(seed)
+    Quillex.RadixCache.ViewStore.open_project_search()
+
+    new_state = %{
+      old_state
+      | show_project_search: true,
+        project_search_query: seed,
+        project_search_focus_field: focus
+    }
+
+    new_graph =
+      QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+
+    new_scene =
+      scene
+      |> assign(state: new_state)
+      |> assign(graph: new_graph)
+      |> push_graph(new_graph)
+
+    # The pane owns the keyboard while it is up, so the editor must let go of
+    # it — otherwise every character typed into the query field is also typed
+    # into the document.
+    Scenic.Scene.put_child(new_scene, :buffer_pane, :blur)
+    Scenic.Scene.put_child(new_scene, :project_search_pane, {:set_query, seed})
+    Scenic.Scene.put_child(new_scene, :project_search_pane, {:focus_field, focus})
+    Scenic.Scene.put_child(new_scene, :project_search_pane, :focus)
+
+    {:noreply, new_scene}
+  end
+
+  # Visit a search result. It opens into the PREVIEW tab — one reusable slot,
+  # so walking thirty results leaves one tab open rather than thirty. The
+  # outgoing preview is closed unless it has unsaved work or the user promoted
+  # it; the incoming buffer takes the slot.
+  defp open_preview_at(scene, path, {line, col}) do
+    old_state = scene.assigns.state
+
     case Quillex.API.FileAPI.open(path) do
       {:ok, %{buffer_ref: buf_ref}} ->
         {:ok, _snapshot} = Quillex.Buffer.dispatch(buf_ref, [{:set_cursor, {line, col}}])
-        Scenic.Scene.put_child(scene, :project_search_pane, :blur)
+        close_stale_preview(old_state, buf_ref)
 
-        # While the popup is up it owns the keyboard: focusing the pane would
-        # lift its overlay gate and the next keystroke would land in BOTH the
-        # search box and the document.
-        unless scene.assigns.state.show_search_bar do
-          Scenic.Scene.put_child(scene, :buffer_pane, :focus)
-        end
-
-        {:noreply, scene}
+        # Keyboard stays with the pane: browsing results is the point, and the
+        # next result is one more click away. Clicking in the editor takes it
+        # back, through the ordinary focus routing in handle_regular_left_press.
+        {:noreply, assign(scene, state: %{old_state | preview_buf_uuid: buf_ref.uuid})}
 
       {:error, reason} ->
         Quillex.RadixCache.ViewStore.show_status(to_string(reason), :warning)
         {:noreply, scene}
+    end
+  end
+
+  # The previous preview goes away when the next result takes the slot — but
+  # never if it has unsaved edits. Losing typed work to a click on a search
+  # result would be indefensible; an extra tab is merely untidy.
+  defp close_stale_preview(%{preview_buf_uuid: nil}, _incoming), do: :ok
+
+  defp close_stale_preview(%{preview_buf_uuid: uuid}, %{uuid: uuid}), do: :ok
+
+  defp close_stale_preview(%{preview_buf_uuid: uuid} = state, _incoming) do
+    case Enum.find(state.buffers, &(&1.uuid == uuid)) do
+      %{dirty?: false} = stale -> Quillex.Buffer.close(stale)
+      _other -> :ok
+    end
+  end
+
+  # A preview tab stops being provisional the moment it is edited — typing in a
+  # file is the clearest possible statement that you meant to open it. It also
+  # stops existing when the buffer does.
+  defp surviving_preview(nil, _buffers), do: nil
+
+  defp surviving_preview(uuid, buffers) do
+    case Enum.find(buffers, &(&1.uuid == uuid)) do
+      %{dirty?: false} -> uuid
+      _promoted_or_gone -> nil
+    end
+  end
+
+  # Promotion: the tab stops being provisional and becomes an ordinary one.
+  # Both gestures that mean "I am staying here" — double-clicking the tab, and
+  # editing the file — come through here.
+  defp promote_preview(scene, uuid) do
+    state = scene.assigns.state
+
+    if state.preview_buf_uuid == uuid do
+      new_state = %{state | preview_buf_uuid: nil}
+      render_snapshot(scene, new_state)
+    else
+      scene
     end
   end
 

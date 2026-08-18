@@ -334,79 +334,65 @@ SideNav process outright.
 to the dragged tab's slot, a lifted background on the tab in flight, and a 5px
 threshold so ordinary clicks don't flash it.
 
-**3. Search backend** (the half of item 4 that has no UI).
+**3. Search backend** (the engine half of item 4).
 `Quillex.Buffer.Core.Search.compile/2` is the single definition of what a query
 means; both project backends and the in-buffer popup read it, so they cannot
 diverge. `:case_sensitive` and `:regex` threaded through, defaults unchanged.
 Invalid patterns are a boundary, not a bug — `{:error, {:bad_pattern, message}}`
 rather than a crashed search task.
 
-## 4. The SearchPane
+## 4. The SearchPane — ✅ DONE 2026-08-17
 
-The largest remaining item. The engine is already good: `Quillex.Search.Project`
-overlays dirty buffers onto backend results, routes replacements through open
-buffers so Undo works there, and falls back from ripgrep to a pure-Elixir walk.
-What it lacks is a surface.
+`ScenicWidgets.SearchPane` now occupies the side-pane slot instead of a
+`SideNav`, and the `qlx-search://…` encoding layer is gone with
+`ProjectSearchTree` — the pane speaks in files and matches, so there is
+nothing left to smuggle through an item id.
 
-Results currently render into a `ScenicWidgets.SideNav`, with actions smuggled
-through synthetic `qlx-search://…` item ids because SideNav's only outbound
-event is `{:sidebar, :navigate, id}`. **That encoding layer goes away.**
+Everything in the decision table shipped as written:
 
-### Why a new component
+- `Ctrl+F` is still the floating in-buffer popup and no longer touches the
+  project at all. `Ctrl+Shift+F` (and `Ctrl+Shift+H`, which lands on the
+  replacement field) opens the pane, which owns its own query, replacement and
+  exclude fields.
+- Per-row actions: dismiss a match, dismiss a file, replace this match, replace
+  all in this file — plus Replace All in the header.
+- Scope is both: the directory checkbox tree *and* an exclude-glob field.
+  `Quillex.Search.Glob` is the gitignore-style dialect, compiled to a regex for
+  the Elixir backend and passed through verbatim to ripgrep, so one field means
+  the same thing to both.
+- Results open into a **reusable preview tab**, drawn in italics. The next
+  result replaces it — unless it has unsaved edits, which is the one thing that
+  must never be thrown away by a click. Double-clicking the tab promotes it, as
+  does editing the file.
+- Live for open buffers only: `ProjectSearchStore` subscribes to the pane
+  source and re-searches just the dirty buffers, debounced at 400ms. Disk
+  results stay put.
+- `Aa` and `.*` in the header, bound to the store's `case_sensitive`/`regex`.
 
-SideNav rows are one line of text plus a chevron: no header region, no rich
-spans within a row, no per-row hover actions. A search pane needs all three.
-Teaching SideNav to do them would hand the file navigator machinery it never
-uses and permanently couple two panes that should evolve separately.
+**Dismissal is real, not cosmetic.** The store keeps `dismissed` and
+`dismissed_files`, and filters them out at the single point where results are
+published — so `files` is simultaneously what the pane draws and what every
+replace path acts on. `Project.replace_matches/2` takes that list and touches
+exactly those occurrences (through the buffer where one is open, so Undo still
+works there). A dismissed match cannot be reached by any replace, which is what
+makes Replace All reviewable.
 
-Build `ScenicWidgets.SearchPane` in **scenic-widget-contrib**, generic over its
-data the way SideNav and TabBar are — Quillex supplies results and handles
-events. It reuses the side-pane *slot*, not the SideNav widget: `side_pane_id/1`
-and `maybe_update_file_nav/3` in `QuillEx.RootScene.Renderizer` already swap two
-components through one frame, width and resize handle, so a third occupant costs
-nothing structurally.
+Dismissals reset when the query, scope, options or exclude field change — that
+is a different result set — but survive the re-search that follows a replace,
+because there the dismissed matches are precisely the ones still standing.
 
-### Decisions (locked 2026-08-17)
+Covered by a rewritten `41_project_search_spex.exs`: four independent spex,
+each setting up its own fixture and search rather than inheriting the previous
+one's (item 9's lesson, applied on the way past).
 
-| Question | Decision |
-|---|---|
-| Where does the query live? | **Separate.** `Ctrl+F` stays the floating in-buffer popup. `Ctrl+Shift+F` opens the pane, which owns its own query + replace fields. Two boxes, two jobs, no interaction. |
-| Per-row actions | Dismiss a match, dismiss a file, replace this one match, replace all in this file. |
-| Scope UI | **Both** — keep the directory checkbox tree, add an exclude-glob field above it. |
-| Clicking a result | Opens in a **reusable preview tab** — walking 30 results leaves one tab, not 30. **Double-clicking the tab promotes it to permanent** (as does editing it). |
-| Result freshness | **Live for open buffers only.** Re-search dirty buffers as you type, debounced; on-disk results stay put until refreshed. Never a full tree walk on a keystroke. |
-| Search options | `case_sensitive` and `regex` toggles in the header. Whole-word declined. |
-
-### Layout
-
-```
-┌ SEARCH ──────────────────────────┐
-│ [query................]  Aa   .* │  Aa = case sensitive, .* = regex
-│ [replace..............]  [ All ] │
-│ exclude [ **/deps/**           ] │
-│ SCOPE  (2 excluded)              │
-│   [x] lib/    [ ] deps/          │
-├──────────────────────────────────┤
-│ ▾ lib/search/project.ex   (3) ↺ ×│
-│    28  defp overlay_dirty…    ↺ ×│
-│              ^^^^^^^ highlighted │
-└──────────────────────────────────┘
-```
-
-### Notes for whoever builds it
-
-- **Match highlighting inside a row** is why rows need spans. `Match` already
-  carries `line`, `col` and `matched`, and `ProjectSearchTree.excerpt/2` already
-  trims the line around the match — but it flattens to a string. The new row
-  contract must keep the offset so the matched text can be drawn distinctly.
-- **Dismissal is the safety valve** — it is what makes Replace All reviewable
-  rather than an act of faith. Dismissed matches must be excluded from every
-  replace path, not merely hidden.
-- **`ProjectSearchStore` already holds `case_sensitive` and `regex`** in its
-  snapshot and re-runs on change; `search_opts/1` converts them to backend
-  options. The header binds to these.
-- The store's `replace_all` can return `{:error, {:bad_pattern, message}}` — the
-  pane must show it, since a regex typed live is wrong most of the time.
+> ### ⚠️ Second trap, found building this one
+>
+> A Scenic component with no `handle_update/3` has `init/3` re-run **on the
+> same process** when its params change — which re-runs `request_input`. The
+> symptom is every keystroke arriving twice: the query field read
+> `"needleneedle"`. Define `handle_update/3` on any component that requests
+> input, and have it update presentation only, never the fields the component
+> owns.
 
 ## 5. Go to Line — ✅ DONE 2026-08-17
 
@@ -620,7 +606,7 @@ demo plays start to finish without a stumble, 1.0 is cut.
 flowchart TB
     S5["5. Go to Line ✅"]
     S9["9. Split spex 07<br/>(makes everything measurable)"] --> S11
-    S4["4. SearchPane<br/>(largest)"] --> S7["7. Menubar polish"]
+    S4["4. SearchPane ✅"] --> S7["7. Menubar polish"]
     S5b["5b. Cursor in display space<br/>(wrap-aware click + arrows)"] --> S11
     S6["6. Themes<br/>recon sweep first"] --> S7
     S7 --> S8["8. Discoverability sweep"]

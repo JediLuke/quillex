@@ -45,6 +45,18 @@ defmodule QuillEx.RootScene.State do
             # (query, scope, results) mirrors ProjectSearchStore.
             show_project_search: false,
             project_search: nil,
+            # What the pane's query field is seeded with when it opens — the
+            # word under the cursor, or whatever the last search was. The pane
+            # owns the field from then on; this is only the seed.
+            project_search_query: "",
+            # Which of the pane's fields the keyboard lands in when it opens:
+            # Ctrl+Shift+F means the query, Ctrl+Shift+H the replacement.
+            project_search_focus_field: :query,
+            # The reusable preview tab. Walking thirty results must leave one
+            # tab open, not thirty, so a result opens into this slot and the
+            # next result replaces it. Double-clicking the tab, or editing the
+            # file, promotes it to an ordinary tab and clears this.
+            preview_buf_uuid: nil,
             # Modal dialogs
             show_file_picker: false,
             show_unsaved_prompt: false,

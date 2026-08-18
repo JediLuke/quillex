@@ -93,6 +93,15 @@ defmodule Quillex.Buffer.Process.Reducer do
     Search.replace_all(buf, replacement)
   end
 
+  # Replace a named set of occurrences — what the search pane's per-match and
+  # per-file buttons do. Unlike {:replace_all, _} this does not consult the
+  # buffer's own search state, so a replace driven from the pane neither needs
+  # nor disturbs a search running in the editor.
+  def process(%BufState{} = buf, {:replace_matches, occurrences, replacement})
+      when is_list(occurrences) and is_binary(replacement) do
+    Search.replace_matches(buf, occurrences, replacement)
+  end
+
   # ===========================================================================
   # EXISTING BUFFER ACTIONS (with undo support)
   # ===========================================================================

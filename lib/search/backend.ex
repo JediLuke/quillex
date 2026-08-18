@@ -14,6 +14,9 @@ defmodule Quillex.Search.Backend do
   - `:excludes` — directory paths (absolute or root-relative) to skip
     entirely, subtree included. Version-control and build directories are
     always skipped; see `default_excludes/0`.
+  - `:exclude_globs` — gitignore-style patterns (`**/deps/**`, `*.lock`) to
+    skip, as typed into the pane's exclude field. See `Quillex.Search.Glob`
+    for the dialect.
   - `:max_results` — stop after this many matches (default 5_000).
   - `:case_sensitive` — default `false`.
   - `:regex` — treat the query as a pattern rather than literal text; default
@@ -40,6 +43,7 @@ defmodule Quillex.Search.Backend do
 
   @type option ::
           {:excludes, [Path.t()]}
+          | {:exclude_globs, [String.t()]}
           | {:max_results, pos_integer()}
           | {:case_sensitive, boolean()}
           | {:regex, boolean()}
@@ -77,12 +81,19 @@ defmodule Quillex.Search.Backend do
     String.length(binary_part(line, 0, byte_offset)) + 1
   end
 
-  @doc "Is `path` inside one of the excluded directories?"
-  def excluded?(path, root, excludes) do
+  @doc """
+  Is `path` inside one of the excluded directories, or matched by one of the
+  exclude globs?
+
+  `globs` are already-compiled regexes (see `Quillex.Search.Glob.compile_all/1`)
+  — the field is recompiled once per search, not once per file.
+  """
+  def excluded?(path, root, excludes, globs \\ []) do
     relative = Path.relative_to(path, root)
     segments = Path.split(relative)
 
     Enum.any?(segments, &(&1 in @default_excludes)) or
+      Quillex.Search.Glob.any_match?(relative, globs) or
       Enum.any?(excludes, fn exclude ->
         exclude_rel = exclude |> Path.expand(root) |> Path.relative_to(root)
         exclude_segments = Path.split(exclude_rel)

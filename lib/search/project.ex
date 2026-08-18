@@ -27,15 +27,10 @@ defmodule Quillex.Search.Project do
   # replace that just rewrote an open buffer shows its new text, not the old).
   defp overlay_dirty_buffers(matches, root, query, opts) do
     excludes = Keyword.get(opts, :excludes, [])
+    globs = opts |> Keyword.get(:exclude_globs, []) |> Quillex.Search.Glob.compile_list()
     canonical_root = Quillex.Buffer.PathIdentity.canonical(root)
 
-    dirty =
-      Quillex.Buffer.list()
-      |> Enum.filter(fn ref ->
-        ref.dirty? and is_binary(ref.path) and
-          String.starts_with?(ref.path, canonical_root <> "/") and
-          not Backend.excluded?(ref.path, canonical_root, excludes)
-      end)
+    dirty = dirty_buffers_under(canonical_root, excludes, globs)
 
     if dirty == [] do
       matches
@@ -47,25 +42,73 @@ defmodule Quillex.Search.Project do
           MapSet.member?(dirty_paths, Quillex.Buffer.PathIdentity.canonical(m.path))
         end)
 
-      from_buffers =
-        Enum.flat_map(dirty, fn ref ->
-          {:ok, snapshot} = Quillex.Buffer.fetch(ref)
-
-          snapshot.lines
-          |> Search.matches(query, opts)
-          |> Enum.map(fn {line, col, matched} ->
-            %Match{
-              path: ref.path,
-              line: line,
-              col: col,
-              text: Enum.at(snapshot.lines, line - 1),
-              matched: matched
-            }
-          end)
-        end)
+      from_buffers = Enum.flat_map(dirty, &buffer_matches(&1, query, opts))
 
       Enum.sort_by(kept ++ from_buffers, &{&1.path, &1.line, &1.col})
     end
+  end
+
+  defp dirty_buffers_under(canonical_root, excludes, globs) do
+    Quillex.Buffer.list()
+    |> Enum.filter(fn ref ->
+      ref.dirty? and is_binary(ref.path) and
+        String.starts_with?(ref.path, canonical_root <> "/") and
+        not Backend.excluded?(ref.path, canonical_root, excludes, globs)
+    end)
+  end
+
+  @doc """
+  Re-search only the buffers with unsaved edits, and fold the result into an
+  existing grouped result set.
+
+  This is what makes the pane live as you type in the editor without a tree
+  walk on every keystroke: the disk results stay exactly as the last search
+  left them, and only the handful of files the editor is actually holding are
+  looked at again.
+  """
+  @spec refresh_dirty([{Path.t(), [Match.t()]}], Path.t(), String.t(), [Backend.option()]) ::
+          [{Path.t(), [Match.t()]}]
+  def refresh_dirty(files, root, query, opts \\ [])
+
+  def refresh_dirty(files, _root, "", _opts), do: files
+
+  def refresh_dirty(files, root, query, opts) do
+    excludes = Keyword.get(opts, :excludes, [])
+    globs = opts |> Keyword.get(:exclude_globs, []) |> Quillex.Search.Glob.compile_list()
+    canonical_root = Quillex.Buffer.PathIdentity.canonical(root)
+    dirty = dirty_buffers_under(canonical_root, excludes, globs)
+
+    if dirty == [] do
+      files
+    else
+      dirty_paths = MapSet.new(dirty, &Quillex.Buffer.PathIdentity.canonical(&1.path))
+
+      kept =
+        Enum.reject(files, fn {path, _matches} ->
+          MapSet.member?(dirty_paths, Quillex.Buffer.PathIdentity.canonical(path))
+        end)
+
+      dirty
+      |> Enum.flat_map(&buffer_matches(&1, query, opts))
+      |> then(&Enum.concat(kept, group_by_file(&1)))
+      |> Enum.sort_by(fn {path, _matches} -> path end)
+    end
+  end
+
+  defp buffer_matches(ref, query, opts) do
+    {:ok, snapshot} = Quillex.Buffer.fetch(ref)
+
+    snapshot.lines
+    |> Search.matches(query, opts)
+    |> Enum.map(fn {line, col, matched} ->
+      %Match{
+        path: ref.path,
+        line: line,
+        col: col,
+        text: Enum.at(snapshot.lines, line - 1),
+        matched: matched
+      }
+    end)
   end
 
   @doc false
@@ -102,6 +145,64 @@ defmodule Quillex.Search.Project do
     else
       {:error, message} -> {:error, {:bad_pattern, message}}
     end
+  end
+
+  @doc """
+  Replace exactly the given matches — the pane's per-match, per-file and
+  Replace All buttons all land here.
+
+  `files` is the grouped result set, already filtered to what the pane is
+  showing: a match the user dismissed is simply not in the list, which is what
+  makes dismissal a real safety valve rather than a cosmetic one. Open buffers
+  are edited through their process (one undo step each), everything else on
+  disk.
+  """
+  @spec replace_matches([{Path.t(), [Match.t()]}], String.t()) ::
+          {:ok, %{files: non_neg_integer(), matches: non_neg_integer()}}
+  def replace_matches(files, replacement) when is_list(files) and is_binary(replacement) do
+    open = open_buffers_by_path()
+
+    totals =
+      Enum.reduce(files, %{files: 0, matches: 0}, fn {path, matches}, acc ->
+        occurrences = Enum.map(matches, &{&1.line, &1.col, &1.matched})
+
+        case Map.fetch(open, Quillex.Buffer.PathIdentity.canonical(path)) do
+          {:ok, buf_ref} -> splice_buffer(buf_ref, occurrences, replacement, acc)
+          :error -> splice_file(path, occurrences, replacement, acc)
+        end
+      end)
+
+    {:ok, totals}
+  end
+
+  defp splice_buffer(_buf_ref, [], _replacement, acc), do: acc
+
+  defp splice_buffer(buf_ref, occurrences, replacement, acc) do
+    {:ok, _snapshot} =
+      Quillex.Buffer.dispatch(buf_ref, [{:replace_matches, occurrences, replacement}])
+
+    %{acc | files: acc.files + 1, matches: acc.matches + length(occurrences)}
+  end
+
+  defp splice_file(_path, [], _replacement, acc), do: acc
+
+  defp splice_file(path, occurrences, replacement, acc) do
+    lines = path |> File.read!() |> String.split("\n")
+
+    new_lines =
+      occurrences
+      |> Enum.sort()
+      |> Enum.reverse()
+      |> Enum.reduce(lines, fn {line, col, matched}, acc_lines ->
+        List.update_at(acc_lines, line - 1, fn text ->
+          before = String.slice(text, 0, col - 1)
+          after_match = String.slice(text, (col - 1 + String.length(matched))..-1//1)
+          before <> replacement <> after_match
+        end)
+      end)
+
+    File.write!(path, Enum.join(new_lines, "\n"))
+    %{acc | files: acc.files + 1, matches: acc.matches + length(occurrences)}
   end
 
   defp open_buffers_by_path do
