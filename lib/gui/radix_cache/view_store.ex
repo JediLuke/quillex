@@ -40,6 +40,10 @@ defmodule Quillex.RadixCache.ViewStore do
     highlight_current_line: false,
     highlight_current_column: false,
     word_wrap: false,
+    # Does Enter carry the current line's indentation down to the new line?
+    # On by default — it is what the editor has always done, and what you want
+    # in code. Off is what you want when typing prose or a list.
+    auto_indent: true,
     tab_width: 4,
     text_size: 24,
     fold_level: 1,
@@ -94,6 +98,11 @@ defmodule Quillex.RadixCache.ViewStore do
     do: GenServer.cast(__MODULE__, :toggle_current_column_highlight)
 
   def toggle_word_wrap, do: GenServer.cast(__MODULE__, :toggle_word_wrap)
+  def toggle_auto_indent, do: GenServer.cast(__MODULE__, :toggle_auto_indent)
+
+  @doc "Set auto-indent outright, rather than flipping it."
+  def set_auto_indent(on?) when is_boolean(on?),
+    do: GenServer.cast(__MODULE__, {:set_auto_indent, on?})
   def toggle_file_nav, do: GenServer.cast(__MODULE__, :toggle_file_nav)
   def toggle_action_feedback, do: GenServer.cast(__MODULE__, :toggle_action_feedback)
   def toggle_menu_shortcuts, do: GenServer.cast(__MODULE__, :toggle_menu_shortcuts)
@@ -166,7 +175,13 @@ defmodule Quillex.RadixCache.ViewStore do
 
   def init(:ok) do
     Scenic.PubSub.register(Sources.view())
-    view = %{@initial | file_nav_path: File.cwd!()}
+
+    # Saved defaults, if the person ever chose to save any (View → Save
+    # Settings as Default). Merged over the built-in defaults, so a settings
+    # file that names only two keys changes only those two.
+    view =
+      %{@initial | file_nav_path: File.cwd!()}
+      |> Map.merge(Quillex.SettingsFile.load())
     Scenic.PubSub.publish(Sources.view(), view)
     # status_ref stamps the current status message so a stale clear-timer
     # cannot erase a newer message — bookkeeping, deliberately NOT published
@@ -183,6 +198,14 @@ defmodule Quillex.RadixCache.ViewStore do
   def handle_cast(:toggle_matching_brace, state) do
     {:noreply,
      publish(state, %{state.view | show_matching_brace: not state.view.show_matching_brace})}
+  end
+
+  def handle_cast(:toggle_auto_indent, state) do
+    {:noreply, publish(state, %{state.view | auto_indent: not state.view.auto_indent})}
+  end
+
+  def handle_cast({:set_auto_indent, on?}, state) do
+    {:noreply, publish(state, %{state.view | auto_indent: on?})}
   end
 
   def handle_cast(:toggle_current_line_highlight, state) do

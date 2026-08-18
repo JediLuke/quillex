@@ -103,4 +103,141 @@ defmodule Quillex.Buffer.Process.ReducerCursorSelectionTest do
       assert result.cursor.col == 7
     end
   end
+  describe "select_to — extending a selection to an absolute position" do
+    setup do
+      buf = %BufState{
+        data: ["Hello World", "This is a test", "Third line"],
+        cursor: Cursor.new(1, 6),
+        selection: nil
+      }
+
+      {:ok, buf: buf}
+    end
+
+    # Shift+Home, Shift+End and Ctrl+Shift+Home/End all arrive as an absolute
+    # position rather than a direction: "the end of this line" is a fact about
+    # the document, and under word wrap "one row up" is a fact about the view.
+    # Neither survives being reduced to a direction.
+    test "starts a selection at the cursor when there is none", %{buf: buf} do
+      result = Quillex.Buffer.Core.Selection.select_to(buf, {1, 12})
+
+      assert result.selection == %{start: {1, 6}, end: {1, 12}}
+      assert {result.cursor.line, result.cursor.col} == {1, 12}
+    end
+
+    test "extends an existing selection, keeping its anchor", %{buf: buf} do
+      buf = %{buf | selection: %{start: {1, 1}, end: {1, 6}}}
+
+      result = Quillex.Buffer.Core.Selection.select_to(buf, {1, 12})
+
+      assert result.selection == %{start: {1, 1}, end: {1, 12}}
+      assert {result.cursor.line, result.cursor.col} == {1, 12}
+    end
+
+    test "collapsing back onto the anchor clears the selection", %{buf: buf} do
+      buf = %{buf | selection: %{start: {1, 1}, end: {1, 6}}}
+
+      result = Quillex.Buffer.Core.Selection.select_to(buf, {1, 1})
+
+      assert result.selection == nil
+      assert {result.cursor.line, result.cursor.col} == {1, 1}
+    end
+
+    test "reaches across lines, which is what Ctrl+Shift+End does", %{buf: buf} do
+      result = Quillex.Buffer.Core.Selection.select_to(buf, {3, 11})
+
+      assert result.selection == %{start: {1, 6}, end: {3, 11}}
+    end
+  end
+
+  describe "word deletion" do
+    # Ctrl+Backspace and Ctrl+Delete. Every backspace handler used to ignore
+    # its modifiers, so both were plain character deletes.
+    defp line(text, col), do: %BufState{data: [text], cursor: Cursor.new(1, col), selection: nil}
+
+    test "Ctrl+Backspace removes the word before the cursor" do
+      result =
+        line("hello brave world", 12)
+        |> Quillex.Buffer.Process.Reducer.process({:delete, :prev_word})
+
+      assert result.data == ["hello  world"]
+      assert result.cursor.col == 7
+    end
+
+    test "Ctrl+Backspace at the start of a word takes the whole word" do
+      result =
+        line("hello", 6)
+        |> Quillex.Buffer.Process.Reducer.process({:delete, :prev_word})
+
+      assert result.data == [""]
+      assert result.cursor.col == 1
+    end
+
+    test "Ctrl+Backspace at the start of the line does nothing" do
+      result =
+        line("hello", 1)
+        |> Quillex.Buffer.Process.Reducer.process({:delete, :prev_word})
+
+      assert result.data == ["hello"]
+    end
+
+    test "Ctrl+Delete removes forward to the start of the next word" do
+      result =
+        line("hello brave world", 7)
+        |> Quillex.Buffer.Process.Reducer.process({:delete, :next_word})
+
+      assert result.data == ["hello world"]
+      assert result.cursor.col == 7
+    end
+
+    test "and undo brings the word back" do
+      before = line("hello brave world", 12)
+
+      result =
+        before
+        |> Quillex.Buffer.Process.Reducer.process({:delete, :prev_word})
+        |> Quillex.Buffer.Process.Reducer.process(:undo)
+
+      assert result.data == ["hello brave world"]
+    end
+  end
+
+  describe "delete_line" do
+    # Implemented in the buffer since 2026-04 and reachable since 2026-08:
+    # it had no key binding and no registry entry, so nothing could invoke it.
+    test "removes the line the cursor is on" do
+      buf = %BufState{
+        data: ["first", "second", "third"],
+        cursor: Cursor.new(2, 3),
+        selection: nil
+      }
+
+      result = Quillex.Buffer.Process.Reducer.process(buf, :delete_line)
+
+      assert result.data == ["first", "third"]
+    end
+
+    test "and undo brings the line back" do
+      buf = %BufState{
+        data: ["first", "second", "third"],
+        cursor: Cursor.new(2, 3),
+        selection: nil
+      }
+
+      restored =
+        buf
+        |> Quillex.Buffer.Process.Reducer.process(:delete_line)
+        |> Quillex.Buffer.Process.Reducer.process(:undo)
+
+      assert restored.data == ["first", "second", "third"]
+    end
+
+    test "leaves a single empty line rather than an empty document" do
+      buf = %BufState{data: ["only line"], cursor: Cursor.new(1, 1), selection: nil}
+
+      result = Quillex.Buffer.Process.Reducer.process(buf, :delete_line)
+
+      assert result.data == [""]
+    end
+  end
 end

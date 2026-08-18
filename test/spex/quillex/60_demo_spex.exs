@@ -22,11 +22,11 @@ defmodule Quillex.DemoSpex do
   Part of what 1.0 means is that the list below is the whole of it, so the demo
   walks all of it:
 
-  - typing, undo and redo, indent and unindent
+  - typing, undo and redo, indent and unindent, delete-line
   - cursor: word-wise movement, line and document ends, page up and down,
     go-to-line with clamping, and the mouse — including clicks past the end of
     a line
-  - selection: shift-arrows, double-click a word, select-all
+  - selection: Shift with any movement key, double-click a word, select-all
   - clipboard: copy and paste against the system clipboard
   - files: opening, dirty tracking, and both halves of noticing an edit made
     underneath the editor — a clean buffer reloads, a dirty one is flagged
@@ -38,11 +38,9 @@ defmodule Quillex.DemoSpex do
   - looking at it: five themes, editor text size, interface zoom
   - finding out: menus for everything, and a generated shortcut reference
 
-  Two things it does NOT show, so that this list stays honest: dragging a tab
-  to reorder it (covered by `38_tab_reorder_spex.exs` — a drag is hard to make
-  legible at this pace), and `Ctrl+D` delete-line, which the buffer still
-  implements but which has no key binding and no registry entry, so there is
-  nothing to demonstrate.
+  One thing it does NOT show, so that this list stays honest: dragging a tab to
+  reorder it, which is covered by `38_tab_reorder_spex.exs` — a drag is hard to
+  make legible at this pace.
   """
   use SexySpex
   @moduletag timeout: 1_800_000
@@ -62,9 +60,19 @@ defmodule Quillex.DemoSpex do
 
   defp beat(ms), do: Process.sleep(if fast?(), do: max(div(ms, 8), 10), else: ms)
 
-  # Narration types at about twice the speed of a person, which is quick enough
-  # not to bore a room and slow enough to read along with.
-  defp per_char_ms, do: if(fast?(), do: 0, else: 9)
+  # A deliberate pause on something that just changed, so a room has time to
+  # see it. This is the difference between demonstrating a feature and merely
+  # exercising it — an audience needs several seconds to find the thing that
+  # moved, and the test does not.
+  defp dwell(ms), do: beat(ms)
+
+  # Narration types at about twice the speed of a person. The opening is slower
+  # — that is when a room reads most closely, and when nobody yet knows what
+  # they are looking at.
+  defp per_char_ms, do: if(fast?(), do: 0, else: Process.get(:demo_pace, 9))
+
+  defp pace(:slow), do: Process.put(:demo_pace, 16)
+  defp pace(:normal), do: Process.put(:demo_pace, 9)
 
   # ── Reading the editor ────────────────────────────────────────────────────
 
@@ -176,6 +184,13 @@ defmodule Quillex.DemoSpex do
     focus_editor()
     select_all_and_delete()
 
+    # The narration types its own leading spaces, and auto-indent would add the
+    # previous line's on top of them — so a bullet list walks steadily right
+    # across the screen. Off while narrating; the demo turns it back on and
+    # shows it deliberately.
+    Quillex.RadixCache.ViewStore.set_auto_indent(false)
+    Process.sleep(120)
+
     lines
     |> Enum.with_index()
     |> Enum.each(fn {line, i} ->
@@ -194,6 +209,7 @@ defmodule Quillex.DemoSpex do
              buffer line 1:   #{inspect(Enum.at(active_buffer().lines, 0))}
            """
 
+    Quillex.RadixCache.ViewStore.set_auto_indent(true)
     beat(1_400)
   end
 
@@ -221,6 +237,23 @@ defmodule Quillex.DemoSpex do
     end
 
     buf
+  end
+
+  # Narration that introduces something happening on ANOTHER page: say it, let
+  # it land, then go back to whatever was showing so the demonstration follows
+  # immediately rather than after a buffer switch.
+  defp narrate_aside(lines) do
+    previous = active_buf()
+    narrate(lines)
+    dwell(3_000)
+
+    if previous && previous.name != @narration_page do
+      :ok = Quillex.Buffer.activate(previous)
+      beat(600)
+      focus_editor()
+    end
+
+    :ok
   end
 
   # A page to work on: a fresh buffer, focused, holding exactly these lines.
@@ -293,6 +326,7 @@ defmodule Quillex.DemoSpex do
     # ────────────────────────────────────────────────────────────────────────
     scenario "Prologue — what this is" do
       given_ "an empty editor", context do
+        pace(:slow)
         focus_editor()
         select_all_and_delete()
         assert wait_until(fn -> active_buffer().lines == [""] end)
@@ -301,14 +335,16 @@ defmodule Quillex.DemoSpex do
 
       when_ "it introduces itself", context do
         narrate([
-          "This is Quillex: a text editor written in Elixir,",
-          "drawn by Scenic, running as an OTP application.",
+          "This is Quillex.",
+          "",
+          "A text editor, written in Elixir, drawn by Scenic,",
+          "running as an OTP application.",
           "",
           "Everything you are about to see is being typed by the",
           "editor, into itself, by a test that asserts as it goes."
         ])
 
-        beat(1_600)
+        dwell(3_500)
         {:ok, context}
       end
 
@@ -320,45 +356,67 @@ defmodule Quillex.DemoSpex do
           "",
           "It is also a reference implementation of an architecture.",
           "Every piece of state lives in a store and is published as",
-          "a snapshot. The GUI holds nothing and can be killed at any",
-          "moment. The editor is a view over an OTP backend, and the",
-          "backend does not know a GUI exists."
+          "a snapshot. The GUI holds nothing, and can be killed at",
+          "any moment. The backend does not know a GUI exists."
         ])
 
-        beat(1_600)
+        dwell(4_000)
         {:ok, context}
       end
 
-      then_ "it says what 1.0 means", context do
+      then_ "it says what you are about to see", context do
         narrate([
-          "1.0 means the feature list is finished — not that the work",
-          "is. What follows is all of it, in the order you would meet",
-          "it. If something is missing from this demo, it is missing",
+          "1.0 means the feature list is finished — not the work.",
+          "",
+          "Here is the tour:",
+          "",
+          "   1.  the ordinary editing everybody needs",
+          "   2.  buffers, tabs, and the project navigator",
+          "   3.  finding things — here, and across the project",
+          "   4.  reading code: highlighting and folding",
+          "   5.  making it yours: text size, tab stops, themes",
+          "",
+          "If something is missing from this tour, it is missing",
           "from Quillex."
         ])
 
         assert Enum.at(active_buffer().lines, 0) =~ "1.0 means"
         Probes.take_screenshot("60_demo_01_prologue")
-        beat(1_800)
+        dwell(5_500)
+        pace(:normal)
         {:ok, context}
       end
     end
 
-    # ────────────────────────────────────────────────────────────────────────
-    scenario "Act I — typing, and taking it back" do
-      given_ "a page to type on", context do
+    # ════════════════════════════════════════════════════════════════════════
+    # 1. THE ORDINARY EDITING
+    # ════════════════════════════════════════════════════════════════════════
+
+    scenario "Act I — the basics, told first" do
+      given_ "the list of what an editor has to get right", context do
         narrate([
-          "Start with the part nobody notices until it is wrong:",
-          "typing, and being able to take it back."
+          "First, all the usual things. Quillex has:",
+          "",
+          "   *  typing, undo and redo",
+          "   *  delete a line, indent and unindent",
+          "   *  select with the keyboard or the mouse",
+          "   *  cut, copy and paste, with the system clipboard",
+          "   *  move by word, by line, by page, or to a line number",
+          "",
+          "Let us go through them."
         ])
 
-        page("editing.txt", [""])
+        dwell(5_000)
         {:ok, context}
       end
 
-      when_ "text is typed", context do
+      when_ "a new buffer is made and typed into", context do
+        narrate(["Ctrl+N makes a new buffer. Then you type into it."])
+        dwell(2_000)
+
+        page("editing.txt", [""])
         type("The quick brown fox jumps over the lazy dog.")
-        beat(800)
+        dwell(2_500)
 
         assert wait_until(fn -> text() =~ "lazy dog" end), "typing did not reach the buffer"
         {:ok, context}
@@ -366,23 +424,62 @@ defmodule Quillex.DemoSpex do
 
       then_ "undo takes it back one edit at a time, and redo returns it", context do
         undo_until(fn -> not (text() =~ "lazy") end)
-        beat(700)
+        dwell(2_500)
         refute text() =~ "lazy", "undo did not remove the typed text"
 
         redo_until(fn -> text() =~ "lazy dog" end)
-        beat(700)
+        dwell(2_500)
         assert text() =~ "lazy dog", "redo did not restore it"
         {:ok, context}
       end
 
+      then_ "Ctrl+D removes a whole line — and undo brings it back", context do
+        narrate([
+          "Ctrl+D deletes the line the cursor is on.",
+          "",
+          "And because every edit goes through one undo stack,",
+          "Ctrl+Z brings it straight back."
+        ])
+
+        dwell(2_500)
+
+        # page/2 focuses, and focusing is a CLICK — which moves the cursor. So
+        # position the cursor after focusing, never before.
+        page("deleting.txt", ["keep this one", "delete this one", "and keep this"])
+        {:ok, _} = Quillex.Buffer.dispatch(active_buf(), [{:set_cursor, {2, 1}}])
+        assert wait_until(fn -> cursor() == {2, 1} end)
+        dwell(2_500)
+
+        key("d", [:ctrl])
+
+        assert wait_until(fn -> active_buffer().lines == ["keep this one", "and keep this"] end),
+               "Ctrl+D should remove line 2, got #{inspect(active_buffer().lines)}"
+
+        dwell(3_000)
+
+        key("z", [:ctrl])
+
+        assert wait_until(fn ->
+                 active_buffer().lines == ["keep this one", "delete this one", "and keep this"]
+               end),
+               "undo should bring the deleted line back, got #{inspect(active_buffer().lines)}"
+
+        dwell(3_000)
+        Probes.take_screenshot("60_demo_02_delete_line")
+        {:ok, context}
+      end
+
       then_ "Tab indents, and Shift+Tab takes the indent back", context do
-        key("home")
+        focus_editor()
+        {:ok, _} = Quillex.Buffer.dispatch(active_buf(), [{:set_cursor, {1, 1}}])
+        assert wait_until(fn -> cursor() == {1, 1} end)
+
         key("tab")
-        beat(600)
+        dwell(2_000)
         assert wait_until(fn -> text() =~ ~r/^\t/ end), "Tab did not indent"
 
         key("tab", [:shift])
-        beat(600)
+        dwell(2_000)
         assert wait_until(fn -> not (text() =~ ~r/^\t/) end), "Shift+Tab did not unindent"
         {:ok, context}
       end
@@ -392,10 +489,14 @@ defmodule Quillex.DemoSpex do
     scenario "Act II — moving around" do
       given_ "a page with several lines", context do
         narrate([
-          "Moving around. Arrows a character at a time, but also by",
-          "word, to the ends of a line, to the ends of the document,",
-          "a screen at a time, and straight to a line number."
+          "Moving around. Arrows a character at a time — but also",
+          "by word with Ctrl, to the ends of a line with Home and",
+          "End, to the ends of the file with Ctrl+Home and Ctrl+End,",
+          "a screen at a time with Page Up and Page Down, and",
+          "straight to a line number with Ctrl+G."
         ])
+
+        dwell(4_000)
 
         page("moving.txt", [
           "alpha beta gamma delta",
@@ -411,7 +512,7 @@ defmodule Quillex.DemoSpex do
 
       when_ "the cursor walks by word", context do
         keys("right", [:ctrl], 3)
-        beat(800)
+        dwell(2_500)
 
         assert {1, col} = cursor()
         assert col > 10, "three word jumps should be well into the line, got column #{col}"
@@ -420,94 +521,125 @@ defmodule Quillex.DemoSpex do
 
       then_ "End and Home reach the ends of the line", context do
         key("end")
-        beat(600)
+        dwell(1_800)
         assert cursor() == {1, String.length("alpha beta gamma delta") + 1}
 
         key("home")
-        beat(600)
+        dwell(1_800)
         assert cursor() == {1, 1}
         {:ok, context}
       end
 
       then_ "Ctrl+End and Ctrl+Home reach the ends of the document", context do
         key("end", [:ctrl])
-        beat(700)
+        dwell(2_000)
         assert wait_until(fn -> match?({4, _}, cursor()) end), "Ctrl+End should reach line 4"
 
         key("home", [:ctrl])
-        beat(700)
+        dwell(2_000)
         assert wait_until(fn -> cursor() == {1, 1} end), "Ctrl+Home should return to the start"
         {:ok, context}
       end
 
       then_ "Page Down and Page Up move a screenful at a time", context do
         long = page("paging.txt", Enum.map(1..300, &"line #{&1}"))
+        focus_editor()
         {:ok, _} = Quillex.Buffer.dispatch(long, [{:set_cursor, {1, 1}}])
         assert wait_until(fn -> cursor() == {1, 1} end)
-        focus_editor()
+        dwell(1_800)
 
         key("page_down")
-        beat(800)
+        dwell(2_200)
 
         assert {down_line, _} = cursor()
         assert down_line > 10, "Page Down should move a screenful, got line #{down_line}"
 
+        key("page_down")
+        dwell(2_200)
+
         key("page_up")
-        beat(800)
+        dwell(2_200)
 
-        assert wait_until(fn -> elem(cursor(), 0) < down_line end),
-               "Page Up should move back up from line #{down_line}, got #{inspect(cursor())}"
+        assert wait_until(fn -> elem(cursor(), 0) < down_line * 2 end),
+               "Page Up should move back up, got #{inspect(cursor())}"
 
-        :ok = Quillex.Buffer.activate(buffer_named("moving.txt"))
-        beat(500)
-        focus_editor()
         {:ok, context}
       end
 
       then_ "Go to Line jumps, and clamps rather than refusing", context do
-        key("g", [:ctrl])
+        narrate(["Ctrl+G goes straight to a line number."])
+        dwell(2_000)
+
+        :ok = Quillex.Buffer.activate(buffer_named("paging.txt"))
         beat(600)
+        focus_editor()
+
+        key("g", [:ctrl])
+        dwell(1_500)
         assert root_state().show_goto_line, "Ctrl+G should open the prompt"
 
-        digits("3")
+        digits("150")
+        dwell(1_500)
         key("enter")
-        beat(700)
-        assert wait_until(fn -> match?({3, _}, cursor()) end), "Ctrl+G did not jump to line 3"
+        dwell(2_500)
+        assert wait_until(fn -> match?({150, _}, cursor()) end), "Ctrl+G did not jump to line 150"
 
-        # 999999 is what people type when they mean "the end", so that is what
-        # it means here. Refusing would be technically correct and useless.
+        narrate([
+          "And if you ask for a line past the end, it takes you to",
+          "the end — because 999999 is what people type when they",
+          "mean 'the bottom'. Refusing would be correct and useless."
+        ])
+
+        dwell(3_000)
+
+        :ok = Quillex.Buffer.activate(buffer_named("paging.txt"))
+        beat(600)
+        focus_editor()
+
         key("g", [:ctrl])
-        beat(500)
+        dwell(1_200)
         digits("999999")
+        dwell(1_200)
         key("enter")
-        beat(800)
+        dwell(2_500)
 
         last = length(active_buffer().lines)
 
         assert wait_until(fn -> match?({^last, _}, cursor()) end),
                "Go to Line should clamp to the last line rather than refuse"
 
+        Probes.take_screenshot("60_demo_03_goto_line")
         {:ok, context}
       end
 
       then_ "and the mouse puts the cursor where you point, including past the text",
             context do
+        narrate([
+          "The mouse does what you expect — including clicking",
+          "past the end of a line, or below the last one."
+        ])
+
+        dwell(2_500)
+
+        page("moving.txt", [
+          "alpha beta gamma delta",
+          "the second line of the file",
+          "a third line here",
+          "and a fourth"
+        ])
+
         %{x: fx, y: fy, width: fw} = SemanticHelpers.get_buffer_frame()
 
-        # On line 2's text.
         Probes.click(fx + 120, fy + 16 + 24)
-        beat(800)
+        dwell(2_200)
         assert wait_until(fn -> match?({2, _}, cursor()) end), "a click should move the cursor"
 
-        # And far to the right of line 4, which is short: past the end of a
-        # line means the end of that line.
         Probes.click(fx + trunc(fw * 0.75), fy + 16 + 3 * 24)
-        beat(800)
+        dwell(2_200)
 
         assert wait_until(fn -> cursor() == {4, String.length("and a fourth") + 1} end),
                "clicking past the end of line 4 should land at its end, got #{inspect(cursor())}"
 
-        Probes.take_screenshot("60_demo_02_moving")
         {:ok, context}
       end
     end
@@ -516,12 +648,14 @@ defmodule Quillex.DemoSpex do
     scenario "Act III — selecting, and the clipboard" do
       given_ "a page to select in", context do
         narrate([
-          "Selecting: hold Shift while you move, or double-click a",
-          "word, or drag across the text.",
+          "Selecting. Hold Shift while you move — any movement key,",
+          "not just the arrows. Or double-click a word. Or drag.",
           "",
-          "Then cut, copy and paste — against the system clipboard,",
+          "Then cut, copy and paste, against the system clipboard,",
           "so it works with everything else on your desktop."
         ])
+
+        dwell(4_000)
 
         page("selecting.txt", ["copy this line", "leave this one alone"])
         {:ok, _} = Quillex.Buffer.dispatch(active_buf(), [{:set_cursor, {1, 1}}])
@@ -531,7 +665,7 @@ defmodule Quillex.DemoSpex do
 
       when_ "Shift and the arrows select as the cursor moves", context do
         keys("right", [:shift], 4)
-        beat(800)
+        dwell(2_500)
 
         assert wait_until(fn -> selection() != nil end), "Shift+Right should start a selection"
         assert %{start: {1, 1}, end: {1, 5}} = selection()
@@ -544,7 +678,7 @@ defmodule Quillex.DemoSpex do
         Probes.click(fx + 60, fy + 16)
         Process.sleep(80)
         Probes.click(fx + 60, fy + 16)
-        beat(800)
+        dwell(2_500)
 
         assert wait_until(fn ->
                  case selection() do
@@ -559,7 +693,7 @@ defmodule Quillex.DemoSpex do
 
       then_ "Select All takes the whole document", context do
         key("a", [:ctrl])
-        beat(700)
+        dwell(2_500)
 
         assert wait_until(fn -> selection() != nil end), "Ctrl+A should select everything"
         assert %{start: {1, 1}} = selection()
@@ -567,24 +701,22 @@ defmodule Quillex.DemoSpex do
       end
 
       then_ "and copy and paste carry text through the system clipboard", context do
+        page("selecting.txt", ["copy this line", "leave this one alone"])
         {:ok, _} = Quillex.Buffer.dispatch(active_buf(), [{:set_cursor, {1, 1}}])
         assert wait_until(fn -> cursor() == {1, 1} end)
 
-        # Shift+Arrows, not Shift+End: Home and End deliberately move the
-        # cursor without extending a selection, and "Shift+Arrows" is what the
-        # shortcut registry claims. The demo shows what is actually there.
-        keys("right", [:shift], String.length("copy this line"))
-        beat(600)
+        key("end", [:shift])
+        dwell(1_800)
         key("c", [:ctrl])
-        beat(800)
+        dwell(1_800)
 
         assert wait_until(fn -> selection() != nil end),
-               "Shift+Right should have selected the line before copying"
+               "Shift+End should have selected the line before copying"
 
         key("end", [:ctrl])
         newline()
         key("v", [:ctrl])
-        beat(900)
+        dwell(2_500)
 
         assert wait_until(fn -> length(active_buffer().lines) == 3 end),
                "paste should have added a line, got #{inspect(active_buffer().lines)}"
@@ -592,34 +724,52 @@ defmodule Quillex.DemoSpex do
         assert List.last(active_buffer().lines) == "copy this line",
                "paste should reproduce the copied line, got #{inspect(active_buffer().lines)}"
 
-        Probes.take_screenshot("60_demo_03_clipboard")
+        Probes.take_screenshot("60_demo_04_clipboard")
         {:ok, context}
       end
     end
 
-    # ────────────────────────────────────────────────────────────────────────
-    scenario "Act IV — files, tabs and the project" do
+    # ════════════════════════════════════════════════════════════════════════
+    # 2. BUFFERS, TABS AND THE PROJECT
+    # ════════════════════════════════════════════════════════════════════════
+
+    scenario "Act IV — many buffers, and the project navigator" do
       given_ "the narration sets the scene", context do
         narrate([
-          "Files open in tabs. An asterisk means unsaved; drag a tab",
-          "to reorder it. The navigator on the left is the project —",
-          "click to open a file, drag to move one.",
+          "Every open document is a buffer, and every buffer is a",
+          "tab. Open as many as you like — the bar scrolls, and the",
+          "asterisk tells you which ones have unsaved work.",
           "",
-          "Opening two files now."
+          "The navigator on the left is the project itself: click to",
+          "open a file, drag one to move it."
         ])
 
+        dwell(4_500)
         {:ok, context}
       end
 
-      when_ "the navigator is opened and two files are opened", context do
+      when_ "a handful of buffers are opened at once", context do
+        for n <- 1..6 do
+          page("scratch-#{n}.txt", ["buffer number #{n}"])
+          beat(500)
+        end
+
+        dwell(3_500)
+
+        assert length(root_state().buffers) >= 6, "six buffers should be open"
+        Probes.take_screenshot("60_demo_05_many_tabs")
+        {:ok, context}
+      end
+
+      when_ "the navigator is opened and two real files are opened from it", context do
         Quillex.RadixCache.ViewStore.open_file_nav()
         assert wait_until(fn -> root_state().show_file_nav end)
-        beat(1_200)
+        dwell(3_000)
 
         {:ok, _} = Quillex.API.FileAPI.open(Path.join(@demo_dir, "lib/kernel.ex"))
-        beat(1_300)
+        dwell(2_500)
         {:ok, _} = Quillex.API.FileAPI.open(Path.join(@demo_dir, "lib/notes.txt"))
-        beat(1_300)
+        dwell(2_500)
         {:ok, context}
       end
 
@@ -636,18 +786,26 @@ defmodule Quillex.DemoSpex do
         focus_editor()
         key("end", [:ctrl])
         type(" ...edited")
-        beat(800)
+        dwell(2_500)
 
         assert wait_until(fn ->
                  Enum.any?(root_state().buffers, &(&1.name == "notes.txt" and &1.dirty?))
                end),
                "typing should mark the buffer dirty"
 
-        Probes.take_screenshot("60_demo_04_tabs")
+        Probes.take_screenshot("60_demo_06_tabs")
         {:ok, context}
       end
 
       then_ "a file changed underneath a CLEAN buffer is quietly reloaded", context do
+        narrate([
+          "If a file changes on disk while you have it open, Quillex",
+          "notices. A buffer with no unsaved work simply reloads —",
+          "and says so."
+        ])
+
+        dwell(3_000)
+
         path = Path.join(@demo_dir, "lib/kernel.ex")
         :ok = Quillex.Buffer.activate(buffer_named("kernel.ex"))
         beat(700)
@@ -656,20 +814,25 @@ defmodule Quillex.DemoSpex do
         File.write!(path, File.read!(path) <> "\n# changed on disk by someone else\n")
         Quillex.Files.ExternalFileSync.poll_now()
 
-        assert wait_until(
-                 fn -> text() =~ "changed on disk by someone else" end,
-                 8_000
-               ),
+        assert wait_until(fn -> text() =~ "changed on disk by someone else" end, 8_000),
                "an external edit to a clean buffer should be picked up"
 
         assert (root_state().status_message || "") =~ "Reloaded",
                "and it should say so, rather than changing the document in silence"
 
-        beat(1_600)
+        dwell(3_500)
         {:ok, context}
       end
 
       then_ "but a file changed under UNSAVED work is flagged, not overwritten", context do
+        narrate([
+          "But if you had unsaved work in it, that would be a",
+          "conflict — so it flags the tab and keeps your edits.",
+          "It will never throw away something you typed."
+        ])
+
+        dwell(3_000)
+
         path = Path.join(@demo_dir, "lib/notes.txt")
         :ok = Quillex.Buffer.activate(buffer_named("notes.txt"))
         beat(700)
@@ -691,31 +854,244 @@ defmodule Quillex.DemoSpex do
                ),
                "an external edit to a DIRTY buffer is a conflict, and must be flagged"
 
-        assert text() =~ "...edited",
-               "the unsaved work must be preserved, not overwritten"
+        assert text() =~ "...edited", "the unsaved work must be preserved, not overwritten"
 
-        Probes.take_screenshot("60_demo_05_external_change")
-        beat(1_600)
+        Probes.take_screenshot("60_demo_07_external_change")
+        dwell(3_500)
         {:ok, context}
       end
     end
 
-    # ────────────────────────────────────────────────────────────────────────
-    scenario "Act V — reading code" do
-      given_ "a source file on screen", context do
+    # ════════════════════════════════════════════════════════════════════════
+    # 3. FINDING THINGS
+    # ════════════════════════════════════════════════════════════════════════
+
+    scenario "Act V — finding things" do
+      given_ "a narrated introduction", context do
         narrate([
-          "Reading code. Syntax highlighting here is structural:",
-          "weight, slant and underline rather than colour, so it reads",
-          "the same for every kind of colour vision — and needs no",
-          "palette of its own.",
+          "Finding things. Two different jobs, two different tools.",
           "",
-          "Folding collapses a block. Guides mark the line and column",
-          "you are on. Word wrap keeps a long line on screen."
+          "Ctrl+F searches this buffer, and F3 walks the matches.",
+          "",
+          "Ctrl+Shift+F searches the whole project, in a pane with",
+          "its own query, its own replacement and its own exclude",
+          "field — results grouped by file, with the match marked",
+          "inside the line."
         ])
 
+        dwell(4_500)
+        {:ok, context}
+      end
+
+      when_ "Ctrl+F finds a word in this buffer, and F3 walks the matches", context do
+        page("in-buffer-find.txt", [
+          "the first needle is here",
+          "nothing on this line",
+          "and a second needle down here"
+        ])
+
+        {:ok, _} = Quillex.Buffer.dispatch(active_buf(), [{:set_cursor, {1, 1}}])
+        assert wait_until(fn -> cursor() == {1, 1} end)
+
+        key("f", [:ctrl])
+        dwell(2_000)
+        assert root_state().show_search_bar, "Ctrl+F should open the find bar"
+
+        type("needle")
+        dwell(2_500)
+
+        assert wait_until(fn -> match?({1, _}, cursor()) end, 6_000),
+               "the first match is on line 1, got #{inspect(cursor())}"
+
+        key("escape")
+        beat(500)
+        focus_editor()
+        key("f3")
+        dwell(2_500)
+
+        assert wait_until(fn -> match?({3, _}, cursor()) end, 6_000),
+               "F3 should move to the next match on line 3, got #{inspect(cursor())}"
+
+        Probes.take_screenshot("60_demo_08_find")
+        {:ok, context}
+      end
+
+      when_ "the project search runs", context do
+        narrate(["Now the whole project at once."])
+        dwell(2_000)
+
+        key("f", [:ctrl, :shift])
+        dwell(2_000)
+        assert root_state().show_project_search, "Ctrl+Shift+F should open the pane"
+
+        type("hello")
+
+        # Typing schedules one debounced search per character; await_idle is
+        # the only moment the results are known to belong to the whole query
+        # rather than a prefix of it.
+        :ok = Quillex.RadixCache.ProjectSearchStore.await_idle()
+
+        assert wait_until(fn ->
+                 match?(%{status: {:done, _, _, _}}, root_state().project_search)
+               end),
+               "the project search never finished"
+
+        dwell(4_000)
+        {:ok, context}
+      end
+
+      then_ "it found the word in both files", context do
+        %{files: files} = root_state().project_search
+        names = Enum.map(files, fn {path, _} -> Path.basename(path) end)
+
+        {:ok, notes} = Quillex.Buffer.fetch(buffer_named("notes.txt"))
+
+        assert "kernel.ex" in names
+        assert "notes.txt" in names,
+               "found #{inspect(names)}; query=#{inspect(root_state().project_search.query)} " <>
+                 "notes buffer=#{inspect(notes.lines)} dirty=#{notes.ref.dirty?}"
+
+        Probes.take_screenshot("60_demo_09_project_search")
+        {:ok, context}
+      end
+
+      then_ "clicking a result opens it in one reusable preview tab", context do
+        narrate_aside([
+          "Clicking a result opens it in a preview tab — italic, and",
+          "reused. Walk thirty results and you have one tab open,",
+          "not thirty."
+        ])
+
+        # Read the results AFTER the narration, and after the store settles.
+        # Narration types into a buffer, and the pane is live for open buffers,
+        # so a match id captured beforehand can be stale by the time it is
+        # clicked.
+        :ok = Quillex.RadixCache.ProjectSearchStore.await_idle()
+        %{files: files} = root_state().project_search
+
+        found = Enum.find(files, fn {p, _} -> Path.basename(p) == "kernel.ex" end)
+
+        assert found,
+               "kernel.ex left the results after narrating: " <>
+                 "#{inspect(Enum.map(files, fn {p, ms} -> {Path.basename(p), length(ms)} end))} " <>
+                 "query=#{inspect(root_state().project_search.query)} " <>
+                 "status=#{inspect(root_state().project_search.status)}"
+
+        {kernel_path, [kernel_match | _]} = found
+
+        tabs_before = length(root_state().buffers)
+
+        Probes.click_element(
+          "search_pane_match_#{kernel_match.line}_#{kernel_match.col}_#{kernel_path}"
+        )
+
+        assert wait_until(fn -> root_state().active_buf.name == "kernel.ex" end),
+               "clicking a result should open that file"
+
+        assert root_state().preview_buf_uuid == root_state().active_buf.uuid,
+               "a result opens into the preview slot, drawn in italics"
+
+        dwell(3_000)
+
+        {notes_path, [notes_match | _]} =
+          Enum.find(files, fn {p, _} -> Path.basename(p) == "notes.txt" end)
+
+        Probes.click_element(
+          "search_pane_match_#{notes_match.line}_#{notes_match.col}_#{notes_path}"
+        )
+
+        assert wait_until(fn -> root_state().active_buf.name == "notes.txt" end)
+
+        assert length(root_state().buffers) <= tabs_before + 1,
+               "the preview tab should be reused, not accumulated"
+
+        Probes.take_screenshot("60_demo_10_preview_tab")
+        dwell(3_000)
+        {:ok, context}
+      end
+
+      then_ "a match is dismissed, and then everything else is replaced", context do
+        narrate_aside([
+          "You can dismiss a match. Once dismissed, no replace can",
+          "reach it — which is what makes Replace All reviewable",
+          "rather than an act of faith."
+        ])
+
+        :ok = Quillex.RadixCache.ProjectSearchStore.await_idle()
+        %{files: files} = root_state().project_search
+        {path, [match | _]} = Enum.find(files, fn {p, _} -> Path.basename(p) == "notes.txt" end)
+
+        before = Enum.sum(Enum.map(files, fn {_p, ms} -> length(ms) end))
+
+        Probes.click_element("search_pane_dismiss_match_#{match.line}_#{match.col}_#{path}")
+
+        assert wait_until(fn ->
+                 %{files: after_files} = root_state().project_search
+                 Enum.sum(Enum.map(after_files, fn {_p, ms} -> length(ms) end)) == before - 1
+               end),
+               "dismissing a match should remove it from the results"
+
+        dwell(3_000)
+
+        Probes.click_element("search_pane_field_replace")
+        beat(600)
+        type("g'day")
+        dwell(2_000)
+        Probes.click_element("search_pane_replace_all")
+
+        assert wait_until(fn -> (root_state().status_message || "") =~ "Replaced" end),
+               "Replace All reported nothing"
+
+        dwell(3_500)
+        {:ok, context}
+      end
+
+      then_ "the dismissed occurrence survived, which is the whole point", context do
+        {:ok, snapshot} = Quillex.Buffer.fetch(buffer_named("notes.txt"))
+        content = Enum.join(snapshot.lines, "\n")
+
+        assert content =~ "hello", "a dismissed match must be untouched by Replace All"
+        assert content =~ "g'day", "the matches that were not dismissed should have been replaced"
+
+        assert snapshot.ref.dirty?,
+               "an open file is replaced through its buffer, so Undo still works there"
+
+        Probes.take_screenshot("60_demo_11_replaced")
+        Quillex.RadixCache.ViewStore.close_project_search()
+        dwell(2_000)
+        {:ok, context}
+      end
+    end
+
+    # ════════════════════════════════════════════════════════════════════════
+    # 4. READING CODE
+    # ════════════════════════════════════════════════════════════════════════
+
+    scenario "Act VI — reading code" do
+      given_ "a source file on screen", context do
+        narrate([
+          "Reading code.",
+          "",
+          "Syntax highlighting here is structural: weight, slant and",
+          "underline rather than colour. It reads the same for every",
+          "kind of colour vision, and it needs no palette of its own,",
+          "so it survives every theme.",
+          "",
+          "Watch what happens to the keywords and the comments."
+        ])
+
+        dwell(4_000)
+
+        # Open it here rather than reaching for whatever an earlier act left
+        # lying around: the search act opens files into a PREVIEW tab, which is
+        # a single reusable slot, so the file it showed is not guaranteed to
+        # still be open by the time this act runs.
+        {:ok, _} = Quillex.API.FileAPI.open(Path.join(@demo_dir, "lib/kernel.ex"))
+        beat(900)
         :ok = Quillex.Buffer.activate(buffer_named("kernel.ex"))
         beat(900)
         focus_editor()
+        dwell(4_000)
         {:ok, context}
       end
 
@@ -733,261 +1109,175 @@ defmodule Quillex.DemoSpex do
         assert child_state(:buffer_pane).highlight_styles != %{},
                "the pane should be highlighting"
 
-        Probes.take_screenshot("60_demo_05_syntax")
-        beat(1_400)
+        Probes.take_screenshot("60_demo_12_syntax")
         {:ok, context}
       end
 
-      then_ "the view toggles change what is drawn", context do
+      then_ "folding collapses the file to its shape", context do
+        narrate_aside([
+          "Folding collapses a block to its first line, so you can",
+          "see the shape of a file rather than its contents.",
+          "",
+          "Set the fold level and the whole file folds at once."
+        ])
+
+        :ok = Quillex.Buffer.activate(buffer_named("kernel.ex"))
+        beat(800)
+        focus_editor()
+        dwell(2_500)
+
+        Quillex.RadixCache.ViewStore.set_fold_level(2)
+        assert wait_until(fn -> root_state().fold_level == 2 end)
+        dwell(4_500)
+        Probes.take_screenshot("60_demo_13_folded")
+
+        Quillex.RadixCache.ViewStore.set_fold_level(1)
+        assert wait_until(fn -> root_state().fold_level == 1 end)
+        dwell(4_500)
+
+        menu(:view, :unfold_all)
+        dwell(3_000)
+        {:ok, context}
+      end
+
+      then_ "the guides mark where you are", context do
+        narrate_aside([
+          "And there are guides for the line and the column you are",
+          "on, if you want them."
+        ])
+
+        :ok = Quillex.Buffer.activate(buffer_named("kernel.ex"))
+        beat(800)
+
         for id <- ["current_line_highlight", "current_column_highlight"] do
-          key = if id == "current_line_highlight", do: :highlight_current_line, else: :highlight_current_column
+          key =
+            if id == "current_line_highlight",
+              do: :highlight_current_line,
+              else: :highlight_current_column
+
           before = Map.get(root_state(), key)
           menu(:view, id)
 
           assert wait_until(fn -> Map.get(root_state(), key) != before end),
                  "View → #{id} did not take effect"
 
-          beat(1_000)
+          dwell(3_500)
         end
 
         close_menus()
-        beat(700)
-        Probes.take_screenshot("60_demo_06_guides")
-        {:ok, context}
-      end
-
-      then_ "folding collapses the file to its shape", context do
-        Quillex.RadixCache.ViewStore.set_fold_level(1)
-        beat(1_600)
-        assert root_state().fold_level == 1
-
-        menu(:view, :unfold_all)
-        beat(1_000)
+        dwell(2_000)
+        Probes.take_screenshot("60_demo_14_guides")
         {:ok, context}
       end
 
       then_ "and word wrap keeps a long line on screen", context do
+        narrate_aside([
+          "Word wrap folds a long line into the window instead of",
+          "scrolling sideways — and the cursor follows the visual",
+          "rows, not the numbered lines."
+        ])
+
         page("wrapping.txt", [Enum.map_join(1..70, " ", &"word#{&1}")])
 
         refute root_state().word_wrap
+        dwell(2_500)
         menu(:view, "word_wrap")
 
         assert wait_until(fn -> root_state().word_wrap end), "Word Wrap did not turn on"
-        beat(1_300)
+        dwell(4_000)
         assert child_state(:buffer_pane).wrap_mode == :word
 
-        # Down moves by VISUAL row under wrap, not to the next numbered line.
+        focus_editor()
         {:ok, _} = Quillex.Buffer.dispatch(active_buf(), [{:set_cursor, {1, 1}}])
         assert wait_until(fn -> cursor() == {1, 1} end)
-        focus_editor()
         key("down")
-        beat(800)
+        dwell(2_500)
 
         assert {1, col} = cursor()
 
         assert col > 1,
                "under wrap, Down should move along the wrapped line, got #{inspect(cursor())}"
 
-        Probes.take_screenshot("60_demo_07_wrap")
+        Probes.take_screenshot("60_demo_15_wrap")
         menu(:view, "word_wrap")
         assert wait_until(fn -> not root_state().word_wrap end)
+        dwell(2_000)
         {:ok, context}
       end
     end
 
-    # ────────────────────────────────────────────────────────────────────────
-    scenario "Act VI — finding things" do
-      given_ "a narrated introduction", context do
-        page("finding.txt", [""])
+    # ════════════════════════════════════════════════════════════════════════
+    # 5. MAKING IT YOURS
+    # ════════════════════════════════════════════════════════════════════════
 
+    scenario "Act VII — making it yours" do
+      given_ "a file with some structure to look at", context do
         narrate([
-          "Ctrl+F finds text in this buffer, and Ctrl+H replaces it.",
+          "Making it yours. All of this is in the View menu, and all",
+          "of it changes while you watch.",
           "",
-          "Ctrl+Shift+F is a different thing: the whole project, in a",
-          "pane with its own query, its own replacement and its own",
-          "exclude field. Results are grouped by file, with the match",
-          "marked inside the line.",
-          "",
-          "Dismiss a match and no replace can reach it. That is what",
-          "makes Replace All reviewable rather than an act of faith."
+          "Text size first — and notice the scrollbars, which have to",
+          "recompute the whole document's height every time it moves."
         ])
 
-        {:ok, context}
-      end
+        dwell(4_000)
 
-      when_ "Ctrl+F finds a word in this buffer, and F3 walks the matches", context do
-        page("in-buffer-find.txt", [
-          "the first needle is here",
-          "nothing on this line",
-          "and a second needle down here"
-        ])
-
-        {:ok, _} = Quillex.Buffer.dispatch(active_buf(), [{:set_cursor, {1, 1}}])
-        assert wait_until(fn -> cursor() == {1, 1} end)
-
-        key("f", [:ctrl])
+        :ok = Quillex.Buffer.activate(buffer_named("paging.txt"))
         beat(800)
-        assert root_state().show_search_bar, "Ctrl+F should open the find bar"
-
-        type("needle")
-        beat(1_000)
-
-        assert wait_until(fn -> match?({1, _}, cursor()) end, 6_000),
-               "the first match is on line 1, got #{inspect(cursor())}"
-
-        key("escape")
-        beat(500)
         focus_editor()
-        key("f3")
-        beat(900)
-
-        assert wait_until(fn -> match?({3, _}, cursor()) end, 6_000),
-               "F3 should move to the next match on line 3, got #{inspect(cursor())}"
-
-        Probes.take_screenshot("60_demo_08_find")
-        beat(900)
         {:ok, context}
       end
 
-      when_ "the project search runs", context do
-        key("f", [:ctrl, :shift])
-        beat(1_100)
-        assert root_state().show_project_search, "Ctrl+Shift+F should open the pane"
+      when_ "the text size is walked up and back down", context do
+        for size <- [28, 32, 16, 12, 24] do
+          Quillex.RadixCache.ViewStore.set_text_size(size)
+          assert wait_until(fn -> root_state().text_size == size end)
+          dwell(2_800)
+        end
 
-        type("hello")
-
-        # Typing schedules one debounced search per character; await_idle is
-        # the only moment the results are known to belong to the whole query
-        # rather than a prefix of it.
-        :ok = Quillex.RadixCache.ProjectSearchStore.await_idle()
-
-        assert wait_until(fn ->
-                 match?(%{status: {:done, _, _, _}}, root_state().project_search)
-               end),
-               "the project search never finished"
-
-        beat(1_700)
+        assert root_state().text_size == 24
+        Probes.take_screenshot("60_demo_16_text_size")
         {:ok, context}
       end
 
-      then_ "it found the word in both files", context do
-        %{files: files} = root_state().project_search
-        names = Enum.map(files, fn {path, _} -> Path.basename(path) end)
-
-        {:ok, notes} = Quillex.Buffer.fetch(buffer_named("notes.txt"))
-
-        assert "kernel.ex" in names
-        assert "notes.txt" in names,
-               "found #{inspect(names)}; query=#{inspect(root_state().project_search.query)} " <>
-                 "notes buffer=#{inspect(notes.lines)} dirty=#{notes.ref.dirty?}"
-
-        Probes.take_screenshot("60_demo_08_project_search")
-        {:ok, context}
-      end
-
-      then_ "clicking a result opens it in one reusable preview tab", context do
-        %{files: files} = root_state().project_search
-        {kernel_path, [kernel_match | _]} =
-          Enum.find(files, fn {p, _} -> Path.basename(p) == "kernel.ex" end)
-
-        tabs_before = length(root_state().buffers)
-
-        Probes.click_element(
-          "search_pane_match_#{kernel_match.line}_#{kernel_match.col}_#{kernel_path}"
-        )
-
-        assert wait_until(fn -> root_state().active_buf.name == "kernel.ex" end),
-               "clicking a result should open that file"
-
-        assert root_state().preview_buf_uuid == root_state().active_buf.uuid,
-               "a result opens into the preview slot, drawn in italics"
-
-        beat(1_400)
-
-        # The next result replaces it rather than adding a tab — walking thirty
-        # results leaves one tab, not thirty.
-        {notes_path, [notes_match | _]} =
-          Enum.find(files, fn {p, _} -> Path.basename(p) == "notes.txt" end)
-
-        Probes.click_element(
-          "search_pane_match_#{notes_match.line}_#{notes_match.col}_#{notes_path}"
-        )
-
-        assert wait_until(fn -> root_state().active_buf.name == "notes.txt" end)
-
-        assert length(root_state().buffers) <= tabs_before + 1,
-               "the preview tab should be reused, not accumulated"
-
-        Probes.take_screenshot("60_demo_09_preview_tab")
-        beat(1_200)
-        {:ok, context}
-      end
-
-      then_ "a match is dismissed, and then everything else is replaced", context do
-        %{files: files} = root_state().project_search
-        {path, [match | _]} = Enum.find(files, fn {p, _} -> Path.basename(p) == "notes.txt" end)
-
-        before = Enum.sum(Enum.map(files, fn {_p, ms} -> length(ms) end))
-
-        Probes.click_element("search_pane_dismiss_match_#{match.line}_#{match.col}_#{path}")
-
-        assert wait_until(fn ->
-                 %{files: after_files} = root_state().project_search
-                 Enum.sum(Enum.map(after_files, fn {_p, ms} -> length(ms) end)) == before - 1
-               end),
-               "dismissing a match should remove it from the results"
-
-        beat(1_500)
-
-        Probes.click_element("search_pane_field_replace")
-        beat(600)
-        type("g'day")
-        beat(800)
-        Probes.click_element("search_pane_replace_all")
-
-        assert wait_until(fn -> (root_state().status_message || "") =~ "Replaced" end),
-               "Replace All reported nothing"
-
-        beat(1_700)
-        {:ok, context}
-      end
-
-      then_ "the dismissed occurrence survived, which is the whole point", context do
-        {:ok, snapshot} = Quillex.Buffer.fetch(buffer_named("notes.txt"))
-        content = Enum.join(snapshot.lines, "\n")
-
-        assert content =~ "hello", "a dismissed match must be untouched by Replace All"
-        assert content =~ "g'day", "the matches that were not dismissed should have been replaced"
-
-        assert snapshot.ref.dirty?,
-               "an open file is replaced through its buffer, so Undo still works there"
-
-        Probes.take_screenshot("60_demo_09_replaced")
-        Quillex.RadixCache.ViewStore.close_project_search()
-        beat(1_000)
-        {:ok, context}
-      end
-    end
-
-    # ────────────────────────────────────────────────────────────────────────
-    scenario "Act VII — how it looks" do
-      given_ "a fresh page to narrate on", context do
-        page("themes.txt", [""])
-
-        narrate([
-          "Five themes. Each one paints the whole interface — the",
-          "editor, the tabs, the menus and the sidebar together —",
-          "because a light buffer inside a dark sidebar reads as",
-          "broken rather than as a theme.",
-          "",
-          "Editor text size and interface scale move independently,",
-          "so you can have large text in a normal-sized window."
+      then_ "tab stops change under the text that is already written", context do
+        narrate_aside([
+          "Tab stops, too — and the indentation that is already on",
+          "screen re-flows to match."
         ])
 
+        page("tabs.txt", [
+          "defmodule Indented do",
+          "\tdef one do",
+          "\t\t:deeper",
+          "\tend",
+          "end"
+        ])
+
+        dwell(3_000)
+
+        for width <- [8, 12, 2, 4] do
+          Quillex.RadixCache.ViewStore.set_tab_width(width)
+          assert wait_until(fn -> root_state().tab_width == width end)
+          dwell(4_000)
+        end
+
+        assert root_state().tab_width == 4
+        Probes.take_screenshot("60_demo_17_tab_stops")
         {:ok, context}
       end
 
-      when_ "each theme is chosen in turn", context do
+      then_ "and the theme repaints everything at once", context do
+        narrate_aside([
+          "And five themes. Each one paints the whole interface —",
+          "the editor, the tabs, the menus and the sidebar together —",
+          "because a light buffer in a dark sidebar reads as broken",
+          "rather than as a theme."
+        ])
+
+        :ok = Quillex.Buffer.activate(buffer_named("kernel.ex"))
+        beat(800)
+
         for {id, _label} <- Palette.themes() do
           Quillex.RadixCache.ViewStore.set_theme(id)
 
@@ -998,65 +1288,60 @@ defmodule Quillex.DemoSpex do
                  end),
                  "#{id} never reached the editor"
 
-          beat(1_600)
-          Probes.take_screenshot("60_demo_10_theme_#{id}")
+          dwell(3_500)
+          Probes.take_screenshot("60_demo_18_theme_#{id}")
         end
 
-        {:ok, context}
-      end
-
-      then_ "every surface followed", context do
         Quillex.RadixCache.ViewStore.set_theme(Palette.default())
         assert wait_until(fn -> root_state().theme == Palette.default() end)
-        beat(900)
 
         palette = Palette.get(Palette.default())
         assert child_state(:tab_bar).theme.background == palette.chrome_bg
         assert child_state(:icon_menu).theme.background == palette.chrome_bg
         assert child_state(:file_nav).theme.background == palette.pane_bg
-        {:ok, context}
-      end
-
-      then_ "and text size and interface scale move independently", context do
-        Quillex.RadixCache.ViewStore.set_text_size(30)
-        assert wait_until(fn -> root_state().text_size == 30 end)
-        beat(1_200)
-
-        Quillex.RadixCache.ViewStore.set_chrome_zoom(120)
-        assert wait_until(fn -> root_state().chrome_zoom == 120 end)
-        beat(1_200)
-        Probes.take_screenshot("60_demo_11_sizing")
-
-        Quillex.RadixCache.ViewStore.set_text_size(24)
-        Quillex.RadixCache.ViewStore.set_chrome_zoom(100)
-        assert wait_until(fn -> root_state().chrome_zoom == 100 end)
-        beat(800)
+        dwell(2_500)
         {:ok, context}
       end
     end
 
-    # ────────────────────────────────────────────────────────────────────────
-    scenario "Epilogue — and everything is written down" do
-      given_ "the closing narration", context do
-        page("closing.txt", [""])
+    # ════════════════════════════════════════════════════════════════════════
+    # AND WHAT YOU WERE TOLD
+    # ════════════════════════════════════════════════════════════════════════
+
+    scenario "Epilogue — what you just saw" do
+      given_ "the recap", context do
+        Quillex.RadixCache.ViewStore.close_file_nav()
+        beat(500)
 
         narrate([
-          "Every feature you have seen is in a menu, and every",
-          "shortcut is in Help, Keyboard Shortcuts. Nothing in Quillex",
-          "is discoverable only by already knowing about it.",
+          "So — that was:",
           "",
-          "That reference is generated from one registry, so a command",
-          "cannot exist without appearing in it."
+          "   1.  typing, undo, delete-line, indent, selection,",
+          "       the clipboard, and every way of moving a cursor",
+          "   2.  buffers and tabs, the project navigator, and",
+          "       noticing a file that changed underneath you",
+          "   3.  find here, find everywhere, dismiss and replace",
+          "   4.  structural highlighting, folding, guides, wrap",
+          "   5.  text size, tab stops and five themes, live",
+          "",
+          "That is the whole feature list. That is what 1.0 means."
         ])
 
+        dwell(6_000)
         {:ok, context}
       end
 
       when_ "the shortcut reference is opened", context do
+        narrate_aside([
+          "Every one of those is in a menu, and every shortcut is in",
+          "Help, Keyboard Shortcuts — generated from one registry, so",
+          "a command cannot exist without appearing in it."
+        ])
+
         menu(:help, :shortcuts)
         assert wait_until(fn -> root_state().show_shortcuts end)
-        beat(3_500)
-        Probes.take_screenshot("60_demo_12_shortcuts")
+        dwell(6_000)
+        Probes.take_screenshot("60_demo_19_shortcuts")
         {:ok, context}
       end
 
@@ -1080,22 +1365,53 @@ defmodule Quillex.DemoSpex do
         {:ok, context}
       end
 
-      then_ "it signs off", context do
-        page("closing.txt", [""])
+      then_ "and it signs off", context do
+        pace(:slow)
+        page("quillex.txt", [""])
 
+        # The first commit, 5 May 2021, contained nothing but this quote. It
+        # turned out to be the design document.
         narrate([
-          "That is Quillex 1.0.",
+          "                          .",
+          "                         /|",
+          "                        / |",
+          "                       /  |",
+          "                      /  /|",
+          "                     /  / |",
+          "                    /  /  |",
+          "                   /  /  /|",
+          "                  /  /  / |",
+          "                 /  /  /  |",
+          "                /  /  /  /",
+          "               /  /  /  /",
+          "              (  (  (  /",
+          "               \\  \\  \\/",
+          "                \\  \\/",
+          "                 \\/",
+          "                 |",
+          "                 |",
+          "                 V",
           "",
-          "Written in Elixir. Rendered by Scenic. A GUI over an OTP",
-          "backend, with a hard line between them.",
+          "   \"Simplicity is the highest goal, achievable when you",
+          "    have overcome all difficulties. After one has played",
+          "    a vast quantity of notes and more notes, it is",
+          "    simplicity that emerges as the crowning reward of art.\"",
           "",
-          "Demonstrated, and tested, by itself."
+          "                                        — Frederic Chopin",
+          "",
+          "",
+          "                      Q U I L L E X   1 . 0",
+          "",
+          "        Written in Elixir. Rendered by Scenic.",
+          "        Demonstrated, and tested, by itself."
         ])
 
-        beat(3_500)
-        Probes.take_screenshot("60_demo_13_end")
+        assert Enum.at(active_buffer().lines, 20) =~ "Simplicity is the highest goal",
+               "the quote should be on screen, got #{inspect(Enum.at(active_buffer().lines, 20))}"
 
-        assert Enum.at(active_buffer().lines, 0) == "That is Quillex 1.0."
+        Probes.take_screenshot("60_demo_20_end")
+        dwell(20_000)
+        pace(:normal)
         {:ok, context}
       end
     end

@@ -241,6 +241,27 @@ defmodule QuillEx.RootScene do
     dispatch_to_active_buffer(scene, {:move_cursor, :doc_end})
   end
 
+  # Ctrl+Shift+Home / Ctrl+Shift+End — the same jumps, selecting on the way.
+  # Every other movement key extends the selection when Shift is held, and
+  # these are movement keys.
+  def handle_input({:key, {:key_home, 1, mods}}, _context, scene)
+      when is_list(mods) do
+    if :ctrl in mods and :shift in mods do
+      dispatch_to_active_buffer(scene, {:select_to, {1, 1}})
+    else
+      {:noreply, scene}
+    end
+  end
+
+  def handle_input({:key, {:key_end, 1, mods}}, _context, scene)
+      when is_list(mods) do
+    if :ctrl in mods and :shift in mods do
+      dispatch_to_active_buffer(scene, {:select_to, document_end(scene)})
+    else
+      {:noreply, scene}
+    end
+  end
+
   # Handle Page Up — move cursor up by roughly one screen-height of lines.
   # Page size is estimated from the viewport frame height minus the top bar,
   # divided by the buffer line height. Matches GEdit behaviour: cursor jumps
@@ -480,19 +501,18 @@ defmodule QuillEx.RootScene do
     # SideNav and TextField both gate keyboard input on a focus flag; a click
     # decides which of them holds it. Skipped while a dialog is open so a
     # stray click can't pull keyboard focus out from under the dialog.
-    if click_y > @top_bar_height and not state.show_unsaved_prompt and
-         not state.show_nav_delete_prompt and not state.show_about and
-         not state.show_shortcuts do
-      side_pane = side_pane_id(state)
-
-      if side_pane_open?(state) and click_x < state.file_nav_width do
-        Scenic.Scene.put_child(scene, side_pane, :focus)
-        Scenic.Scene.put_child(scene, :buffer_pane, :blur)
+    scene =
+      if click_y > @top_bar_height and not state.show_unsaved_prompt and
+           not state.show_nav_delete_prompt and not state.show_about and
+           not state.show_shortcuts do
+        if side_pane_open?(state) and click_x < state.file_nav_width do
+          grant_keyboard(scene, :side_pane)
+        else
+          grant_keyboard(scene, :buffer)
+        end
       else
-        if side_pane_open?(state), do: Scenic.Scene.put_child(scene, side_pane, :blur)
-        Scenic.Scene.put_child(scene, :buffer_pane, :focus)
+        scene
       end
-    end
 
     # --- Search bar ---
     # Close the search bar when the click lands below it (in the buffer area).
@@ -601,6 +621,13 @@ defmodule QuillEx.RootScene do
   # Compute how many lines fit in the visible buffer area.
   # Uses the current viewport frame height, subtracts the top bar, and divides
   # by the buffer line height. Falls back to 20 if the frame is not yet set.
+  # The very last position in the active document.
+  defp document_end(scene) do
+    {:ok, snapshot} = Quillex.Buffer.fetch(scene.assigns.state.active_buf)
+    line = length(snapshot.lines)
+    {line, String.length(Enum.at(snapshot.lines, line - 1, "")) + 1}
+  end
+
   defp compute_page_size(scene) do
     case scene.assigns.state.frame do
       nil -> 20
@@ -631,7 +658,7 @@ defmodule QuillEx.RootScene do
   defp keyboard_overlay_open?(state) do
     state.show_goto_line or
       state.show_search_bar or state.show_unsaved_prompt or state.show_file_picker or
-      state.show_nav_delete_prompt or
+      state.show_nav_delete_prompt or state.show_save_settings_prompt or
       Map.get(state, :show_about, false) or Map.get(state, :show_shortcuts, false)
   end
 
@@ -1091,6 +1118,7 @@ defmodule QuillEx.RootScene do
     :highlight_current_line,
     :highlight_current_column,
     :word_wrap,
+    :auto_indent,
     :tab_width,
     :text_size,
     :fold_level,
@@ -1118,6 +1146,7 @@ defmodule QuillEx.RootScene do
         :highlight_current_line,
         :highlight_current_column,
         :word_wrap,
+        :auto_indent,
         :tab_width,
         :text_size,
         :chrome_zoom,
@@ -1262,6 +1291,10 @@ defmodule QuillEx.RootScene do
         Scenic.Scene.put_child(scene, :buffer_pane, {:action, :select_all})
         {:noreply, scene}
 
+      "delete_line" ->
+        Scenic.Scene.put_child(scene, :buffer_pane, {:action, :delete_line})
+        {:noreply, scene}
+
       "find" ->
         # Find - show search bar
         show_search_bar(scene)
@@ -1290,6 +1323,10 @@ defmodule QuillEx.RootScene do
 
       "line_numbers" ->
         Quillex.RadixCache.ViewStore.toggle_line_numbers()
+        {:noreply, scene}
+
+      "auto_indent" ->
+        Quillex.RadixCache.ViewStore.toggle_auto_indent()
         {:noreply, scene}
 
       "word_wrap" ->
@@ -1327,6 +1364,9 @@ defmodule QuillEx.RootScene do
         )
 
         {:noreply, scene}
+
+      "save_default_settings" ->
+        show_save_settings_dialog(scene)
 
       "about" ->
         show_about_dialog(scene)
@@ -1545,10 +1585,24 @@ defmodule QuillEx.RootScene do
   # The pane owns its fields and its presentation; the scene owns what a search
   # means. Every action it can take is one of these.
 
+  # A pane reporting that a click just gave it the keyboard. Clicks are
+  # positional: they arrive at whichever component was under the pointer and
+  # never at this scene, so this event is the only way it learns that focus
+  # moved. Its job is to take the keyboard off everyone else.
+  def handle_event({:focus_taken, :buffer_pane}, _from, scene) do
+    {:noreply, grant_keyboard(scene, :buffer)}
+  end
+
+  def handle_event({:focus_taken, pane}, _from, scene)
+      when pane in [:project_search_pane, :file_nav] do
+    {:noreply, grant_keyboard(scene, :side_pane)}
+  end
+
+  def handle_event({:focus_taken, _other}, _from, scene), do: {:noreply, scene}
+
   def handle_event({:search_pane, :close}, _from, scene) do
     Quillex.RadixCache.ViewStore.close_project_search()
-    Scenic.Scene.put_child(scene, :buffer_pane, :focus)
-    {:noreply, scene}
+    {:noreply, grant_keyboard(scene, :buffer)}
   end
 
   def handle_event({:search_pane, :query_changed, query}, _from, scene) do
@@ -1607,9 +1661,7 @@ defmodule QuillEx.RootScene do
       Logger.info("File nav: opening file #{item_id}")
       # Opening a file moves the user's attention to the editor: hand keyboard
       # focus back so they can type immediately (and the nav stops eating keys).
-      Scenic.Scene.put_child(scene, :file_nav, :blur)
-      Scenic.Scene.put_child(scene, :buffer_pane, :focus)
-      open_file(scene, item_id)
+      open_file(grant_keyboard(scene, :buffer), item_id)
     else
       Logger.debug("File nav: not a regular file: #{item_id}")
       {:noreply, scene}
@@ -1702,6 +1754,61 @@ defmodule QuillEx.RootScene do
   #           files requires chained state machines and is left for a later cycle.
   # :discard — close without saving (changes are lost).
   # :cancel  — leave the buffer open with its unsaved changes intact.
+
+  # --- Save Settings as Default ---
+  #
+  # Every other editor writes your preferences back the moment you change one,
+  # which is fine until you widen the tabs to read somebody else's file and
+  # find the wide tabs waiting for you tomorrow. Here, changing a setting
+  # changes this session; making it permanent is this, and it says so first.
+  defp show_save_settings_dialog(scene) do
+    state = scene.assigns.state
+
+    graph =
+      scene.assigns.graph
+      |> ScenicWidgets.ConfirmDialog.add_to_graph(
+        %{
+          frame: state.frame,
+          title: "Save these settings as the default?",
+          message:
+            "Every new session will start with the settings you have now — " <>
+              "theme, tab width, text size, the View menu toggles.\n\n" <>
+              "Written to #{Quillex.SettingsFile.path()}.\n\n" <>
+              "Nothing is saved until you do this, so changing a setting only " <>
+              "ever affects the session you are in.",
+          buttons: [{:discard, "Save as Default"}, {:cancel, "Cancel"}]
+        },
+        id: :save_settings_prompt
+      )
+
+    new_state = %{state | show_save_settings_prompt: true}
+
+    new_scene =
+      scene
+      |> assign(state: new_state, graph: graph)
+      |> push_graph(graph)
+
+    Scenic.Scene.put_child(new_scene, :buffer_pane, :blur)
+    {:noreply, new_scene}
+  end
+
+  def handle_event({:confirm_dialog_response, :save_settings_prompt, action}, _from, scene) do
+    state = scene.assigns.state
+    graph = Scenic.Graph.delete(scene.assigns.graph, :save_settings_prompt)
+    new_state = %{state | show_save_settings_prompt: false}
+
+    if action == :discard do
+      {:ok, path} = Quillex.SettingsFile.save(Quillex.RadixCache.ViewStore.get_state())
+      Quillex.RadixCache.ViewStore.show_status("Saved these settings as default (#{path})", :info)
+    end
+
+    new_scene =
+      scene
+      |> assign(state: new_state, graph: graph)
+      |> push_graph(graph)
+
+    {:noreply, grant_keyboard(new_scene, :buffer)}
+  end
 
   # --- About dialog ---
   # Any response (OK button, Enter, Escape) just dismisses.
@@ -2135,7 +2242,8 @@ defmodule QuillEx.RootScene do
       old_state
       | show_project_search: true,
         project_search_query: seed,
-        project_search_focus_field: focus
+        project_search_focus_field: focus,
+        keyboard_owner: :side_pane
     }
 
     new_graph =
@@ -2225,6 +2333,30 @@ defmodule QuillEx.RootScene do
 
   defp side_pane_id(%{show_project_search: true}), do: :project_search_pane
   defp side_pane_id(_state), do: :file_nav
+
+  # Hand the keyboard to exactly one pane.
+  #
+  # Both halves matter and both used to be done by hand at each call site: the
+  # winner is told to focus, the loser is told to blur, AND the state records
+  # who won — because the renderizer rebuilds the buffer pane from that state,
+  # and a rebuild that disagrees hands the keyboard back to a pane that was
+  # supposed to have let go of it.
+  defp grant_keyboard(scene, owner) when owner in [:buffer, :side_pane] do
+    state = scene.assigns.state
+    side_pane = side_pane_id(state)
+
+    case owner do
+      :buffer ->
+        if side_pane_open?(state), do: Scenic.Scene.put_child(scene, side_pane, :blur)
+        Scenic.Scene.put_child(scene, :buffer_pane, :focus)
+
+      :side_pane ->
+        Scenic.Scene.put_child(scene, :buffer_pane, :blur)
+        Scenic.Scene.put_child(scene, side_pane, :focus)
+    end
+
+    assign(scene, state: %{state | keyboard_owner: owner})
+  end
 
   defp do_show_search_bar(scene, old_state, initial_query, replace_mode) do
     new_state = %{

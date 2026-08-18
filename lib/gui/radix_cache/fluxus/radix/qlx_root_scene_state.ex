@@ -26,6 +26,7 @@ defmodule QuillEx.RootScene.State do
             highlight_current_line: false,
             highlight_current_column: false,
             word_wrap: false,
+            auto_indent: true,
             tab_width: 4,
             text_size: 24,
             fold_level: 1,
@@ -60,6 +61,21 @@ defmodule QuillEx.RootScene.State do
             # next result replaces it. Double-clicking the tab, or editing the
             # file, promotes it to an ordinary tab and clears this.
             preview_buf_uuid: nil,
+            # Which pane owns the keyboard: :buffer or :side_pane.
+            #
+            # Focus used to be derived twice, in two places that disagreed. The
+            # renderizer recreated the buffer pane with `focused: not
+            # show_search_bar`, so any re-render while the project search pane
+            # was open handed the keyboard BACK to the buffer without taking it
+            # off the pane — and both then consumed every keystroke. The
+            # symptom was text appearing in the document and the search field
+            # at the same time.
+            #
+            # So it is recorded once, here, and the renderizer reads it rather
+            # than guessing. Clicks reach a component, not this scene (see the
+            # note on :focus_taken in the scene), so the components report the
+            # click and this scene decides who holds the keyboard.
+            keyboard_owner: :buffer,
             # Modal dialogs
             show_file_picker: false,
             show_unsaved_prompt: false,
@@ -69,6 +85,9 @@ defmodule QuillEx.RootScene.State do
             quit_dirty_buffers: [],
             pending_nav_delete: [],
             show_nav_delete_prompt: false,
+            # "Save Settings as Default" explains itself before it writes
+            # anything — it is the one action here that outlives the session.
+            show_save_settings_prompt: false,
             # Go to Line (Ctrl+G). The digits are collected by RootScene itself
             # rather than by a text-input component: the prompt accepts only
             # digits, so a full editable field would be more machinery than the

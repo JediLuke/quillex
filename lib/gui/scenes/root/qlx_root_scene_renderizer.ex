@@ -191,6 +191,7 @@ defmodule QuillEx.RootScene.Renderizer do
              highlight_current_line: state.highlight_current_line,
              highlight_current_column: state.highlight_current_column,
              wrap_mode: if(state.word_wrap, do: :word, else: :none),
+             auto_indent: state.auto_indent,
              tab_width: state.tab_width,
              font: Quillex.GUI.Theme.editor_font(state.text_size),
              highlight_styles: highlight_styles(state),
@@ -220,6 +221,7 @@ defmodule QuillEx.RootScene.Renderizer do
         old_state.highlight_current_line != state.highlight_current_line or
         old_state.highlight_current_column != state.highlight_current_column or
         old_state.word_wrap != state.word_wrap or
+        old_state.auto_indent != state.auto_indent or
         old_state.tab_width != state.tab_width or
         old_state.text_size != state.text_size or
         old_state.syntax_highlighting != state.syntax_highlighting or
@@ -246,6 +248,7 @@ defmodule QuillEx.RootScene.Renderizer do
            highlight_current_line: state.highlight_current_line,
            highlight_current_column: state.highlight_current_column,
            wrap_mode: if(state.word_wrap, do: :word, else: :none),
+           auto_indent: state.auto_indent,
            tab_width: state.tab_width,
            font: Quillex.GUI.Theme.editor_font(state.text_size),
            highlight_styles: highlight_styles(state),
@@ -872,6 +875,7 @@ defmodule QuillEx.RootScene.Renderizer do
           command_item.(:paste),
           %Divider{id: "edit_selection_divider"},
           command_item.(:select_all),
+          command_item.(:delete_line),
           %Divider{id: "edit_find_divider"},
           command_item.(:find),
           command_item.(:find_replace),
@@ -910,6 +914,13 @@ defmodule QuillEx.RootScene.Renderizer do
             label: "Word Wrap",
             checked?: state.word_wrap,
             tooltip: "Wrap long lines at word boundaries instead of scrolling horizontally."
+          },
+          %Toggle{
+            id: "auto_indent",
+            label: "Auto Indent",
+            checked?: state.auto_indent,
+            tooltip:
+              "Carry the current line's indentation onto the next one when you press Enter."
           },
           %Toggle{
             id: "matching_brace",
@@ -995,6 +1006,15 @@ defmodule QuillEx.RootScene.Renderizer do
             label: "Keyboard Shortcuts in Menus",
             checked?: state.show_menu_shortcuts,
             tooltip: "Show or hide the right-aligned shortcut column in menus."
+          },
+          # Changing a setting changes this session. Making it the one every
+          # session starts with is a separate, deliberate act — so it is a
+          # command sitting under the settings it saves, not a toggle.
+          %Divider{id: "view_defaults_divider"},
+          %Item{
+            id: "save_default_settings",
+            label: "Save Settings as Default",
+            tooltip: "Start every future session with the settings you have now."
           }
         ]
         |> List.flatten()
@@ -1088,8 +1108,12 @@ defmodule QuillEx.RootScene.Renderizer do
     # TextField data for the active buffer (using state settings)
     wrap_mode = if state.word_wrap, do: :word, else: :none
 
-    # Buffer should NOT be focused if search bar is visible (search bar takes focus)
-    buffer_focused = not state.show_search_bar
+    # Who holds the keyboard is recorded in the state, not inferred here. This
+    # line used to read `not state.show_search_bar`, which meant that every
+    # time the pane was recreated while the project search pane was open, the
+    # buffer quietly took the keyboard back without the pane losing it — and
+    # both consumed each keystroke.
+    buffer_focused = state.keyboard_owner == :buffer and not state.show_search_bar
 
     text_field_data =
       %{
@@ -1114,6 +1138,7 @@ defmodule QuillEx.RootScene.Renderizer do
         highlight_current_line: state.highlight_current_line,
         highlight_current_column: state.highlight_current_column,
         wrap_mode: wrap_mode,
+        auto_indent: state.auto_indent,
         tab_width: state.tab_width,
         # QA A5: a thin line either side of the text pane, none on top/bottom
         # (top would double the tab bar's edge; bottom hugs the window edge)

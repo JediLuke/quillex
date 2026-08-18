@@ -96,6 +96,13 @@ defmodule Quillex.Commands do
       description: "Select the entire contents of the active buffer."
     },
     %{
+      id: :delete_line,
+      label: "Delete Line",
+      shortcut: "Ctrl+D",
+      menu: :edit,
+      description: "Remove the line the cursor is on."
+    },
+    %{
       id: :find,
       label: "Find",
       shortcut: "Ctrl+F",
@@ -234,10 +241,28 @@ defmodule Quillex.Commands do
     %{
       id: :extend_selection,
       label: "Extend Selection",
-      shortcut: "Shift+Arrows",
+      shortcut: "Shift+Move",
       menu: nil,
       section: "Selecting",
-      description: "Hold Shift while moving the cursor to select as you go."
+      description:
+        "Hold Shift while moving the cursor — arrows, Home, End, Ctrl+Home, " <>
+          "Ctrl+End — to select as you go."
+    },
+    %{
+      id: :delete_prev_word,
+      label: "Delete Previous Word",
+      shortcut: "Ctrl+Backspace",
+      menu: nil,
+      section: "Editing",
+      description: "Remove the word before the cursor."
+    },
+    %{
+      id: :delete_next_word,
+      label: "Delete Next Word",
+      shortcut: "Ctrl+Delete",
+      menu: nil,
+      section: "Editing",
+      description: "Remove the word after the cursor."
     },
     %{
       id: :indent,

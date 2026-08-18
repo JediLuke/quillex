@@ -83,8 +83,9 @@ defmodule Quillex.MenuLayoutSpex do
         {:ok, context}
       end
 
-      then_ "View reads as panels, text, folding, sizes, theme, preferences", context do
-        assert [panels, text, folding, sizes, theme, preferences] = groups(:view)
+      then_ "View reads as panels, text, folding, sizes, theme, preferences, defaults",
+            context do
+        assert [panels, text, folding, sizes, theme, preferences, defaults] = groups(:view)
 
         assert panels == ["file_nav"]
         assert "line_numbers" in text and "word_wrap" in text
@@ -92,6 +93,10 @@ defmodule Quillex.MenuLayoutSpex do
         assert sizes == ["text_size", "tab_width", "chrome_zoom"]
         assert hd(theme) == "theme_heading"
         assert preferences == ["action_feedback", "menu_shortcuts"]
+
+        # The one row in this menu that outlives the session gets a group of
+        # its own, so it cannot be read as another preference toggle.
+        assert defaults == ["save_default_settings"]
         {:ok, context}
       end
 
@@ -120,7 +125,7 @@ defmodule Quillex.MenuLayoutSpex do
         assert [history, clipboard, selection, find, project, navigate] = groups(:edit)
         assert history == ["undo", "redo"]
         assert clipboard == ["cut", "copy", "paste"]
-        assert selection == ["select_all"]
+        assert selection == ["select_all", "delete_line"]
         assert find == ["find", "find_replace", "find_next"]
         assert project == ["find_in_project", "replace_in_project"]
         assert navigate == ["goto_line"]

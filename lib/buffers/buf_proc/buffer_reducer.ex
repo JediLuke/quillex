@@ -218,6 +218,16 @@ defmodule Quillex.Buffer.Process.Reducer do
     |> Navigation.move_cursor({c.line + 1, String.length(indent) + 1})
   end
 
+  # Enter with auto-indent turned off: a plain new line, cursor at column 1.
+  def process(%BufState{} = buf, {:newline, :no_indent}) do
+    c = buf.cursor
+
+    buf
+    |> History.push()
+    |> Document.insert_new_line(:at_cursor)
+    |> Navigation.move_cursor({c.line + 1, 1})
+  end
+
   # here `below_cursor` implies the cursor is in NORMAL mode, though I dunno if it makes any difference really
   def process(%BufState{} = buf, {:newline, :below_cursor}) do
     c = buf.cursor
@@ -392,6 +402,43 @@ defmodule Quillex.Buffer.Process.Reducer do
 
     buf
     |> Navigation.move_cursor(new_cursor_coords)
+  end
+
+  # Ctrl+Backspace and Ctrl+Delete: remove a whole word rather than a
+  # character. The span is the same one the word-wise cursor movement uses, so
+  # deleting a word and moving over it agree about where words begin.
+  def process(%BufState{} = buf, {:delete, :prev_word}) do
+    {line, target_col} = Quillex.Buffer.Utils.prev_word_coords(buf)
+    c = buf.cursor
+
+    if target_col == c.col do
+      buf
+    else
+      delete_span(buf, line, target_col, c.col)
+    end
+  end
+
+  def process(%BufState{} = buf, {:delete, :next_word}) do
+    {line, target_col} = Quillex.Buffer.Utils.next_word_coords(buf)
+    c = buf.cursor
+
+    if target_col == c.col do
+      buf
+    else
+      delete_span(buf, line, c.col, target_col)
+    end
+  end
+
+  defp delete_span(buf, line, from_col, to_col) do
+    text = Enum.at(buf.data, line - 1, "")
+    before = String.slice(text, 0, from_col - 1)
+    rest = String.slice(text, to_col - 1, String.length(text) - to_col + 1)
+
+    buf
+    |> History.push()
+    |> Map.put(:data, List.replace_at(buf.data, line - 1, before <> rest))
+    |> Map.put(:dirty?, true)
+    |> Navigation.move_cursor({line, from_col})
   end
 
   # Mark buffer clean without writing to disk (used by FileAPI after it writes directly)
