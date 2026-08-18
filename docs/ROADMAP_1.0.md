@@ -624,13 +624,37 @@ their own — every one of them previously masked by inherited state:
   click works — so the drag helper clicks first, which is what a real pointer
   does anyway.
 
-**`04` and `30` have the same disease.** Found while measuring: at the *session
-start* commit `d1b6446`, `04_view_settings_spex.exs` failed 1, 0 and 3
-scenarios over three runs, and `30_clipboard_spex.exs` failed 3 scenarios where
-it now fails 1. Interleaved A/B in two fresh worktrees put `04` at parity
-(BASE 1.33 failures/run, HEAD 1.33) — it is noise, not regression, and it is
-the same cause: scenarios inheriting each other's buffers and focus. They are
-next in line for the same treatment.
+### The suite as a whole, measured 2026-08-18
+
+Splitting `07` fixed `07`. It did not fix the suite, because the disease is not
+one file's — it is what happens when 58 files share one app instance in a
+random order. Full-suite runs, both arms:
+
+| Arm | Failures |
+|---|---|
+| `d1b6446` (session start) | 14 |
+| after Part II | **12** |
+
+Seven are common to both arms. Nothing this pass added is on the list; the
+three that were — `43_goto_line` and `44_wrapped_cursor` ×2 — traced to a
+defect in the *helper*, not the spex:
+
+> `ensure_editor_focused/0` silently returned `:ok` when it could not find the
+> editor's frame, and never checked that its click had taken focus. Both
+> failures surface several steps later as a keystroke that "did nothing" —
+> which is exactly what made these failures unreadable. It now targets the
+> `:buffer_pane` entry specifically (the search pane publishes a `text_buffer`
+> entry too), verifies the pane holds the keyboard, and **raises** rather than
+> quietly doing nothing.
+
+**Still carrying it**, in rough order of how often they fail:
+`04_view_settings`, `30_clipboard`, `35_folding`, `27_side_nav_scroll`,
+`31_file_nav_resize`, `11_run_verification`, `19_input_focus_routing`,
+`26_release_visuals`, `22_scrollbar_drag` (shift+scroll, chronic since Phase
+3). Each passes alone and fails in company. The treatment is known and now
+demonstrated: own your setup, prove your preconditions, derive every
+coordinate from the pane's live frame, and put back anything you pointed the
+app at.
 
 **The measurement protocol above stays.** It is what kept two false alarms out
 of this session: `04` and `30` both looked like regressions from the theme and
