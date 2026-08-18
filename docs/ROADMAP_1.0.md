@@ -3,6 +3,11 @@
 *Drafted 2026-07-31, from: the codebase tour (`docs/CODEBASE_TOUR.md`), the
 2026-07-31 manual-QA notes, `TODO_TEXT_EDITOR_FEATURES.md`, and
 `docs/claude_notes/franklin_known_failures_2026_04_22.md`.*
+*Part II added 2026-08-17.*
+
+> **Current work is [Part II — The Product Pass](#part-ii--the-product-pass-2026-08-17).**
+> Phases 1–5 below are the original engineering gates (G1–G4); they are
+> historical and largely closed. Read Part II first.
 
 ## What 1.0 means
 
@@ -10,8 +15,12 @@ Quillex 1.0 is **the `qlx` command you'd happily put on someone else's
 machine**: open a file, edit with keyboard *and mouse*, find/replace, save,
 close — with no input leaking between panes, a window that reflows when
 resized, and a green test suite whose spex files are themselves part of the
-showcase. Not in 1.0: syntax highlighting, minimap, multiple cursors,
-regex search (all explicitly deferred in the TODO's "advanced" tier).
+showcase. Not in 1.0: minimap, multiple cursors.
+
+*Scope correction, 2026-08-17: this line originally also deferred **syntax
+highlighting** and **regex search**. Both shipped — structural highlighting
+(weight/slant/underline, no palette) in 104c849, and `:regex` /
+`:case_sensitive` search options in 605fc59.*
 
 The definition of done, as four gates:
 
@@ -128,7 +137,7 @@ item. Do them as one arc:
 | 3.2 | **Drag to select, double-click word, click-clears-selection** — the machinery already existed (`text_drag` in TextField); the monolith scenarios were aiming at the top bar (written for a local-coords model that never matched reality). With corrected coordinates all three pass. Shift+click extend still unverified. | ✅ (verify shift+click) |
 | 3.3 | **Shift+Scroll horizontal** — mechanism verified working end-to-end (shift tracked → axes swapped → offset moves → semantic reports it). The monolith failure was focus-dependence: shift tracking is gated on keyboard focus, which 20 prior stateful scenarios can't guarantee. Extracted to `22_scrollbar_drag_spex.exs` with a focus-guaranteed setup. Scrollbar-thumb drag from the same spex still fails — next candidate: thumb hit-test vs the semantic-frame-derived grab point (see 22's log trail). | ◐ shift+scroll ✅, thumb drag open |
 | 3.4 | **Typing after search close** — known-failure #2 (07:572): focus doesn't return to the buffer pane when the search bar closes. Related to the Phase 1 focus arbiter — likely trivial after 1.2. |
-| 3.5 | **Split `07_integration_v1_spex.exs`** into per-feature files, each owning its state setup. **Started 2026-07-31**: the three chronically flaky scenarios (click-cursor, thumb-drag, shift+scroll) extracted to 22/23 with self-contained, focus-guaranteed setups. Two structural lessons now encoded in the new files: (a) never hardcode window-size-dependent coordinates — the WM may grant less than requested, the layout reflows, and `ViewPort.info` reports only the *configured* size; use `SemanticHelpers.get_buffer_frame()` (TextField now publishes its actual frame in semantic metadata); (b) a scenario must prove its own preconditions (focus, typed text visible) before asserting. Also learned: 07 assumes near-boot state — never run other spex before it. | ◐ started |
+| 3.5 | **Split `07_integration_v1_spex.exs`** into per-feature files, each owning its state setup. **Started 2026-07-31**: the three chronically flaky scenarios (click-cursor, thumb-drag, shift+scroll) extracted to 22/23 with self-contained, focus-guaranteed setups. Two structural lessons now encoded in the new files: (a) never hardcode window-size-dependent coordinates — the WM may grant less than requested, the layout reflows, and `ViewPort.info` reports only the *configured* size; use `SemanticHelpers.get_buffer_frame()` (TextField now publishes its actual frame in semantic metadata); (b) a scenario must prove its own preconditions (focus, typed text visible) before asserting. Also learned: 07 assumes near-boot state — never run other spex before it. **Promoted and re-evidenced 2026-08-17 — see Part II item 9.** | ◐ started |
 | 3.6 | Small-but-1.0-worthy TODO items. **Audited 2026-07-31, the TODO was stale**: Select All (Ctrl+A → `:select_all`) and auto-indent on newline (`{:newline, :at_cursor}` extracts + applies leading whitespace, reducer-tested) were **already implemented** ✅. **Line:col indicator** ✅ implemented as `ScenicWidgets.CursorPosLabel` — a ~100-line contrib component that just subscribes to the pane source (the store line in miniature; RootScene uninvolved after creation), slotted in the top bar between tabs and icon menu. **About splash** ✅ 2026-07-31 (late): `ScenicWidgets.PopupModal` implemented (dimmed overlay, centred panel, Escape/Enter/OK dismiss, `{:popup_modal_response, id, action}` contract) — the About box now shows the full Chopin quote from commit #1 with the project link; verified by `26_about_dialog_spex.exs` (2 scenarios green, including focus return on dismiss). **3.6 complete.** |
 
 ## Phase 4 — The spex suite as a showcase
@@ -293,7 +302,335 @@ a human pass on a clean machine (the final 1.0 sign-off).
 
 ---
 
-## Sequencing
+# Part II — The Product Pass (2026-08-17)
+
+Phases 1–5 asked *"does it work?"*. This part asks *"would you hand it to
+someone?"*
+
+**Every feature Quillex needs for 1.0 now exists.** Syntax highlighting was the
+last one in. What remains is not capability but *finish*: features that work but
+cannot be discovered, interactions that succeed but say nothing while they do,
+and one pane that needs to grow up.
+
+> 1.0 is reached when a competent editor user can sit down at Quillex, find
+> every feature without being told it exists, and never be surprised by what an
+> interaction does.
+
+The pass is **bounded** — the list below is the whole of it. When it is done,
+1.0 is cut. The demo spex is deliberately last: it can only be written once the
+feature set stops moving.
+
+## ✅ Done (committed 2026-08-17)
+
+**1. File navigator.** Drag-to-move had no feedback and could only drop onto
+what was already on screen. Now: spring-loaded folders (550ms hover opens a
+collapsed directory), edge auto-scroll, a ghost label on the cursor, themed drop
+colours, and drop-on-empty-space meaning "the project root". Plus the reset bug
+— the tree lost its expansion twice per file operation, because a status toast
+put the root scene on its z-order rebuild path, and that path deleted the
+SideNav process outright.
+
+**2. Tab bar.** Reordering worked but was silent. Now a blue drop line anchored
+to the dragged tab's slot, a lifted background on the tab in flight, and a 5px
+threshold so ordinary clicks don't flash it.
+
+**3. Search backend** (the half of item 4 that has no UI).
+`Quillex.Buffer.Core.Search.compile/2` is the single definition of what a query
+means; both project backends and the in-buffer popup read it, so they cannot
+diverge. `:case_sensitive` and `:regex` threaded through, defaults unchanged.
+Invalid patterns are a boundary, not a bug — `{:error, {:bad_pattern, message}}`
+rather than a crashed search task.
+
+## 4. The SearchPane
+
+The largest remaining item. The engine is already good: `Quillex.Search.Project`
+overlays dirty buffers onto backend results, routes replacements through open
+buffers so Undo works there, and falls back from ripgrep to a pure-Elixir walk.
+What it lacks is a surface.
+
+Results currently render into a `ScenicWidgets.SideNav`, with actions smuggled
+through synthetic `qlx-search://…` item ids because SideNav's only outbound
+event is `{:sidebar, :navigate, id}`. **That encoding layer goes away.**
+
+### Why a new component
+
+SideNav rows are one line of text plus a chevron: no header region, no rich
+spans within a row, no per-row hover actions. A search pane needs all three.
+Teaching SideNav to do them would hand the file navigator machinery it never
+uses and permanently couple two panes that should evolve separately.
+
+Build `ScenicWidgets.SearchPane` in **scenic-widget-contrib**, generic over its
+data the way SideNav and TabBar are — Quillex supplies results and handles
+events. It reuses the side-pane *slot*, not the SideNav widget: `side_pane_id/1`
+and `maybe_update_file_nav/3` in `QuillEx.RootScene.Renderizer` already swap two
+components through one frame, width and resize handle, so a third occupant costs
+nothing structurally.
+
+### Decisions (locked 2026-08-17)
+
+| Question | Decision |
+|---|---|
+| Where does the query live? | **Separate.** `Ctrl+F` stays the floating in-buffer popup. `Ctrl+Shift+F` opens the pane, which owns its own query + replace fields. Two boxes, two jobs, no interaction. |
+| Per-row actions | Dismiss a match, dismiss a file, replace this one match, replace all in this file. |
+| Scope UI | **Both** — keep the directory checkbox tree, add an exclude-glob field above it. |
+| Clicking a result | Opens in a **reusable preview tab** — walking 30 results leaves one tab, not 30. **Double-clicking the tab promotes it to permanent** (as does editing it). |
+| Result freshness | **Live for open buffers only.** Re-search dirty buffers as you type, debounced; on-disk results stay put until refreshed. Never a full tree walk on a keystroke. |
+| Search options | `case_sensitive` and `regex` toggles in the header. Whole-word declined. |
+
+### Layout
+
+```
+┌ SEARCH ──────────────────────────┐
+│ [query................]  Aa   .* │  Aa = case sensitive, .* = regex
+│ [replace..............]  [ All ] │
+│ exclude [ **/deps/**           ] │
+│ SCOPE  (2 excluded)              │
+│   [x] lib/    [ ] deps/          │
+├──────────────────────────────────┤
+│ ▾ lib/search/project.ex   (3) ↺ ×│
+│    28  defp overlay_dirty…    ↺ ×│
+│              ^^^^^^^ highlighted │
+└──────────────────────────────────┘
+```
+
+### Notes for whoever builds it
+
+- **Match highlighting inside a row** is why rows need spans. `Match` already
+  carries `line`, `col` and `matched`, and `ProjectSearchTree.excerpt/2` already
+  trims the line around the match — but it flattens to a string. The new row
+  contract must keep the offset so the matched text can be drawn distinctly.
+- **Dismissal is the safety valve** — it is what makes Replace All reviewable
+  rather than an act of faith. Dismissed matches must be excluded from every
+  replace path, not merely hidden.
+- **`ProjectSearchStore` already holds `case_sensitive` and `regex`** in its
+  snapshot and re-runs on change; `search_opts/1` converts them to backend
+  options. The header binds to these.
+- The store's `replace_all` can return `{:error, {:bad_pattern, message}}` — the
+  pane must show it, since a regex typed live is wrong most of the time.
+
+## 5. Go to Line
+
+`Ctrl+G`. Missing entirely — no implementation anywhere in `lib/`. It sits in
+Phase 3's "Should Have" beside Find and Replace, both long since done, so it is
+the last hole in navigation.
+
+Smallest item here: an input modal (`ScenicWidgets.PopupModal` exists and is
+used by About) collecting a line number, then the existing
+`{:move_cursor, {line, col}}` action. Clamp out-of-range rather than refusing —
+`999999` should mean "end of document", because that is what people type when
+they mean that.
+
+## 5b. The cursor lives in source space; the screen is in display space
+
+Two symptoms reported 2026-08-17, **one root cause**. Word wrap turns one source
+line into several display rows, and the cursor code was never told.
+
+**a) Down/Up arrow skips the rest of a wrapped line.** With the cursor on the
+first visual row of a line that wraps to three, Down jumps to the *next numbered
+line* instead of the second visual row. `Reducer.move_cursor/2` is literally
+`line + 1` over `state.lines` (`text_field/reducer.ex:1308`) — source lines, no
+notion of wrap.
+
+**b) Clicking past the end of a wrapped row lands on the wrong column.**
+`State.click_to_cursor/2` correctly maps the click's Y to a display row and then
+to a source line (`display_to_source_line/2`) — but it then measures X against
+the **entire source line** from its first character. Click on the second visual
+row and the column is computed as though you had clicked the first. Note the
+horizontal clamp itself is already right: `find_column/5` returns `length + 1`
+when the click runs past the last glyph, so clicking past end-of-line does mean
+end-of-line **when wrap is off**. Reproduce with wrap on before assuming
+otherwise.
+
+**Why this is trickier than it looks.** Vertical movement has to happen in
+display space (row above/below, preserving a *goal column* measured in display
+columns), while the cursor is stored — and must stay stored — as a source
+`{line, col}`, because that is what the buffer, undo, search and every other
+consumer speak. So each vertical move is: source → display, move, display →
+source. The goal column must survive several moves through short rows without
+being clipped, which means it cannot be re-derived from the cursor each time.
+
+**Precedent in the codebase:** this exact confusion was already fixed once for
+scrolling — Phase 4b records that `ensure_cursor_visible` "computed scroll
+targets from SOURCE line numbers, so with word wrap on the end of a document was
+unreachable. Now uses the display line." Display-awareness was retrofitted to
+scrolling and never extended to click mapping or vertical movement.
+
+**Watch the conformance oracle.** `25_model_conformance_spex.exs` folds
+operations through the pure `Reducer`, which knows only source lines. If the GUI
+starts moving by display row, the two diverge under wrap — which is very likely
+the same class as the already-logged open question there (oracle `{1,17}` vs GUI
+`{1,8}`). Decide deliberately: either the oracle learns about wrap, or vertical
+movement is declared a view-local concern and excluded from conformance.
+
+## 6. Themes
+
+Structural syntax highlighting (weight/slant/underline) is settled and stays as
+it is — it works for every kind of colour vision and needs no palette. Themes
+are about the *surfaces*, not the tokens.
+
+**Five themes. This is the whole list.**
+
+| Theme | Notes |
+|---|---|
+| **Alchemical Dance (Dark)** | The current purple. **Default.** |
+| **Alchemical Dance (Light)** | Same identity, light surfaces. |
+| Solarized Dark | The most-cited editor palette. |
+| Solarized Light | Its matched pair. |
+| High Contrast | Accessibility. Pairs with the colour-blind-safe syntax marking. |
+
+*Naming:* "Alchemical Dance (Dark/Light)" reads unambiguously as a pair. The
+alternative was "Alchemica Luna" / "Alchemical Solus" — note that Latin *solus*
+means "alone", not "sun"; if the moon/sun pairing is wanted it is **Luna / Sol**.
+
+**Scope: everything.** One palette drives editor *and* chrome — tab bar,
+menubar, sidebar, status strip. A light buffer inside a dark sidebar reads as
+broken, not as a theme.
+
+The real work is not the palettes. Each contrib component carries its own theme
+map (`SideNavThemes`, `TabBar.State`'s `@default_theme`, IconMenu's,
+TextField's), and Quillex hardcodes colours in several places
+(`Quillex.GUI.Theme`, the status-strip severity colours in the renderizer, the
+file-nav resize handle). **Step one is a reconnaissance sweep for every
+hardcoded colour across both repos**, then a single `Quillex.GUI.Palette` they
+all derive from. Themes 2–5 are cheap once that exists; the first one is the
+whole job.
+
+Selection lives in **View → Theme**, a radio group beside the existing Text Size
+/ Tab Stops / Zoom steppers.
+
+## 7. Menubar polish
+
+Chiefly the **fold controls**. They work; the arrangement doesn't. "Set Fold
+Level" sits alone under `view_folding_divider` at the bottom of View, after
+Zoom. Regroup so folding reads as a group rather than an afterthought.
+
+While in there: a deliberate pass over grouping and divider placement generally,
+now that View has grown to ~10 toggles plus three steppers.
+
+## 8. Discoverability sweep
+
+The goal in one line: *"otherwise how will users know it exists"*.
+
+Smaller than first assumed — Show Matching Brace, Highlight Current Line and
+Highlight Current Column are all already in View with checkboxes. (An earlier
+note claimed otherwise; it came from grepping the *state* field names rather
+than the *menu* ids, which drop the prefix and live in
+`Renderizer.build_menus/1`.)
+
+The job is a deliberate audit, feature by feature, asking **"can a user find
+this without being told?"** Keyboard-only features are the suspects: word-wise
+movement (`Ctrl+←/→`), page navigation, `Ctrl+Home/End`, project search,
+clipboard operations. Where a feature has no home, give it one — a menu entry,
+or a shortcut registered into Help → Keyboard Shortcuts (generated, so entries
+must be registered rather than hand-written).
+
+## 9. Split `07_integration_v1_spex.exs`
+
+**Promoted from Phase 3 item 3.5 on new evidence, 2026-08-17.**
+
+Spex 07 fails a *different, shifting* set of scenarios on identical code. This
+is not new: the Phase 3 ledger above records it across ~35 runs ("the rest land
+at 1–6 failures with a shifting failure set, on identical code; targeted subsets
+run green repeatedly") and notes "07 assumes near-boot state".
+
+It is actively harmful now, because it makes 07 useless as a regression signal —
+a real regression and ordinary noise look identical. During the 2026-08-17
+session it manufactured a false alarm that cost a rebuild of the TabBar renderer
+under a wrong diagnosis.
+
+**Measured 2026-08-17.** Three A/B rounds on `07`, `104c849` vs `605fc59`
+(failures per run):
+
+| Round | Method | BASE | HEAD | Reading |
+|---|---|---|---|---|
+| 1 | baseline measured hours earlier | 0,0,0,0 | 2,1,1,2 | "regression" — **wrong** |
+| 2 | interleaved, BASE in a fresh worktree, HEAD in the working dir | 0,1,0,1 | 3,3,2,1 | "regression" — **still wrong** |
+| 3 | interleaved, **both in fresh worktrees** | 2,2,1 | 1,2,1 | **parity** |
+
+The decisive number is not BASE-vs-HEAD at all: **the same commit in the same
+worktree went from 0.5 to 1.67 failures per run** between rounds 2 and 3, on
+identical code. That drift is larger than any difference between the two
+commits. Round 2's apparent regression was the working directory (accumulated
+`_build`, different `deps/`), not the diff — a separate bisect had already
+exonerated the TabBar change specifically.
+
+**Protocol for anyone comparing spex runs, until 07 is split:**
+1. Never compare against a baseline measured earlier — re-measure it now.
+2. Interleave the arms; do not run all of A then all of B.
+3. Put both arms in **equivalent** environments — two fresh `git worktree`s, not
+   one worktree against your working directory.
+4. Three pairs minimum. One pair proves nothing at this noise level.
+
+Everything in 07 reads through the semantic registry after fixed
+`Process.sleep`s, and its scenarios inherit each other's buffers. The fix is the
+one already prescribed in 3.5: split into per-feature files, each owning its
+state setup and asserting its own preconditions — the pattern of `22_` and `23_`,
+extracted for exactly this reason, which run green repeatedly.
+
+**Until it is split, never read a 07 failure as a regression without a
+back-to-back interleaved baseline.**
+
+## 10. Documentation + architecture diagrams
+
+`README` (user-facing), `ARCHITECTURE.md` + `docs/CODEBASE_TOUR.md`
+(developer-facing). Prune the known-stale references: `Quillex-BasePrompt.md`
+points at deleted files, `TODO_TEXT_EDITOR_FEATURES.md` is stale.
+
+Diagrams for the store line (RadixCache → PubSub → components) and the
+input/focus model — the two things a newcomer cannot infer from the tree.
+
+## 11. The demo spex — *last*
+
+One spex that walks **every feature, top to bottom, paced to play like a
+movie**, narrating itself by typing the explanations into the buffer as it goes,
+launched by `scripts/run_demo`.
+
+It is simultaneously a showcase and the most complete integration test in the
+suite — which is exactly why it comes last. It can only be written against a
+feature set that has stopped moving, and it is the natural final gate: if the
+demo plays start to finish without a stumble, 1.0 is cut.
+
+## Part II sequencing
+
+```mermaid
+flowchart TB
+    S9["9. Split spex 07<br/>(makes everything measurable)"] --> S11
+    S4["4. SearchPane<br/>(largest)"] --> S7["7. Menubar polish"]
+    S5["5. Go to Line<br/>(smallest)"] --> S8
+    S5b["5b. Cursor in display space<br/>(wrap-aware click + arrows)"] --> S11
+    S6["6. Themes<br/>recon sweep first"] --> S7
+    S7 --> S8["8. Discoverability sweep"]
+    S8 --> S10["10. Docs + diagrams"]
+    S10 --> S11["11. Demo spex<br/>(final gate)"]
+```
+
+Item 9 is independent and worth doing early — it is what makes every later
+change measurable. Item 5 is small enough to slot anywhere. Item 6's
+reconnaissance sweep can run in parallel with item 4; they touch different files.
+
+## Decisions deliberately declined
+
+Recorded so they are not silently re-litigated:
+
+- **Whole-word search** — case-sensitive and regex only.
+- **Collision-checking drop validity** in the file navigator — a green drop
+  target may still be followed by a "destination exists" toast.
+- **A read-only preview *panel*** for search results — the reusable preview
+  *tab* was chosen instead as the cheap form of the same idea.
+- **Recent files, session restore** — off the 1.0 list.
+
+## Known environmental caveats
+
+- **ripgrep is not installed on the primary dev machine.**
+  `test/search/project_search_test.exs` guards each assertion behind
+  `if @backend.available?()`, so every `Backend.Ripgrep` test reports PASS while
+  asserting nothing. A warning test now says so out loud. `:auto` selects the
+  Elixir backend there, so the app exercises the tested path — but the ripgrep
+  flag mapping is unverified locally.
+
+---
+
+## Sequencing (Phases 1–5, historical)
 
 ```mermaid
 flowchart LR
