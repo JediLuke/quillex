@@ -31,12 +31,23 @@ defmodule Quillex.FileNavOperationsSpex do
     root = Path.join(System.tmp_dir!(), "quillex_nav_spex_#{System.unique_integer([:positive])}")
     File.mkdir_p!(Path.join(root, "destination"))
     File.mkdir_p!(Path.join(root, "opened"))
+    File.mkdir_p!(Path.join(root, "nest/inner"))
     File.write!(Path.join(root, "alpha.txt"), "alpha")
     File.write!(Path.join(root, "beta.txt"), "beta")
     File.write!(Path.join(root, "gamma.txt"), "gamma")
     File.write!(Path.join(root, "opened/child.txt"), "child")
+    File.write!(Path.join(root, "nest/inner/deep.txt"), "deep")
 
-    on_exit(fn -> File.rm_rf(root) end)
+    # Spex share one running app. Pointing the navigator at a temp directory and
+    # then deleting it out from under itself leaves every later spex looking at
+    # an empty tree, so put the path back where it was found.
+    previous_nav_path = ViewStore.get_state().file_nav_path
+
+    on_exit(fn ->
+      if previous_nav_path, do: ViewStore.set_file_nav_path(previous_nav_path)
+      ViewStore.sync()
+      File.rm_rf(root)
+    end)
 
     ViewStore.set_file_nav_path(root)
     ViewStore.open_file_nav()
@@ -54,6 +65,15 @@ defmodule Quillex.FileNavOperationsSpex do
   end
 
   defp nav_state, do: nav_scene().assigns.state
+
+  # Process identity is the assertion when the question is "did this survive?" —
+  # a recreated SideNav looks identical from the outside until you notice every
+  # folder has closed.
+  defp nav_pid do
+    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    {:ok, child} = Scenic.Scene.child(root, :file_nav)
+    if is_list(child), do: List.first(child), else: child
+  end
 
   defp row_background(path) do
     [primitive] = Scenic.Graph.get(nav_scene().assigns.graph, String.to_atom("item_bg_#{path}"))
@@ -136,6 +156,59 @@ defmodule Quillex.FileNavOperationsSpex do
     assert nav_state().drag_source == nil
   end
 
+  # The viewport point at the vertical middle of a row.
+  #
+  # NOT row_center/1: semantic screen_bounds come back zero-sized for nav rows,
+  # so the "centre" it computes is really the row's top-left corner — which is
+  # exactly the boundary between two rows, and hit_test's bounds are inclusive
+  # at both ends, so either neighbour can match. item_bounds is the map hit_test
+  # itself reads, which makes it the honest source for a coordinate.
+  defp row_point(path) do
+    state = nav_state()
+    %{y: y, height: height} = Map.fetch!(state.item_bounds, path)
+
+    {state.frame.pin.x + 40, state.frame.pin.y + y + height / 2 - state.scroll.offset_y}
+  end
+
+  # Press and move, but do NOT release — the drag is left in flight so a
+  # scenario can assert on what the navigator does while it is being held.
+  defp drag_hold(source, {x, y}) do
+    pointer(:btn_left, 1, [], row_point(source))
+    Process.sleep(100)
+    assert nav_state().drag_source == source
+
+    {:ok, viewport} = Scenic.ViewPort.info(:main_viewport)
+    # Two moves: the first crosses the drag threshold, the second is the one
+    # that lands where we want with `dragging` already true.
+    Scenic.ViewPort.Input.send(viewport, {:cursor_pos, {x, y}})
+    Process.sleep(60)
+    Scenic.ViewPort.Input.send(viewport, {:cursor_pos, {x, y}})
+    Process.sleep(60)
+    assert nav_state().dragging
+  end
+
+  defp drag_release({x, y}) do
+    pointer(:btn_left, 0, [], {x, y})
+    Process.sleep(500)
+    assert nav_state().drag_source == nil
+  end
+
+  # A point in the pane below every row — the empty space that means "the
+  # navigator root".
+  defp empty_space_below_tree do
+    state = nav_state()
+
+    lowest =
+      state.item_bounds
+      |> Map.values()
+      |> Enum.map(&(&1.y + &1.height))
+      |> Enum.max()
+
+    y = lowest - state.scroll.offset_y + 30
+    assert y < state.frame.size.height, "the tree fills the pane; no empty space to drop into"
+    {state.frame.pin.x + 40, state.frame.pin.y + y}
+  end
+
   defp refresh_tree do
     NavigatorTreeSync.poll_now()
     ViewStore.sync()
@@ -215,6 +288,51 @@ defmodule Quillex.FileNavOperationsSpex do
       end
     end
 
+    # The navigator used to collapse to its roots twice for every file
+    # operation. A status message appearing or disappearing changes the buffer
+    # pane's geometry, which put the root scene on its z-order rebuild path,
+    # and that path deleted :file_nav outright — killing the SideNav process
+    # along with its expanded set, selection and scroll offset. Since every
+    # move/rename/delete raises a toast that clears itself 8s later, the tree
+    # reset once on the way in and once on the way out, seconds after the user
+    # had moved on. The side pane's own frame is carved before the status strip
+    # is split off, so it never needed rebuilding at all.
+    scenario "A status message does not reset the tree" do
+      given_ "a directory is expanded and a file selected with no status showing", context do
+        opened = Path.join(context.root, "opened")
+        gamma = Path.join(context.root, "gamma.txt")
+        # A row click TOGGLES a directory, and earlier scenarios in this spex
+        # share the tree — clicking unconditionally would collapse it here.
+        unless MapSet.member?(nav_state().expanded, opened), do: click(opened)
+        click(gamma, [:ctrl])
+
+        state = nav_state()
+        assert MapSet.member?(state.expanded, opened)
+        assert MapSet.member?(state.selected_ids, gamma)
+
+        {:ok, Map.merge(context, %{opened: opened, gamma: gamma, nav_pid: nav_pid()})}
+      end
+
+      when_ "an operation raises a status message", context do
+        refute root_state().status_message
+        ViewStore.show_status("Moved 2 entries to destination", :info)
+        ViewStore.sync()
+        Process.sleep(400)
+        assert root_state().status_message
+        {:ok, context}
+      end
+
+      then_ "the same SideNav is still alive with its expansion intact", context do
+        assert nav_pid() == context.nav_pid,
+               "the navigator was recreated; expansion and scroll are lost with it"
+
+        state = nav_state()
+        assert MapSet.member?(state.expanded, context.opened)
+        assert MapSet.member?(state.selected_ids, context.gamma)
+        {:ok, context}
+      end
+    end
+
     scenario "Clicking a binary file is rejected before it reaches the editor" do
       given_ "an executable-like file is visible", context do
         binary = Path.join(context.root, "window_pinner")
@@ -268,6 +386,86 @@ defmodule Quillex.FileNavOperationsSpex do
         refute File.exists?(context.beta)
         assert File.regular?(Path.join(context.destination, "alpha.txt"))
         assert File.regular?(Path.join(context.destination, "beta.txt"))
+        {:ok, context}
+      end
+    end
+
+    # A drag can only ever drop onto what is already on screen. Both of these
+    # exist so that the tree the drag started in is not the only tree it can
+    # finish in: a collapsed folder opens when you rest on it, and the space
+    # below the last row means the navigator root — the one destination that
+    # has no row of its own to aim at.
+    scenario "Resting a drag on a collapsed directory springs it open" do
+      given_ "a collapsed directory and something to drag", context do
+        nest = Path.join(context.root, "nest")
+        gamma = Path.join(context.root, "gamma.txt")
+        refresh_tree()
+
+        if MapSet.member?(nav_state().expanded, nest), do: click(nest)
+        refute MapSet.member?(nav_state().expanded, nest)
+
+        click(gamma)
+        {:ok, Map.merge(context, %{nest: nest, gamma: gamma})}
+      end
+
+      when_ "the drag hovers over it without dropping", context do
+        target = row_point(context.nest)
+        drag_hold(context.gamma, target)
+
+        # The ghost only exists while a drag is in flight, so this is also the
+        # only moment it can be asserted on.
+        assert [_ghost] = Scenic.Graph.get(nav_scene().assigns.graph, :side_nav_drag_ghost)
+        assert nav_state().drag_target == context.nest
+
+        # Longer than the spring-load delay, which the component owns.
+        Process.sleep(900)
+        {:ok, Map.put(context, :target, target)}
+      end
+
+      then_ "it opens and its contents become droppable", context do
+        assert MapSet.member?(nav_state().expanded, context.nest),
+               "the directory did not spring open under a resting drag"
+
+        assert Map.has_key?(nav_state().item_bounds, Path.join(context.nest, "inner"))
+
+        drag_release(context.target)
+        refute Scenic.Graph.get(nav_scene().assigns.graph, :side_nav_drag_ghost) != []
+        {:ok, context}
+      end
+    end
+
+    scenario "Dropping on empty space moves to the navigator root" do
+      given_ "a file nested inside a subdirectory", context do
+        nest = Path.join(context.root, "nest")
+        inner = Path.join(nest, "inner")
+        deep = Path.join(inner, "deep.txt")
+
+        refresh_tree()
+        unless MapSet.member?(nav_state().expanded, nest), do: click(nest)
+        unless MapSet.member?(nav_state().expanded, inner), do: click(inner)
+        assert Map.has_key?(nav_state().item_bounds, deep)
+
+        click(deep)
+        {:ok, Map.merge(context, %{deep: deep, moved: Path.join(context.root, "deep.txt")})}
+      end
+
+      when_ "it is dragged below the last row and dropped", context do
+        empty = empty_space_below_tree()
+        drag_hold(context.deep, empty)
+
+        # The root has no row, so the pane border is the drop affordance.
+        assert nav_state().drag_target == context.root
+        assert nav_state().drop_valid
+        assert [_outline] = Scenic.Graph.get(nav_scene().assigns.graph, :side_nav_root_drop_target)
+
+        drag_release(empty)
+        refresh_tree()
+        {:ok, context}
+      end
+
+      then_ "the file now sits at the top level", context do
+        refute File.exists?(context.deep)
+        assert File.regular?(context.moved)
         {:ok, context}
       end
     end
@@ -342,6 +540,55 @@ defmodule Quillex.FileNavOperationsSpex do
         refute File.exists?(context.rename_directory)
         assert File.read!(Path.join(context.renamed_directory, "child.txt")) == "child"
         assert String.starts_with?(ViewStore.get_state().status_message, "Renamed")
+        {:ok, context}
+      end
+    end
+
+    # Last, because it fills the pane with enough rows to overflow it and every
+    # earlier scenario locates its rows by position.
+    scenario "Holding a drag at the bottom edge scrolls the tree" do
+      given_ "a tree taller than the pane", context do
+        bulk = Path.join(context.root, "bulk")
+        File.mkdir_p!(bulk)
+        for n <- 1..80, do: File.write!(Path.join(bulk, "file_#{n}.txt"), "x")
+        refresh_tree()
+
+        unless MapSet.member?(nav_state().expanded, bulk), do: click(bulk)
+
+        state = nav_state()
+
+        assert state.scroll.content_height > state.frame.size.height,
+               "the tree still fits the pane; there would be nothing to scroll"
+
+        {:ok, Map.merge(context, %{bulk: bulk, offset_before: state.scroll.offset_y})}
+      end
+
+      when_ "a drag is held in the bottom edge strip", context do
+        state = nav_state()
+        # Inside the pane, a few pixels from its bottom edge — where the wheel
+        # is unavailable because the button is still down.
+        edge = {state.frame.pin.x + 40, state.frame.pin.y + state.frame.size.height - 6}
+
+        drag_hold(Path.join(context.bulk, "file_1.txt"), edge)
+        Process.sleep(600)
+        {:ok, Map.put(context, :edge, edge)}
+      end
+
+      then_ "the tree scrolls under the stationary pointer", context do
+        scrolled = nav_state().scroll.offset_y
+
+        assert scrolled > context.offset_before,
+               "the tree did not scroll (offset #{scrolled} vs #{context.offset_before})"
+
+        drag_release(context.edge)
+
+        # And it stops as soon as the drag does.
+        settled = nav_state().scroll.offset_y
+        Process.sleep(300)
+        assert nav_state().scroll.offset_y == settled
+
+        File.rm_rf!(context.bulk)
+        refresh_tree()
         {:ok, context}
       end
     end

@@ -19,6 +19,7 @@ defmodule Quillex.Structs.BufState do
           redo_stack: list(),
           undo_max_size: pos_integer(),
           search_query: String.t() | nil,
+          search_opts: keyword(),
           search_matches: list(),
           search_current_index: non_neg_integer()
         }
@@ -55,6 +56,11 @@ defmodule Quillex.Structs.BufState do
     # ===== SEARCH STATE (Single Source of Truth) =====
     # Current search query string (nil = not searching)
     search_query: nil,
+    # How to interpret that query: :case_sensitive and :regex, both default
+    # false. Held per buffer alongside the query itself, because every later
+    # recompute — resync after an edit, the rescan after a replace — has to
+    # read the document the same way the original search did.
+    search_opts: [],
     # List of {line, col, match_text} tuples for all matches
     search_matches: [],
     # Current match index (0-based)
@@ -96,6 +102,7 @@ defmodule Quillex.Structs.BufState do
       undo_max_size: Map.get(args, :undo_max_size) || 100,
       # Search - start with no search
       search_query: nil,
+      search_opts: [],
       search_matches: [],
       search_current_index: 0
     }

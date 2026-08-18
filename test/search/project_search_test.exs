@@ -22,6 +22,21 @@ defmodule Quillex.Search.ProjectTest do
     {:ok, root: root}
   end
 
+  # `if @backend.available?()` inside each test means an absent backend reports
+  # PASS while asserting nothing — the ripgrep half of this file is invisible
+  # unless `rg` is installed. Say so once, out loud, so a green run cannot be
+  # mistaken for coverage it does not have.
+  test "ripgrep backend coverage is real on this machine" do
+    if Backend.Ripgrep.available?() do
+      assert true
+    else
+      IO.warn(
+        "ripgrep is not installed: every Backend.Ripgrep test in this file " <>
+          "passed without asserting anything. Install rg to cover that backend."
+      )
+    end
+  end
+
   for backend <- [Backend.Elixir, Backend.Ripgrep] do
     @backend backend
 
@@ -68,6 +83,36 @@ defmodule Quillex.Search.ProjectTest do
 
       test "an empty query matches nothing", %{root: root} do
         assert {:ok, []} = @backend.search(root, "", [])
+      end
+
+      # The two backends reach the same answers by completely different routes —
+      # ripgrep flags versus a compiled Elixir regex — so the options are worth
+      # asserting on both. A pane that means one thing under ripgrep and another
+      # without it would be worse than having no toggles at all.
+      test "case_sensitive matches only the exact casing", %{root: root} do
+        if @backend.available?() do
+          {:ok, matches} = @backend.search(root, "THE", case_sensitive: true)
+
+          assert Enum.map(matches, &{Path.relative_to(&1.path, root), &1.line, &1.col}) ==
+                   [{"lib/a.ex", 3, 1}]
+        end
+      end
+
+      test "regex treats the query as a pattern, and does not by default", %{root: root} do
+        if @backend.available?() do
+          {:ok, literal} = @backend.search(root, "th.", [])
+          assert literal == []
+
+          {:ok, matches} = @backend.search(root, "th.", regex: true)
+          assert Enum.map(matches, & &1.matched) |> Enum.uniq() |> Enum.sort() == ["THE", "the"]
+        end
+      end
+
+      test "a pattern that will not compile is reported, not raised", %{root: root} do
+        if @backend.available?() do
+          assert {:error, {:bad_pattern, message}} = @backend.search(root, "foo(", regex: true)
+          assert is_binary(message)
+        end
       end
     end
   end

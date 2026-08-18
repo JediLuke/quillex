@@ -20,13 +20,23 @@ defmodule Quillex.Search.Backend.Ripgrep do
     excludes = Keyword.get(opts, :excludes, [])
 
     args =
-      ["--json", "--ignore-case", "--fixed-strings", "--no-messages", "--sort", "path"] ++
+      ["--json", "--no-messages", "--sort", "path"] ++
+        match_args(opts) ++
         glob_args(root, excludes) ++ ["--regexp", query, "--", "."]
 
-    case System.cmd("rg", args, cd: root, stderr_to_stdout: false) do
+    # stderr is folded in so a rejected pattern can be reported in ripgrep's own
+    # words. Safe for the success path: parse/2 keeps only lines that decode as
+    # JSON, and a diagnostic never will.
+    case System.cmd("rg", args, cd: root, stderr_to_stdout: true) do
       # rg exits 1 when nothing matched — not an error
       {output, code} when code in [0, 1] ->
         {:ok, output |> parse(root) |> Enum.take(max_results)}
+
+      # A pattern rg will not compile also exits 2. The user is mid-keystroke
+      # on a regex far more often than ripgrep is genuinely broken, so say so
+      # in the pane's own words rather than reporting an exit code.
+      {output, 2} ->
+        {:error, {:bad_pattern, first_line(output)}}
 
       {output, code} ->
         {:error, {:ripgrep_exit, code, String.slice(output, 0, 500)}}
@@ -34,6 +44,24 @@ defmodule Quillex.Search.Backend.Ripgrep do
   end
 
   def search(_root, "", _opts), do: {:ok, []}
+
+  defp first_line(output) do
+    output |> String.split("\n", trim: true) |> List.first() |> to_string() |> String.slice(0, 200)
+  end
+
+  # ripgrep's own equivalents of the search options. `--fixed-strings` is what
+  # makes a literal query literal, so it is dropped — not negated — in regex
+  # mode, where the query IS the pattern.
+  defp match_args(opts) do
+    case_args =
+      if Keyword.get(opts, :case_sensitive, false),
+        do: ["--case-sensitive"],
+        else: ["--ignore-case"]
+
+    regex_args = if Keyword.get(opts, :regex, false), do: [], else: ["--fixed-strings"]
+
+    case_args ++ regex_args
+  end
 
   # Every exclude becomes an anchored ignore-glob. ripgrep's globs follow
   # gitignore rules: a leading slash anchors the pattern to the search root, so

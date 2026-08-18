@@ -33,7 +33,12 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
     query: "",
     status: :idle,
     files: [],
-    excluded: MapSet.new()
+    excluded: MapSet.new(),
+    # How the query is read. Part of the snapshot because the pane draws the
+    # toggles from it, and because a search is only reproducible together with
+    # the options it ran under.
+    case_sensitive: false,
+    regex: false
   }
 
   def start_link(_opts), do: GenServer.start_link(__MODULE__, :ok, name: __MODULE__)
@@ -54,6 +59,18 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
 
   @doc "Include or exclude a directory subtree from the search scope."
   def toggle_scope(dir) when is_binary(dir), do: GenServer.cast(__MODULE__, {:toggle_scope, dir})
+
+  @doc "Flip a search option (`:case_sensitive` or `:regex`) and re-run."
+  def toggle_option(option) when option in [:case_sensitive, :regex],
+    do: GenServer.cast(__MODULE__, {:toggle_option, option})
+
+  @doc "Set a search option outright."
+  def set_option(option, value) when option in [:case_sensitive, :regex] and is_boolean(value),
+    do: GenServer.cast(__MODULE__, {:set_option, option, value})
+
+  @doc "The current query options, in the shape the search backends take."
+  def search_opts(%{case_sensitive: case_sensitive, regex: regex}),
+    do: [case_sensitive: case_sensitive, regex: regex]
 
   @doc "Replace every current match with `replacement`, then search again."
   def replace_all(replacement) when is_binary(replacement),
@@ -103,17 +120,35 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
     {:noreply, state |> publish(%{state.view | excluded: excluded}) |> schedule_search()}
   end
 
-  def handle_cast({:replace_all, replacement}, %{view: %{query: query, files: files}} = state)
+  def handle_cast({:toggle_option, option}, state) do
+    handle_cast({:set_option, option, not Map.fetch!(state.view, option)}, state)
+  end
+
+  def handle_cast({:set_option, option, value}, %{view: view} = state) do
+    if Map.fetch!(view, option) == value do
+      {:noreply, state}
+    else
+      {:noreply, state |> publish(Map.put(view, option, value)) |> schedule_search()}
+    end
+  end
+
+  def handle_cast({:replace_all, replacement}, %{view: %{query: query, files: files} = view} = state)
       when query != "" and files != [] do
     paths = Enum.map(files, fn {path, _matches} -> path end)
-    {:ok, %{files: n_files, matches: n_matches}} = Project.replace_all(paths, query, replacement)
 
-    Quillex.RadixCache.ViewStore.show_status(
-      "Replaced #{n_matches} #{plural(n_matches, "match", "matches")} in #{n_files} #{plural(n_files, "file", "files")}",
-      :info
-    )
+    case Project.replace_all(paths, query, replacement, search_opts(view)) do
+      {:ok, %{files: n_files, matches: n_matches}} ->
+        Quillex.RadixCache.ViewStore.show_status(
+          "Replaced #{n_matches} #{plural(n_matches, "match", "matches")} in #{n_files} #{plural(n_files, "file", "files")}",
+          :info
+        )
 
-    {:noreply, run_search_now(state)}
+        {:noreply, run_search_now(state)}
+
+      {:error, {:bad_pattern, message}} ->
+        Quillex.RadixCache.ViewStore.show_status("Replace failed: #{message}", :error)
+        {:noreply, state}
+    end
   end
 
   def handle_cast({:replace_all, _replacement}, state), do: {:noreply, state}
@@ -178,9 +213,12 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
     query = view.query
     excludes = MapSet.to_list(view.excluded)
 
+    opts =
+      [excludes: excludes, max_results: @max_results] ++ search_opts(view)
+
     task =
       Task.Supervisor.async_nolink(Quillex.Search.TaskSupervisor, fn ->
-        Project.search(root, query, excludes: excludes, max_results: @max_results)
+        Project.search(root, query, opts)
       end)
 
     state

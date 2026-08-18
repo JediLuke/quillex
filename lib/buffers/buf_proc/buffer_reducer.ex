@@ -25,7 +25,18 @@ defmodule Quillex.Buffer.Process.Reducer do
   # SEARCH ACTIONS
   # ===========================================================================
 
-  # Set search query and find all matches.
+  # Set search query and find all matches. The three-element form carries the
+  # options the query is to be read under (:case_sensitive, :regex); the buffer
+  # keeps them so every later recompute reads the document the same way.
+  def process(%BufState{} = buf, {:search, query, opts})
+      when is_binary(query) and query != "" and is_list(opts) do
+    Search.set(buf, query, opts)
+  end
+
+  def process(%BufState{} = buf, {:search, _empty, _opts}) do
+    Search.set(buf, nil)
+  end
+
   def process(%BufState{} = buf, {:search, query}) when is_binary(query) and query != "" do
     Search.set(buf, query)
   end

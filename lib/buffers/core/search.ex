@@ -8,19 +8,21 @@ defmodule Quillex.Buffer.Core.Search do
   # the cursor — the one under it, when the query came from the word there,
   # or the next one down the document — and the cursor goes to it so the
   # view reveals it. Wraps to the first match when nothing follows.
-  def set(%BufState{cursor: %{line: line, col: col}} = buf, query)
+  def set(buf, query, opts \\ [])
+
+  def set(%BufState{cursor: %{line: line, col: col}} = buf, query, opts)
       when is_binary(query) and query != "" do
-    found = matches(buf.data, query)
+    found = matches(buf.data, query, opts)
 
     index =
       Enum.find_index(found, fn {l, c, text} -> {l, c + String.length(text)} > {line, col} end) ||
         0
 
-    apply_matches(%{buf | search_query: query}, found, index)
+    apply_matches(%{buf | search_query: query, search_opts: opts}, found, index)
   end
 
-  def set(%BufState{} = buf, _),
-    do: %{buf | search_query: nil, search_matches: [], search_current_index: 0}
+  def set(%BufState{} = buf, _, _opts),
+    do: %{buf | search_query: nil, search_opts: [], search_matches: [], search_current_index: 0}
 
   def clear(%BufState{} = buf), do: set(buf, nil)
 
@@ -34,7 +36,7 @@ defmodule Quillex.Buffer.Core.Search do
   def resync(%BufState{data: data} = buf, %BufState{data: data}), do: buf
 
   def resync(%BufState{} = buf, _previous) do
-    found = matches(buf.data, buf.search_query)
+    found = matches(buf.data, buf.search_query, buf.search_opts)
     index = if found == [], do: 0, else: min(buf.search_current_index, length(found) - 1)
     %{buf | search_matches: found, search_current_index: index}
   end
@@ -61,7 +63,7 @@ defmodule Quillex.Buffer.Core.Search do
         # index is wrong when the replacement itself still matches (a
         # case-insensitive "the" → "THE"): Enter would replace the same spot
         # forever. Wraps to the first match when nothing follows.
-        found = matches(replaced.data, buf.search_query)
+        found = matches(replaced.data, buf.search_query, buf.search_opts)
         after_replacement = {line, col + String.length(replacement)}
         next = Enum.find_index(found, fn {l, c, _} -> {l, c} >= after_replacement end) || 0
         apply_matches(replaced, found, next)
@@ -81,19 +83,71 @@ defmodule Quillex.Buffer.Core.Search do
         replace_at(acc, line, col, matched, replacement)
       end)
 
-    refresh(updated, buf.search_query, 0)
+    refresh(updated, buf.search_query, buf.search_opts, 0)
   end
 
   @doc """
-  Every case-insensitive occurrence of `query`, as `{line, col, matched_text}`
-  with 1-based grapheme columns, in document order.
+  Compile `query` into the regex a search will scan with.
+
+  Options, both defaulting to `false` so the historical contract — literal,
+  case-insensitive — is what you get for a bare query:
+
+    * `:case_sensitive`
+    * `:regex` — treat the query as a pattern instead of literal text
+
+  Returns `{:error, message}` when the user's pattern will not compile. That is
+  a boundary, not a bug: `foo(` is an ordinary thing to have typed halfway
+  through writing `foo(bar)`, and it arrives here on every keystroke. Callers
+  taking user input validate here and report the message; everything below
+  assumes a query that compiles.
   """
-  def matches(lines, query) when is_list(lines) and is_binary(query) do
+  @spec compile(String.t(), keyword()) :: {:ok, Regex.t()} | {:error, String.t()}
+  def compile(query, opts \\ []) when is_binary(query) do
+    pattern = if Keyword.get(opts, :regex, false), do: query, else: Regex.escape(query)
+
     # Caseless matching on the ORIGINAL line, not on a downcased copy: for
     # some scripts downcasing changes the byte length, and positions found in
     # the copy would not line up with the text they are meant to describe.
-    {:ok, regex} = Regex.compile(Regex.escape(query), "iu")
+    flags = if Keyword.get(opts, :case_sensitive, false), do: "u", else: "iu"
 
+    case Regex.compile(pattern, flags) do
+      {:ok, regex} ->
+        {:ok, regex}
+
+      # Regex.compile reports the reason as a CHARLIST, which string
+      # interpolation refuses (String.Chars has no impl for lists) — building
+      # the message the obvious way raises inside the error path itself.
+      {:error, {reason, at}} ->
+        {:error, "#{describe(reason)} (at position #{at})"}
+
+      {:error, reason} ->
+        {:error, describe(reason)}
+    end
+  end
+
+  defp describe(reason) when is_list(reason), do: List.to_string(reason)
+  defp describe(reason) when is_binary(reason), do: reason
+  defp describe(reason), do: inspect(reason)
+
+  @doc """
+  Every occurrence of `query`, as `{line, col, matched_text}` with 1-based
+  grapheme columns, in document order.
+
+  Takes the same options as `compile/2`, and requires a query that compiles
+  under them — validate user input with `compile/2` first.
+  """
+  def matches(lines, query, opts \\ []) when is_list(lines) and is_binary(query) do
+    {:ok, regex} = compile(query, opts)
+    matches_with(lines, regex)
+  end
+
+  @doc """
+  `matches/3` against an already-compiled regex.
+
+  For callers scanning many documents with one query — a project search walks
+  thousands of files, and recompiling the pattern for each is pure waste.
+  """
+  def matches_with(lines, %Regex{} = regex) when is_list(lines) do
     lines
     |> Enum.with_index(1)
     |> Enum.flat_map(fn {line, line_number} -> matches_in_line(line, regex, line_number) end)
@@ -111,8 +165,8 @@ defmodule Quillex.Buffer.Core.Search do
     }
   end
 
-  defp refresh(buf, query, desired_index) do
-    found = matches(buf.data, query)
+  defp refresh(buf, query, opts, desired_index) do
+    found = matches(buf.data, query, opts)
     apply_matches(buf, found, desired_index)
   end
 

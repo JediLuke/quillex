@@ -62,6 +62,16 @@ defmodule Quillex.Utils.SideNavThemes do
       border: {50, 52, 62},
       # Clearly visible over the dark pane
       scrollbar_color: {185, 190, 205},
+      # Drag-and-drop feedback. Green/red carry the meaning for most people, so
+      # they are also the two most different in brightness against the pane —
+      # the accept reads lighter than the background, the reject darker.
+      drop_valid_bg: {52, 96, 70},
+      drop_invalid_bg: {104, 48, 52},
+      drop_text: {245, 246, 250},
+      # The label riding the cursor: darker than any row so it reads as floating
+      # above the tree rather than as part of it.
+      ghost_bg: {24, 26, 34},
+      ghost_text: {225, 228, 238},
 
       # Dimensions
       # Compact but readable

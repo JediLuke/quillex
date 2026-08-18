@@ -15,9 +15,19 @@ defmodule Quillex.Search.Backend do
     entirely, subtree included. Version-control and build directories are
     always skipped; see `default_excludes/0`.
   - `:max_results` — stop after this many matches (default 5_000).
+  - `:case_sensitive` — default `false`.
+  - `:regex` — treat the query as a pattern rather than literal text; default
+    `false`.
 
-  Queries are literal, case-insensitive text — the same contract as the
-  in-buffer search, so the popup means one thing everywhere.
+  The defaults are literal, case-insensitive text — the same contract as the
+  in-buffer search, and `:case_sensitive` and `:regex` mean the same thing
+  there (`Quillex.Buffer.Core.Search.compile/2` is where both are defined), so
+  the popup and the project pane never disagree about what a query means.
+
+  A pattern that will not compile comes back as `{:error, {:bad_pattern,
+  message}}` from either backend. The user is mid-keystroke on a regex far more
+  often than a search is genuinely broken, so this is an expected reply to be
+  shown, not a failure to crash on.
 
   ## Choosing a backend
 
@@ -28,7 +38,11 @@ defmodule Quillex.Search.Backend do
 
   alias Quillex.Search.Match
 
-  @type option :: {:excludes, [Path.t()]} | {:max_results, pos_integer()}
+  @type option ::
+          {:excludes, [Path.t()]}
+          | {:max_results, pos_integer()}
+          | {:case_sensitive, boolean()}
+          | {:regex, boolean()}
 
   @callback available?() :: boolean()
   @callback search(root :: Path.t(), query :: String.t(), [option()]) ::

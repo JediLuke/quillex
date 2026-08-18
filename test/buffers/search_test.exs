@@ -32,6 +32,66 @@ defmodule Quillex.Buffer.Core.SearchTest do
     end
   end
 
+  describe "matches/3 options" do
+    test "case_sensitive matches only the exact casing" do
+      lines = ["The cat, THE hat, the bat"]
+
+      assert Search.matches(lines, "the", case_sensitive: true) == [{1, 19, "the"}]
+      assert length(Search.matches(lines, "the", case_sensitive: false)) == 3
+    end
+
+    test "regex treats the query as a pattern" do
+      assert Search.matches(["a.c abc"], "a.c", regex: true) == [{1, 1, "a.c"}, {1, 5, "abc"}]
+    end
+
+    test "regex and case_sensitive compose" do
+      lines = ["Foo1 foo2 FOO3"]
+
+      assert Search.matches(lines, "foo\\d", regex: true, case_sensitive: true) ==
+               [{1, 6, "foo2"}]
+    end
+
+    test "columns stay grapheme-based under regex" do
+      assert Search.matches(["self—caused, the essence"], "th\\w", regex: true) ==
+               [{1, 14, "the"}]
+    end
+
+    test "the default is unchanged: literal and case-insensitive" do
+      assert Search.matches(["a.c abc"], "a.c", []) == [{1, 1, "a.c"}]
+    end
+  end
+
+  describe "compile/2" do
+    test "reports a pattern the user is midway through typing" do
+      assert {:error, message} = Search.compile("foo(", regex: true)
+      assert is_binary(message)
+      assert message =~ "parenthes"
+    end
+
+    test "an unclosed group is harmless when the query is literal" do
+      assert {:ok, _regex} = Search.compile("foo(", [])
+      assert Search.matches(["a foo( b"], "foo(") == [{1, 3, "foo("}]
+    end
+  end
+
+  describe "search options are remembered by the buffer" do
+    test "a case-sensitive search stays case-sensitive when the text changes under it" do
+      b = buf(["the THE", "x"]) |> Search.set("THE", case_sensitive: true)
+      assert b.search_matches == [{1, 5, "THE"}]
+
+      # An edit elsewhere triggers resync/2, which must re-read the document
+      # the same way the original search did rather than reverting to caseless.
+      edited = %{b | data: ["the THE", "y"]}
+      assert Search.resync(edited, b).search_matches == [{1, 5, "THE"}]
+    end
+
+    test "clearing forgets the options along with the query" do
+      b = buf(["a"]) |> Search.set("a", regex: true) |> Search.clear()
+      assert b.search_query == nil
+      assert b.search_opts == []
+    end
+  end
+
   describe "set/2" do
     test "starts at the match under or after the cursor and moves the cursor to it" do
       b = buf(["one two one", "one"])

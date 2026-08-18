@@ -120,11 +120,18 @@ defmodule QuillEx.RootScene.Renderizer do
       # Keeping that process alive is important for pointer input too:
       # deleting it during the short-lived "opened file" status transition
       # made the first wheel event disappear until a later click.
+      # The side pane is NOT in this list. It is a stable child like the buffer
+      # pane: deleting it kills the SideNav process, and with it the expanded
+      # folders, the selection and the scroll offset. Because every file
+      # operation raises a status message, and a status message appearing or
+      # disappearing lands here, recreating the pane meant the navigator
+      # collapsed to its roots twice per drag-and-drop — once on the "Moved 2
+      # entries" toast, once again when it cleared 8s later. The side pane's
+      # frame is carved before the status strip (see the split above), so it is
+      # not even geometrically affected by the transition that rebuilds it.
       graph =
         graph
         |> Scenic.Graph.delete(:status_bar)
-        |> Scenic.Graph.delete(:file_nav)
-        |> Scenic.Graph.delete(:project_search_pane)
         |> Scenic.Graph.delete(:file_nav_resize_handle_group)
         |> Scenic.Graph.delete(:search_bar)
         |> Scenic.Graph.delete(:tab_bar)
@@ -140,8 +147,10 @@ defmodule QuillEx.RootScene.Renderizer do
           update_or_create_buffer_pane(graph, scene, state, actual_buffer_frame)
         end
 
+      apply_file_nav_frame(scene, old_state, state, file_nav_frame)
+
       graph
-      |> maybe_create_file_nav(state, file_nav_frame)
+      |> maybe_update_file_nav(state, file_nav_frame)
       |> maybe_create_status_bar(state, status_bar_frame)
       |> maybe_create_search_bar(state, search_bar_frame)
       |> maybe_create_file_nav_resize_handle(state, file_nav_frame)
@@ -256,6 +265,9 @@ defmodule QuillEx.RootScene.Renderizer do
 
   defp apply_file_nav_frame(_scene, _old_state, _state, nil), do: :ok
 
+  # First render: there is no pane to move yet, it is about to be created.
+  defp apply_file_nav_frame(_scene, nil, _state, _frame), do: :ok
+
   defp apply_file_nav_frame(scene, old_state, state, frame) do
     if old_state.file_nav_width != state.file_nav_width or old_state.frame != state.frame do
       Scenic.Scene.put_child(scene, side_pane_id(state), {:update_frame, frame})
@@ -332,7 +344,8 @@ defmodule QuillEx.RootScene.Renderizer do
 
   defp maybe_create_file_nav(graph, state, %Widgex.Frame{} = frame) do
     # Build file tree from current path
-    file_tree = FileTree.build(state.file_nav_path || File.cwd!())
+    nav_root = state.file_nav_path || File.cwd!()
+    file_tree = FileTree.build(nav_root)
 
     # Sized against the editor's text, but deliberately smaller than it —
     # see SideNavThemes.for_editor/1.
@@ -342,7 +355,11 @@ defmodule QuillEx.RootScene.Renderizer do
       frame: frame,
       tree: file_tree,
       active_id: state.active_buf && state.active_buf.path,
-      theme: side_nav_theme
+      theme: side_nav_theme,
+      # Lets a drop on the empty space below the tree mean "move to the top
+      # level"; without it there is no way to drag a file back out of a
+      # subdirectory, because the root has no row of its own to aim at.
+      root_id: nav_root
     }
 
     graph

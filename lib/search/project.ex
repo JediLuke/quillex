@@ -52,7 +52,7 @@ defmodule Quillex.Search.Project do
           {:ok, snapshot} = Quillex.Buffer.fetch(ref)
 
           snapshot.lines
-          |> Search.matches(query)
+          |> Search.matches(query, opts)
           |> Enum.map(fn {line, col, matched} ->
             %Match{
               path: ref.path,
@@ -81,21 +81,27 @@ defmodule Quillex.Search.Project do
   Returns `{:ok, %{files: n, matches: m}}` — the number of files touched and
   occurrences replaced. Open buffers are edited in place; other files on disk.
   """
-  @spec replace_all([Path.t()], String.t(), String.t()) ::
-          {:ok, %{files: non_neg_integer(), matches: non_neg_integer()}}
-  def replace_all(paths, query, replacement)
+  @spec replace_all([Path.t()], String.t(), String.t(), [Backend.option()]) ::
+          {:ok, %{files: non_neg_integer(), matches: non_neg_integer()}} | {:error, term()}
+  def replace_all(paths, query, replacement, opts \\ [])
       when is_list(paths) and is_binary(query) and query != "" and is_binary(replacement) do
-    open = open_buffers_by_path()
+    # Validate once, up front. Halfway through rewriting a project is the worst
+    # possible moment to discover the pattern does not compile.
+    with {:ok, _regex} <- Search.compile(query, opts) do
+      open = open_buffers_by_path()
 
-    totals =
-      Enum.reduce(paths, %{files: 0, matches: 0}, fn path, acc ->
-        case Map.fetch(open, Quillex.Buffer.PathIdentity.canonical(path)) do
-          {:ok, buf_ref} -> replace_in_buffer(buf_ref, query, replacement, acc)
-          :error -> replace_on_disk(path, query, replacement, acc)
-        end
-      end)
+      totals =
+        Enum.reduce(paths, %{files: 0, matches: 0}, fn path, acc ->
+          case Map.fetch(open, Quillex.Buffer.PathIdentity.canonical(path)) do
+            {:ok, buf_ref} -> replace_in_buffer(buf_ref, query, replacement, opts, acc)
+            :error -> replace_on_disk(path, query, replacement, opts, acc)
+          end
+        end)
 
-    {:ok, totals}
+      {:ok, totals}
+    else
+      {:error, message} -> {:error, {:bad_pattern, message}}
+    end
   end
 
   defp open_buffers_by_path do
@@ -107,16 +113,16 @@ defmodule Quillex.Search.Project do
   # Through the buffer: one undoable step there, and no clash with unsaved
   # edits. The trailing :clear_search keeps a hidden buffer from lighting up
   # with highlights the user never asked for.
-  defp replace_in_buffer(buf_ref, query, replacement, acc) do
+  defp replace_in_buffer(buf_ref, query, replacement, opts, acc) do
     {:ok, snapshot} = Quillex.Buffer.fetch(buf_ref)
-    count = snapshot.lines |> Search.matches(query) |> length()
+    count = snapshot.lines |> Search.matches(query, opts) |> length()
 
     if count == 0 do
       acc
     else
       {:ok, _snapshot} =
         Quillex.Buffer.dispatch(buf_ref, [
-          {:search, query},
+          {:search, query, opts},
           {:replace_all, replacement},
           :clear_search
         ])
@@ -125,10 +131,10 @@ defmodule Quillex.Search.Project do
     end
   end
 
-  defp replace_on_disk(path, query, replacement, acc) do
+  defp replace_on_disk(path, query, replacement, opts, acc) do
     content = File.read!(path)
     lines = String.split(content, "\n")
-    matches = Search.matches(lines, query)
+    matches = Search.matches(lines, query, opts)
 
     if matches == [] do
       acc

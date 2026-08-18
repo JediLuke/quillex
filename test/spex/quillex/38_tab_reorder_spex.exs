@@ -47,5 +47,118 @@ defmodule Quillex.TabReorderSpex do
         {:ok, context}
       end
     end
+
+    # Reordering worked before this, but silently: tabs simply teleported past
+    # each other with nothing to say a drag was under way or where the tab would
+    # end up.
+    scenario "A drag in flight shows a drop line and lifts the tab" do
+      given_ "no drag is happening", context do
+        refute tab_bar_state().drag_active?
+        refute drop_indicator_visible?()
+        {:ok, Map.put(context, :centres, tab_centres(context))}
+      end
+
+      when_ "a tab is pressed but not yet moved", context do
+        {fx, fy} = context.centres.first
+        Probes.mouse_down(fx, fy)
+        Process.sleep(150)
+
+        # A press is not a drag. Every ordinary tab click starts this way, and
+        # flashing the drop line on each one would be noise.
+        refute tab_bar_state().drag_active?
+        refute drop_indicator_visible?()
+        {:ok, context}
+      end
+
+      when_ "the pointer travels far enough to count as a drag", context do
+        {fx, fy} = context.centres.first
+        Probes.send_mouse_move(fx + 30, fy)
+        Process.sleep(200)
+        {:ok, context}
+      end
+
+      then_ "the drop line marks the slot and the tab reads as lifted", context do
+        state = tab_bar_state()
+        assert state.drag_active?
+
+        assert drop_indicator_visible?()
+
+        # It straddles the leading edge of the dragged tab's slot.
+        {slot_x, _y, _w, _h} =
+          ScenicWidgets.TabBar.State.get_tab_bounds(state, state.dragging_tab_id)
+
+        {drawn_x, _} = Scenic.Primitive.get_transform(drop_indicator(), :translate)
+        assert_in_delta drawn_x + 1.5, slot_x, 0.01
+
+        dragged_bg = tab_background(state.dragging_tab_id)
+        assert dragged_bg == state.theme.tab_drag_background
+        refute dragged_bg == state.theme.tab_selected_background
+
+        {:ok, context}
+      end
+
+      then_ "releasing clears the feedback", context do
+        {fx, fy} = context.centres.first
+        Probes.mouse_up(fx + 30, fy)
+        Process.sleep(300)
+
+        refute tab_bar_state().drag_active?
+        assert tab_bar_state().dragging_tab_id == nil
+        refute drop_indicator_visible?()
+        {:ok, context}
+      end
+    end
+  end
+
+  defp tab_bar_scene do
+    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    {:ok, child} = Scenic.Scene.child(root, :tab_bar)
+    pid = if is_list(child), do: List.first(child), else: child
+    :sys.get_state(pid)
+  end
+
+  defp tab_bar_state, do: tab_bar_scene().assigns.state
+  defp tab_bar_graph, do: tab_bar_scene().assigns.graph
+
+  defp drop_indicator do
+    case Scenic.Graph.get(tab_bar_graph(), :tab_drop_indicator) do
+      [primitive] -> primitive
+      [] -> nil
+    end
+  end
+
+  # The indicator is a permanent primitive painted :clear when idle — patching
+  # one fill beats rebuilding the graph on every mouse-down — so "is it
+  # showing?" is a question about colour, not about presence.
+  defp drop_indicator_visible? do
+    case drop_indicator() do
+      nil ->
+        false
+
+      primitive ->
+        case Scenic.Primitive.get_style(primitive, :fill) do
+          {:color, {:color_rgba, {_r, _g, _b, 0}}} -> false
+          nil -> false
+          _ -> true
+        end
+    end
+  end
+
+  defp tab_background(tab_id) do
+    [primitive] = Scenic.Graph.get(tab_bar_graph(), {:tab_bg, tab_id})
+
+    case Scenic.Primitive.get_style(primitive, :fill) do
+      {:color, {:color_rgba, {r, g, b, _a}}} -> {r, g, b}
+      other -> other
+    end
+  end
+
+  # Screen centres of the two fixture tabs, whatever order they are in now —
+  # the previous scenario deliberately swapped them.
+  defp tab_centres(context) do
+    Map.new([first: context.first, second: context.second], fn {name, buffer} ->
+      %{entry: %{screen_bounds: b}} = SemanticProbe.dump("tab_bar_#{buffer.uuid}")
+      {name, {b.left + b.width / 2, b.top + b.height / 2}}
+    end)
   end
 end

@@ -25,13 +25,20 @@ defmodule Quillex.Search.Backend.Elixir do
     max_results = Keyword.get(opts, :max_results, 5_000)
     excludes = Keyword.get(opts, :excludes, [])
 
-    matches =
-      root
-      |> text_files(root, excludes)
-      |> Stream.flat_map(&matches_in_file(&1, query))
-      |> Enum.take(max_results)
+    # Compiled once for the whole walk, and validated here: a regex the user is
+    # halfway through typing must come back as an error the pane can show, not
+    # as a crash in the middle of a directory traversal.
+    with {:ok, regex} <- Search.compile(query, opts) do
+      matches =
+        root
+        |> text_files(root, excludes)
+        |> Stream.flat_map(&matches_in_file(&1, regex))
+        |> Enum.take(max_results)
 
-    {:ok, matches}
+      {:ok, matches}
+    else
+      {:error, message} -> {:error, {:bad_pattern, message}}
+    end
   end
 
   defp text_files(dir, root, excludes) do
@@ -79,7 +86,7 @@ defmodule Quillex.Search.Backend.Elixir do
     end
   end
 
-  defp matches_in_file(path, query) do
+  defp matches_in_file(path, regex) do
     case File.read(path) do
       # Not UTF-8 (Latin-1, UTF-16, a NUL-free binary): not a text file we
       # can search — the caseless unicode scan raises on invalid bytes.
@@ -87,18 +94,18 @@ defmodule Quillex.Search.Backend.Elixir do
         []
 
       {:ok, content} ->
-        if String.valid?(content), do: matches_in_lines(path, query, content), else: []
+        if String.valid?(content), do: matches_in_lines(path, regex, content), else: []
 
       {:error, _} ->
         []
     end
   end
 
-  defp matches_in_lines(path, query, content) do
+  defp matches_in_lines(path, regex, content) do
     lines = String.split(content, "\n")
 
     lines
-    |> Search.matches(query)
+    |> Search.matches_with(regex)
     |> Enum.map(fn {line, col, matched} ->
       %Match{
         path: path,
