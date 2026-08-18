@@ -117,14 +117,65 @@ defmodule Quillex.TestHelpers.Integration do
   # Click into the pane (semantic frame → works at any window size) so the
   # editor owns keyboard focus. The "rotating" 07 failures traced to typed
   # setup text silently going nowhere when focus was left elsewhere.
-  def ensure_editor_focused do
-    case SemanticHelpers.get_buffer_frame() do
-      %{x: x, y: y, width: w, height: h} ->
-        Probes.click(x + trunc(w * 0.4), y + trunc(h * 0.4))
-        Process.sleep(150)
+  def ensure_editor_focused, do: ensure_editor_focused(3)
+
+  def ensure_editor_focused(0) do
+    raise """
+    the editor pane never took keyboard focus.
+
+    Every scenario that types depends on this, and when it silently fails the
+    symptom is a keystroke that "did nothing" several steps later — which is
+    what made the old integration spex so hard to read.
+    """
+  end
+
+  def ensure_editor_focused(attempts) do
+    %{x: x, y: y, width: w, height: h} = buffer_pane_frame()
+
+    Probes.click(x + trunc(w * 0.4), y + trunc(h * 0.4))
+    Process.sleep(200)
+
+    # Assert the postcondition rather than assume the click landed. A click can
+    # be swallowed by an overlay that is still closing, or by a pane being
+    # rebuilt — and a click that did not take focus is indistinguishable from
+    # one that did until the next keystroke goes nowhere.
+    if editor_focused?() do
+      :ok
+    else
+      Probes.send_keys("escape", [])
+      Process.sleep(150)
+      ensure_editor_focused(attempts - 1)
+    end
+  end
+
+  @doc "Does the buffer pane hold the keyboard right now?"
+  def editor_focused? do
+    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+
+    case Scenic.Scene.child(root, :buffer_pane) do
+      {:ok, [pid | _]} ->
+        state = :sys.get_state(pid, 30_000).assigns.state
+        state.focused and not state.overlay_open
 
       _ ->
-        :ok
+        false
+    end
+  end
+
+  # The MAIN editor pane's frame, not "the latest text_buffer" — the search
+  # pane and other components publish text_buffer entries too, and clicking a
+  # frame that belongs to one of those focuses the wrong thing.
+  defp buffer_pane_frame do
+    {:ok, viewport} = Scenic.ViewPort.info(:main_viewport)
+
+    {:ok, entries} = SemanticHelpers.find_by_type_all_graphs(viewport, :text_buffer)
+
+    case Enum.find(entries, &(get_in(&1, [:semantic, :field_id]) == :buffer_pane)) do
+      %{semantic: %{frame: %{x: _, y: _, width: _, height: _} = frame}} ->
+        frame
+
+      _ ->
+        raise "no :buffer_pane entry in the semantic viewport — the editor is not on screen"
     end
   end
 
