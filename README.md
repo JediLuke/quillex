@@ -8,6 +8,44 @@ line. See **[ARCHITECTURE.md](ARCHITECTURE.md)** for the diagrams.
 
 ![QuillEx demo](assets/demo.gif)
 
+## What it does
+
+A text editor, in the sense that word means when nobody has to explain it.
+
+**Editing.** Multiple buffers in tabs, drag to reorder them. Undo and redo.
+Cut, copy, paste against the system clipboard. Select with the keyboard or the
+mouse; double-click a word. Tab and Shift+Tab indent and unindent.
+
+**Moving around.** Word-wise movement, line and document ends, page up and
+down, and `Ctrl+G` to jump to a line number — which clamps rather than
+refuses, because `999999` is what people type when they mean "the end".
+
+**Finding.** `Ctrl+F` searches the buffer; `Ctrl+H` replaces in it.
+`Ctrl+Shift+F` opens a project-wide search pane with its own query,
+replacement and exclude-glob fields, results grouped by file with the match
+marked inside the line. Dismiss a match or a whole file before replacing —
+which is what makes Replace All reviewable rather than an act of faith.
+Results open into one reusable preview tab, so walking thirty of them leaves
+one tab open rather than thirty. Case-sensitive and regular-expression modes
+for both.
+
+**Reading code.** Structural syntax highlighting: keywords, names, strings and
+comments are marked by **weight**, *slant* and underline rather than colour, so
+it reads the same for every kind of colour vision. Code folding by nesting
+level. Matching braces. Optional line and column guides. Word wrap.
+
+**The project.** A file navigator with drag-and-drop, spring-loaded folders and
+rename/delete. Files edited outside Quillex are noticed and offered for reload.
+
+**Looking at it.** Five themes — Alchemical Dance in dark and light, Solarized
+in both, and High Contrast — each driving the editor *and* the whole interface,
+because a light buffer inside a dark sidebar reads as broken rather than as a
+theme. Editor text size and interface scale adjust independently.
+
+Every feature is reachable from the menu bar, and every shortcut is listed in
+**Help → Keyboard Shortcuts**. Nothing here is discoverable only by knowing
+about it already.
+
 ## Quick Start
 
 ```bash

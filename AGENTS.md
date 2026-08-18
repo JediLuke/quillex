@@ -8,13 +8,17 @@
 - `tools/` and `biblio/` store auxiliary scripts and notes; `_build/` and `deps/` are build artifacts.
 
 ## Build, Test, and Development Commands
-- `mix deps.get` fetches dependencies (note: several are local path deps).
+- `mix deps.get` fetches dependencies. They are pinned Git revisions of several
+  forks; `QUILLEX_LOCAL_DEPS=1` switches to sibling checkouts for work that
+  spans repos (see `mix.exs` and the README).
 - `mix compile` compiles the project.
-- `iex -S mix run` starts the app in dev mode (matches README guidance).
+- `iex -S mix` starts the app in dev mode.
 - `mix test` runs the full ExUnit suite.
 - `mix format` formats `mix`, `config`, `lib`, and `test` sources per `.formatter.exs`.
-- Spex runs require `SCENIC_LOCAL_TARGET=glfw` (cairo-gtk is currently broken for spex).
-  Example: `SCENIC_LOCAL_TARGET=glfw MIX_ENV=test mix spex test/spex/quillex/01_app_launch_spex.exs`.
+- Spex go through `scripts/run_spex_quiet.sh` — never `mix spex` directly. The
+  wrapper boots the window pinner (without it, spex windows scatter across
+  desktops) and keeps the multi-thousand-line output in a log file.
+  Example: `scripts/run_spex_quiet.sh test/spex/quillex/01_app_launch_spex.exs`.
 
 ## Coding Style & Naming Conventions
 - Elixir code uses standard `mix format` conventions; run it before committing.
@@ -30,19 +34,25 @@
 ## Commit & Pull Request Guidelines
 - Recent commit messages are short and informal (no strict convention observed). Keep them concise and descriptive.
 - PRs should include: a brief summary, testing notes (`mix test` or scoped command), and screenshots for UI changes in Scenic.
-- Link related issues or documents (e.g., `GEDIT_CLONE_ROADMAP.md`) when applicable.
+- Link related issues or documents (e.g., `docs/ROADMAP_1.0.md`) when applicable.
 
 ## Local Dependencies & Setup Notes
-- `mix.exs` uses local path dependencies for Scenic and related libraries; ensure sibling repos exist (e.g., `../scenic`, `../scenic_driver_local`).
-- Scenic requires OpenGL system deps; follow the Scenic install docs before running.
+- `mix.exs` pins immutable Git revisions of the Scenic constellation, so a
+  fresh clone builds on its own. `QUILLEX_LOCAL_DEPS=1` is the development
+  posture: it builds against sibling checkouts (`../scenic`,
+  `../scenic-widget-contrib`, …) so a change spanning two repos does not need
+  a commit, a push and a re-pin before every test run. Commit, push and re-pin
+  before releasing — a revision that only exists on your machine builds fine
+  for you and for nobody else.
+- Scenic requires OpenGL system deps; `scripts/install.sh` handles them.
 
 ## State Architecture — RadixCache stores (READ FIRST)
 
 Diagrams: `ARCHITECTURE.md` (repo root).
 
 State lives in GenServer stores organized by data domain, publishing full
-snapshots on retained `Scenic.PubSub` sources (see the Architecture section
-of `Quillex-BasePrompt.md` for the full picture):
+snapshots on retained `Scenic.PubSub` sources (`ARCHITECTURE.md` has the
+diagrams and the reasoning):
 
 - `Buffer.Process` → `:"radix_buf_<uuid>"` (per-buffer text state)
 - `BufferManager` → `:radix_buffers` (buffer list, active buffer, dirty flags)

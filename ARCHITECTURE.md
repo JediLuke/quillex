@@ -6,9 +6,10 @@ stores on Scenic's retained PubSub, with a hard line between a frontend that
 owns raw input and a backend that only ever sees semantic actions.
 
 This document is the map. The doctrine lives in `AGENTS.md` (State
-Architecture section) and `Quillex-BasePrompt.md`; the store contract that
-makes the TextField reusable is documented in `ScenicWidgets.TextField`'s
-moduledoc (in `../scenic-widget-contrib`).
+Architecture section); the store contract that makes the TextField reusable is
+documented in `ScenicWidgets.TextField`'s moduledoc (in
+`../scenic-widget-contrib`). `docs/CODEBASE_TOUR.md` is the guided walk through
+the code itself.
 
 ## Runtime ownership and public buffer contract
 
@@ -106,6 +107,60 @@ tab click ──▶ RootScene ──cast──▶ BufferManager ──publish─
     the snapshot
 ```
 
+## The input and focus model
+
+The other thing a newcomer cannot infer from the tree. Scenic delivers input
+two ways, and Quillex uses both — for different kinds of input, on purpose.
+
+```
+                        ┌──────────────────────────────┐
+                        │  ViewPort / Driver (GLFW)    │
+                        └───────┬──────────────┬───────┘
+             POSITIONAL         │              │      NON-POSITIONAL
+        (hit-tested: goes to    │              │   (broadcast: goes to EVERY
+         whichever primitive    │              │    scene that asked for it)
+         declared `input: […]`) │              │
+                                ▼              ▼
+              ┌──────────────────────┐   ┌──────────────────────────┐
+              │ cursor_button        │   │ key · codepoint          │
+              │ cursor_pos           │   │ (+ cursor_scroll, which  │
+              │  → one component,    │   │  IS positional but must  │
+              │    local coords      │   │  be requested, so every  │
+              │                      │   │  handler bounds-checks   │
+              │                      │   │  its own frame first)    │
+              └──────────┬───────────┘   └────────────┬─────────────┘
+                         │                            │
+                         │                    every listener receives it,
+                         │                    so each one GATES on focus:
+                         ▼                            ▼
+        ┌────────────────────────────┐   ┌──────────────────────────────┐
+        │ RootScene routes FOCUS by  │   │ TextField  : focused? and    │
+        │ where the click landed:    │   │              not overlay_open│
+        │                            │   │ SideNav    : focused?        │
+        │  x < sidebar width         │   │ SearchPane : focused?        │
+        │    → focus side pane       │   │ SearchBar  : it is the       │
+        │      blur buffer pane      │   │              overlay         │
+        │  otherwise                 │   └──────────────────────────────┘
+        │    → blur side pane        │
+        │      focus buffer pane     │   Focus is granted by :focus /
+        └────────────────────────────┘   :blur puts from the parent.
+```
+
+**Why two gates on the editor.** Focus is granted by an asynchronous message,
+so between "an overlay opened" and "the editor learned it lost focus" there is
+a window in which the dying pane is still eligible for keystrokes. That window
+is not theoretical: the first characters of a search query used to be inserted
+into the document. `{:set_overlay_open, true}` is a second, synchronous gate
+that closes it.
+
+**Why `request_input` and `input:` must not be mixed for the same type.** A
+component that both requests `:cursor_button` and declares it on a primitive
+receives every press twice. The same trap, in a different shape, is a component
+with no `handle_update/3`: Scenic re-runs `init/3` on the same process when its
+params change, which re-runs `request_input` — and every keystroke arrives
+twice. The SearchPane was built with that bug and the symptom was a query field
+reading `"needleneedle"`.
+
 ## The three properties that make it work
 
 1. **The store line is absolute.** Every arrow crossing it is either a
@@ -134,7 +189,13 @@ tab click ──▶ RootScene ──cast──▶ BufferManager ──publish─
 | `Quillex.Buffer.Process` (×N) | `:"radix_buf_<uuid>"` | one document: lines, cursors, selection, undo/redo, search |
 | `Quillex.Buffer.BufferManager` | `:radix_buffers` | buffer lifecycle + list, active buffer, dirty flags (edge-cast) |
 | `Quillex.RadixCache.PaneStore` | `:radix_pane_main` | what the pane displays; follows the active buffer, forwards actions |
-| `Quillex.RadixCache.ViewStore` | `:radix_view` | editor settings, file-nav flags, status message + its clear-timer |
+| `Quillex.RadixCache.ViewStore` | `:radix_view` | editor settings, theme, file-nav flags, status message + its clear-timer |
+| `Quillex.RadixCache.ProjectSearchStore` | `:radix_project_search` | project-wide search: query, scope, exclude globs, results, dismissals |
+| `Quillex.RadixCache.HighlightStore` | `:radix_highlights` | token spans for the pane's document, for structural syntax marking |
+
+`ProjectSearchStore` is the one store that subscribes to another's source: it
+follows `:radix_pane_main` so that editing a file the results are showing
+re-searches *that buffer* (debounced), and never the tree.
 
 Source atoms are minted only in `Quillex.RadixCache.Sources`. Splits someday
 = one more PaneStore with its own source; no other concept changes.

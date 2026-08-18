@@ -6,9 +6,9 @@
 > — Frédéric Chopin
 
 That quote is the entire content of the first commit, May 5th, 2021. Five
-years and 331 commits later, the architectural heart of this editor — the
-store layer that every other part of the system is organised around — is
-**309 lines of code**. The quote turned out to be a design document.
+years later, the architectural heart of this editor — the store layer that
+every other part of the system is organised around — is still the smallest
+thing in it. The quote turned out to be a design document.
 
 This tour complements `ARCHITECTURE.md` (which owns the topology and flow
 diagrams) rather than repeating it. It covers what that document doesn't:
@@ -21,17 +21,22 @@ findings to the exact code responsible.
 
 ## 1. The shape of the thing
 
-~8,100 lines of Elixir in `lib/`, ~25,400 in `test/`. That 3:1 ratio is the
-first thing to appreciate: this is a text editor that is mostly *test
-harness*, and the harness drives a real GLFW window.
+~12,400 lines of Elixir in `lib/`, ~36,000 in `test/`. That ratio is the first
+thing to appreciate: this is a text editor that is mostly *test harness*, and
+the harness drives a real GLFW window.
 
 | Area | LOC | Role |
 |---|---|---|
-| `lib/gui/` | 2,001 | The entire frontend: one scene + its renderer |
-| `lib/buffers/` | 2,228 | The document backend: process, reducer, mutator |
-| `lib/test_helpers/` | 1,531 | Viewport introspection, shipped in `lib/` so spex can use it |
-| `lib/radix_cache/` | **309** | The store layer — smallest area, centre of gravity |
-| `lib/api/`, `lib/utils/`, `lib/mix/`, top-level | ~1,900 | API surface, CLI, perf, tooling |
+| `lib/gui/` | 5,836 | The frontend: one scene, its renderer, and the stores it reads |
+| `lib/buffers/` | 2,665 | The document backend: process, reducer, mutator |
+| `lib/utils/` | 2,060 | CLI, file operations, external-file sync, perf |
+| `lib/search/` | 708 | Project-wide search: backends, globs, replace |
+| `lib/api/` | 655 | The public contract |
+| `lib/gui/radix_cache/` | **1,275** | The store layer — the centre of gravity |
+
+Note where the store layer sits: *inside* `lib/gui/`, not beside it. That is
+not where the doctrine would put it, and it is worth knowing before you go
+looking for `lib/radix_cache/` and fail to find it.
 
 The frontend is a single `Scenic.Scene` — `QuillEx.RootScene` — and
 everything visible inside it is a reusable component from
@@ -95,7 +100,7 @@ flowchart TD
   still the project root instead of the user's shell directory, the file
   navigator would open in the wrong place forever after.
 - **The stores start before Scenic** — and `RadixCache.Supervisor`
-  (`lib/radix_cache/supervisor.ex:39`) starts `Scenic.PubSub` *itself*.
+  (`lib/gui/radix_cache/supervisor.ex`) starts `Scenic.PubSub` *itself*.
   This is what the scenic fork exists for: upstream Scenic would try to
   start its own PubSub and crash; the fork skips it when one is already
   running. The stores must exist before any scene subscribes to them.
@@ -112,7 +117,7 @@ flowchart TD
 
 ---
 
-## 3. The store layer — 309 lines, four stores
+## 3. The store layer — six stores
 
 Every store is a GenServer that owns exactly one retained `Scenic.PubSub`
 source, and every mutation funnels through one `publish` call. Source atoms
@@ -123,9 +128,11 @@ are minted in exactly one place — `Quillex.RadixCache.Sources`, 21 lines.
 | `Buffer.Process` (×N) | `:radix_buf_<uuid>` | one document |
 | `BufferManager` | `:radix_buffers` | buffer list, active buffer, dirty flags |
 | `PaneStore` | `:radix_pane_main` | *which* document the main pane shows |
-| `ViewStore` | `:radix_view` | settings, file-nav, status message |
+| `ViewStore` | `:radix_view` | settings, theme, file-nav, status message |
+| `ProjectSearchStore` | `:radix_project_search` | project search: query, scope, results, dismissals |
+| `HighlightStore` | `:radix_highlights` | token spans for the pane's document |
 
-**`PaneStore` (`lib/radix_cache/pane_store.ex`, 116 lines) is the most
+**`PaneStore` (`lib/gui/radix_cache/pane_store.ex`) is the most
 conceptually interesting module in the repo.** It is an indirection layer:
 the TextField subscribes to `:radix_pane_main` once, at creation, and never
 learns which buffer it is showing. When the active buffer changes,
@@ -152,10 +159,15 @@ PaneStore it had 4.
   with `make_ref()` (`view_store.ex:105`). A stale timer's ref no longer
   matches and is swallowed (`:118`), so a slow old clear can never erase a
   newer message. Sixteen lines for a bug most editors ship with.
-- RootScene merges only a whitelist of 8 keys from the store
-  (`@view_keys`, `qlx_root_scene.ex:692`). The search and dialog flags live
-  in the store but are deliberately *not* merged, because clobbering them
-  mid-dialog would break in-flight choreography.
+- RootScene merges only a whitelist of keys from the store (`@view_keys` in
+  `qlx_root_scene.ex`). The search and dialog flags live in the store but are
+  deliberately *not* merged, because clobbering them mid-dialog would break
+  in-flight choreography.
+
+**`ProjectSearchStore` is the one store that subscribes to another's source.**
+It follows `:radix_pane_main`, so editing a file the search results are showing
+re-searches *that buffer*, debounced — the pane stays live for open documents
+without ever walking the tree on a keystroke.
 
 ---
 
@@ -286,10 +298,9 @@ buffer tests. Spinoza's *Ethics* Part I (81KB, in `biblio/` and
 `test/support/`) is the standard large-file corpus — scenarios in the
 integration spex are literally named "Find in Spinoza."
 
-**Spex** (20 files, 9,420 LOC, `scripts/run_spex.sh`) drives a **real GLFW
-window**. Each spex is a `spex … scenario … given_/when_/then_` block;
-scenarios deliberately share application state in sequence, like a user
-session. The assertions are the remarkable part:
+**Spex** (~58 files, ~16,000 LOC, `scripts/run_spex_quiet.sh`) drives a **real
+GLFW window**. Each spex is a `spex … scenario … given_/when_/then_` block. The
+assertions are the remarkable part:
 `Quillex.TestHelpers.ScriptInspector` reads Scenic's *script table* and
 reconstructs the on-screen text sorted by (y, x) — verifying
 pixels-as-rendered, not internal state.
@@ -307,9 +318,27 @@ and the docstring explains why: the pinner blocks in `XNextEvent` and would
 never notice a closed pipe. A text editor with a bespoke X11 daemon in its
 test tooling is a project that takes its test ergonomics seriously.
 
-`test/old_spex/` — 55 files, 10,695 lines of retired debug scenarios
+`test/old_spex/` — 55 files of retired debug scenarios
 (`final_debug_spex.exs`…) — is the archaeological layer of a hard debugging
 era, kept rather than deleted.
+
+**Scenarios used to share state deliberately, in sequence, like a user
+session — and it was a mistake.** `07_integration_v1_spex.exs` held fifteen
+scenarios that inherited each other's buffers, and it failed a *different,
+shifting* set of them on identical code, one to six per run. That made it
+useless as a regression signal: a real break and ordinary noise looked exactly
+alike, and it once cost a rebuild of the TabBar renderer under a diagnosis that
+was simply wrong. It is now seven per-feature files (`50_`–`56_`), each
+starting from `Quillex.TestHelpers.Integration.fresh_editor!/0`, and they run
+green together, repeatedly. Two files still carry the disease —
+`04_view_settings` and `30_clipboard` — and are named in the roadmap.
+
+The lesson generalises to two rules the newer spex follow. **Own your setup**:
+a scenario that inherits what the last one left open fails for reasons that
+have nothing to do with what it is testing. **Never hardcode a coordinate**:
+an open file navigator moves the editor pane 250px right, so a fixed click
+lands in the sidebar — derive every point from
+`SemanticHelpers.get_buffer_frame()`.
 
 ---
 

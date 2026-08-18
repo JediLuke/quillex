@@ -633,14 +633,40 @@ next in line for the same treatment.
 of this session: `04` and `30` both looked like regressions from the theme and
 menu work, and both were failing identically before that work existed.
 
-## 10. Documentation + architecture diagrams
+## 10. Documentation + architecture diagrams — ✅ DONE 2026-08-18
 
-`README` (user-facing), `ARCHITECTURE.md` + `docs/CODEBASE_TOUR.md`
-(developer-facing). Prune the known-stale references: `Quillex-BasePrompt.md`
-points at deleted files, `TODO_TEXT_EDITOR_FEATURES.md` is stale.
+**README** gained the section it did not have: *what Quillex does*. It
+explained how to install and launch an editor without ever saying what the
+editor could do — which for a 1.0 README is the wrong way round.
 
-Diagrams for the store line (RadixCache → PubSub → components) and the
-input/focus model — the two things a newcomer cannot infer from the tree.
+**ARCHITECTURE.md** gained the **input and focus model**, the second of the two
+diagrams this item asked for and the one a newcomer genuinely cannot infer from
+the tree: positional input is hit-tested to one component, non-positional input
+is broadcast to every listener, and therefore every listener gates on a focus
+flag. It also records the two traps that follow from that — why the editor
+needs a *second*, synchronous overlay gate (focus arrives by message, and the
+window between "an overlay opened" and "the editor knows" is where the first
+characters of a search query used to land in the document), and why
+`request_input` and `input:` must never name the same type.
+
+The store-line diagram was already there and is now current: the sidebar slot
+has two occupants, and `ProjectSearchStore` and `HighlightStore` are in the
+inventory — including the one thing that makes the search pane live, which is
+that `ProjectSearchStore` subscribes to another store's source.
+
+**docs/CODEBASE_TOUR.md** had drifted: its line counts were from an 8,100-line
+`lib/`, and it pointed at `lib/radix_cache/`, which now lives inside
+`lib/gui/`. Its test-estate section said scenarios "deliberately share
+application state in sequence, like a user session" — which was true, and was
+the disease item 9 cured; it now says so, with the two rules the newer spex
+follow.
+
+**Pruned.** `Quillex-BasePrompt.md` (a superseded agent brief: wrong directory
+tree, path dependencies that are now pinned revisions, seven dead file paths)
+and `TODO_TEXT_EDITOR_FEATURES.md` (a wishlist whose items are now either
+shipped or recorded as declined) are deleted. `AGENTS.md` still described the
+dependencies as path deps and told readers to run `mix spex` directly, which
+scatters windows across desktops; both corrected.
 
 ## 11. The demo spex — *last*
 
@@ -664,7 +690,7 @@ flowchart TB
     S6["6. Themes ✅"] --> S7
     S7["7. Menubar polish ✅"] --> S8["8. Discoverability sweep"]
     S8["8. Discoverability ✅"] --> S10["10. Docs + diagrams"]
-    S10 --> S11["11. Demo spex<br/>(final gate)"]
+    S10["10. Docs + diagrams ✅"] --> S11["11. Demo spex<br/>(final gate)"]
 ```
 
 Item 9 is independent and worth doing early — it is what makes every later
