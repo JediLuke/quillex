@@ -430,47 +430,51 @@ Covered by `43_goto_line_spex.exs`, including the menubar route.
 >
 > A unit test will not catch this. A spex will, immediately.
 
-## 5b. The cursor lives in source space; the screen is in display space
+## 5b. The cursor in display space — ✅ DONE 2026-08-17
 
-Two symptoms reported 2026-08-17, **one root cause**. Word wrap turns one source
-line into several display rows, and the cursor code was never told.
+Both symptoms had the one root cause, and both are fixed.
 
-**a) Down/Up arrow skips the rest of a wrapped line.** With the cursor on the
-first visual row of a line that wraps to three, Down jumps to the *next numbered
-line* instead of the second visual row. `Reducer.move_cursor/2` is literally
-`line + 1` over `state.lines` (`text_field/reducer.ex:1308`) — source lines, no
-notion of wrap.
+`Renderer.display_to_source_cursor/2` is the return leg
+`source_to_display_cursor/2` never had. Vertical movement and clicking now
+both happen in display space and convert back to the source `{line, col}` the
+buffer stores.
 
-**b) Clicking past the end of a wrapped row lands on the wrong column.**
-`State.click_to_cursor/2` correctly maps the click's Y to a display row and then
-to a source line (`display_to_source_line/2`) — but it then measures X against
-the **entire source line** from its first character. Click on the second visual
-row and the column is computed as though you had clicked the first. Note the
-horizontal clamp itself is already right: `find_column/5` returns `length + 1`
-when the click runs past the last glyph, so clicking past end-of-line does mean
-end-of-line **when wrap is off**. Reproduce with wrap on before assuming
-otherwise.
+Three things this needed that were not obvious from the write-up:
 
-**Why this is trickier than it looks.** Vertical movement has to happen in
-display space (row above/below, preserving a *goal column* measured in display
-columns), while the cursor is stored — and must stay stored — as a source
-`{line, col}`, because that is what the buffer, undo, search and every other
-consumer speak. So each vertical move is: source → display, move, display →
-source. The goal column must survive several moves through short rows without
-being clipped, which means it cannot be re-derived from the cursor each time.
+- **The goal column cannot be re-derived from the cursor** — already predicted
+  above, and true.
+- **Neither can the display ROW.** A cursor at a wrap boundary is genuinely
+  both the end of one visual row and the start of the next; re-deriving picks
+  the earlier one, so a second Down computes the same target and the cursor
+  stops dead at the boundary. Row and column are both remembered, stored
+  alongside the cursor that produced them so any other movement invalidates
+  them without every call site having to know.
+- **Wrapping swallows whitespace at each boundary, including into the row you
+  are asking about.** Leaving that last adjustment out put the cursor one
+  character further right per wrap on a spaced line.
 
-**Precedent in the codebase:** this exact confusion was already fixed once for
-scrolling — Phase 4b records that `ensure_cursor_visible` "computed scroll
-targets from SOURCE line numbers, so with word wrap on the end of a document was
-unreachable. Now uses the display line." Display-awareness was retrofitted to
-scrolling and never extended to click mapping or vertical movement.
+**The `:store_backed` trap again, in a new shape.** Arrow keys in Quillex never
+reach `Reducer.move_cursor/2`; they become `{:move_cursor, :up, 1}` buffer
+actions, and the buffer cannot answer "one row up" — wrapping is a function of
+the widget's frame and font. So when display and source disagree the widget
+resolves the move itself and sends an absolute position: `{:set_cursor, _}`,
+or the new `{:select_to, {line, col}}` for Shift+Up/Down. With wrap off and no
+folds the old direction-based actions are sent unchanged and the projection is
+skipped entirely.
 
-**Watch the conformance oracle.** `25_model_conformance_spex.exs` folds
-operations through the pure `Reducer`, which knows only source lines. If the GUI
-starts moving by display row, the two diverge under wrap — which is very likely
-the same class as the already-logged open question there (oracle `{1,17}` vs GUI
-`{1,8}`). Decide deliberately: either the oracle learns about wrap, or vertical
-movement is declared a view-local concern and excluded from conformance.
+**The conformance oracle question, answered.** Vertical movement under wrap is
+declared a **view-local concern**: the widget resolves it and expresses the
+result to the store as an absolute position, so what the store sees is still a
+statement about the document. `25_model_conformance_spex.exs` models the
+document, not the view, and is unaffected — it runs with wrap off, and its
+already-logged cursor divergence at document boundaries is a separate
+(clamp-vs-wrap) question.
+
+Covered by `44_wrapped_cursor_spex.exs`: Down walks visual rows, the goal
+column survives a short row, and a click on the second visual row lands on the
+character drawn under the pointer. `40_word_wrap_spex.exs` was made
+self-contained on the way past — it assumed the buffer its `setup_all` created
+was still active, which stops being true the moment another spex runs first.
 
 ## 6. Themes
 
@@ -607,7 +611,7 @@ flowchart TB
     S5["5. Go to Line ✅"]
     S9["9. Split spex 07<br/>(makes everything measurable)"] --> S11
     S4["4. SearchPane ✅"] --> S7["7. Menubar polish"]
-    S5b["5b. Cursor in display space<br/>(wrap-aware click + arrows)"] --> S11
+    S5b["5b. Cursor in display space ✅"] --> S11
     S6["6. Themes<br/>recon sweep first"] --> S7
     S7 --> S8["8. Discoverability sweep"]
     S8 --> S10["10. Docs + diagrams"]

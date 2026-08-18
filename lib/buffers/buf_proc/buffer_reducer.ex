@@ -172,6 +172,15 @@ defmodule Quillex.Buffer.Process.Reducer do
     buf |> Selection.select_text(direction, count)
   end
 
+  # Extend (or start) a selection to an absolute position. Shift+Up/Down under
+  # word wrap arrives here rather than as {:select_text, :up, 1}: which
+  # character is "one row up" depends on how the view wrapped the line, which
+  # only the widget knows, so it resolves the position and sends it whole.
+  def process(%Quillex.Structs.BufState{} = buf, {:select_to, {line, col}})
+      when line >= 1 and col >= 1 do
+    buf |> Selection.select_to({line, col})
+  end
+
   def process(%Quillex.Structs.BufState{} = buf, :clear_selection) do
     %{buf | selection: nil}
   end

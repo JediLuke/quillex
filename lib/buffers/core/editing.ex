@@ -441,6 +441,30 @@ defmodule Quillex.Buffer.Core.Selection do
   end
 
   # Helper function to determine if cursor movement is contracting a selection
+
+  @doc """
+  Extend the selection to an absolute `{line, col}`, starting one at the
+  current cursor if there is none.
+
+  The directional `select_text/3` cannot express a wrap-aware vertical move:
+  "one row up" is a fact about how the view laid the text out, not about the
+  document. The widget resolves it and calls this instead.
+  """
+  def select_to(%{cursor: c, selection: nil} = buf, {line, col}) do
+    moved = Navigation.move_cursor(buf, {line, col})
+    %{moved | selection: %{start: {c.line, c.col}, end: {line, col}}}
+  end
+
+  def select_to(%{selection: %{start: start_pos}} = buf, {line, col}) do
+    moved = Navigation.move_cursor(buf, {line, col})
+
+    if {line, col} == start_pos do
+      %{moved | selection: nil}
+    else
+      %{moved | selection: %{start: start_pos, end: {line, col}}}
+    end
+  end
+
   defp is_contracting_selection?(start_pos, end_pos, current_pos, new_pos) do
     # Normalize the selection to determine actual start and end
     {actual_start, actual_end} = Position.normalize(start_pos, end_pos)

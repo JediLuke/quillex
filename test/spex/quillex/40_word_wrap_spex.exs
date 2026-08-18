@@ -26,6 +26,20 @@ defmodule Quillex.WordWrapSpex do
       "The real View-menu toggle changes layout and keeps all wrapped content reachable",
     tags: [:phase_40, :view_settings, :word_wrap] do
     scenario "Enabling Word Wrap on prose containing a very long identifier" do
+      # Its own document, not whatever setup_all left active: another spex in
+      # the run may have activated a different buffer by the time this starts.
+      given_ "a document whose single line contains a very long identifier", context do
+        {:ok, buffer} =
+          Quillex.Buffer.new(%{
+            name: "word-wrap-proof.txt",
+            data: ["alpha beta #{context.long_token} omega"]
+          })
+
+        :ok = Quillex.Buffer.activate(buffer)
+        Process.sleep(350)
+        {:ok, context}
+      end
+
       when_ "Word Wrap is enabled through the View menu", context do
         unless pane_state().wrap_mode == :word do
           Probes.click_element("icon_menu_view")
