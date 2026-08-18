@@ -46,6 +46,10 @@ defmodule Quillex.RadixCache.ViewStore do
     show_menu_shortcuts: true,
     # Structural syntax highlighting (weight/slant/underline by token class)
     syntax_highlighting: true,
+    # The colour scheme for editor AND chrome alike — see Quillex.GUI.Palette.
+    # One palette drives both: a light buffer inside a dark sidebar reads as
+    # broken, not as a theme.
+    theme: :alchemical_dark,
     chrome_zoom: 100,
     # File navigator sidebar
     show_file_nav: false,
@@ -130,6 +134,12 @@ defmodule Quillex.RadixCache.ViewStore do
 
   def set_fold_level(n) when is_integer(n) and n in 1..4 do
     GenServer.cast(__MODULE__, {:set_fold_level, n})
+  end
+
+  @doc "Choose the colour scheme. See `Quillex.GUI.Palette.themes/0`."
+  def set_theme(id) when is_atom(id) do
+    true = Quillex.GUI.Palette.known?(id)
+    GenServer.cast(__MODULE__, {:set_theme, id})
   end
 
   def set_chrome_zoom(n) when is_integer(n) and n in 50..200,
@@ -261,6 +271,10 @@ defmodule Quillex.RadixCache.ViewStore do
 
   def handle_cast({:set_fold_level, n}, state) do
     {:noreply, publish(state, %{state.view | fold_level: n})}
+  end
+
+  def handle_cast({:set_theme, id}, state) do
+    {:noreply, publish(state, %{state.view | theme: id})}
   end
 
   def handle_cast({:set_chrome_zoom, n}, state) do

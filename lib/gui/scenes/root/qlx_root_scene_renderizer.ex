@@ -19,9 +19,8 @@ defmodule QuillEx.RootScene.Renderizer do
   @status_bar_height 24
 
   # Background colours for each severity level
-  @status_color_info {60, 130, 70}
-  @status_color_warning {170, 100, 30}
-  @status_color_error {160, 40, 40}
+  # Colour lives in Quillex.GUI.Palette — one palette for the editor and every
+  # piece of chrome. Nothing in this file names a colour.
 
   # `_scene` is kept in the signature for API stability (callers pass the scene struct);
   # it is currently unused because rendering is pure graph-state transformation.
@@ -148,6 +147,7 @@ defmodule QuillEx.RootScene.Renderizer do
         end
 
       apply_file_nav_frame(scene, old_state, state, file_nav_frame)
+      apply_theme(scene, old_state, state)
 
       graph
       |> maybe_update_file_nav(state, file_nav_frame)
@@ -159,6 +159,7 @@ defmodule QuillEx.RootScene.Renderizer do
       # Incremental updates - z-order preserved
       apply_buffer_pane_settings(scene, old_state, state, actual_buffer_frame)
       apply_file_nav_frame(scene, old_state, state, file_nav_frame)
+      apply_theme(scene, old_state, state)
 
       graph
       |> maybe_move_buffer_pane(old_state, state, actual_buffer_frame)
@@ -184,6 +185,7 @@ defmodule QuillEx.RootScene.Renderizer do
           :buffer_pane,
           {:update_settings,
            %{
+             colors: Quillex.GUI.Palette.text_field_colors(palette(state)),
              show_line_numbers: state.show_line_numbers,
              show_matching_brace: state.show_matching_brace,
              highlight_current_line: state.highlight_current_line,
@@ -221,6 +223,7 @@ defmodule QuillEx.RootScene.Renderizer do
         old_state.tab_width != state.tab_width or
         old_state.text_size != state.text_size or
         old_state.syntax_highlighting != state.syntax_highlighting or
+        old_state.theme != state.theme or
         old_state.chrome_zoom != state.chrome_zoom or
         old_state.file_nav_width != state.file_nav_width or
         old_state.frame != state.frame or
@@ -237,6 +240,7 @@ defmodule QuillEx.RootScene.Renderizer do
         :buffer_pane,
         {:update_settings,
          %{
+           colors: Quillex.GUI.Palette.text_field_colors(palette(state)),
            show_line_numbers: state.show_line_numbers,
            show_matching_brace: state.show_matching_brace,
            highlight_current_line: state.highlight_current_line,
@@ -247,6 +251,41 @@ defmodule QuillEx.RootScene.Renderizer do
            highlight_styles: highlight_styles(state),
            frame: frame
          }}
+      )
+    end
+
+    :ok
+  end
+
+  # A theme change repaints every surviving child in place. Rebuilding them
+  # instead would work, but the side pane would lose its expanded folders and
+  # its scroll offset — the same failure a status toast used to cause — and the
+  # open dropdown would close under the pointer that just chose the theme.
+  defp apply_theme(_scene, nil, _state), do: :ok
+
+  defp apply_theme(_scene, %{theme: theme}, %{theme: theme}), do: :ok
+
+  defp apply_theme(scene, _old_state, state) do
+    p = palette(state)
+
+    Scenic.Scene.put_child(scene, :tab_bar, {:set_theme, Quillex.GUI.Palette.tab_bar_theme(p)})
+    Scenic.Scene.put_child(scene, :icon_menu, {:set_theme, Quillex.GUI.Palette.icon_menu_theme(p)})
+
+    Scenic.Scene.put_child(
+      scene,
+      :cursor_pos_label,
+      {:set_theme, %{color: p.chrome_fg, background: p.chrome_bg}}
+    )
+
+    if state.show_project_search do
+      Scenic.Scene.put_child(scene, :project_search_pane, {:set_theme, search_pane_theme(state)})
+    end
+
+    if state.show_file_nav do
+      Scenic.Scene.put_child(
+        scene,
+        :file_nav,
+        {:set_theme, Quillex.GUI.Palette.side_nav_theme(p)}
       )
     end
 
@@ -294,7 +333,8 @@ defmodule QuillEx.RootScene.Renderizer do
       id: :search_bar,
       frame: frame,
       query: state.search_query,
-      replace_mode: state.show_replace
+      replace_mode: state.show_replace,
+      theme: Quillex.GUI.Palette.search_bar_theme(palette(state))
     }
 
     graph
@@ -353,7 +393,7 @@ defmodule QuillEx.RootScene.Renderizer do
 
     # Sized against the editor's text, but deliberately smaller than it —
     # see SideNavThemes.for_editor/1.
-    side_nav_theme = SideNavThemes.for_editor(scaled(24, state))
+    side_nav_theme = SideNavThemes.for_editor(scaled(24, state), palette(state))
 
     side_nav_data = %{
       frame: frame,
@@ -378,13 +418,15 @@ defmodule QuillEx.RootScene.Renderizer do
   # editor's text size — a 24pt document must not turn the sidebar into a
   # billboard. Same reasoning as SideNavThemes.for_editor/1.
   defp search_pane_theme(state) do
-    %{
+    palette(state)
+    |> Quillex.GUI.Palette.search_pane_theme()
+    |> Map.merge(%{
       font: :ibm_plex_mono,
       font_size: scaled(13, state),
       small_font_size: scaled(11, state),
       row_height: scaled(20, state),
       field_height: scaled(24, state)
-    }
+    })
   end
 
   # Update the sidebar (add/remove/swap) without full rebuild
@@ -436,17 +478,14 @@ defmodule QuillEx.RootScene.Renderizer do
     boundary_x = frame.pin.x + frame.size.width
     center_y = frame.pin.y + frame.size.height * 0.9
 
-    {fill, stroke, arrow} =
+    handle_state =
       cond do
-        state.file_nav_resizing ->
-          {{205, 216, 236}, {235, 241, 250}, {42, 52, 72}}
-
-        state.file_nav_resize_hovered ->
-          {{72, 91, 126}, {150, 174, 220}, {225, 232, 245}}
-
-        true ->
-          {{55, 60, 72}, {105, 115, 135}, {180, 188, 205}}
+        state.file_nav_resizing -> :dragging
+        state.file_nav_resize_hovered -> :hovered
+        true -> :idle
       end
+
+    {fill, stroke, arrow} = Quillex.GUI.Palette.handle_colors(palette(state), handle_state)
 
     group(
       graph,
@@ -484,7 +523,7 @@ defmodule QuillEx.RootScene.Renderizer do
   defp maybe_create_status_bar(graph, _state, nil), do: graph
 
   defp maybe_create_status_bar(graph, state, %Widgex.Frame{} = frame) do
-    bg_color = status_color(state.status_severity)
+    bg_color = Quillex.GUI.Palette.status_color(palette(state), state.status_severity)
     {w, h} = {frame.size.width, frame.size.height}
     {tx, ty} = frame.pin.point
     msg = state.status_message || ""
@@ -496,7 +535,7 @@ defmodule QuillEx.RootScene.Renderizer do
         |> rect({w, h}, fill: bg_color)
         |> text(msg,
           translate: {scaled(8, state), h - scaled(6, state)},
-          fill: :white,
+          fill: palette(state).status_fg,
           font_size: scaled(14, state)
         )
       end,
@@ -520,9 +559,7 @@ defmodule QuillEx.RootScene.Renderizer do
   end
 
   # Map severity atom to a background colour tuple
-  defp status_color(:warning), do: @status_color_warning
-  defp status_color(:error), do: @status_color_error
-  defp status_color(_), do: @status_color_info
+  defp palette(state), do: Quillex.GUI.Palette.get(state.theme)
 
   # Render top bar (tab bar + icon menu)
   defp render_top_bar(graph, scene, old_state, state, frame) do
@@ -570,7 +607,9 @@ defmodule QuillEx.RootScene.Renderizer do
           %{
             frame: frame,
             source: Quillex.RadixCache.PaneStore.source(),
-            font: %{name: :ibm_plex_mono, size: scaled(13, state)}
+            font: %{name: :ibm_plex_mono, size: scaled(13, state)},
+            color: palette(state).chrome_fg,
+            background: palette(state).chrome_bg
           },
           id: :cursor_pos_label,
           translate: frame.pin.point
@@ -621,15 +660,18 @@ defmodule QuillEx.RootScene.Renderizer do
           menus: menus,
           show_shortcuts: state.show_menu_shortcuts,
           # the library's theme defaults to the built-in :roboto_mono; quillex ships IBM Plex
-          theme: %{
-            font: :ibm_plex_mono,
-            height: scaled(35, state),
-            icon_button_size: scaled(35, state),
-            icon_font_size: scaled(16, state),
-            dropdown_item_height: scaled(28, state),
-            dropdown_slider_height: scaled(52, state),
-            dropdown_font_size: scaled(13, state)
-          }
+          theme:
+            palette(state)
+            |> Quillex.GUI.Palette.icon_menu_theme()
+            |> Map.merge(%{
+              font: :ibm_plex_mono,
+              height: scaled(35, state),
+              icon_button_size: scaled(35, state),
+              icon_font_size: scaled(16, state),
+              dropdown_item_height: scaled(28, state),
+              dropdown_slider_height: scaled(52, state),
+              dropdown_font_size: scaled(13, state)
+            })
         }
 
         graph
@@ -729,17 +771,20 @@ defmodule QuillEx.RootScene.Renderizer do
       tabs: tabs,
       selected_id: selected_id,
       # the library's theme defaults to the built-in :roboto_mono; quillex ships IBM Plex
-      theme: %{
-        font: :ibm_plex_mono,
-        italic_font: :ibm_plex_mono_italic,
-        height: scaled(35, state),
-        min_tab_width: scaled(100, state),
-        max_tab_width: scaled(200, state),
-        tab_padding: scaled(12, state),
-        close_button_size: scaled(16, state),
-        close_button_margin: scaled(8, state),
-        font_size: scaled(13, state)
-      }
+      theme:
+        palette(state)
+        |> Quillex.GUI.Palette.tab_bar_theme()
+        |> Map.merge(%{
+          font: :ibm_plex_mono,
+          italic_font: :ibm_plex_mono_italic,
+          height: scaled(35, state),
+          min_tab_width: scaled(100, state),
+          max_tab_width: scaled(200, state),
+          tab_padding: scaled(12, state),
+          close_button_size: scaled(16, state),
+          close_button_margin: scaled(8, state),
+          font_size: scaled(13, state)
+        })
     }
 
     graph
@@ -748,6 +793,22 @@ defmodule QuillEx.RootScene.Renderizer do
       id: :tab_bar,
       translate: frame.pin.point
     )
+  end
+
+  # One radio row per theme. The list is short and fixed (five, deliberately),
+  # so showing them all beats hiding them behind a submenu the user has to
+  # discover — which is the whole point of item 8.
+  defp theme_items(state) do
+    Enum.map(Quillex.GUI.Palette.themes(), fn {id, label} ->
+      %ScenicWidgets.Menu.Model.Radio{
+        id: "theme_#{id}",
+        label: label,
+        group: "theme",
+        value: id,
+        selected?: state.theme == id,
+        tooltip: "Use the #{label} colour scheme for the editor and the whole interface."
+      }
+    end)
   end
 
   @doc """
@@ -897,6 +958,9 @@ defmodule QuillEx.RootScene.Renderizer do
             tooltip:
               "Scale application chrome independently from editor text. Ctrl/Cmd + or - changes it; Ctrl/Cmd 0 resets it."
           },
+          %Divider{id: "view_theme_divider"},
+          %Item{id: "theme_heading", label: "Theme", enabled?: false},
+          theme_items(state),
           %Divider{id: "view_folding_divider"},
           command_item.(:toggle_fold),
           command_item.(:unfold_all),
@@ -908,6 +972,7 @@ defmodule QuillEx.RootScene.Renderizer do
             tooltip: "Collapse all code blocks at the selected nesting level or deeper."
           }
         ]
+        |> List.flatten()
       },
       %{
         id: :help,
@@ -970,7 +1035,6 @@ defmodule QuillEx.RootScene.Renderizer do
 
     # Create font
     font = Quillex.GUI.Theme.editor_font(state.text_size)
-    colors = Quillex.GUI.Theme.editor_colors()
 
     # Check if we have a cursor position to restore (from resize or saved in buffer)
     # Priority: 1) _restore_cursor from state (explicit restore), 2) buffer's saved cursor
@@ -1019,14 +1083,7 @@ defmodule QuillEx.RootScene.Renderizer do
           size: font.size,
           metrics: font.metrics
         },
-        colors: %{
-          text: :white,
-          background: colors.slate,
-          cursor: :white,
-          line_numbers: {255, 255, 255, 85},
-          border: {80, 80, 100, 180},
-          focused_border: {255, 215, 0}
-        },
+        colors: Quillex.GUI.Palette.text_field_colors(palette(state)),
         cursor_mode: :cursor,
         viewport_buffer_lines: 5,
         id: :buffer_pane

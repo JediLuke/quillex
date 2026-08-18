@@ -476,41 +476,41 @@ character drawn under the pointer. `40_word_wrap_spex.exs` was made
 self-contained on the way past — it assumed the buffer its `setup_all` created
 was still active, which stops being true the moment another spex runs first.
 
-## 6. Themes
+## 6. Themes — ✅ DONE 2026-08-18
 
-Structural syntax highlighting (weight/slant/underline) is settled and stays as
-it is — it works for every kind of colour vision and needs no palette. Themes
-are about the *surfaces*, not the tokens.
+**`Quillex.GUI.Palette` is the single source of colour for the application.**
+Nothing else names one: the renderizer, `SideNavThemes` and the buffer pane all
+derive from it, and the recon sweep that item 6 asked for is what produced the
+token list.
 
-**Five themes. This is the whole list.**
+What the sweep found, and where it went:
 
-| Theme | Notes |
+| Was | Now |
 |---|---|
-| **Alchemical Dance (Dark)** | The current purple. **Default.** |
-| **Alchemical Dance (Light)** | Same identity, light surfaces. |
-| Solarized Dark | The most-cited editor palette. |
-| Solarized Light | Its matched pair. |
-| High Contrast | Accessibility. Pairs with the colour-blind-safe syntax marking. |
+| `Quillex.GUI.Theme.editor_colors/0` | gone; `Palette.text_field_colors/1` |
+| Status-strip severity colours in the renderizer | `Palette.status_color/2` |
+| File-nav resize handle, three states | `Palette.handle_colors/2` |
+| `SideNavThemes` dark/light/bare_bones | one shape, colours merged from the palette; the other two deleted |
+| TabBar / IconMenu / SearchBar defaults | `Palette.*_theme/1` overrides |
+| TextField's hardcoded selection, search, brace, guide and scrollbar colours | contrib: keys in its `colors` map, defaulted to today's values |
+| CursorPosLabel drawing no background at all | contrib: a themed background — unpainted, it showed the viewport's clear colour, which on a light theme reads as a hole in the top bar |
 
-*Naming:* "Alchemical Dance (Dark/Light)" reads unambiguously as a pair. The
-alternative was "Alchemica Luna" / "Alchemical Solus" — note that Latin *solus*
-means "alone", not "sun"; if the moon/sun pairing is wanted it is **Luna / Sol**.
+Themes 2–5 were indeed cheap once that existed; the first one was the job.
 
-**Scope: everything.** One palette drives editor *and* chrome — tab bar,
-menubar, sidebar, status strip. A light buffer inside a dark sidebar reads as
-broken, not as a theme.
+**Repainting happens in place.** Every themed component takes
+`{:set_theme, theme}` and merges it over what it has. Rebuilding them instead
+would work, but the side pane would lose its expanded folders and scroll offset
+— the same failure a status toast used to cause (item 1) — and the View
+dropdown would close under the pointer that just chose the theme.
 
-The real work is not the palettes. Each contrib component carries its own theme
-map (`SideNavThemes`, `TabBar.State`'s `@default_theme`, IconMenu's,
-TextField's), and Quillex hardcodes colours in several places
-(`Quillex.GUI.Theme`, the status-strip severity colours in the renderizer, the
-file-nav resize handle). **Step one is a reconnaissance sweep for every
-hardcoded colour across both repos**, then a single `Quillex.GUI.Palette` they
-all derive from. Themes 2–5 are cheap once that exists; the first one is the
-whole job.
+Selection is **View → Theme**, five radio rows under a heading, above the
+folding group. `:alchemical_dark` reproduces exactly what Quillex looked like
+before themes existed, so choosing the default is a no-op rather than a
+redesign — asserted, not assumed, in `45_themes_spex.exs`.
 
-Selection lives in **View → Theme**, a radio group beside the existing Text Size
-/ Tab Stops / Zoom steppers.
+`test/gui/palette_test.exs` derives every component theme from every palette:
+a palette missing one token would otherwise not fail until the surface that
+reads it happened to be drawn.
 
 ## 7. Menubar polish
 
@@ -612,7 +612,7 @@ flowchart TB
     S9["9. Split spex 07<br/>(makes everything measurable)"] --> S11
     S4["4. SearchPane ✅"] --> S7["7. Menubar polish"]
     S5b["5b. Cursor in display space ✅"] --> S11
-    S6["6. Themes<br/>recon sweep first"] --> S7
+    S6["6. Themes ✅"] --> S7
     S7 --> S8["8. Discoverability sweep"]
     S8 --> S10["10. Docs + diagrams"]
     S10 --> S11["11. Demo spex<br/>(final gate)"]

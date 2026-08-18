@@ -1,9 +1,10 @@
 defmodule Quillex.Utils.SideNavThemes do
   @moduledoc """
-  Theme definitions for SideNav component in Quillex.
+  Layout for the file navigator's SideNav.
 
-  Provides both a bare-bones default theme and a polished dark theme
-  based on the merlinex app styling conventions.
+  The *colours* come from `Quillex.GUI.Palette` — one palette drives the editor
+  and every piece of chrome. What is left here is the sizing, and `dark/0` as
+  the shape a palette is merged over so a missing key is still a valid theme.
   """
 
   @doc """
@@ -11,6 +12,7 @@ defmodule Quillex.Utils.SideNavThemes do
 
   The sidebar is chrome, not content: it should read as secondary to the text
   being edited, so its label font is deliberately smaller than the buffer's.
+  Colours come from `palette`; only the sizing is decided here.
   It still tracks `text_size` rather than being fixed, so bumping the editor
   font scales the whole UI instead of leaving the sidebar stranded.
 
@@ -21,10 +23,13 @@ defmodule Quillex.Utils.SideNavThemes do
   @nav_text_ratio 0.7
   @nav_text_min 11
 
-  def for_editor(text_size) when is_integer(text_size) and text_size > 0 do
+  def for_editor(text_size), do: for_editor(text_size, Quillex.GUI.Palette.get(Quillex.GUI.Palette.default()))
+
+  def for_editor(text_size, palette) when is_integer(text_size) and text_size > 0 do
     font_size = max(@nav_text_min, round(text_size * @nav_text_ratio))
 
     dark()
+    |> Map.merge(Quillex.GUI.Palette.side_nav_theme(palette))
     |> Map.put(:font, :ibm_plex_mono)
     |> Map.put(:font_size, font_size)
     |> Map.put(:line_height, font_size + 6)
@@ -32,12 +37,12 @@ defmodule Quillex.Utils.SideNavThemes do
   end
 
   @doc """
-  Dark theme based on merlinex app styling.
+  The full shape of a SideNav theme, with the sizing this app wants and the
+  original merlinex-inspired colours.
 
-  Features:
-  - Dark blue-gray backgrounds
-  - Subtle hover/active states
-  - Clean, professional appearance
+  A palette is merged over the colours; this exists so that a palette missing
+  a key still yields a complete, drawable theme rather than a crash inside the
+  widget's renderer.
   """
   def dark do
     %{
@@ -93,91 +98,4 @@ defmodule Quillex.Utils.SideNavThemes do
     }
   end
 
-  @doc """
-  Bare bones theme - minimal styling, very light weight.
-
-  Good for debugging or when you want no visual distractions.
-  """
-  def bare_bones do
-    %{
-      # Minimal colors
-      background: {45, 45, 50},
-      text: :white,
-      active_bg: {70, 70, 80},
-      active_bar: :cyan,
-      selection_bg: {58, 58, 66},
-      hover_bg: {55, 55, 60},
-      chevron: {150, 150, 150},
-      focus_ring: :cyan,
-      border: {60, 60, 65},
-      scrollbar_color: {190, 190, 200},
-
-      # Dimensions
-      item_height: 24,
-      indent: 12,
-      font: :roboto,
-      font_size: 12,
-      line_height: 16,
-
-      # Spacing
-      padding_left: 8,
-      padding_right: 8,
-      item_spacing: 0,
-
-      # Chevron
-      chevron_size: 10,
-      chevron_margin: 4
-    }
-  end
-
-  @doc """
-  Light theme - HexDocs-inspired light appearance.
-
-  For users who prefer light mode.
-  """
-  def light do
-    %{
-      # Light colors
-      background: {250, 250, 252},
-      text: {34, 34, 34},
-      active_bg: {229, 242, 255},
-      active_bar: {76, 86, 106},
-      selection_bg: {214, 218, 224},
-      hover_bg: {240, 240, 245},
-      chevron: {80, 80, 80},
-      focus_ring: {0, 112, 214},
-      border: {220, 220, 225},
-      scrollbar_color: {105, 110, 125},
-
-      # Dimensions
-      item_height: 28,
-      indent: 16,
-      font: :roboto,
-      font_size: 14,
-      line_height: 20,
-
-      # Spacing
-      padding_left: 12,
-      padding_right: 12,
-      item_spacing: 0,
-
-      # Chevron
-      chevron_size: 14,
-      chevron_margin: 6
-    }
-  end
-
-  @doc """
-  Get theme by name.
-
-  ## Examples
-
-      iex> Quillex.Utils.SideNavThemes.get(:dark)
-      %{background: {35, 37, 47}, ...}
-  """
-  def get(:dark), do: dark()
-  def get(:bare_bones), do: bare_bones()
-  def get(:light), do: light()
-  # Default to dark theme
-  def get(_), do: dark()
 end

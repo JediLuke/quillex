@@ -32,6 +32,9 @@ defmodule QuillEx.RootScene.State do
             show_action_feedback: true,
             show_menu_shortcuts: true,
             syntax_highlighting: true,
+            # The colour scheme, mirrored from ViewStore. One palette drives
+            # the editor and every piece of chrome — see Quillex.GUI.Palette.
+            theme: :alchemical_dark,
             chrome_zoom: 100,
             # File navigator sidebar
             show_file_nav: false,

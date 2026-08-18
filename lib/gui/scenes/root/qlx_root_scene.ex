@@ -1103,6 +1103,7 @@ defmodule QuillEx.RootScene do
     :file_nav_revision,
     :show_project_search,
     :syntax_highlighting,
+    :theme,
     :status_message,
     :status_severity
   ]
@@ -1123,6 +1124,7 @@ defmodule QuillEx.RootScene do
         :show_file_nav,
         :show_project_search,
         :syntax_highlighting,
+        :theme,
         :show_action_feedback
       ],
       fn key -> Map.get(old_state, key) != Map.get(new_state, key) end
@@ -1292,6 +1294,12 @@ defmodule QuillEx.RootScene do
 
       "action_feedback" ->
         Quillex.RadixCache.ViewStore.toggle_action_feedback()
+        {:noreply, scene}
+
+      # Theme radio rows. One palette drives the editor and every piece of
+      # chrome, so this is the only place a colour scheme is chosen.
+      "theme_" <> theme ->
+        Quillex.RadixCache.ViewStore.set_theme(String.to_existing_atom(theme))
         {:noreply, scene}
 
       "syntax_highlighting" ->
