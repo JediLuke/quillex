@@ -1615,11 +1615,6 @@ defmodule QuillEx.RootScene do
     {:noreply, assign(scene, state: %{scene.assigns.state | project_search_query: query})}
   end
 
-  def handle_event({:search_pane, :exclude_changed, field}, _from, scene) do
-    Quillex.RadixCache.ProjectSearchStore.set_exclude(field)
-    {:noreply, scene}
-  end
-
   def handle_event({:search_pane, :toggle_option, option}, _from, scene) do
     Quillex.RadixCache.ProjectSearchStore.toggle_option(option)
     {:noreply, scene}

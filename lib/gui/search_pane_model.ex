@@ -48,10 +48,18 @@ defmodule Quillex.GUI.SearchPaneModel do
 
   defp scope(%{root: nil}), do: []
 
+  # Files as well as directories. Narrowing a search is mostly "not that
+  # folder", but often enough it is "not THAT file" — a fixture, a generated
+  # module, the one file that matches everything. Leaving files out meant the
+  # only way to say so was a glob typed into a text field, which is a
+  # programming language for a job that wants pointing at things.
+  #
+  # The whole tree is walked either way: FileTree.build/1 already visits every
+  # file to construct the directory items, and the old filter simply threw
+  # them away.
   defp scope(%{root: root, excluded: excluded}) do
     root
     |> Quillex.Utils.FileTree.build()
-    |> Enum.filter(&(&1.type == :group))
     |> Enum.map(&scope_node(&1, excluded))
   end
 
@@ -60,10 +68,7 @@ defmodule Quillex.GUI.SearchPaneModel do
       id: path,
       label: name,
       included?: not MapSet.member?(excluded, path),
-      children:
-        children
-        |> Enum.filter(&(&1.type == :group))
-        |> Enum.map(&scope_node(&1, excluded))
+      children: Enum.map(children, &scope_node(&1, excluded))
     }
   end
 

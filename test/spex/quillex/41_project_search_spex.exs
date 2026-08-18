@@ -66,7 +66,6 @@ defmodule Quillex.ProjectSearchSpex do
     close_fixture_buffers(root)
     Quillex.RadixCache.ViewStore.set_file_nav_path(root)
     Process.sleep(200)
-    ProjectSearchStore.set_exclude("")
     ProjectSearchStore.set_option(:case_sensitive, false)
     ProjectSearchStore.set_option(:regex, false)
     ProjectSearchStore.set_root(root)
@@ -179,7 +178,6 @@ defmodule Quillex.ProjectSearchSpex do
         :ok = Quillex.Buffer.activate(seed_buf)
         Process.sleep(300)
         Quillex.RadixCache.ViewStore.set_file_nav_path(context.root)
-        ProjectSearchStore.set_exclude("")
         ProjectSearchStore.set_option(:case_sensitive, false)
         ProjectSearchStore.set_query("")
         Process.sleep(400)
@@ -393,25 +391,53 @@ defmodule Quillex.ProjectSearchSpex do
         {:ok, context}
       end
 
-      when_ "an exclude glob hides lib/", context do
-        ProjectSearchStore.set_exclude("lib/**")
+      when_ "lib/ is unticked in the scope tree", context do
+        # Narrowing a search is pointing at things, not writing a pattern for
+        # them: the scope tree is the whole mechanism, and a directory takes
+        # its subtree with it.
+        ProjectSearchStore.toggle_scope(Path.join(context.root, "lib"))
 
         assert wait_until(fn ->
                  search_done?() and
                    not Enum.any?(results().files, fn {p, _} -> String.contains?(p, "/lib/") end)
                end),
-               "the exclude glob should remove every file under lib/"
+               "unticking lib/ should remove every file under it"
 
         {:ok, context}
       end
 
-      then_ "clearing it brings them back", context do
-        ProjectSearchStore.set_exclude("")
+      then_ "ticking it again brings them back", context do
+        ProjectSearchStore.toggle_scope(Path.join(context.root, "lib"))
 
         assert wait_until(fn ->
                  search_done?() and
                    Enum.any?(results().files, fn {p, _} -> String.contains?(p, "/lib/") end)
                end)
+
+        {:ok, context}
+      end
+
+      then_ "a single file can be unticked too, and only that file goes", context do
+        [{victim, _} | _] = results().files
+        others = results().files |> Enum.map(&elem(&1, 0)) |> Enum.reject(&(&1 == victim))
+
+        ProjectSearchStore.toggle_scope(victim)
+
+        assert wait_until(fn ->
+                 search_done?() and
+                   not Enum.any?(results().files, fn {p, _} -> p == victim end)
+               end),
+               "unticking #{Path.basename(victim)} should remove it from the results"
+
+        remaining = Enum.map(results().files, &elem(&1, 0))
+
+        for path <- others do
+          assert path in remaining,
+                 "excluding one file must not take #{Path.basename(path)} with it"
+        end
+
+        ProjectSearchStore.toggle_scope(victim)
+        assert wait_until(fn -> search_done?() end)
 
         {:ok, context}
       end

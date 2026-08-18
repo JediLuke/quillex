@@ -469,7 +469,6 @@ defmodule QuillEx.RootScene.Renderizer do
     %{
       root: nil,
       query: "",
-      exclude: "",
       status: :idle,
       files: [],
       excluded: MapSet.new(),

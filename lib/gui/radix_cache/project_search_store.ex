@@ -14,10 +14,9 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
       %{
         root: path,                    # project root being searched
         query: string,
-        exclude: string,               # gitignore-style globs, as typed
         status: :idle | :searching | {:done, match_count, file_count, ms} | {:error, term},
         files: [{path, [Match]}],      # VISIBLE results, grouped by file
-        excluded: MapSet of dirs,      # scope: subtrees the user unticked
+        excluded: MapSet of paths,     # scope: files and subtrees unticked
         dismissed: MapSet of {path, line, col},
         dismissed_files: MapSet of path,
         error: nil | String.t(),       # last replace failure, for the pane to show
@@ -46,7 +45,6 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
   @initial %{
     root: nil,
     query: "",
-    exclude: "",
     status: :idle,
     files: [],
     excluded: MapSet.new(),
@@ -76,10 +74,6 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
   @doc "Set the query; the search runs shortly after (debounced while typing)."
   def set_query(query) when is_binary(query), do: GenServer.cast(__MODULE__, {:set_query, query})
 
-  @doc "Set the exclude-glob field; the search re-runs shortly after."
-  def set_exclude(field) when is_binary(field),
-    do: GenServer.cast(__MODULE__, {:set_exclude, field})
-
   @doc "Hide one match from the results, and from every replace path."
   def dismiss_match(path, line, col),
     do: GenServer.cast(__MODULE__, {:dismiss_match, path, line, col})
@@ -97,8 +91,14 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
   """
   def refresh_dirty, do: GenServer.cast(__MODULE__, :refresh_dirty)
 
-  @doc "Include or exclude a directory subtree from the search scope."
-  def toggle_scope(dir) when is_binary(dir), do: GenServer.cast(__MODULE__, {:toggle_scope, dir})
+  @doc """
+  Include or exclude a path from the search scope.
+
+  A directory takes its whole subtree with it; a file is just itself. The
+  backend matches on path segments, so both are the same rule.
+  """
+  def toggle_scope(path) when is_binary(path),
+    do: GenServer.cast(__MODULE__, {:toggle_scope, path})
 
   @doc "Flip a search option (`:case_sensitive` or `:regex`) and re-run."
   def toggle_option(option) when option in [:case_sensitive, :regex],
@@ -175,16 +175,11 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
   def handle_cast({:set_query, query}, state),
     do: {:noreply, restart_search(state, %{state.view | query: query})}
 
-  def handle_cast({:set_exclude, field}, %{view: %{exclude: field}} = state), do: {:noreply, state}
-
-  def handle_cast({:set_exclude, field}, state),
-    do: {:noreply, restart_search(state, %{state.view | exclude: field})}
-
-  def handle_cast({:toggle_scope, dir}, state) do
+  def handle_cast({:toggle_scope, path}, state) do
     excluded =
-      if MapSet.member?(state.view.excluded, dir),
-        do: MapSet.delete(state.view.excluded, dir),
-        else: MapSet.put(state.view.excluded, dir)
+      if MapSet.member?(state.view.excluded, path),
+        do: MapSet.delete(state.view.excluded, path),
+        else: MapSet.put(state.view.excluded, path)
 
     {:noreply, restart_search(state, %{state.view | excluded: excluded})}
   end
@@ -370,7 +365,6 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
   defp backend_opts(view) do
     [
       excludes: MapSet.to_list(view.excluded),
-      exclude_globs: Quillex.Search.Glob.split(view.exclude),
       max_results: @max_results
     ] ++ search_opts(view)
   end

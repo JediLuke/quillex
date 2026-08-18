@@ -11,11 +11,15 @@ defmodule Quillex.Search.Backend do
 
   ## Options
 
-  - `:excludes` — directory paths (absolute or root-relative) to skip
+  - `:excludes` — paths (absolute or root-relative) to skip. A directory takes
+    its whole subtree with it, a file is just itself; both are the same
+    segment-prefix rule. This is what the pane's scope tree unticks.
     entirely, subtree included. Version-control and build directories are
     always skipped; see `default_excludes/0`.
   - `:exclude_globs` — gitignore-style patterns (`**/deps/**`, `*.lock`) to
-    skip, as typed into the pane's exclude field. See `Quillex.Search.Glob`
+    skip. No part of the UI sets these — the scope tree replaced the glob
+    field it used to come from — but the search itself still honours them,
+    which is what a .gitignore reader would want. See `Quillex.Search.Glob`
     for the dialect.
   - `:max_results` — stop after this many matches (default 5_000).
   - `:case_sensitive` — default `false`.

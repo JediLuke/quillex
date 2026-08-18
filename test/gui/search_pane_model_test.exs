@@ -11,7 +11,6 @@ defmodule Quillex.GUI.SearchPaneModelTest do
       %{
         root: nil,
         query: "",
-        exclude: "",
         status: :idle,
         files: [],
         excluded: MapSet.new(),
@@ -31,6 +30,43 @@ defmodule Quillex.GUI.SearchPaneModelTest do
     assert model.files == []
     assert model.scope == []
     refute model.case_sensitive
+  end
+
+  test "the scope tree offers files as well as directories" do
+    dir = Path.join(System.tmp_dir!(), "qlx_scope_#{System.unique_integer([:positive])}")
+    File.mkdir_p!(Path.join(dir, "lib"))
+    File.write!(Path.join(dir, "lib/a.ex"), "x")
+    File.write!(Path.join(dir, "top.txt"), "x")
+    on_exit(fn -> File.rm_rf(dir) end)
+
+    model = Model.build(snapshot(%{root: dir}))
+
+    labels = Enum.map(model.scope, & &1.label)
+    assert "lib" in labels, "directories should still be there: #{inspect(labels)}"
+
+    # The point of the change: a file is a leaf you can untick, so narrowing a
+    # search means pointing at things rather than writing a glob for them.
+    assert "top.txt" in labels, "files should be tickable too: #{inspect(labels)}"
+
+    lib = Enum.find(model.scope, &(&1.label == "lib"))
+    assert Enum.map(lib.children, & &1.label) == ["a.ex"]
+    assert Enum.all?(model.scope, & &1.included?), "nothing is excluded by default"
+  end
+
+  test "an unticked file is marked excluded, and only that file" do
+    dir = Path.join(System.tmp_dir!(), "qlx_scope_#{System.unique_integer([:positive])}")
+    File.mkdir_p!(dir)
+    File.write!(Path.join(dir, "keep.txt"), "x")
+    File.write!(Path.join(dir, "drop.txt"), "x")
+    on_exit(fn -> File.rm_rf(dir) end)
+
+    model =
+      Model.build(snapshot(%{root: dir, excluded: MapSet.new([Path.join(dir, "drop.txt")])}))
+
+    by_label = Map.new(model.scope, &{&1.label, &1.included?})
+
+    refute by_label["drop.txt"]
+    assert by_label["keep.txt"]
   end
 
   test "results become one group per file, each match carrying its own offset" do
