@@ -22,7 +22,33 @@ if [ -n "${DISPLAY:-}" ]; then
 
   "$PINNER_BIN" &
   PINNER_PID=$!
-  trap 'kill "$PINNER_PID" 2>/dev/null || true' EXIT
+
+  # The pinner blocks in XNextEvent, so it only acts on SIGTERM when the next
+  # X event happens to arrive — which on an idle desktop can be never. It
+  # prints "Exiting" (the handler ran) and then keeps running.
+  #
+  # That is not merely untidy. Started from a script it shares this job's
+  # process group, so an interactive shell waits for it: `scripts/run_demo`
+  # printed its results, printed "Exiting", and never gave the prompt back.
+  #
+  # So: ask nicely, wait a moment, then insist. `wait` reaps it afterwards so
+  # the shell has nothing left to wait for.
+  stop_pinner() {
+    [ -n "${PINNER_PID:-}" ] || return 0
+    kill -0 "$PINNER_PID" 2>/dev/null || return 0
+
+    kill "$PINNER_PID" 2>/dev/null || true
+
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+      kill -0 "$PINNER_PID" 2>/dev/null || break
+      sleep 0.1
+    done
+
+    kill -9 "$PINNER_PID" 2>/dev/null || true
+    wait "$PINNER_PID" 2>/dev/null || true
+  }
+
+  trap stop_pinner EXIT
 else
   echo "No DISPLAY — skipping window_pinner (spex windows will land wherever the WM puts them)."
 fi
