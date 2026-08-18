@@ -578,51 +578,60 @@ with the code that handles it, checked against the registry and against the
 generated reference, plus a check that every command claiming a menu really
 has a row there, and that the reference fits on screen.
 
-## 9. Split `07_integration_v1_spex.exs`
+## 9. Split `07_integration_v1_spex.exs` — ✅ DONE 2026-08-18
 
-**Promoted from Phase 3 item 3.5 on new evidence, 2026-08-17.**
+**`07` is gone.** Its fifteen scenarios live in seven per-feature files, each
+starting from a known editor:
 
-Spex 07 fails a *different, shifting* set of scenarios on identical code. This
-is not new: the Phase 3 ledger above records it across ~35 runs ("the rest land
-at 1–6 failures with a shifting failure set, on identical code; targeted subsets
-run green repeatedly") and notes "07 assumes near-boot state".
+| File | What it covers |
+|---|---|
+| `50_boot_and_typing_spex.exs` | boot state, typing without doubling |
+| `51_open_files_spex.exs` | a large prose document, a source file |
+| `52_tabs_spex.exs` | switching tabs, holding many at once |
+| `53_find_integration_spex.exs` | finding in a real document, focus, highlight placement |
+| `54_undo_and_save_spex.exs` | edit history, save and reopen |
+| `55_scrolling_spex.exs` | scrolling, with wrap off and on |
+| `56_selection_and_mouse_spex.exs` | keyboard selection, mouse |
 
-It is actively harmful now, because it makes 07 useless as a regression signal —
-a real regression and ordinary noise look identical. During the 2026-08-17
-session it manufactured a false alarm that cost a rebuild of the TabBar renderer
-under a wrong diagnosis.
+The shared vocabulary moved to `Quillex.TestHelpers.Integration`, whose
+`fresh_editor!/0` is the known starting point every file begins from.
 
-**Measured 2026-08-17.** Three A/B rounds on `07`, `104c849` vs `605fc59`
-(failures per run):
+**Result: 15 passed, three rounds in a row, run together in one invocation
+with the file order randomised.** `07` used to land at 1–6 failures per run
+with a shifting set, on identical code.
 
-| Round | Method | BASE | HEAD | Reading |
-|---|---|---|---|---|
-| 1 | baseline measured hours earlier | 0,0,0,0 | 2,1,1,2 | "regression" — **wrong** |
-| 2 | interleaved, BASE in a fresh worktree, HEAD in the working dir | 0,1,0,1 | 3,3,2,1 | "regression" — **still wrong** |
-| 3 | interleaved, **both in fresh worktrees** | 2,2,1 | 1,2,1 | **parity** |
+Three real defects in the scenarios surfaced the moment they had to stand on
+their own — every one of them previously masked by inherited state:
 
-The decisive number is not BASE-vs-HEAD at all: **the same commit in the same
-worktree went from 0.5 to 1.67 failures per run** between rounds 2 and 3, on
-identical code. That drift is larger than any difference between the two
-commits. Round 2's apparent regression was the working directory (accumulated
-`_build`, different `deps/`), not the diff — a separate bisect had already
-exonerated the TabBar change specifically.
+- **`new_empty_buffer/0` did not.** It pressed File→New, which *deliberately*
+  hands back an existing untitled buffer rather than duplicating it — so a
+  scenario that had already typed got its own text back and failed on its
+  first assertion with the *previous* scenario's content. It resets the editor
+  now.
+- **The line-count assertion counted the wrong thing.** It split the semantic
+  content of the pane — which is the render *window*, a few dozen lines around
+  the viewport — and expected 339. That held only while some earlier scenario
+  had happened to scroll to the end. It now asks the buffer, and cross-checks
+  against the file on disk.
+- **Every mouse coordinate was hardcoded.** Phase 3.5's lesson, unlearned: an
+  open file navigator moves the pane 250px right, so the drag happened in the
+  sidebar. All of them derive from `get_buffer_frame()` now. Also measured
+  while fixing it: a bare `mouse_down` after the pane was last touched
+  elsewhere starts nothing at all, while the same sequence after one ordinary
+  click works — so the drag helper clicks first, which is what a real pointer
+  does anyway.
 
-**Protocol for anyone comparing spex runs, until 07 is split:**
-1. Never compare against a baseline measured earlier — re-measure it now.
-2. Interleave the arms; do not run all of A then all of B.
-3. Put both arms in **equivalent** environments — two fresh `git worktree`s, not
-   one worktree against your working directory.
-4. Three pairs minimum. One pair proves nothing at this noise level.
+**`04` and `30` have the same disease.** Found while measuring: at the *session
+start* commit `d1b6446`, `04_view_settings_spex.exs` failed 1, 0 and 3
+scenarios over three runs, and `30_clipboard_spex.exs` failed 3 scenarios where
+it now fails 1. Interleaved A/B in two fresh worktrees put `04` at parity
+(BASE 1.33 failures/run, HEAD 1.33) — it is noise, not regression, and it is
+the same cause: scenarios inheriting each other's buffers and focus. They are
+next in line for the same treatment.
 
-Everything in 07 reads through the semantic registry after fixed
-`Process.sleep`s, and its scenarios inherit each other's buffers. The fix is the
-one already prescribed in 3.5: split into per-feature files, each owning its
-state setup and asserting its own preconditions — the pattern of `22_` and `23_`,
-extracted for exactly this reason, which run green repeatedly.
-
-**Until it is split, never read a 07 failure as a regression without a
-back-to-back interleaved baseline.**
+**The measurement protocol above stays.** It is what kept two false alarms out
+of this session: `04` and `30` both looked like regressions from the theme and
+menu work, and both were failing identically before that work existed.
 
 ## 10. Documentation + architecture diagrams
 
@@ -649,7 +658,7 @@ demo plays start to finish without a stumble, 1.0 is cut.
 ```mermaid
 flowchart TB
     S5["5. Go to Line ✅"]
-    S9["9. Split spex 07<br/>(makes everything measurable)"] --> S11
+    S9["9. Split spex 07 ✅"] --> S11
     S4["4. SearchPane ✅"] --> S7["7. Menubar polish"]
     S5b["5b. Cursor in display space ✅"] --> S11
     S6["6. Themes ✅"] --> S7
