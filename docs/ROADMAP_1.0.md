@@ -416,7 +416,7 @@ no working behaviour was lost.
 
 Covered by `43_goto_line_spex.exs`, including the menubar route.
 
-> ### ⚠️ Trap for every future keybinding — read before item 4
+> ### ⚠️ Trap for every future keybinding
 >
 > Quillex runs TextField in **`:store_backed`** mode. In that mode
 > `Reducer.process_input/2` **is never called**: `handle_store_backed_input/2`
@@ -707,21 +707,22 @@ The demo plays start to finish without a stumble. **1.0 is cut.**
 
 ## Part II sequencing
 
+All of it, done. The dependencies it was planned around held: item 9 first made
+everything after it measurable, item 6's palette had to exist before item 7
+could see the menu clearly, and item 11 could only be written once the rest had
+stopped moving.
+
 ```mermaid
 flowchart TB
     S5["5. Go to Line ✅"]
-    S9["9. Split spex 07 ✅"] --> S11
-    S4["4. SearchPane ✅"] --> S7["7. Menubar polish"]
+    S9["9. Split spex 07 ✅"] --> S11["11. Demo spex ✅"]
+    S4["4. SearchPane ✅"] --> S7["7. Menubar polish ✅"]
     S5b["5b. Cursor in display space ✅"] --> S11
     S6["6. Themes ✅"] --> S7
-    S7["7. Menubar polish ✅"] --> S8["8. Discoverability sweep"]
-    S8["8. Discoverability ✅"] --> S10["10. Docs + diagrams"]
-    S10["10. Docs + diagrams ✅"] --> S11["11. Demo spex ✅"]
+    S7 --> S8["8. Discoverability ✅"]
+    S8 --> S10["10. Docs + diagrams ✅"]
+    S10 --> S11
 ```
-
-Item 9 is independent and worth doing early — it is what makes every later
-change measurable. Item 5 is small enough to slot anywhere. Item 6's
-reconnaissance sweep can run in parallel with item 4; they touch different files.
 
 ## Decisions deliberately declined
 
