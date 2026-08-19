@@ -50,6 +50,7 @@ defmodule Quillex.SettingsFile do
     :show_action_feedback,
     :syntax_highlighting,
     :search_results_view,
+    :primary_modifier,
     :theme,
     :chrome_zoom,
     :file_nav_width
@@ -117,6 +118,7 @@ defmodule Quillex.SettingsFile do
     settings
     |> encode_atom(:theme)
     |> encode_atom(:search_results_view)
+    |> encode_atom(:primary_modifier)
   end
 
   defp encode_atom(settings, key) do
@@ -134,6 +136,7 @@ defmodule Quillex.SettingsFile do
       case Map.fetch(known, key) do
         {:ok, :theme} -> theme_pair(value)
         {:ok, :search_results_view} -> results_view_pair(value)
+        {:ok, :primary_modifier} -> modifier_pair(value)
         {:ok, atom} -> [{atom, value}]
         :error -> []
       end
@@ -157,4 +160,8 @@ defmodule Quillex.SettingsFile do
   defp results_view_pair("tree"), do: [search_results_view: :tree]
   defp results_view_pair("list"), do: [search_results_view: :list]
   defp results_view_pair(_), do: []
+
+  defp modifier_pair("ctrl"), do: [primary_modifier: :ctrl]
+  defp modifier_pair("meta"), do: [primary_modifier: :meta]
+  defp modifier_pair(_), do: []
 end

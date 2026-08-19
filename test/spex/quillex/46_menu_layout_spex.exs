@@ -83,9 +83,9 @@ defmodule Quillex.MenuLayoutSpex do
         {:ok, context}
       end
 
-      then_ "View reads as panels, text, folding, sizes, theme, preferences, defaults",
+      then_ "View reads as panels, text, folding, sizes, theme, preferences, keys, defaults",
             context do
-        assert [panels, text, folding, sizes, theme, preferences, defaults] = groups(:view)
+        assert [panels, text, folding, sizes, theme, preferences, keys, defaults] = groups(:view)
 
         assert panels == ["file_nav"]
         assert "line_numbers" in text and "word_wrap" in text
@@ -93,6 +93,11 @@ defmodule Quillex.MenuLayoutSpex do
         assert sizes == ["text_size", "tab_width", "chrome_zoom"]
         assert hd(theme) == "theme_heading"
         assert preferences == ["action_feedback", "menu_shortcuts"]
+
+        # Which key means "command" is a group of its own: it changes what is
+        # printed on every other row in every menu, which is not something to
+        # read as a third preference toggle.
+        assert hd(keys) == "modifier_heading"
 
         # The rows in this menu that outlive the session get a group of their
         # own, so they cannot be read as more preference toggles.

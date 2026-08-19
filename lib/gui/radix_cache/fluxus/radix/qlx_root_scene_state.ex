@@ -36,6 +36,9 @@ defmodule QuillEx.RootScene.State do
             # The colour scheme, mirrored from ViewStore. One palette drives
             # the editor and every piece of chrome — see Quillex.GUI.Palette.
             theme: :alchemical_dark,
+            # Which key means "command" — :ctrl, or :meta (⌘) on a Mac.
+            # Mirrored from ViewStore; the menus print it beside every row.
+            primary_modifier: :ctrl,
             chrome_zoom: 100,
             # File navigator sidebar
             show_file_nav: false,

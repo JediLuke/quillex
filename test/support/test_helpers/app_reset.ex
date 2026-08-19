@@ -48,7 +48,28 @@ defmodule Quillex.TestHelpers.AppReset do
     dismiss_overlays()
     Quillex.RadixCache.ViewStore.close_file_nav()
     Quillex.RadixCache.ViewStore.close_project_search()
+    reset_display!()
     Process.sleep(200)
+    :ok
+  end
+
+  @doc """
+  Put the display settings back to their defaults.
+
+  A spex that scales the chrome up to check that a menu still fits will set it
+  back afterwards — unless the assertion between the two fails, at which point
+  the zoom stays where it was for the whole rest of the run. Every window
+  after it is drawn at 130%, which looks like a rendering bug and is really
+  just the previous file's mess.
+
+  The same goes for the modifier key: a spex that switches the editor to a Mac
+  keyboard and fails partway leaves every later spex pressing keys the editor
+  no longer answers to, which is a spectacularly confusing way to fail.
+  """
+  def reset_display! do
+    Quillex.RadixCache.ViewStore.set_chrome_zoom(100)
+    Quillex.RadixCache.ViewStore.set_text_size(24)
+    Quillex.RadixCache.ViewStore.set_primary_modifier(:ctrl)
     :ok
   end
 

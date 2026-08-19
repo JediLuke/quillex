@@ -53,6 +53,10 @@ defmodule Quillex.RadixCache.ViewStore do
     # you are looking for a file or for an occurrence, so it is a preference
     # rather than a mode — and one worth keeping between sessions.
     search_results_view: :tree,
+    # Which key means "command": :ctrl everywhere, :meta (⌘) on a Mac. Set
+    # from the platform at boot and overridable, because muscle memory belongs
+    # to the person and not to the operating system — see Quillex.Shortcuts.
+    primary_modifier: :ctrl,
     # Structural syntax highlighting (weight/slant/underline by token class)
     syntax_highlighting: true,
     # The colour scheme for editor AND chrome alike — see Quillex.GUI.Palette.
@@ -111,6 +115,9 @@ defmodule Quillex.RadixCache.ViewStore do
 
   def set_search_results_view(view) when view in [:tree, :list],
     do: GenServer.cast(__MODULE__, {:set_search_results_view, view})
+
+  def set_primary_modifier(modifier) when modifier in [:ctrl, :meta],
+    do: GenServer.cast(__MODULE__, {:set_primary_modifier, modifier})
 
   # Set rather than flip. A caller that wants a guide OFF has to read the
   # current value first to know whether to toggle, and then it is racing every
@@ -209,8 +216,17 @@ defmodule Quillex.RadixCache.ViewStore do
     # Settings as Default). Merged over the built-in defaults, so a settings
     # file that names only two keys changes only those two.
     view =
-      %{@initial | file_nav_path: File.cwd!()}
+      %{
+        @initial
+        | file_nav_path: File.cwd!(),
+          primary_modifier: Quillex.Shortcuts.default_primary_modifier()
+      }
       |> Map.merge(Quillex.SettingsFile.load())
+
+    # Whatever the setting turned out to be — platform default or saved
+    # choice — the widgets have to be told before they see a keystroke.
+    Quillex.Shortcuts.apply(view.primary_modifier)
+
     Scenic.PubSub.publish(Sources.view(), view)
     # status_ref stamps the current status message so a stale clear-timer
     # cannot erase a newer message — bookkeeping, deliberately NOT published
@@ -239,6 +255,13 @@ defmodule Quillex.RadixCache.ViewStore do
 
   def handle_cast({:set_search_results_view, view}, state) do
     {:noreply, publish(state, %{state.view | search_results_view: view})}
+  end
+
+  def handle_cast({:set_primary_modifier, modifier}, state) do
+    # The widget library reads its own copy — it cannot depend on this
+    # application — so the two are set together and never separately.
+    Quillex.Shortcuts.apply(modifier)
+    {:noreply, publish(state, %{state.view | primary_modifier: modifier})}
   end
 
   def handle_cast({:set_current_line_highlight, on?}, state) do

@@ -863,6 +863,21 @@ defmodule QuillEx.RootScene.Renderizer do
     end)
   end
 
+  # Two rows, same shape as the themes: a short fixed list is better shown
+  # than hidden behind a submenu.
+  defp modifier_items(state) do
+    Enum.map(Quillex.Shortcuts.choices(), fn {id, label} ->
+      %ScenicWidgets.Menu.Model.Radio{
+        id: "primary_modifier_#{id}",
+        label: label,
+        group: "primary_modifier",
+        value: id,
+        selected?: state.primary_modifier == id,
+        tooltip: "Use #{label} for shortcuts like Save and Copy, and print it in every menu."
+      }
+    end)
+  end
+
   @doc """
   Build menus with current toggle states from state.
   """
@@ -875,7 +890,9 @@ defmodule QuillEx.RootScene.Renderizer do
       %Item{
         id: Atom.to_string(id),
         label: command.label,
-        shortcut: command.shortcut,
+        # Rendered, not stored: the registry spells shortcuts with "Mod", and
+        # what that key is called depends on the keyboard — Quillex.Shortcuts.
+        shortcut: Quillex.Shortcuts.render(command.shortcut),
         tooltip: command.description
       }
     end
@@ -1034,7 +1051,10 @@ defmodule QuillEx.RootScene.Renderizer do
             max: 200,
             step: 10,
             tooltip:
-              "Scale application chrome independently from editor text. Ctrl/Cmd + or - changes it; Ctrl/Cmd 0 resets it."
+              "Scale application chrome independently from editor text. " <>
+                "#{Quillex.Commands.shortcut(:zoom_in)} and " <>
+                "#{Quillex.Commands.shortcut(:zoom_out)} change it; " <>
+                "#{Quillex.Commands.shortcut(:zoom_reset)} resets it."
           },
           # A bare list of five palette names needs a noun over it; the other
           # groups are legible from their rows and get a divider instead.
@@ -1054,6 +1074,13 @@ defmodule QuillEx.RootScene.Renderizer do
             checked?: state.show_menu_shortcuts,
             tooltip: "Show or hide the right-aligned shortcut column in menus."
           },
+          # Which key means "command". A Mac user's hands know ⌘; a Linux
+          # user's know Ctrl; and someone with a foot in both camps knows
+          # whichever they decided on, which is why this is a setting and not
+          # a detection. Changing it re-letters every shortcut in every menu.
+          %Divider{id: "view_modifier_divider"},
+          %Item{id: "modifier_heading", label: "Command Key", enabled?: false},
+          modifier_items(state),
           # Changing a setting changes this session. Making it the one every
           # session starts with is a separate, deliberate act — so it is a
           # command sitting under the settings it saves, not a toggle.

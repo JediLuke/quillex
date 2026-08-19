@@ -99,6 +99,16 @@ defmodule QuillEx.RootScene do
     {:ok, scene}
   end
 
+  # Every keystroke Scenic delivers arrives here first, and the command key is
+  # rewritten to :ctrl before anything looks at it. On a Mac that key is
+  # Command, which Scenic reports as :meta; on Linux it is Control and this is
+  # the identity. Doing it once, here, is why the forty clauses below can each
+  # say [:ctrl] and be right on both platforms.
+  def handle_input({:key, {key, action, mods}}, context, scene),
+    do: route_input({:key, {key, action, Quillex.Shortcuts.normalize(mods)}}, context, scene)
+
+  def handle_input(input, context, scene), do: route_input(input, context, scene)
+
   # NOTE: "Verify File" (run_verification) has no keyboard shortcut.
   # The original Ctrl+V+F design used string-format patterns that Scenic 0.12
   # never delivers (Scenic uses atom keys like :key_f, not strings like "f").
@@ -107,7 +117,7 @@ defmodule QuillEx.RootScene do
 
   # Go to Line prompt owns the keyboard entirely while it is open. These clauses
   # come FIRST so a digit does not also trip a document shortcut underneath.
-  def handle_input({:key, {key, 1, _mods}}, _context, %{assigns: %{state: %{show_goto_line: true}}} = scene) do
+  defp route_input({:key, {key, 1, _mods}}, _context, %{assigns: %{state: %{show_goto_line: true}}} = scene) do
     state = scene.assigns.state
 
     case key do
@@ -135,28 +145,28 @@ defmodule QuillEx.RootScene do
 
   # Swallow key-release and codepoint events too, so nothing leaks to the
   # document while the prompt is up.
-  def handle_input({:key, {_key, 0, _mods}}, _context, %{assigns: %{state: %{show_goto_line: true}}} = scene),
+  defp route_input({:key, {_key, 0, _mods}}, _context, %{assigns: %{state: %{show_goto_line: true}}} = scene),
     do: {:noreply, scene}
 
-  def handle_input({:codepoint, _}, _context, %{assigns: %{state: %{show_goto_line: true}}} = scene),
+  defp route_input({:codepoint, _}, _context, %{assigns: %{state: %{show_goto_line: true}}} = scene),
     do: {:noreply, scene}
 
   # Handle Ctrl+N keyboard shortcut for New Buffer
   # Creates a new empty buffer, equivalent to File → New Buffer.
-  def handle_input({:key, {:key_n, 1, [:ctrl]}}, _context, scene) do
+  defp route_input({:key, {:key_n, 1, [:ctrl]}}, _context, scene) do
     handle_cast({:action, :new_buffer}, scene)
   end
 
   # Handle Ctrl+O keyboard shortcut for Open File
   # Opens the file picker modal in open mode, equivalent to File → Open.
-  def handle_input({:key, {:key_o, 1, [:ctrl]}}, _context, scene) do
+  defp route_input({:key, {:key_o, 1, [:ctrl]}}, _context, scene) do
     show_file_picker(scene)
   end
 
   # Handle Ctrl+W keyboard shortcut for Close Buffer
   # If the active buffer has unsaved changes, shows a Save/Discard/Cancel dialog.
   # If the buffer is clean (or there is no active buffer), closes immediately.
-  def handle_input({:key, {:key_w, 1, [:ctrl]}}, _context, scene) do
+  defp route_input({:key, {:key_w, 1, [:ctrl]}}, _context, scene) do
     try_close_active_buffer(scene)
   end
 
@@ -168,7 +178,7 @@ defmodule QuillEx.RootScene do
   # Both open the same pane. The pane carries a replacement field at all times,
   # so there is nothing for the shifted-H variant to reveal — it exists because
   # people's fingers know it, and it lands on the replacement field.
-  def handle_input({:key, {key, 1, mods}}, _context, scene)
+  defp route_input({:key, {key, 1, mods}}, _context, scene)
       when key in [:key_f, :key_h] and is_list(mods) do
     if :shift in mods and Enum.any?(mods, &(&1 in [:ctrl, :meta, :super])) do
       open_project_search(scene, focus: if(key == :key_h, do: :replace, else: :query))
@@ -177,19 +187,19 @@ defmodule QuillEx.RootScene do
     end
   end
 
-  def handle_input({:key, {key, 1, mods}}, _context, scene)
+  defp route_input({:key, {key, 1, mods}}, _context, scene)
       when key in [:key_equal, :key_kp_add, :"key_="] do
     if Enum.any?(mods, &(&1 in [:ctrl, :meta, :super])), do: adjust_chrome_zoom(10)
     {:noreply, scene}
   end
 
-  def handle_input({:key, {key, 1, mods}}, _context, scene)
+  defp route_input({:key, {key, 1, mods}}, _context, scene)
       when key in [:key_minus, :key_kp_subtract, :"key_-"] do
     if Enum.any?(mods, &(&1 in [:ctrl, :meta, :super])), do: adjust_chrome_zoom(-10)
     {:noreply, scene}
   end
 
-  def handle_input({:key, {:key_0, 1, mods}}, _context, scene) do
+  defp route_input({:key, {:key_0, 1, mods}}, _context, scene) do
     if Enum.any?(mods, &(&1 in [:ctrl, :meta, :super])),
       do: Quillex.RadixCache.ViewStore.set_chrome_zoom(100)
 
@@ -201,14 +211,14 @@ defmodule QuillEx.RootScene do
   # on the same line number (or the new last line if the bottom line was deleted).
   # When only one line remains the buffer is cleared to a single empty line.
   # Supports undo via Ctrl+Z.
-  def handle_input({:key, {:key_d, 1, [:ctrl]}}, _context, scene) do
+  defp route_input({:key, {:key_d, 1, [:ctrl]}}, _context, scene) do
     dispatch_to_active_buffer(scene, :delete_line)
   end
 
   # Folding commands are view-only TextField actions. They are handled at the
   # root so the command registry and Help dialog describe real shortcuts even
   # when focus has just moved between editor children.
-  def handle_input({:key, {:key_left_bracket, 1, mods}}, _context, scene)
+  defp route_input({:key, {:key_left_bracket, 1, mods}}, _context, scene)
       when mods in [[:ctrl, :alt], [:alt, :ctrl]] do
     if keyboard_overlay_open?(scene.assigns.state) do
       {:noreply, scene}
@@ -219,7 +229,7 @@ defmodule QuillEx.RootScene do
     end
   end
 
-  def handle_input({:key, {:key_right_bracket, 1, mods}}, _context, scene)
+  defp route_input({:key, {:key_right_bracket, 1, mods}}, _context, scene)
       when mods in [[:ctrl, :alt], [:alt, :ctrl]] do
     unless keyboard_overlay_open?(scene.assigns.state) do
       Scenic.Scene.put_child(scene, :buffer_pane, {:action, :unfold_all})
@@ -231,21 +241,21 @@ defmodule QuillEx.RootScene do
   # Handle Ctrl+Home — move cursor to the very start of the document (line 1, col 1).
   # Mirrors GEdit behaviour: jumps to the beginning of the file regardless of current
   # position, clearing any active selection.
-  def handle_input({:key, {:key_home, 1, [:ctrl]}}, _context, scene) do
+  defp route_input({:key, {:key_home, 1, [:ctrl]}}, _context, scene) do
     dispatch_to_active_buffer(scene, {:move_cursor, :doc_start})
   end
 
   # Handle Ctrl+End — move cursor to the end of the last line in the document.
   # Mirrors GEdit behaviour: jumps to the end of the file regardless of current
   # position, clearing any active selection.
-  def handle_input({:key, {:key_end, 1, [:ctrl]}}, _context, scene) do
+  defp route_input({:key, {:key_end, 1, [:ctrl]}}, _context, scene) do
     dispatch_to_active_buffer(scene, {:move_cursor, :doc_end})
   end
 
   # Ctrl+Shift+Home / Ctrl+Shift+End — the same jumps, selecting on the way.
   # Every other movement key extends the selection when Shift is held, and
   # these are movement keys.
-  def handle_input({:key, {:key_home, 1, mods}}, _context, scene)
+  defp route_input({:key, {:key_home, 1, mods}}, _context, scene)
       when is_list(mods) do
     if :ctrl in mods and :shift in mods do
       dispatch_to_active_buffer(scene, {:select_to, {1, 1}})
@@ -254,7 +264,7 @@ defmodule QuillEx.RootScene do
     end
   end
 
-  def handle_input({:key, {:key_end, 1, mods}}, _context, scene)
+  defp route_input({:key, {:key_end, 1, mods}}, _context, scene)
       when is_list(mods) do
     if :ctrl in mods and :shift in mods do
       dispatch_to_active_buffer(scene, {:select_to, document_end(scene)})
@@ -267,14 +277,14 @@ defmodule QuillEx.RootScene do
   # Page size is estimated from the viewport frame height minus the top bar,
   # divided by the buffer line height. Matches GEdit behaviour: cursor jumps
   # upward by a page, clamping at line 1. Clears any active selection.
-  def handle_input({:key, {:key_pageup, 1, _mods}}, _context, scene) do
+  defp route_input({:key, {:key_pageup, 1, _mods}}, _context, scene) do
     page_size = compute_page_size(scene)
     dispatch_to_active_buffer(scene, {:move_cursor, {:page_up, page_size}})
   end
 
   # Handle Page Down — move cursor down by roughly one screen-height of lines.
   # Same page size logic as Page Up; clamps at the last line of the document.
-  def handle_input({:key, {:key_pagedown, 1, _mods}}, _context, scene) do
+  defp route_input({:key, {:key_pagedown, 1, _mods}}, _context, scene) do
     page_size = compute_page_size(scene)
     dispatch_to_active_buffer(scene, {:move_cursor, {:page_down, page_size}})
   end
@@ -288,13 +298,13 @@ defmodule QuillEx.RootScene do
   # to the buffer controller in store_backed mode, which is the single
   # correct code path.
 
-  def handle_input({:viewport, {input, _coords}}, _context, scene)
+  defp route_input({:viewport, {input, _coords}}, _context, scene)
       when input in [:enter, :exit] do
     # don't do anything when the mouse enters/leaves the viewport
     {:noreply, scene}
   end
 
-  def handle_input(
+  defp route_input(
         {:viewport, {:reshape, {_new_vp_width, _new_vp_height} = new_vp_size}},
         _context,
         scene
@@ -344,7 +354,7 @@ defmodule QuillEx.RootScene do
 
   # File navigator resize drag. The root scene owns this short-lived gesture;
   # ViewStore remains authoritative for the committed width and visibility.
-  def handle_input({:cursor_pos, {x, _y} = coords}, _context, scene)
+  defp route_input({:cursor_pos, {x, _y} = coords}, _context, scene)
       when scene.assigns.state.file_nav_resizing do
     state = scene.assigns.state
 
@@ -385,12 +395,12 @@ defmodule QuillEx.RootScene do
   # RootScene requests cursor input itself, so use explicit bounds rather than
   # relying on Scenic to choose the pill as the positional-input context. That
   # remains reliable even when the adjacent child component overlaps its edge.
-  def handle_input({:cursor_pos, coords}, _context, scene) do
+  defp route_input({:cursor_pos, coords}, _context, scene) do
     maybe_clear_icon_menu_hover(scene, scene.assigns.state.cursor_pos, coords)
     update_file_nav_resize_hover(scene, coords, file_nav_resize_handle_hit?(scene, coords))
   end
 
-  def handle_input(
+  defp route_input(
         {:cursor_button, {:btn_left, 0, _mods, _coords}},
         _context,
         %{assigns: %{state: %{file_nav_resizing: true}}} = scene
@@ -455,7 +465,7 @@ defmodule QuillEx.RootScene do
   #
   # The FilePicker already handles close-on-outside-click internally (it renders
   # a full-screen overlay and cancels when the overlay is clicked).
-  def handle_input({:cursor_button, {:btn_left, 1, _mods, {click_x, click_y}}}, _context, scene) do
+  defp route_input({:cursor_button, {:btn_left, 1, _mods, {click_x, click_y}}}, _context, scene) do
     if file_nav_resize_handle_hit?(scene, {click_x, click_y}) do
       start_file_nav_resize(scene)
     else
@@ -533,7 +543,7 @@ defmodule QuillEx.RootScene do
   # Mouse clicks on child components (TextField, IconMenu, FilePicker, etc.) are
   # handled by those components via Scenic's hit-testing and their own
   # request_input registrations.  This catch-all handles any remaining events.
-  def handle_input(_input, _context, scene) do
+  defp route_input(_input, _context, scene) do
     {:noreply, scene}
   end
 
@@ -1145,6 +1155,7 @@ defmodule QuillEx.RootScene do
     :show_project_search,
     :syntax_highlighting,
     :theme,
+    :primary_modifier,
     :status_message,
     :status_severity
   ]
@@ -1167,6 +1178,9 @@ defmodule QuillEx.RootScene do
         :show_project_search,
         :syntax_highlighting,
         :theme,
+        # Changing the command key re-letters the shortcut beside every menu
+        # row, so the menus have to be rebuilt — which is what this triggers.
+        :primary_modifier,
         :show_action_feedback
       ],
       fn key -> Map.get(old_state, key) != Map.get(new_state, key) end
@@ -1354,6 +1368,13 @@ defmodule QuillEx.RootScene do
       # chrome, so this is the only place a colour scheme is chosen.
       "theme_" <> theme ->
         Quillex.RadixCache.ViewStore.set_theme(String.to_existing_atom(theme))
+        {:noreply, scene}
+
+      # Which key means "command". Both halves of the answer — what is printed
+      # in the menus and what is matched when a key is pressed — follow from
+      # this one setting, so there is nothing else to change.
+      "primary_modifier_" <> modifier ->
+        Quillex.RadixCache.ViewStore.set_primary_modifier(String.to_existing_atom(modifier))
         {:noreply, scene}
 
       "syntax_highlighting" ->

@@ -21,112 +21,112 @@ defmodule Quillex.Commands do
     %{
       id: :new,
       label: "New Buffer",
-      shortcut: "Ctrl+N",
+      shortcut: "Mod+N",
       menu: :file,
       description: "Create a new unsaved text buffer."
     },
     %{
       id: :open,
       label: "Open File…",
-      shortcut: "Ctrl+O",
+      shortcut: "Mod+O",
       menu: :file,
       description: "Choose a text file to open in a new tab."
     },
     %{
       id: :save,
       label: "Save",
-      shortcut: "Ctrl+S",
+      shortcut: "Mod+S",
       menu: :file,
       description: "Write the active buffer to its current file."
     },
     %{
       id: :save_as,
       label: "Save As…",
-      shortcut: "Ctrl+Shift+S",
+      shortcut: "Mod+Shift+S",
       menu: :file,
       description: "Write the active buffer to a new file path."
     },
     %{
       id: :close,
       label: "Close Buffer",
-      shortcut: "Ctrl+W",
+      shortcut: "Mod+W",
       menu: :file,
       description: "Close the active tab, prompting if it has unsaved changes."
     },
     %{
       id: :undo,
       label: "Undo",
-      shortcut: "Ctrl+Z",
+      shortcut: "Mod+Z",
       menu: :edit,
       description: "Undo the most recent editing action."
     },
     %{
       id: :redo,
       label: "Redo",
-      shortcut: "Ctrl+Shift+Z",
+      shortcut: "Mod+Shift+Z",
       menu: :edit,
       description: "Reapply the most recently undone action."
     },
     %{
       id: :cut,
       label: "Cut",
-      shortcut: "Ctrl+X",
+      shortcut: "Mod+X",
       menu: :edit,
       description: "Remove the selection and copy it to the clipboard."
     },
     %{
       id: :copy,
       label: "Copy",
-      shortcut: "Ctrl+C",
+      shortcut: "Mod+C",
       menu: :edit,
       description: "Copy the selected text to the clipboard."
     },
     %{
       id: :paste,
       label: "Paste",
-      shortcut: "Ctrl+V",
+      shortcut: "Mod+V",
       menu: :edit,
       description: "Insert clipboard text at the cursor."
     },
     %{
       id: :select_all,
       label: "Select All",
-      shortcut: "Ctrl+A",
+      shortcut: "Mod+A",
       menu: :edit,
       description: "Select the entire contents of the active buffer."
     },
     %{
       id: :delete_line,
       label: "Delete Line",
-      shortcut: "Ctrl+D",
+      shortcut: "Mod+D",
       menu: :edit,
       description: "Remove the line the cursor is on."
     },
     %{
       id: :find,
       label: "Find",
-      shortcut: "Ctrl+F",
+      shortcut: "Mod+F",
       menu: :edit,
       description: "Search within the active buffer."
     },
     %{
       id: :find_replace,
       label: "Find & Replace",
-      shortcut: "Ctrl+H",
+      shortcut: "Mod+H",
       menu: :edit,
       description: "Search for text and replace matching occurrences."
     },
     %{
       id: :find_in_project,
       label: "Find in Project",
-      shortcut: "Ctrl+Shift+F",
+      shortcut: "Mod+Shift+F",
       menu: :edit,
       description: "Search every file under the project root; results open in the sidebar."
     },
     %{
       id: :replace_in_project,
       label: "Replace in Project",
-      shortcut: "Ctrl+Shift+H",
+      shortcut: "Mod+Shift+H",
       menu: :edit,
       description: "Search the project and replace every match across its files."
     },
@@ -140,7 +140,7 @@ defmodule Quillex.Commands do
     %{
       id: :goto_line,
       label: "Go to Line…",
-      shortcut: "Ctrl+G",
+      shortcut: "Mod+G",
       menu: :edit,
       section: "Moving around",
       description: "Jump the cursor to a line number."
@@ -149,7 +149,7 @@ defmodule Quillex.Commands do
       id: :toggle_fold,
       section: "Folding",
       label: "Toggle Fold",
-      shortcut: "Ctrl+Alt+[",
+      shortcut: "Mod+Alt+[",
       menu: :view,
       description: "Fold or unfold the code block containing the cursor."
     },
@@ -157,7 +157,7 @@ defmodule Quillex.Commands do
       id: :unfold_all,
       section: "Folding",
       label: "Unfold All",
-      shortcut: "Ctrl+Alt+]",
+      shortcut: "Mod+Alt+]",
       menu: :view,
       description: "Expand every folded code block in the active buffer."
     },
@@ -177,7 +177,7 @@ defmodule Quillex.Commands do
     %{
       id: :word_left,
       label: "Move to Previous Word",
-      shortcut: "Ctrl+Left",
+      shortcut: "Mod+Left",
       menu: nil,
       section: "Moving around",
       description: "Move the cursor to the start of the previous word."
@@ -185,7 +185,7 @@ defmodule Quillex.Commands do
     %{
       id: :word_right,
       label: "Move to Next Word",
-      shortcut: "Ctrl+Right",
+      shortcut: "Mod+Right",
       menu: nil,
       section: "Moving around",
       description: "Move the cursor to the start of the next word."
@@ -209,7 +209,7 @@ defmodule Quillex.Commands do
     %{
       id: :doc_start,
       label: "Start of Document",
-      shortcut: "Ctrl+Home",
+      shortcut: "Mod+Home",
       menu: nil,
       section: "Moving around",
       description: "Move the cursor to the very beginning of the buffer."
@@ -217,7 +217,7 @@ defmodule Quillex.Commands do
     %{
       id: :doc_end,
       label: "End of Document",
-      shortcut: "Ctrl+End",
+      shortcut: "Mod+End",
       menu: nil,
       section: "Moving around",
       description: "Move the cursor to the very end of the buffer."
@@ -245,13 +245,13 @@ defmodule Quillex.Commands do
       menu: nil,
       section: "Selecting",
       description:
-        "Hold Shift while moving the cursor — arrows, Home, End, Ctrl+Home, " <>
-          "Ctrl+End — to select as you go."
+        "Hold Shift while moving the cursor — arrows, Home, End, and the " <>
+          "document start/end shortcuts — to select as you go."
     },
     %{
       id: :delete_prev_word,
       label: "Delete Previous Word",
-      shortcut: "Ctrl+Backspace",
+      shortcut: "Mod+Backspace",
       menu: nil,
       section: "Editing",
       description: "Remove the word before the cursor."
@@ -259,7 +259,7 @@ defmodule Quillex.Commands do
     %{
       id: :delete_next_word,
       label: "Delete Next Word",
-      shortcut: "Ctrl+Delete",
+      shortcut: "Mod+Delete",
       menu: nil,
       section: "Editing",
       description: "Remove the word after the cursor."
@@ -283,7 +283,7 @@ defmodule Quillex.Commands do
     %{
       id: :zoom_in,
       label: "Zoom In",
-      shortcut: "Ctrl++",
+      shortcut: "Mod++",
       menu: nil,
       section: "Interface",
       description: "Scale the application chrome up, leaving the editor text alone."
@@ -291,7 +291,7 @@ defmodule Quillex.Commands do
     %{
       id: :zoom_out,
       label: "Zoom Out",
-      shortcut: "Ctrl+-",
+      shortcut: "Mod+-",
       menu: nil,
       section: "Interface",
       description: "Scale the application chrome down, leaving the editor text alone."
@@ -299,7 +299,7 @@ defmodule Quillex.Commands do
     %{
       id: :zoom_reset,
       label: "Reset Zoom",
-      shortcut: "Ctrl+0",
+      shortcut: "Mod+0",
       menu: nil,
       section: "Interface",
       description: "Return the application chrome to its normal size."
@@ -321,10 +321,23 @@ defmodule Quillex.Commands do
       raise ArgumentError, "unknown command #{inspect(id)}"
   end
 
+  @doc """
+  The row as it appears in a menu, with its shortcut spelled for this keyboard.
+
+  The shortcut is rendered here rather than stored rendered, so that changing
+  the modifier setting changes every menu at once — see `Quillex.Shortcuts`.
+  """
   def menu_label(id) do
     command = fetch!(id)
-    if command.shortcut, do: "#{command.label} (#{command.shortcut})", else: command.label
+
+    case Quillex.Shortcuts.render(command.shortcut) do
+      nil -> command.label
+      shortcut -> "#{command.label} (#{shortcut})"
+    end
   end
+
+  @doc "A command's shortcut, spelled for this keyboard. `nil` if it has none."
+  def shortcut(id), do: fetch!(id) |> Map.fetch!(:shortcut) |> Quillex.Shortcuts.render()
 
   @sections [
     "File",
@@ -349,7 +362,11 @@ defmodule Quillex.Commands do
     |> Enum.group_by(&section/1)
     |> Enum.sort_by(fn {section, _} -> Enum.find_index(@sections, &(&1 == section)) end)
     |> Enum.flat_map(fn {section, commands} ->
-      [section] ++ Enum.map(commands, &"  #{String.pad_trailing(&1.shortcut, 16)}#{&1.label}")
+      [section] ++
+        Enum.map(commands, fn command ->
+          shortcut = Quillex.Shortcuts.render(command.shortcut)
+          "  #{String.pad_trailing(shortcut, 16)}#{command.label}"
+        end)
     end)
   end
 
