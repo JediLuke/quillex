@@ -387,6 +387,129 @@ defmodule Quillex.FindBarSpex do
       end
     end
 
+    scenario "undoing a replace" do
+      given_ "a replacement that has been made", context do
+        fresh_document()
+
+        key("h", [:ctrl])
+        assert wait_until(fn -> bar().replace_mode end)
+
+        type("alpha")
+        assert wait_until(fn -> length(matches()) == 3 end)
+
+        click_widget(:replace_field)
+        type("omega")
+        assert wait_until(fn -> bar().replace_query == "omega" end)
+
+        {:ok, Map.put(context, :before, buffer().lines)}
+      end
+
+      when_ "Replace All has taken every occurrence", context do
+        click_widget(:replace_all)
+
+        assert wait_until(fn -> not Enum.any?(buffer().lines, &(&1 =~ "alpha")) end),
+               "nothing should be left: #{inspect(buffer().lines)}"
+
+        {:ok, context}
+      end
+
+      then_ "Ctrl+Z puts them all back, WITHOUT closing the bar first", context do
+        # The moment you want a replacement back is the moment right after
+        # making it — with the bar still open and the query still in it.
+        # Nothing handled the chord while the bar held the keyboard, so it
+        # simply vanished.
+        key("z", [:ctrl])
+
+        assert wait_until(fn -> buffer().lines == context.before end),
+               "undo should restore the document: #{inspect(buffer().lines)}"
+
+        assert root_state().show_search_bar, "and should not have needed the bar closed"
+
+        {:ok, context}
+      end
+
+      then_ "and redo puts the replacement back again", context do
+        key("z", [:ctrl, :shift])
+
+        assert wait_until(fn -> Enum.any?(buffer().lines, &(&1 =~ "omega")) end),
+               "redo should re-apply the replacement: #{inspect(buffer().lines)}"
+
+        {:ok, context}
+      end
+
+      then_ "one undo covers the whole Replace All, not one match at a time", context do
+        key("z", [:ctrl])
+
+        assert wait_until(fn -> buffer().lines == context.before end),
+               "a single undo should take back the entire batch: #{inspect(buffer().lines)}"
+
+        {:ok, context}
+      end
+
+      then_ "and a single Replace undoes the same way", context do
+        before = buffer().lines
+
+        click_widget(:replace_one)
+        assert wait_until(fn -> buffer().lines != before end), "one occurrence should change"
+
+        key("z", [:ctrl])
+
+        assert wait_until(fn -> buffer().lines == before end),
+               "undo should take back a single replace too: #{inspect(buffer().lines)}"
+
+        {:ok, context}
+      end
+    end
+
+    scenario "a query longer than the field" do
+      given_ "the find bar over a document", context do
+        fresh_document()
+        key("f", [:ctrl])
+        assert wait_until(fn -> root_state().show_search_bar end)
+
+        {:ok, context}
+      end
+
+      when_ "a query far wider than the field is typed", context do
+        long = String.duplicate("verylongsearchterm", 6)
+        type(long)
+
+        assert wait_until(fn -> field_text(:search) == long end),
+               "the whole thing should be in the field"
+
+        {:ok, Map.put(context, :long, long)}
+      end
+
+      then_ "it stays on ONE line — a one-line field does not wrap", context do
+        st = field(:search)
+
+        assert length(st.lines) == 1, "the field holds one line: #{inspect(st.lines)}"
+        assert st.wrap_mode == :none, "and must not be wrapping: #{inspect(st.wrap_mode)}"
+
+        {:ok, context}
+      end
+
+      then_ "and it scrolls sideways so the end is what you can see", context do
+        st = field(:search)
+
+        assert st.scroll.offset_x > 0,
+               "the field should have scrolled to keep the cursor in view, offset " <>
+                 inspect(st.scroll.offset_x)
+
+        {:ok, context}
+      end
+
+      then_ "and Home brings the start back into view", context do
+        key("home")
+
+        assert wait_until(fn -> field(:search).scroll.offset_x == 0 end),
+               "going to the start should scroll back to it, offset " <>
+                 inspect(field(:search).scroll.offset_x)
+
+        {:ok, context}
+      end
+    end
+
     scenario "the tooltips line up" do
       given_ "find and replace open, so the bar is two rows tall", context do
         fresh_document()
@@ -407,12 +530,6 @@ defmodule Quillex.FindBarSpex do
         labelled = Enum.filter(BarState.widgets(st), & &1.tooltip)
         assert length(labelled) >= 6, "most of the bar should explain itself"
 
-        for w <- labelled do
-          assert w.y + w.h == bottom or w.id in [:prev, :next, :close] or
-                   match?({:toggle, _}, w.id) or w.id == :toggle_replace,
-                 "unexpected widget in the tooltip set: #{inspect(w.id)}"
-        end
-
         {:ok, context}
       end
 
@@ -421,7 +538,18 @@ defmodule Quillex.FindBarSpex do
         {fx, fy} = st.frame.pin.point
         bottom = BarState.height(st)
 
-        for id <- [:toggle_replace, {:toggle, :case_sensitive}, {:toggle, :regex}, :close] do
+        # The top row's labels hang below the top row; the caret's hangs below
+        # the whole bar, level with the replace buttons it sits beside.
+        expected = %{
+          {:toggle, :case_sensitive} => BarState.bar_height(),
+          {:toggle, :regex} => BarState.bar_height(),
+          :close => BarState.bar_height(),
+          :next => BarState.bar_height(),
+          :toggle_replace => bottom,
+          :replace_all => bottom
+        }
+
+        for {id, want} <- expected do
           w = Enum.find(BarState.widgets(st), &(&1.id == id))
 
           Probes.send_mouse_move(trunc(fx + w.x + w.w / 2), trunc(fy + w.y + w.h / 2))
@@ -435,8 +563,8 @@ defmodule Quillex.FindBarSpex do
 
           [%{transforms: %{translate: {_tx, ty}}}] = tooltip
 
-          assert_in_delta ty, bottom + 4, 1,
-                          "#{inspect(id)}'s tooltip should hang from the bottom of the bar"
+          assert_in_delta ty, want + 4, 1,
+                          "#{inspect(id)}'s tooltip hangs from the wrong row"
         end
 
         {:ok, context}

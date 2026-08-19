@@ -994,6 +994,15 @@ defmodule QuillEx.RootScene do
     {:noreply, scene}
   end
 
+  # Undo and redo asked for from the find bar. They act on the DOCUMENT: the
+  # bar's own fields hold a query, not work worth keeping, and the thing you
+  # want back after a replace is the text.
+  def handle_cast({:undo_requested, _id}, scene),
+    do: do_dispatch_to_active_buffer(scene, :undo)
+
+  def handle_cast({:redo_requested, _id}, scene),
+    do: do_dispatch_to_active_buffer(scene, :redo)
+
   def handle_cast({:search_close, _id}, scene) do
     hide_search_bar(scene)
   end
