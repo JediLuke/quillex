@@ -2365,7 +2365,23 @@ defmodule QuillEx.RootScene do
 
     case Quillex.API.FileAPI.open(path) do
       {:ok, %{buffer_ref: buf_ref}} ->
-        {:ok, _snapshot} = Quillex.Buffer.dispatch(buf_ref, [{:set_cursor, {line, col}}])
+        # Land on the match AND mark it. Arriving at a line with nothing
+        # highlighted leaves you to find, by eye, the thing you just clicked
+        # on — so the buffer is given the same query the pane ran, which
+        # marks every occurrence in this file, and then the cursor is put on
+        # the one that was clicked.
+        #
+        # In that order: setting the search jumps to the FIRST match, so a
+        # cursor set before it would be immediately overridden.
+        search = Quillex.RadixCache.ProjectSearchStore.get_state()
+
+        {:ok, _snapshot} =
+          Quillex.Buffer.dispatch(buf_ref, [
+            {:search, search.query,
+             [case_sensitive: search.case_sensitive, regex: search.regex]},
+            {:set_cursor, {line, col}}
+          ])
+
         close_stale_preview(old_state, buf_ref)
 
         # Keyboard stays with the pane: browsing results is the point, and the

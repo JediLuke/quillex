@@ -274,6 +274,16 @@ defmodule Quillex.ProjectSearchSpex do
         assert wait_until(fn -> buffer_pane_state().cursor == {match.line, match.col} end),
                "the cursor should sit on the match"
 
+        # And the match is MARKED. Landing on a line with nothing highlighted
+        # leaves you to find, by eye, the thing you just clicked on.
+        assert wait_until(fn -> buffer_pane_state().search_matches != [] end),
+               "the occurrences should be highlighted, got #{inspect(buffer_pane_state().search_matches)}"
+
+        assert Enum.any?(buffer_pane_state().search_matches, fn {line, col, _text} ->
+                 {line, col} == {match.line, match.col}
+               end),
+               "including the one that was clicked"
+
         {:ok, Map.put(context, :readme_uuid, root_state().active_buf.uuid)}
       end
 
@@ -397,6 +407,57 @@ defmodule Quillex.ProjectSearchSpex do
         # Still dismissed, still there: a replace never reaches a match the
         # user has taken out of the set.
         assert File.read!(context.beta_path) =~ "a needle in a haystack"
+        {:ok, context}
+      end
+    end
+  end
+
+  spex "The scope tree belongs to the settings section",
+    description: "It appears with SEARCH SETTINGS, not among the results",
+    tags: [:phase_41, :project_search, :scope] do
+    scenario "showing and hiding the scope tree" do
+      given_ "results for 'needle'", context do
+        :ok = open_pane_with(context.root, "needle")
+        {:ok, context}
+      end
+
+      then_ "with settings shut, the rows are results and nothing else", context do
+        refute pane_state().domain_open?, "settings start shut"
+
+        kinds = pane_state() |> ScenicWidgets.SearchPane.State.rows() |> Enum.map(& &1.kind)
+
+        refute :scope_header in kinds,
+               "the scope tree should not be sitting among the results: #{inspect(kinds)}"
+
+        {:ok, context}
+      end
+
+      when_ "SEARCH SETTINGS is opened", context do
+        Probes.click_element("search_pane_domain")
+
+        assert wait_until(fn -> pane_state().domain_open? end),
+               "clicking the heading should open the settings"
+
+        {:ok, context}
+      end
+
+      then_ "the scope tree is there", context do
+        kinds = pane_state() |> ScenicWidgets.SearchPane.State.rows() |> Enum.map(& &1.kind)
+
+        assert :scope_header in kinds,
+               "the scope tree belongs to the settings section: #{inspect(kinds)}"
+
+        {:ok, context}
+      end
+
+      then_ "and shutting the settings takes it away again", context do
+        Probes.click_element("search_pane_domain")
+
+        assert wait_until(fn -> not pane_state().domain_open? end)
+
+        kinds = pane_state() |> ScenicWidgets.SearchPane.State.rows() |> Enum.map(& &1.kind)
+        refute :scope_header in kinds
+
         {:ok, context}
       end
     end
