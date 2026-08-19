@@ -65,5 +65,23 @@ if [ "${QUILLEX_LOCAL_DEPS:-}" != 1 ] && [ "${QUILLEX_LOCAL_DEPS:-}" != true ] &
   echo
 fi
 
+# And the other direction, which is the one that has actually bitten. Running
+# with QUILLEX_LOCAL_DEPS=1 tests the checkouts beside this one, so a suite can
+# go green against code that exists nowhere else — and then the editor does not
+# start for anyone, including you the next time you run it without the flag.
+# A green run in this mode proves the code works; it proves nothing about what
+# this repo pins.
+if [ "${QUILLEX_LOCAL_DEPS:-}" = 1 ] || [ "${QUILLEX_LOCAL_DEPS:-}" = true ]; then
+  printf '\033[33m'
+  echo "┌──────────────────────────────────────────────────────────────────┐"
+  echo "│ QUILLEX_LOCAL_DEPS=1 — running against your LOCAL sibling forks. │"
+  echo "│ Passing here does NOT mean the pinned revisions in mix.exs work. │"
+  echo "│ Before committing quillex: push the fork, bump the SHA, re-run   │"
+  echo "│ with QUILLEX_LOCAL_DEPS unset.                                   │"
+  echo "└──────────────────────────────────────────────────────────────────┘"
+  printf '\033[0m'
+  echo
+fi
+
 JSONL="${SPEX_JSONL:-/tmp/quillex_spex_failures_$(date +%Y%m%d_%H%M%S).jsonl}"
 MIX_ENV=test SCENIC_LOCAL_TARGET=glfw mix spex --jsonl="$JSONL" "$@"
