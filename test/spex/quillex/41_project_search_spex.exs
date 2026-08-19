@@ -20,6 +20,12 @@ defmodule Quillex.ProjectSearchSpex do
 
   defp root_state, do: :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state
 
+  defp pane_scene do
+    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    {:ok, child} = Scenic.Scene.child(root, :project_search_pane)
+    :sys.get_state(if(is_list(child), do: List.first(child), else: child))
+  end
+
   defp pane_state do
     root = :sys.get_state(Process.whereis(QuillEx.RootScene))
     {:ok, [pid | _]} = Scenic.Scene.child(root, :project_search_pane)
@@ -437,6 +443,43 @@ defmodule Quillex.ProjectSearchSpex do
 
         assert wait_until(fn -> pane_state().domain_open? end),
                "clicking the heading should open the settings"
+
+        {:ok, context}
+      end
+
+      then_ "the HEADER redraws, not just the results", context do
+        # The bug this catches: opening the settings was in neither of the
+        # renderizer's "has anything changed" checks, so the header kept its
+        # old shape — old height, old status position, triangle still shut —
+        # while the body redrew and showed the scope tree on its own. Typing
+        # any character afterwards changed the status text, tripped the widget
+        # check, and set it all right, which is what made it look intermittent.
+        st = pane_state()
+        widgets = ScenicWidgets.SearchPane.State.header_widgets(st)
+
+        for id <- [{:domain, :open_buffers_only}, {:domain, :use_ignore_files}, :edit_excludes] do
+          assert Enum.any?(widgets, &(&1.id == id)),
+                 "#{inspect(id)} should be in the header once the settings are open"
+        end
+
+        status = Enum.find(widgets, &(&1.id == :status))
+        options = Enum.filter(widgets, &match?({:domain, _}, &1.id))
+
+        assert Enum.all?(options, &(&1.y + &1.h <= status.y)),
+               "the status line is the boundary: the options belong above it"
+
+        # And the DRAWN header has to be as tall as the state says it is. This
+        # is the assertion that catches it: everything above reads state, and
+        # the state was always right — it was the graph that had not caught up,
+        # leaving a band of bare pane between the old backdrop and the results.
+        [%{data: {_w, drawn_height}}] =
+          Scenic.Graph.get(pane_scene().assigns.graph, :search_pane_header_bg)
+
+        assert_in_delta drawn_height,
+                        ScenicWidgets.SearchPane.State.header_height(st),
+                        1,
+                        "the header backdrop is #{drawn_height} tall but the header is " <>
+                          "#{ScenicWidgets.SearchPane.State.header_height(st)} — it did not redraw"
 
         {:ok, context}
       end
