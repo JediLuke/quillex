@@ -73,6 +73,17 @@ defmodule Quillex.ProjectSearchSpex do
     Quillex.RadixCache.ViewStore.open_project_search()
     Process.sleep(400)
     ProjectSearchStore.set_query(query)
+
+    # And tell the PANE, which is where a person would have typed it. Setting
+    # only the store leaves the pane's field empty, and an empty field reports
+    # itself the moment anything makes it redraw — wiping the query this
+    # helper just set.
+    Scenic.Scene.put_child(
+      :sys.get_state(Process.whereis(QuillEx.RootScene)),
+      :project_search_pane,
+      {:set_query, query}
+    )
+
     :ok = ProjectSearchStore.await_idle()
     true = wait_until(fn -> search_done?() end)
 
@@ -329,7 +340,11 @@ defmodule Quillex.ProjectSearchSpex do
         # The replacement row is behind a disclosure now, the same as the find
         # bar's: most searches are searches.
         Probes.click_element("search_pane_replace_caret")
-        Process.sleep(500)
+
+        assert wait_until(fn -> pane_state().replace_open? end),
+               "the caret should open the replacement row"
+
+        Process.sleep(300)
 
         Probes.click_element("search_pane_field_replace")
         Process.sleep(150)
@@ -467,7 +482,9 @@ defmodule Quillex.ProjectSearchSpex do
                      Enum.any?(matches, &(&1.matched == "NEEDLE"))
                    end)
                end),
-               "an upper-case occurrence must not match a lower-case query"
+               "an upper-case occurrence must not match a lower-case query — " <>
+                 "cs=#{inspect(results().case_sensitive)} status=#{inspect(results().status)} " <>
+                 "matched=#{inspect(Enum.flat_map(results().files, fn {_p, ms} -> Enum.map(ms, & &1.matched) end))}"
 
         Probes.click_element("search_pane_toggle_case_sensitive")
         assert wait_until(fn -> not results().case_sensitive end)

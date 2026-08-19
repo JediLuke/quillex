@@ -1094,6 +1094,7 @@ defmodule QuillEx.RootScene do
     if new_state.show_project_search do
       model = Quillex.GUI.SearchPaneModel.build(snapshot)
       Scenic.Scene.put_child(scene, :project_search_pane, {:update_model, model})
+
     end
 
     {:noreply, scene}
@@ -1631,6 +1632,42 @@ defmodule QuillEx.RootScene do
   def handle_event({:search_pane, :query_changed, query}, _from, scene) do
     Quillex.RadixCache.ProjectSearchStore.set_query(query)
     {:noreply, assign(scene, state: %{scene.assigns.state | project_search_query: query})}
+  end
+
+  def handle_event({:search_pane, :clear}, _from, scene) do
+    Quillex.RadixCache.ProjectSearchStore.set_query("")
+    Scenic.Scene.put_child(scene, :project_search_pane, {:set_query, ""})
+    {:noreply, scene}
+  end
+
+  # The exclude list is a file, and this is a text editor: opening it IS the
+  # settings UI. Reached from the pane rather than a menu, beside the switch
+  # that says whether it is being honoured.
+  def handle_event({:search_pane, :edit_excludes}, _from, scene) do
+    _ = Quillex.Search.Excludes.patterns()
+    {:ok, _} = Quillex.API.FileAPI.open(Quillex.Search.Excludes.path())
+    {:noreply, scene}
+  end
+
+  # "Replace" in a project search means the first match still standing. There
+  # is no cursor here — the results are a list, not a position — so pressing
+  # it repeatedly walks down them, which is the reviewable way to do a
+  # replace you are not sure about.
+  def handle_event({:search_pane, :replace_one, replacement}, _from, scene) do
+    case Quillex.RadixCache.ProjectSearchStore.get_state().files do
+      [{path, [match | _]} | _] ->
+        Quillex.RadixCache.ProjectSearchStore.replace_match(
+          path,
+          match.line,
+          match.col,
+          replacement
+        )
+
+      _ ->
+        :ok
+    end
+
+    {:noreply, scene}
   end
 
   def handle_event({:search_pane, :toggle_option, option}, _from, scene) do
