@@ -168,7 +168,9 @@ defmodule Quillex.FindOptionsSpex do
           |> Enum.filter(& &1.tooltip)
           |> Enum.map(& &1.id)
 
-        for id <- [:toggle_replace, {:toggle, :case_sensitive}, {:toggle, :regex}, :prev, :next, :close] do
+        # Not the caret: it says what it does by pointing at what it opens, and
+        # a label for it lands on top of the query field.
+        for id <- [{:toggle, :case_sensitive}, {:toggle, :regex}, :prev, :next, :close] do
           assert id in labelled, "#{inspect(id)} should explain itself"
         end
 

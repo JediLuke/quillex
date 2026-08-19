@@ -1049,6 +1049,17 @@ defmodule QuillEx.RootScene do
     show_search_bar(scene, replace_mode: true)
   end
 
+  # The bar's disclosure caret. Unlike Ctrl+H, which only ever opens the
+  # replacement row, this closes it again — a caret that cannot put back what
+  # it revealed is a button that does nothing every second time it is pressed.
+  def handle_cast({:replace_mode_toggled, _id}, scene) do
+    if scene.assigns.state.show_replace do
+      hide_replace_row(scene)
+    else
+      show_search_bar(scene, replace_mode: true)
+    end
+  end
+
   def handle_cast({:replace_requested, _id, replacement}, scene) do
     Scenic.Scene.put_child(scene, :buffer_pane, {:action, {:replace, replacement}})
     {:noreply, scene}
@@ -2202,6 +2213,24 @@ defmodule QuillEx.RootScene do
   # This is the BUFFER's find, and only that. The project pane is a separate
   # surface with its own fields (see open_project_search/2): two boxes, two
   # jobs, no interaction between them.
+  # Shrink find-and-replace back to plain find, keeping the bar and the query.
+  defp hide_replace_row(scene) do
+    old_state = scene.assigns.state
+    new_state = %{old_state | show_replace: false}
+
+    new_graph =
+      QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+
+    new_scene =
+      scene
+      |> assign(state: new_state)
+      |> assign(graph: new_graph)
+      |> push_graph(new_graph)
+
+    Scenic.Scene.put_child(new_scene, :search_bar, :disable_replace_mode)
+    {:noreply, new_scene}
+  end
+
   defp show_search_bar(scene, opts \\ []) do
     replace_mode = Keyword.get(opts, :replace_mode, false)
     old_state = scene.assigns.state

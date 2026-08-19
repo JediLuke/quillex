@@ -103,6 +103,15 @@ defmodule Quillex.RadixCache.ViewStore do
   @doc "Set auto-indent outright, rather than flipping it."
   def set_auto_indent(on?) when is_boolean(on?),
     do: GenServer.cast(__MODULE__, {:set_auto_indent, on?})
+
+  # Set rather than flip. A caller that wants a guide OFF has to read the
+  # current value first to know whether to toggle, and then it is racing every
+  # other thing that can change it.
+  def set_current_line_highlight(on?) when is_boolean(on?),
+    do: GenServer.cast(__MODULE__, {:set_current_line_highlight, on?})
+
+  def set_current_column_highlight(on?) when is_boolean(on?),
+    do: GenServer.cast(__MODULE__, {:set_current_column_highlight, on?})
   def toggle_file_nav, do: GenServer.cast(__MODULE__, :toggle_file_nav)
   def toggle_action_feedback, do: GenServer.cast(__MODULE__, :toggle_action_feedback)
   def toggle_menu_shortcuts, do: GenServer.cast(__MODULE__, :toggle_menu_shortcuts)
@@ -218,6 +227,14 @@ defmodule Quillex.RadixCache.ViewStore do
 
   def handle_cast({:set_auto_indent, on?}, state) do
     {:noreply, publish(state, %{state.view | auto_indent: on?})}
+  end
+
+  def handle_cast({:set_current_line_highlight, on?}, state) do
+    {:noreply, publish(state, %{state.view | highlight_current_line: on?})}
+  end
+
+  def handle_cast({:set_current_column_highlight, on?}, state) do
+    {:noreply, publish(state, %{state.view | highlight_current_column: on?})}
   end
 
   def handle_cast(:toggle_current_line_highlight, state) do

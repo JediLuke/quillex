@@ -1534,30 +1534,50 @@ defmodule Quillex.DemoSpex do
 
       then_ "and it signs off", context do
         pace(:slow)
+
+        # Clear the desk before signing it. The current-line and
+        # current-column guides were turned on two acts ago to show what they
+        # do, and a highlight band drawn straight through the middle of a
+        # drawing is the one thing you cannot un-see.
+        Quillex.RadixCache.ViewStore.set_current_line_highlight(false)
+        Quillex.RadixCache.ViewStore.set_current_column_highlight(false)
+        Quillex.RadixCache.ViewStore.sync()
+        beat(600)
+
         page("quillex.txt", [""])
 
         # The first commit, 5 May 2021, contained nothing but this quote. It
         # turned out to be the design document.
         narrate([
-          "                          .",
-          "                         /|",
-          "                        / |",
-          "                       /  |",
-          "                      /  /|",
-          "                     /  / |",
-          "                    /  /  |",
-          "                   /  /  /|",
-          "                  /  /  / |",
-          "                 /  /  /  |",
-          "                /  /  /  /",
-          "               /  /  /  /",
-          "              (  (  (  /",
-          "               \\  \\  \\/",
-          "                \\  \\/",
-          "                 \\/",
-          "                 |",
-          "                 |",
-          "                 V",
+          "                                             .",
+          "                                       ,///'",
+          "                                    ,//////'",
+          "                                 ,////////'",
+          "                              ,//////////'",
+          "                           ,////////////'",
+          "                        ,//////////////'",
+          "                      ,///////////////'",
+          "                    ,///////////////'",
+          "                   ,//////////////'",
+          "                  ,/////////////'",
+          "                 ,////////////'",
+          "                ,///////////'",
+          "                ,//////////'",
+          "               ,/////////'",
+          "               ,///////'",
+          "              ,//////'",
+          "              ,////'",
+          "             ,///'",
+          "             ,//'",
+          "             ,/'",
+          "            //",
+          "           //",
+          "          //",
+          "         //",
+          "        //",
+          "       //",
+          "      \\/",
+          "       .",
           "",
           "   \"Simplicity is the highest goal, achievable when you",
           "    have overcome all difficulties. After one has played",
@@ -1573,8 +1593,10 @@ defmodule Quillex.DemoSpex do
           "        Demonstrated, and tested, by itself."
         ])
 
-        assert Enum.at(active_buffer().lines, 20) =~ "Simplicity is the highest goal",
-               "the quote should be on screen, got #{inspect(Enum.at(active_buffer().lines, 20))}"
+        # By content, not by line number: the drawing above it is art, and art
+        # gets redrawn.
+        assert Enum.any?(active_buffer().lines, &(&1 =~ "Simplicity is the highest goal")),
+               "the quote should be on screen, got #{inspect(active_buffer().lines)}"
 
         Probes.take_screenshot("60_demo_20_end")
         dwell(20_000)
