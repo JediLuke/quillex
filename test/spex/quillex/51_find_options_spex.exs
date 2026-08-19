@@ -33,6 +33,12 @@ defmodule Quillex.FindOptionsSpex do
   end
 
   defp bar_state, do: :sys.get_state(child!(:search_bar)).assigns.state
+
+  defp field_pid do
+    bar = :sys.get_state(child!(:search_bar))
+    {:ok, c} = Scenic.Scene.child(bar, :search_bar_query_field)
+    if is_list(c), do: List.first(c), else: c
+  end
   defp pane_state, do: :sys.get_state(child!(:buffer_pane)).assigns.state
 
   defp matches, do: pane_state().search_matches
@@ -59,13 +65,15 @@ defmodule Quillex.FindOptionsSpex do
 
     Probes.click(trunc(fx + w.x + w.w / 2), trunc(fy + w.y + w.h / 2))
     Process.sleep(600)
+
+
   end
 
-  # The bar's field is still its own hand-rolled input, not a TextField, so it
-  # has no select-all — Ctrl+A goes to the document underneath. Clear it the
-  # way a person would.
+  # Select all, then type over it. This is the whole point of the fields being
+  # TextFields: Ctrl+A did nothing in this bar until they were, and clearing
+  # it meant a fistful of backspaces.
   defp set_query(text) do
-    for _ <- 1..24, do: Probes.send_keys("backspace", [])
+    Probes.send_keys("a", [:ctrl])
     Process.sleep(200)
     Probes.send_text(text)
     Process.sleep(400)

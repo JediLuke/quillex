@@ -21,6 +21,7 @@ defmodule Quillex.Buffer.Core.Search do
     apply_matches(%{buf | search_query: query, search_opts: opts}, found, index)
   end
 
+
   def set(%BufState{} = buf, _, _opts),
     do: %{buf | search_query: nil, search_opts: [], search_matches: [], search_current_index: 0}
 
@@ -162,8 +163,15 @@ defmodule Quillex.Buffer.Core.Search do
   under them — validate user input with `compile/2` first.
   """
   def matches(lines, query, opts \\ []) when is_list(lines) and is_binary(query) do
-    {:ok, regex} = compile(query, opts)
-    matches_with(lines, regex)
+    # A pattern that does not compile matches nothing, rather than raising.
+    # Every keystroke runs a search, so a regex is INVALID for most of the
+    # time it is being typed: "h(" is what "h(a|b)" looks like on the way in.
+    # This is a boundary — the pattern is something a person is in the middle
+    # of typing — not an internal invariant worth crashing over.
+    case compile(query, opts) do
+      {:ok, regex} -> matches_with(lines, regex)
+      {:error, _reason} -> []
+    end
   end
 
   @doc """

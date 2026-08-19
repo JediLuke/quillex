@@ -11,7 +11,10 @@ defmodule QuillEx.RootScene.Renderizer do
   @top_bar_height 35
 
   # Height of the search bar
-  @search_bar_height 36
+  # Taken from the component rather than guessed at. The bar owns its own
+  # height, and a copy of it here drifts the moment the bar is restyled —
+  # leaving the editor's frame carved for a bar of the wrong size.
+  @search_bar_height ScenicWidgets.SearchBar.State.bar_height()
   @search_popup_width 480
   @search_popup_margin 12
 

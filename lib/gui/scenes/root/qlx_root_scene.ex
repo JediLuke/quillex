@@ -5,7 +5,10 @@ defmodule QuillEx.RootScene do
 
   # Layout constants — must stay in sync with qlx_root_scene_renderizer.ex
   @top_bar_height 35
-  @search_bar_height 36
+  # Taken from the component rather than guessed at. The bar owns its own
+  # height, and a copy of it here drifts the moment the bar is restyled —
+  # leaving the editor's frame carved for a bar of the wrong size.
+  @search_bar_height ScenicWidgets.SearchBar.State.bar_height()
   @search_popup_width 480
   @search_popup_margin 12
 
@@ -1017,6 +1020,24 @@ defmodule QuillEx.RootScene do
   def handle_cast({:search_prev, _id}, scene) do
     Scenic.Scene.put_child(scene, :buffer_pane, {:action, :find_prev})
     {:noreply, scene}
+  end
+
+  # The bar saw a click land outside itself. It is the only thing that can
+  # see that — clicks reach whichever component is under them and never this
+  # scene — so the decision is made here on its report.
+  #
+  # Clicks in the sidebar do NOT close it: browsing project-search results
+  # with the find bar still up is the point of having both.
+  def handle_cast({:clicked_outside, _id, {x, y}}, scene) do
+    state = scene.assigns.state
+    in_side_pane? = side_pane_open?(state) and x < state.file_nav_width
+
+    if state.show_search_bar and not in_side_pane? and
+         not search_popup_point?(state, {x, y}) do
+      hide_search_bar(scene)
+    else
+      {:noreply, scene}
+    end
   end
 
   def handle_cast({:search_close, _id}, scene) do

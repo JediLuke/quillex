@@ -368,11 +368,19 @@ defmodule Quillex.FindSpex do
       end
 
       when_ "we click the close button", context do
-        # The close button is at the left of the search bar
-        # Assuming search bar is near top of window
-        # Approximate position of X button
-        Probes.click(16, 50)
-        Process.sleep(200)
+        # Ask the bar where its close button is rather than guessing at a
+        # coordinate. It used to be on the left; it is on the right now, and a
+        # guess of {16, 50} lands on the disclosure caret instead — which
+        # opens the replace row, the opposite of closing.
+        root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+        {:ok, child} = Scenic.Scene.child(root, :search_bar)
+        bar = :sys.get_state(if(is_list(child), do: List.first(child), else: child)).assigns.state
+
+        w = Enum.find(ScenicWidgets.SearchBar.State.widgets(bar), &(&1.id == :close))
+        {fx, fy} = bar.frame.pin.point
+
+        Probes.click(trunc(fx + w.x + w.w / 2), trunc(fy + w.y + w.h / 2))
+        Process.sleep(300)
         {:ok, context}
       end
 
