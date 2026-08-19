@@ -50,7 +50,17 @@ defmodule Quillex.SearchFieldBehaviourSpex do
   defp pane_scene, do: :sys.get_state(child!(root_scene(), :project_search_pane))
   defp pane_state, do: pane_scene().assigns.state
 
-  defp field_state(id), do: :sys.get_state(child!(pane_scene(), id)).assigns.state
+  # Looked up fresh and retried: opening or closing the replacement row
+  # rebuilds the pane's graph, which builds new field processes. A pid read a
+  # moment ago may be gone by the time it is asked anything.
+  defp field_state(id, attempts \\ 5) do
+    :sys.get_state(child!(pane_scene(), id)).assigns.state
+  catch
+    :exit, _ when attempts > 1 ->
+      Process.sleep(150)
+      field_state(id, attempts - 1)
+  end
+
   defp query_text, do: field_state(:search_pane_query_field).lines |> Enum.join()
 
   defp open_pane do
@@ -110,6 +120,14 @@ defmodule Quillex.SearchFieldBehaviourSpex do
       end
 
       then_ "Tab moves the keyboard to the replacement field", context do
+        # The replacement row is behind a disclosure now; with it shut there
+        # is only one field and nothing for Tab to move to.
+        Probes.click_element("search_pane_replace_caret")
+        Process.sleep(600)
+
+        assert pane_state().replace_open?,
+               "the caret should have opened the replacement row"
+
         Probes.send_keys("tab", [])
         Process.sleep(600)
 

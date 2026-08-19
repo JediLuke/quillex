@@ -326,6 +326,11 @@ defmodule Quillex.ProjectSearchSpex do
       end
 
       when_ "a replacement is typed into the pane's own replace field", context do
+        # The replacement row is behind a disclosure now, the same as the find
+        # bar's: most searches are searches.
+        Probes.click_element("search_pane_replace_caret")
+        Process.sleep(500)
+
         Probes.click_element("search_pane_field_replace")
         Process.sleep(150)
         Probes.send_text("pin")
