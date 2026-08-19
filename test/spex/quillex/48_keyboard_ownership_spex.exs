@@ -51,6 +51,14 @@ defmodule Quillex.KeyboardOwnershipSpex do
 
         assert root_state().show_project_search, "Ctrl+Shift+F should open the pane"
 
+        # Start from an empty field: the pane keeps its query between
+        # scenarios, and a spex that assumes otherwise is asserting about
+        # whatever the file before it happened to type.
+        Probes.send_keys("a", [:ctrl])
+        Process.sleep(200)
+        Probes.send_keys("backspace", [])
+        Process.sleep(200)
+
         Probes.send_text("hello")
         Process.sleep(600)
 

@@ -427,13 +427,9 @@ defmodule Quillex.ProjectSearchSpex do
         {:ok, context}
       end
 
-      then_ "with settings shut, the rows are results and nothing else", context do
+      then_ "with settings shut, there is no scope tree anywhere", context do
         refute pane_state().domain_open?, "settings start shut"
-
-        kinds = pane_state() |> ScenicWidgets.SearchPane.State.rows() |> Enum.map(& &1.kind)
-
-        refute :scope_header in kinds,
-               "the scope tree should not be sitting among the results: #{inspect(kinds)}"
+        assert ScenicWidgets.SearchPane.State.scope_rows(pane_state()) == []
 
         {:ok, context}
       end
@@ -484,11 +480,21 @@ defmodule Quillex.ProjectSearchSpex do
         {:ok, context}
       end
 
-      then_ "the scope tree is there", context do
-        kinds = pane_state() |> ScenicWidgets.SearchPane.State.rows() |> Enum.map(& &1.kind)
+      then_ "the scope tree is in the settings section, ABOVE the status line", context do
+        st = pane_state()
+        widgets = ScenicWidgets.SearchPane.State.header_widgets(st)
 
-        assert :scope_header in kinds,
-               "the scope tree belongs to the settings section: #{inspect(kinds)}"
+        scope = Enum.filter(widgets, &match?({:scope_row, _}, &1.id))
+        refute scope == [], "the scope tree belongs to the header now, with the settings"
+
+        status = Enum.find(widgets, &(&1.id == :status))
+
+        assert Enum.all?(scope, &(&1.y + &1.h <= status.y)),
+               "the status line is the boundary — the scope belongs above it, not below"
+
+        # And NOT among the results, which is where it used to sit.
+        kinds = st |> ScenicWidgets.SearchPane.State.rows() |> Enum.map(& &1.kind)
+        refute :scope_header in kinds, "and not among the results: #{inspect(kinds)}"
 
         {:ok, context}
       end
@@ -497,9 +503,7 @@ defmodule Quillex.ProjectSearchSpex do
         Probes.click_element("search_pane_domain")
 
         assert wait_until(fn -> not pane_state().domain_open? end)
-
-        kinds = pane_state() |> ScenicWidgets.SearchPane.State.rows() |> Enum.map(& &1.kind)
-        refute :scope_header in kinds
+        assert ScenicWidgets.SearchPane.State.scope_rows(pane_state()) == []
 
         {:ok, context}
       end
