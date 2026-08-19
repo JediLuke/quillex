@@ -49,6 +49,7 @@ defmodule Quillex.SettingsFile do
     :show_menu_shortcuts,
     :show_action_feedback,
     :syntax_highlighting,
+    :search_results_view,
     :theme,
     :chrome_zoom,
     :file_nav_width
@@ -113,8 +114,14 @@ defmodule Quillex.SettingsFile do
   # list of themes, so a hand-edited file naming a theme that no longer exists
   # is dropped instead of creating an atom for a theme nobody can render.
   defp encode(settings) do
+    settings
+    |> encode_atom(:theme)
+    |> encode_atom(:search_results_view)
+  end
+
+  defp encode_atom(settings, key) do
     case settings do
-      %{theme: theme} -> %{settings | theme: Atom.to_string(theme)}
+      %{^key => value} when is_atom(value) -> Map.put(settings, key, Atom.to_string(value))
       _ -> settings
     end
   end
@@ -126,6 +133,7 @@ defmodule Quillex.SettingsFile do
     |> Enum.flat_map(fn {key, value} ->
       case Map.fetch(known, key) do
         {:ok, :theme} -> theme_pair(value)
+        {:ok, :search_results_view} -> results_view_pair(value)
         {:ok, atom} -> [{atom, value}]
         :error -> []
       end
@@ -143,4 +151,10 @@ defmodule Quillex.SettingsFile do
   end
 
   defp theme_pair(_), do: []
+
+  # Named rather than freely converted: a hand-edited file naming a view that
+  # does not exist should lose that key, not mint an atom for it.
+  defp results_view_pair("tree"), do: [search_results_view: :tree]
+  defp results_view_pair("list"), do: [search_results_view: :list]
+  defp results_view_pair(_), do: []
 end

@@ -1634,6 +1634,25 @@ defmodule QuillEx.RootScene do
     {:noreply, assign(scene, state: %{scene.assigns.state | project_search_query: query})}
   end
 
+  def handle_event({:search_pane, :set_results_view, which}, _from, scene) do
+    Quillex.RadixCache.ViewStore.set_search_results_view(which)
+
+    # And show it now. The pane's model is built from the SEARCH snapshot, and
+    # this setting lives in the view store — without pushing a fresh model the
+    # slider would not move until the next search happened to publish one.
+    if scene.assigns.state.show_project_search do
+      model =
+        scene.assigns.state
+        |> QuillEx.RootScene.Renderizer.project_search_snapshot()
+        |> Quillex.GUI.SearchPaneModel.build()
+        |> Map.put(:results_view, which)
+
+      Scenic.Scene.put_child(scene, :project_search_pane, {:update_model, model})
+    end
+
+    {:noreply, scene}
+  end
+
   def handle_event({:search_pane, :clear}, _from, scene) do
     Quillex.RadixCache.ProjectSearchStore.set_query("")
     Scenic.Scene.put_child(scene, :project_search_pane, {:set_query, ""})

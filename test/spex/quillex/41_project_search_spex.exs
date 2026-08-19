@@ -549,6 +549,94 @@ defmodule Quillex.ProjectSearchSpex do
     end
   end
 
+  spex "Results show as a tree or a list",
+    description: "One slider with two positions, and the choice is remembered",
+    tags: [:phase_41, :project_search, :results_view] do
+    scenario "sliding between them" do
+      given_ "results for 'needle'", context do
+        Quillex.RadixCache.ViewStore.set_search_results_view(:tree)
+        Quillex.RadixCache.ViewStore.sync()
+        :ok = open_pane_with(context.root, "needle")
+
+        assert wait_until(fn -> pane_state().results_view == :tree end)
+        {:ok, context}
+      end
+
+      then_ "as a tree, files head their matches", context do
+        kinds = pane_state() |> ScenicWidgets.SearchPane.State.rows() |> Enum.map(& &1.kind)
+
+        assert :file in kinds, "a tree has file headings: #{inspect(Enum.uniq(kinds))}"
+        {:ok, context}
+      end
+
+      when_ "the slider is pushed to list", context do
+        # It is ONE control with two halves, so where you click inside it is
+        # the whole of the interaction — clicking its right half means list.
+        slider =
+          pane_state()
+          |> ScenicWidgets.SearchPane.State.header_widgets()
+          |> Enum.find(&(&1.id == :results_view))
+
+        {px, py} = pane_state().frame.pin.point
+
+        Probes.click(
+          trunc(px + slider.x + slider.w * 0.75),
+          trunc(py + slider.y + slider.h / 2)
+        )
+
+        assert wait_until(fn -> pane_state().results_view == :list end),
+               "the right half of the slider means list"
+
+        {:ok, context}
+      end
+
+      then_ "as a list, every row is a match and carries its file", context do
+        rows = pane_state() |> ScenicWidgets.SearchPane.State.rows()
+        kinds = rows |> Enum.map(& &1.kind) |> Enum.uniq()
+
+        assert kinds == [:match], "a list is matches and nothing else: #{inspect(kinds)}"
+
+        assert Enum.all?(rows, &String.contains?(&1.label, ":")),
+               "each row should say which file and line it is from"
+
+        {:ok, context}
+      end
+
+      then_ "and the choice is a setting, kept with the others", context do
+        # It lives in the view store, which is what Save Settings as Default
+        # writes — so it survives the session rather than resetting to tree
+        # every time the pane opens.
+        assert Quillex.RadixCache.ViewStore.get_state().search_results_view == :list
+
+        assert :search_results_view in Quillex.SettingsFile.persisted_keys(),
+               "the view is one of the settings that can be saved"
+
+        {:ok, context}
+      end
+
+      then_ "and pushing it back to tree restores the headings", context do
+        slider =
+          pane_state()
+          |> ScenicWidgets.SearchPane.State.header_widgets()
+          |> Enum.find(&(&1.id == :results_view))
+
+        {px, py} = pane_state().frame.pin.point
+
+        Probes.click(
+          trunc(px + slider.x + slider.w * 0.25),
+          trunc(py + slider.y + slider.h / 2)
+        )
+
+        assert wait_until(fn -> pane_state().results_view == :tree end)
+
+        kinds = pane_state() |> ScenicWidgets.SearchPane.State.rows() |> Enum.map(& &1.kind)
+        assert :file in kinds
+
+        {:ok, context}
+      end
+    end
+  end
+
   spex "The pane's header steers the search",
     description: "Exclude globs, case sensitivity and the close button",
     tags: [:phase_41, :project_search, :search_options] do

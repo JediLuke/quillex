@@ -499,8 +499,9 @@ defmodule QuillEx.RootScene.Renderizer do
 
   # The scene mirrors the store snapshot; before the first one lands, draw
   # the pane empty rather than crash on nil.
-  defp project_search_snapshot(%{project_search: nil}), do: empty_search_snapshot()
-  defp project_search_snapshot(%{project_search: snapshot}), do: snapshot
+  @doc false
+  def project_search_snapshot(%{project_search: nil}), do: empty_search_snapshot()
+  def project_search_snapshot(%{project_search: snapshot}), do: snapshot
 
   @doc false
   def empty_search_snapshot do

@@ -30,6 +30,7 @@ defmodule Quillex.GUI.SearchPaneModel do
       case_sensitive: snapshot.case_sensitive,
       regex: snapshot.regex,
       open_buffers_only: snapshot.open_buffers_only,
+      results_view: Quillex.RadixCache.ViewStore.get_state().search_results_view,
       use_ignore_files: snapshot.use_ignore_files,
       scope: scope(snapshot),
       files: files(snapshot)
@@ -45,6 +46,7 @@ defmodule Quillex.GUI.SearchPaneModel do
       regex: false,
       open_buffers_only: false,
       use_ignore_files: true,
+      results_view: :tree,
       scope: [],
       files: []
     }

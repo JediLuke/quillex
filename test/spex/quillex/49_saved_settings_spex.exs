@@ -43,6 +43,15 @@ defmodule Quillex.SavedSettingsSpex do
   spex "settings become defaults only when asked" do
     scenario "saving the current settings as the default" do
       given_ "a setting changed in this session", context do
+        # Start from a plain editor: a spex that runs after the project search
+        # one inherits its open pane, and a menu click lands somewhere else
+        # entirely. Passing alone and failing in company is the least useful
+        # way for a test to fail.
+        Quillex.RadixCache.ViewStore.close_project_search()
+        Quillex.RadixCache.ViewStore.sync()
+        Quillex.TestHelpers.Integration.close_search_bar_if_open()
+        Process.sleep(400)
+
         refute Quillex.SettingsFile.exists?(),
                "nothing should have been written just by changing settings"
 

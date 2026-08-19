@@ -48,6 +48,11 @@ defmodule Quillex.RadixCache.ViewStore do
     text_size: 24,
     fold_level: 1,
     show_menu_shortcuts: true,
+    # How project-search results are shown: :tree groups matches under their
+    # file, :list gives one row per match. Which is better depends on whether
+    # you are looking for a file or for an occurrence, so it is a preference
+    # rather than a mode — and one worth keeping between sessions.
+    search_results_view: :tree,
     # Structural syntax highlighting (weight/slant/underline by token class)
     syntax_highlighting: true,
     # The colour scheme for editor AND chrome alike — see Quillex.GUI.Palette.
@@ -103,6 +108,9 @@ defmodule Quillex.RadixCache.ViewStore do
   @doc "Set auto-indent outright, rather than flipping it."
   def set_auto_indent(on?) when is_boolean(on?),
     do: GenServer.cast(__MODULE__, {:set_auto_indent, on?})
+
+  def set_search_results_view(view) when view in [:tree, :list],
+    do: GenServer.cast(__MODULE__, {:set_search_results_view, view})
 
   # Set rather than flip. A caller that wants a guide OFF has to read the
   # current value first to know whether to toggle, and then it is racing every
@@ -227,6 +235,10 @@ defmodule Quillex.RadixCache.ViewStore do
 
   def handle_cast({:set_auto_indent, on?}, state) do
     {:noreply, publish(state, %{state.view | auto_indent: on?})}
+  end
+
+  def handle_cast({:set_search_results_view, view}, state) do
+    {:noreply, publish(state, %{state.view | search_results_view: view})}
   end
 
   def handle_cast({:set_current_line_highlight, on?}, state) do
