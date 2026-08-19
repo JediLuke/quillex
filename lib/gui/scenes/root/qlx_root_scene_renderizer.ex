@@ -341,6 +341,41 @@ defmodule QuillEx.RootScene.Renderizer do
   defp side_pane_id(_state), do: :file_nav
 
   # Create search bar if frame is provided (search bar visible)
+  @doc """
+  Where the find bar floats, in the buffer pane's own coordinates.
+
+  The pane is told an overlay is open so it stops acting on keys. Told `true`
+  it also drops every CLICK, which is right for a dropdown and wrong for the
+  find bar: clicking back into the document is how you resume editing, and a
+  pane that ignores the click can never be handed the keyboard again. Given
+  the rectangle instead, it drops only the clicks that land on the bar.
+  """
+  def search_bar_overlay_rect(state) do
+    [_top_bar, buffer_frame] =
+      Widgex.Frame.v_split(state.frame, px: scaled(@top_bar_height, state))
+
+    height =
+      if state.show_replace,
+        do: scaled(@search_bar_height * 2, state),
+        else: scaled(@search_bar_height, state)
+
+    frame =
+      FloatingPanel.frame(buffer_frame,
+        placement: :top_right,
+        margin: scaled(@search_popup_margin, state),
+        size: {scaled(@search_popup_width, state), height}
+      )
+
+    pane_x = if side_pane_open?(state), do: state.file_nav_width, else: 0
+
+    %{
+      x: frame.pin.x - pane_x,
+      y: frame.pin.y - scaled(@top_bar_height, state),
+      width: frame.size.width,
+      height: frame.size.height
+    }
+  end
+
   defp maybe_create_search_bar(graph, _state, nil), do: graph
 
   defp maybe_create_search_bar(graph, state, %Widgex.Frame{} = frame) do

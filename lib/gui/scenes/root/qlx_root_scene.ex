@@ -9,8 +9,6 @@ defmodule QuillEx.RootScene do
   # height, and a copy of it here drifts the moment the bar is restyled —
   # leaving the editor's frame carved for a bar of the wrong size.
   @search_bar_height ScenicWidgets.SearchBar.State.bar_height()
-  @search_popup_width 480
-  @search_popup_margin 12
 
   # Line height of the buffer pane text (must match BufferPane font_size).
   # Used to estimate the visible page size for Page Up / Page Down navigation.
@@ -523,39 +521,13 @@ defmodule QuillEx.RootScene do
       end
 
     # --- Search bar ---
-    # Close the search bar when the click lands below it (in the buffer area).
-    # Clicks in the sidebar keep it: browsing project-search results while
-    # the popup stays open is the point of the pane.
-    in_side_pane? = side_pane_open?(state) and click_x < state.file_nav_width
-
-    if state.show_search_bar and not in_side_pane? and
-         not search_popup_point?(state, {click_x, click_y}) do
-      hide_search_bar(scene)
-    else
-      {:noreply, scene}
-    end
-  end
-
-  defp search_popup_point?(state, {x, y}) do
-    margin = scaled(@search_popup_margin, state)
-
-    [_top_bar, buffer_frame] =
-      Widgex.Frame.v_split(state.frame, px: scaled(@top_bar_height, state))
-
-    popup =
-      ScenicWidgets.FloatingPanel.frame(buffer_frame,
-        placement: :top_right,
-        margin: margin,
-        size: {
-          scaled(@search_popup_width, state),
-          scaled(
-            if(state.show_replace, do: @search_bar_height * 2, else: @search_bar_height),
-            state
-          )
-        }
-      )
-
-    ScenicWidgets.FloatingPanel.contains?(popup, {x, y})
+    # A click does NOT close the find bar. Clicking into the document while a
+    # search is up means "let me edit for a moment", not "throw the search
+    # away" — the query, the match count and the place in the results are all
+    # still wanted, and retyping them because a hand slipped is the annoying
+    # part of every editor that does close it. Escape closes it, and so does
+    # the bar's own X.
+    {:noreply, scene}
   end
 
   # Mouse clicks on child components (TextField, IconMenu, FilePicker, etc.) are
@@ -1020,24 +992,6 @@ defmodule QuillEx.RootScene do
   def handle_cast({:search_prev, _id}, scene) do
     Scenic.Scene.put_child(scene, :buffer_pane, {:action, :find_prev})
     {:noreply, scene}
-  end
-
-  # The bar saw a click land outside itself. It is the only thing that can
-  # see that — clicks reach whichever component is under them and never this
-  # scene — so the decision is made here on its report.
-  #
-  # Clicks in the sidebar do NOT close it: browsing project-search results
-  # with the find bar still up is the point of having both.
-  def handle_cast({:clicked_outside, _id, {x, y}}, scene) do
-    state = scene.assigns.state
-    in_side_pane? = side_pane_open?(state) and x < state.file_nav_width
-
-    if state.show_search_bar and not in_side_pane? and
-         not search_popup_point?(state, {x, y}) do
-      hide_search_bar(scene)
-    else
-      {:noreply, scene}
-    end
   end
 
   def handle_cast({:search_close, _id}, scene) do
@@ -2213,6 +2167,21 @@ defmodule QuillEx.RootScene do
   # This is the BUFFER's find, and only that. The project pane is a separate
   # surface with its own fields (see open_project_search/2): two boxes, two
   # jobs, no interaction between them.
+  # The overlay rectangle has to follow the bar's HEIGHT. It is what tells the
+  # editor pane which clicks belong to the bar, and the bar grows a second row
+  # when the replacement field appears — with a stale one-row rectangle, every
+  # click on the replacement field looked to the pane like a click in the
+  # document, so the pane took the keyboard and the field went dead.
+  defp refresh_search_overlay_rect(scene, state) do
+    Scenic.Scene.put_child(
+      scene,
+      :buffer_pane,
+      {:set_overlay_open, QuillEx.RootScene.Renderizer.search_bar_overlay_rect(state)}
+    )
+
+    :ok
+  end
+
   # Shrink find-and-replace back to plain find, keeping the bar and the query.
   defp hide_replace_row(scene) do
     old_state = scene.assigns.state
@@ -2228,6 +2197,7 @@ defmodule QuillEx.RootScene do
       |> push_graph(new_graph)
 
     Scenic.Scene.put_child(new_scene, :search_bar, :disable_replace_mode)
+    refresh_search_overlay_rect(new_scene, new_state)
     {:noreply, new_scene}
   end
 
@@ -2255,6 +2225,7 @@ defmodule QuillEx.RootScene do
           |> push_graph(new_graph)
 
         Scenic.Scene.put_child(new_scene, :search_bar, :enable_replace_mode)
+        refresh_search_overlay_rect(new_scene, new_state)
         {:noreply, new_scene}
 
       true ->
@@ -2410,6 +2381,18 @@ defmodule QuillEx.RootScene do
     case owner do
       :buffer ->
         if side_pane_open?(state), do: Scenic.Scene.put_child(scene, side_pane, :blur)
+
+        # The find bar STAYS on screen when the document is clicked — it is
+        # not thrown away by a click — but it must let go of the keyboard, and
+        # the overlay gate has to come off with it. That gate is a second,
+        # independent lock on the editor's key handling; leaving it on means
+        # the click hands focus back to a pane that goes on ignoring every
+        # keystroke.
+        if state.show_search_bar do
+          Scenic.Scene.put_child(scene, :search_bar, :blur)
+          Scenic.Scene.put_child(scene, :buffer_pane, {:set_overlay_open, false})
+        end
+
         Scenic.Scene.put_child(scene, :buffer_pane, :focus)
 
       :side_pane ->
@@ -2439,7 +2422,16 @@ defmodule QuillEx.RootScene do
     # Belt and braces: mark that an overlay owns the keyboard. Focus is
     # granted/revoked by async messages, so blur alone leaves a window; the
     # overlay flag gates key input independently of the focus flag.
-    Scenic.Scene.put_child(scene, :buffer_pane, {:set_overlay_open, true})
+    #
+    # The bar's RECTANGLE, not a blanket `true`. Told `true`, the pane drops
+    # every click as "meant for the overlay" — and since the bar no longer
+    # closes when the document is clicked, that left no way to get the
+    # keyboard back at all.
+    Scenic.Scene.put_child(
+      scene,
+      :buffer_pane,
+      {:set_overlay_open, QuillEx.RootScene.Renderizer.search_bar_overlay_rect(new_state)}
+    )
 
     # Reuse existing graph to preserve component PIDs and avoid race conditions
     new_graph =

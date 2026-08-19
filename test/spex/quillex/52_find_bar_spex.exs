@@ -387,6 +387,72 @@ defmodule Quillex.FindBarSpex do
       end
     end
 
+    scenario "the tooltips line up" do
+      given_ "find and replace open, so the bar is two rows tall", context do
+        fresh_document()
+        key("h", [:ctrl])
+        assert wait_until(fn -> bar().replace_mode end)
+
+        {:ok, context}
+      end
+
+      then_ "every tooltip hangs from the same latitude", context do
+        # The controls are not all the same height — the option toggles are
+        # inset inside the query field, and the caret spans both rows — so a
+        # label placed under each control lands at a different height and the
+        # set reads as scattered. They hang from the bottom of the BAR.
+        st = bar()
+        bottom = BarState.height(st)
+
+        labelled = Enum.filter(BarState.widgets(st), & &1.tooltip)
+        assert length(labelled) >= 6, "most of the bar should explain itself"
+
+        for w <- labelled do
+          assert w.y + w.h == bottom or w.id in [:prev, :next, :close] or
+                   match?({:toggle, _}, w.id) or w.id == :toggle_replace,
+                 "unexpected widget in the tooltip set: #{inspect(w.id)}"
+        end
+
+        {:ok, context}
+      end
+
+      then_ "and hovering each one puts its label at that latitude", context do
+        st = bar()
+        {fx, fy} = st.frame.pin.point
+        bottom = BarState.height(st)
+
+        for id <- [:toggle_replace, {:toggle, :case_sensitive}, {:toggle, :regex}, :close] do
+          w = Enum.find(BarState.widgets(st), &(&1.id == id))
+
+          Probes.send_mouse_move(trunc(fx + w.x + w.w / 2), trunc(fy + w.y + w.h / 2))
+          Process.sleep(400)
+
+          assert wait_until(fn -> bar().hovered == id end),
+                 "#{inspect(id)} should show a hover state like every other button"
+
+          tooltip = Scenic.Graph.get(bar_scene().assigns.graph, :tooltip)
+          refute tooltip == [], "#{inspect(id)} should have put a tooltip on screen"
+
+          [%{transforms: %{translate: {_tx, ty}}}] = tooltip
+
+          assert_in_delta ty, bottom + 4, 1,
+                          "#{inspect(id)}'s tooltip should hang from the bottom of the bar"
+        end
+
+        {:ok, context}
+      end
+
+      then_ "and the caret is the full height of the bar, so its hover covers it", context do
+        st = bar()
+        caret = Enum.find(BarState.widgets(st), &(&1.id == :toggle_replace))
+
+        assert caret.h == BarState.height(st),
+               "the caret should span every row the bar has, got #{caret.h}"
+
+        {:ok, context}
+      end
+    end
+
     scenario "closing it" do
       then_ "Escape closes the bar and the keyboard goes back to the document", context do
         fresh_document()
@@ -401,16 +467,53 @@ defmodule Quillex.FindBarSpex do
         {:ok, context}
       end
 
-      then_ "and a click in the document closes it too", context do
+      then_ "but a click in the document does NOT close it", context do
+        # Deliberate, and the opposite of what this used to do. Clicking into
+        # the document while a search is up means "let me edit for a moment",
+        # not "throw the search away": the query, the match count and the
+        # place in the results are all still wanted. Retyping them because a
+        # hand slipped is the annoying part of every editor that closes here.
         fresh_document()
         key("f", [:ctrl])
         assert wait_until(fn -> root_state().show_search_bar end)
 
+        type("alpha")
+        assert wait_until(fn -> length(matches()) == 3 end)
+
         %{x: x, y: y, width: w, height: h} = Quillex.TestHelpers.Integration.buffer_pane_frame()
         Probes.click(x + trunc(w * 0.3), y + trunc(h * 0.6))
+        Process.sleep(600)
+
+        assert root_state().show_search_bar,
+               "a click in the document must leave the find bar alone"
+
+        assert bar().query == "alpha", "and leave the query in it"
+
+        {:ok, context}
+      end
+
+      then_ "the click DOES hand the keyboard back to the document", context do
+        # The bar staying up must not mean it keeps eating keystrokes — the
+        # click was a request to edit.
+        before = buffer().lines
+
+        type("X")
+
+        assert wait_until(fn -> buffer().lines != before end),
+               "typing after clicking into the document should reach the document"
+
+        assert bar().query == "alpha", "and must not reach the query field"
+
+        {:ok, context}
+      end
+
+      then_ "and the bar's own X closes it", context do
+        assert root_state().show_search_bar, "still up"
+
+        click_widget(:close)
 
         assert wait_until(fn -> not root_state().show_search_bar end),
-               "clicking away from the bar should close it"
+               "the close button should close the bar"
 
         {:ok, context}
       end

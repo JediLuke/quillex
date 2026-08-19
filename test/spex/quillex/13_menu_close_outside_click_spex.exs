@@ -17,6 +17,8 @@ defmodule Quillex.MenuCloseOutsideClickSpex do
   alias ScenicMcp.Query
   alias ScenicMcp.Probes
 
+  defp root_state, do: :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state
+
   setup_all do
     case Application.ensure_all_started(:quillex) do
       {:ok, _apps} -> :ok
@@ -81,58 +83,68 @@ defmodule Quillex.MenuCloseOutsideClickSpex do
   # 2. Search bar — close on outside click
   # ---------------------------------------------------------------------------
 
-  spex "Search Bar Closes on Outside Click",
-    description: "Clicking below the search bar in the editor area closes it",
+  spex "Search Bar Survives an Outside Click",
+    description: "Clicking in the editor hands the keyboard back WITHOUT closing the bar",
     tags: [:phase_13, :search_bar, :close_on_outside_click] do
+    scenario "the find bar stays up when the user clicks into the document" do
+      given_ "the search bar is open over a document", context do
+        {:ok, buf} =
+          Quillex.Buffer.new(%{name: "outside.txt", data: ["outside click test content"]})
 
-    scenario "Search bar is dismissed when the user clicks in the buffer area" do
-      given_ "the search bar is open", context do
-        # Clean slate — escape closes any open menu/picker, then click the
-        # editor area to guarantee focus is on the buffer pane before typing.
-        Probes.send_keys("escape", [])
+        :ok = Quillex.Buffer.activate(buf)
+        Process.sleep(400)
+        Quillex.TestHelpers.Integration.close_search_bar_if_open()
+        Quillex.TestHelpers.Integration.ensure_editor_focused()
         Process.sleep(200)
-        Probes.click(400, 200)
-        Process.sleep(100)
-        Probes.send_keys("a", [:ctrl])
-        Process.sleep(50)
-        Probes.send_keys("backspace", [])
-        Process.sleep(50)
-        Probes.send_text("outside click test content")
-        Process.sleep(100)
 
-        # Click editor area again to ensure buffer pane focus before Ctrl+F,
-        # so the key event reaches the TextField (which sends {:find_requested}).
-        Probes.click(400, 200)
-        Process.sleep(100)
-
-        # Open the search bar
         Probes.send_keys("f", [:ctrl])
-        Process.sleep(500)
+        Process.sleep(600)
 
-        # Verify the search bar is open
-        # "Aa" is the Match Case toggle, always drawn while the bar is up.
-        visible = Query.text_visible?("Aa") or
-                  Query.text_visible?("0/0") or Query.text_visible?("Find")
-        assert visible, "Search bar should be visible"
+        assert root_state().show_search_bar, "Ctrl+F should open the bar"
         {:ok, context}
       end
 
       when_ "we click in the buffer area below the search bar", context do
-        # Top bar = 35 px, search bar = 36 px, so the buffer area starts at y > 71.
-        # Click well inside the buffer area.
         Probes.click(400, 200)
-        Process.sleep(400)
+        Process.sleep(500)
         {:ok, context}
       end
 
-      then_ "the search bar should be closed and keystrokes go to the editor" do
-        # If the search bar is closed, the buffer pane regains focus and
-        # typing should insert text into the buffer, not the search field.
+      then_ "the bar is still there", context do
+        # This spex used to assert the opposite, and it passed for a reason
+        # that had nothing to do with closing: the old bar consumed codepoints
+        # whether or not it had focus, so the typed character reached the
+        # document either way and "the bar must have closed" was never tested.
+        #
+        # Clicking into the document while a search is up means "let me edit
+        # for a moment", not "throw the search away". Escape closes the bar,
+        # and so does its own X.
+        assert root_state().show_search_bar,
+               "a click in the document must not close the find bar"
+
+        {:ok, context}
+      end
+
+      then_ "and the keystrokes go to the editor", context do
+        {:ok, before} = Quillex.Buffer.fetch(root_state().active_buf)
+
         Probes.send_text("Q")
-        Process.sleep(200)
-        assert Query.text_visible?("Q"),
-          "'Q' should appear in the editor — search bar should be closed"
-        :ok
+        Process.sleep(400)
+
+        {:ok, after_typing} = Quillex.Buffer.fetch(root_state().active_buf)
+
+        assert after_typing.lines != before.lines,
+               "typing after the click should reach the document, not the query field"
+
+        {:ok, context}
+      end
+
+      then_ "and Escape is what closes it", context do
+        Probes.send_keys("escape", [])
+        Process.sleep(500)
+
+        refute root_state().show_search_bar, "Escape should close the bar"
+        {:ok, context}
       end
     end
   end
