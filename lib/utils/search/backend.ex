@@ -16,6 +16,9 @@ defmodule Quillex.Search.Backend do
     segment-prefix rule. This is what the pane's scope tree unticks.
     entirely, subtree included. Version-control and build directories are
     always skipped; see `default_excludes/0`.
+  - `:use_ignore_files` — read the project's own .gitignore (and .ignore) and
+    honour it. On by default: a project already says what is not source, and
+    searching its build output is never what anybody wanted.
   - `:exclude_globs` — gitignore-style patterns (`**/deps/**`, `*.lock`) to
     skip. No part of the UI sets these — the scope tree replaced the glob
     field it used to come from — but the search itself still honours them,
@@ -56,6 +59,10 @@ defmodule Quillex.Search.Backend do
   @callback search(root :: Path.t(), query :: String.t(), [option()]) ::
               {:ok, [Match.t()]} | {:error, term()}
 
+  # Kept only so a search asked for with no options at all still skips the
+  # obvious. What a search ACTUALLY skips comes from Quillex.Search.Excludes,
+  # which is a file the person using the editor owns — this list is a
+  # fallback, not a policy.
   @default_excludes ~w(.git .hg .svn _build deps node_modules .elixir_ls .cache)
 
   @doc "Directory names skipped by every backend, wherever they appear."
@@ -92,16 +99,22 @@ defmodule Quillex.Search.Backend do
   `globs` are already-compiled regexes (see `Quillex.Search.Glob.compile_all/1`)
   — the field is recompiled once per search, not once per file.
   """
-  def excluded?(path, root, excludes, globs \\ []) do
+  def excluded?(path, root, excludes, globs \\ [], unignore_globs \\ []) do
     relative = Path.relative_to(path, root)
     segments = Path.split(relative)
 
+    # A negation from an ignore file wins over the ignore rules — `!keep.log`
+    # after `*.log`. It does NOT rescue a path from the always-skipped list or
+    # from the scope tree: those are this editor's own decisions, and a
+    # project's .gitignore has no opinion about them.
+    unignored? = Quillex.Search.Glob.any_match?(relative, unignore_globs)
+
     Enum.any?(segments, &(&1 in @default_excludes)) or
-      Quillex.Search.Glob.any_match?(relative, globs) or
       Enum.any?(excludes, fn exclude ->
         exclude_rel = exclude |> Path.expand(root) |> Path.relative_to(root)
         exclude_segments = Path.split(exclude_rel)
         List.starts_with?(segments, exclude_segments)
-      end)
+      end) or
+      (not unignored? and Quillex.Search.Glob.any_match?(relative, globs))
   end
 end

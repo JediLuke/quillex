@@ -94,9 +94,9 @@ defmodule Quillex.MenuLayoutSpex do
         assert hd(theme) == "theme_heading"
         assert preferences == ["action_feedback", "menu_shortcuts"]
 
-        # The one row in this menu that outlives the session gets a group of
-        # its own, so it cannot be read as another preference toggle.
-        assert defaults == ["save_default_settings"]
+        # The rows in this menu that outlive the session get a group of their
+        # own, so they cannot be read as more preference toggles.
+        assert defaults == ["save_default_settings", "edit_search_excludes"]
         {:ok, context}
       end
 

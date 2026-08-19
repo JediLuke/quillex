@@ -1061,6 +1061,13 @@ defmodule QuillEx.RootScene.Renderizer do
             id: "save_default_settings",
             label: "Save Settings as Default",
             tooltip: "Start every future session with the settings you have now."
+          },
+          # The exclude list is a text file, and this is a text editor. That
+          # is the whole of its "settings UI": open it, type, save.
+          %Item{
+            id: "edit_search_excludes",
+            label: "Edit Search Excludes",
+            tooltip: "What a project search skips, as a list you can change."
           }
         ]
         |> List.flatten()

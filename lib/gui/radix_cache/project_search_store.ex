@@ -55,7 +55,15 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
     # toggles from it, and because a search is only reproducible together with
     # the options it ran under.
     case_sensitive: false,
-    regex: false
+    regex: false,
+    # Honour the project's own .gitignore. On by default: a project already
+    # says what is not source, and searching its build output is never what
+    # anybody wanted. Off searches everything the excludes file allows.
+    use_ignore_files: true,
+    # Search only what is already open. For the times you know the thing you
+    # are looking for is in one of the files in front of you, and the rest of
+    # the project is noise.
+    open_buffers_only: false
   }
 
   def start_link(_opts), do: GenServer.start_link(__MODULE__, :ok, name: __MODULE__)
@@ -101,7 +109,8 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
     do: GenServer.cast(__MODULE__, {:toggle_scope, path})
 
   @doc "Flip a search option (`:case_sensitive` or `:regex`) and re-run."
-  def toggle_option(option) when option in [:case_sensitive, :regex],
+  def toggle_option(option)
+      when option in [:case_sensitive, :regex, :use_ignore_files, :open_buffers_only],
     do: GenServer.cast(__MODULE__, {:toggle_option, option})
 
   @doc "Set a search option outright."
@@ -362,9 +371,25 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
     |> publish(%{view | status: :searching, error: nil})
   end
 
+  # What a search skips, assembled per search from three places that each
+  # answer a different question:
+  #
+  #   the excludes file — "never search this, in any project" (yours to edit)
+  #   the project's .gitignore — "this project says this is not source"
+  #   the scope tree — "not this, for THIS search"
+  #
+  # The first two are globs and go in together; the third is a set of paths.
   defp backend_opts(view) do
+    ignore_patterns =
+      if view.use_ignore_files and view.root,
+        do: Quillex.Search.IgnoreFile.rules(view.root),
+        else: %{ignore: [], unignore: []}
+
     [
       excludes: MapSet.to_list(view.excluded),
+      exclude_globs: Quillex.Search.Excludes.patterns() ++ ignore_patterns.ignore,
+      unignore_globs: ignore_patterns.unignore,
+      open_buffers_only: view.open_buffers_only,
       max_results: @max_results
     ] ++ search_opts(view)
   end

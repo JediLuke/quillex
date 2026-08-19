@@ -25,6 +25,7 @@ defmodule Quillex.Search.Backend.Elixir do
     max_results = Keyword.get(opts, :max_results, 5_000)
     excludes = Keyword.get(opts, :excludes, [])
     globs = opts |> Keyword.get(:exclude_globs, []) |> Quillex.Search.Glob.compile_list()
+    unignore = opts |> Keyword.get(:unignore_globs, []) |> Quillex.Search.Glob.compile_list()
 
     # Compiled once for the whole walk, and validated here: a regex the user is
     # halfway through typing must come back as an error the pane can show, not
@@ -32,7 +33,7 @@ defmodule Quillex.Search.Backend.Elixir do
     with {:ok, regex} <- Search.compile(query, opts) do
       matches =
         root
-        |> text_files(root, excludes, globs)
+        |> text_files(root, excludes, globs, unignore)
         |> Stream.flat_map(&matches_in_file(&1, regex))
         |> Enum.take(max_results)
 
@@ -42,7 +43,7 @@ defmodule Quillex.Search.Backend.Elixir do
     end
   end
 
-  defp text_files(dir, root, excludes, globs) do
+  defp text_files(dir, root, excludes, globs, unignore) do
     Stream.resource(
       fn -> [dir] end,
       fn
@@ -51,7 +52,7 @@ defmodule Quillex.Search.Backend.Elixir do
 
         [path | rest] ->
           cond do
-            Backend.excluded?(path, root, excludes, globs) and path != root ->
+            Backend.excluded?(path, root, excludes, globs, unignore) and path != root ->
               {[], rest}
 
             File.dir?(path) ->

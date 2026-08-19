@@ -29,6 +29,8 @@ defmodule Quillex.GUI.SearchPaneModel do
       error: snapshot.error,
       case_sensitive: snapshot.case_sensitive,
       regex: snapshot.regex,
+      open_buffers_only: snapshot.open_buffers_only,
+      use_ignore_files: snapshot.use_ignore_files,
       scope: scope(snapshot),
       files: files(snapshot)
     }
@@ -41,6 +43,8 @@ defmodule Quillex.GUI.SearchPaneModel do
       error: nil,
       case_sensitive: false,
       regex: false,
+      open_buffers_only: false,
+      use_ignore_files: true,
       scope: [],
       files: []
     }

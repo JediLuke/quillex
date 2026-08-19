@@ -18,7 +18,9 @@ defmodule Quillex.GUI.SearchPaneModelTest do
         dismissed_files: MapSet.new(),
         error: nil,
         case_sensitive: false,
-        regex: false
+        regex: false,
+        open_buffers_only: false,
+        use_ignore_files: true
       },
       overrides
     )

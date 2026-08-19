@@ -20,9 +20,9 @@ defmodule Quillex.SettingsFile do
 
   ## Where
 
-  `$XDG_CONFIG_HOME/quillex/settings.json`, falling back to
-  `~/.config/quillex/settings.json` — the ordinary place for a Linux
-  application's configuration.
+  Wherever `Quillex.ConfigDir` says, which is the ordinary place for the
+  platform: `~/.config/quillex` on Linux, `~/Library/Application Support`
+  on macOS, `%APPDATA%` on Windows.
 
   ## What is saved
 
@@ -56,14 +56,7 @@ defmodule Quillex.SettingsFile do
 
   @doc "The settings file's path, whether or not it exists."
   def path do
-    base =
-      case System.get_env("XDG_CONFIG_HOME") do
-        nil -> Path.join(System.user_home!(), ".config")
-        "" -> Path.join(System.user_home!(), ".config")
-        dir -> dir
-      end
-
-    Path.join([base, "quillex", "settings.json"])
+    Quillex.ConfigDir.file("settings.json")
   end
 
   @doc "Which settings are saved. The About/dialog text reads this rather than repeating it."

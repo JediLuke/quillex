@@ -1380,6 +1380,17 @@ defmodule QuillEx.RootScene do
       "save_default_settings" ->
         show_save_settings_dialog(scene)
 
+      # No settings dialog, no schema, no persistence layer: the list of
+      # things a search skips is a text file, and this application opens text
+      # files. Editing it and saving is the whole workflow, and the next
+      # search reads it back.
+      "edit_search_excludes" ->
+        # Asking for the patterns writes the file with its defaults if it is
+        # not there yet, so there is always something to open and read.
+        _ = Quillex.Search.Excludes.patterns()
+        {:ok, _} = Quillex.API.FileAPI.open(Quillex.Search.Excludes.path())
+        {:noreply, scene}
+
       "about" ->
         show_about_dialog(scene)
 

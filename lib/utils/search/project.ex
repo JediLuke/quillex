@@ -17,9 +17,34 @@ defmodule Quillex.Search.Project do
   @spec search(Path.t(), String.t(), [Backend.option()]) ::
           {:ok, [{Path.t(), [Match.t()]}]} | {:error, term()}
   def search(root, query, opts \\ []) do
-    with {:ok, matches} <- Backend.pick().search(root, query, opts) do
-      {:ok, matches |> overlay_dirty_buffers(root, query, opts) |> group_by_file()}
+    if Keyword.get(opts, :open_buffers_only, false) do
+      # No disk walk at all. For when you know the thing is in one of the
+      # files already in front of you, and the rest of the project is noise —
+      # and it is instant, because there is nothing to walk.
+      {:ok, root |> open_buffer_matches(query, opts) |> group_by_file()}
+    else
+      with {:ok, matches} <- Backend.pick().search(root, query, opts) do
+        {:ok, matches |> overlay_dirty_buffers(root, query, opts) |> group_by_file()}
+      end
     end
+  end
+
+  # Every open buffer with a path under the root — saved or not, since what is
+  # on screen is what the person is searching.
+  defp open_buffer_matches(root, query, opts) do
+    canonical_root = Quillex.Buffer.PathIdentity.canonical(root)
+    excludes = Keyword.get(opts, :excludes, [])
+    globs = opts |> Keyword.get(:exclude_globs, []) |> Quillex.Search.Glob.compile_list()
+    unignore = opts |> Keyword.get(:unignore_globs, []) |> Quillex.Search.Glob.compile_list()
+
+    Quillex.Buffer.list()
+    |> Enum.filter(fn ref ->
+      is_binary(ref.path) and
+        String.starts_with?(ref.path, canonical_root <> "/") and
+        not Backend.excluded?(ref.path, canonical_root, excludes, globs, unignore)
+    end)
+    |> Enum.flat_map(&buffer_matches(&1, query, opts))
+    |> Enum.sort_by(&{&1.path, &1.line, &1.col})
   end
 
   # Backends read the disk; a file with unsaved edits is searched as the
