@@ -106,10 +106,9 @@ defmodule Quillex.FocusIndicationSpex do
 
         # Reuse the search-bar visibility check from 06_find_spex.exs
         visible_check =
-          Query.text_visible?("<") or
-            Query.text_visible?(">") or
+          Query.text_visible?("Aa") or
             Query.text_visible?("0/0") or
-            Query.text_visible?("Search...")
+            Query.text_visible?("Find")
 
         assert visible_check, "Search bar should be visible after Ctrl+F"
         :ok

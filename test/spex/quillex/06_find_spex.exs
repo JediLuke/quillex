@@ -112,11 +112,13 @@ defmodule Quillex.FindSpex do
 
         # The search bar renders: < prev, match count (0/0), > next
         # Also check for "Search..." placeholder
+        # The navigation arrows are drawn glyphs now rather than "<" and ">"
+        # text, so the bar is recognised by the things it still says in words:
+        # its match count and its placeholder.
         visible_check =
-          Query.text_visible?("<") or
-            Query.text_visible?(">") or
+          Query.text_visible?("Aa") or
             Query.text_visible?("0/0") or
-            Query.text_visible?("Search...")
+            Query.text_visible?("Find")
 
         assert visible_check,
                "Search bar should be visible (nav buttons, match count, or placeholder)"
@@ -451,12 +453,19 @@ defmodule Quillex.FindSpex do
       end
 
       then_ "search bar should reopen" do
-        # Search bar should be visible again
+        # The scene's own flag first: it is the truth, and it says whether the
+        # bar reopened even when what it happens to be DRAWING depends on what
+        # the previous scenario left in the query.
+        assert :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state.show_search_bar,
+               "Ctrl+F should reopen the search bar"
+
+        # And then that it is actually drawn. "Aa" is the Match Case toggle,
+        # which is on screen whenever the bar is, however the query field and
+        # the match count happen to read.
         visible_check =
-          Query.text_visible?("<") or
-            Query.text_visible?(">") or
+          Query.text_visible?("Aa") or
             Query.text_visible?("0/0") or
-            Query.text_visible?("Search...")
+            Query.text_visible?("Find")
 
         assert visible_check,
                "Search bar should be visible (nav buttons, match count, or placeholder)"

@@ -997,6 +997,18 @@ defmodule QuillEx.RootScene do
     end
   end
 
+  # Match Case or Use Regular Expression was toggled in the find bar. The same
+  # query means something different now, so it has to run again.
+  def handle_cast({:search_options_changed, _id, opts}, scene) do
+    state = %{scene.assigns.state | search_opts: opts}
+
+    if state.search_query == "" do
+      {:noreply, assign(scene, state: state)}
+    else
+      perform_search(scene, state.search_query, state)
+    end
+  end
+
   def handle_cast({:search_next, _id}, scene) do
     Scenic.Scene.put_child(scene, :buffer_pane, {:action, :find_next})
     {:noreply, scene}
@@ -2437,8 +2449,7 @@ defmodule QuillEx.RootScene do
 
   # Performs search and updates state.
   defp perform_search(scene, query, state) do
-    # Send search action to TextField
-    Scenic.Scene.put_child(scene, :buffer_pane, {:action, {:search, query}})
+    Scenic.Scene.put_child(scene, :buffer_pane, {:action, {:search, query, state.search_opts}})
 
     new_scene = scene |> assign(state: state)
     {:noreply, new_scene}

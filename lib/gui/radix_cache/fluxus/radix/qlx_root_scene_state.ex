@@ -97,6 +97,10 @@ defmodule QuillEx.RootScene.State do
             # Search bar
             show_search_bar: false,
             search_query: "",
+            # Find options for the in-buffer search, mirrored from the bar so
+            # a re-run (F3, or a fresh query) uses the same ones the person
+            # can see are lit.
+            search_opts: [case_sensitive: false, regex: false],
             search_current_match: 0,
             search_total_matches: 0,
             # Replace mode (Ctrl+H)

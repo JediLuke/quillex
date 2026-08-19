@@ -110,8 +110,9 @@ defmodule Quillex.MenuCloseOutsideClickSpex do
         Process.sleep(500)
 
         # Verify the search bar is open
-        visible = Query.text_visible?("<") or Query.text_visible?(">") or
-                  Query.text_visible?("0/0") or Query.text_visible?("Search...")
+        # "Aa" is the Match Case toggle, always drawn while the bar is up.
+        visible = Query.text_visible?("Aa") or
+                  Query.text_visible?("0/0") or Query.text_visible?("Find")
         assert visible, "Search bar should be visible"
         {:ok, context}
       end
