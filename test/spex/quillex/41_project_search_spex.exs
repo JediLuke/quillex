@@ -20,6 +20,17 @@ defmodule Quillex.ProjectSearchSpex do
 
   defp root_state, do: :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state
 
+  defp status_widget do
+    pane_state()
+    |> ScenicWidgets.SearchPane.State.header_widgets()
+    |> Enum.find(&(&1.id == :status))
+  end
+
+  defp drawn_header_height do
+    [%{data: {_w, h}}] = Scenic.Graph.get(pane_scene().assigns.graph, :search_pane_header_bg)
+    h
+  end
+
   defp pane_scene do
     root = :sys.get_state(Process.whereis(QuillEx.RootScene))
     {:ok, child} = Scenic.Scene.child(root, :project_search_pane)
@@ -495,6 +506,34 @@ defmodule Quillex.ProjectSearchSpex do
         # And NOT among the results, which is where it used to sit.
         kinds = st |> ScenicWidgets.SearchPane.State.rows() |> Enum.map(& &1.kind)
         refute :scope_header in kinds, "and not among the results: #{inspect(kinds)}"
+
+        {:ok, context}
+      end
+
+      then_ "expanding the tree moves the status line down with it", context do
+        # Expanding a folder adds rows to the HEADER, so everything below them
+        # moves. With only the open/shut flags in the layout signature this
+        # was invisible to the header while the body moved anyway — the tree
+        # appeared to do nothing except shove the results down.
+        before_status = status_widget().y
+        before_height = drawn_header_height()
+
+        Probes.click_element("search_pane_scope")
+
+        assert wait_until(fn -> pane_state().scope_open? end),
+               "clicking the scope summary should open the tree"
+
+        assert wait_until(fn -> status_widget().y > before_status end),
+               "the status line should move down as the tree grows"
+
+        assert wait_until(fn -> drawn_header_height() > before_height end),
+               "and the DRAWN header should grow with it, not just the state's idea of it"
+
+        rows = ScenicWidgets.SearchPane.State.scope_rows(pane_state())
+        assert length(rows) > 1, "the tree itself should be showing: #{inspect(rows)}"
+
+        Probes.click_element("search_pane_scope")
+        assert wait_until(fn -> not pane_state().scope_open? end)
 
         {:ok, context}
       end
