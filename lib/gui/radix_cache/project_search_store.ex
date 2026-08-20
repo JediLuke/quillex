@@ -14,7 +14,11 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
       %{
         root: path,                    # project root being searched
         query: string,
-        status: :idle | :searching | {:done, match_count, file_count, ms} | {:error, term},
+        status: :idle                     # nothing to search, or nothing typed
+              | :debouncing               # a keystroke landed; the search has not started
+              | :searching                # the task is running
+              | {:done, matches, files, ms}
+              | {:error, term},
         files: [{path, [Match]}],      # VISIBLE results, grouped by file
         excluded: MapSet of paths,     # scope: files and subtrees unticked
         dismissed: MapSet of {path, line, col},
@@ -23,6 +27,13 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
         case_sensitive: boolean,
         regex: boolean
       }
+
+  The three in-flight states are published, not inferred. While a search is
+  pending or running, `files` still holds the PREVIOUS query's results — they
+  are the best thing to show, since blanking the pane between keystrokes
+  would leave nothing readable while typing — so the status is the only thing
+  that can say they are not the answer yet. `ScenicWidgets.SearchPane` fades
+  them for exactly as long as it is being told so.
 
   `files` is what the pane draws AND what every replace path acts on. Dismissed
   matches are removed here, at the single point where results are published, so
@@ -327,9 +338,24 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
   # there, the matches the user dismissed are exactly the ones still standing.
   defp restart_search(state, view) do
     state
-    |> publish(%{view | dismissed: MapSet.new(), dismissed_files: MapSet.new(), error: nil})
+    |> publish(%{
+      view
+      | dismissed: MapSet.new(),
+        dismissed_files: MapSet.new(),
+        error: nil,
+        status: pending_status(view)
+    })
     |> schedule_search()
   end
+
+  # A keystroke has landed and the search has not started yet. Published
+  # rather than left at whatever the last search said, because for those
+  # 150ms the results on screen answer a query that is no longer in the box —
+  # and the pane's only way to know that is to be told.
+  #
+  # An empty query is not pending anything; there is nothing to search.
+  defp pending_status(%{query: ""}), do: :idle
+  defp pending_status(_view), do: :debouncing
 
   defp schedule_search(state) do
     ref = make_ref()
