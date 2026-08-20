@@ -13,6 +13,10 @@ defmodule Quillex.Search.Project do
   alias Quillex.Search.{Backend, Match}
   alias Quillex.Buffer.Core.Search
 
+  # How often a search in progress reports in. Short enough that a slow search
+  # visibly fills up, long enough that filling up is not itself the slow part.
+  @partial_interval_ms 60
+
   @doc "Search `root` for `query`; matches grouped by file, in path order."
   @spec search(Path.t(), String.t(), [Backend.option()]) ::
           {:ok, [{Path.t(), [Match.t()]}]} | {:error, term()}
@@ -38,6 +42,59 @@ defmodule Quillex.Search.Project do
           {:ok, matches |> overlay_dirty_buffers(root, query, opts) |> group_by_file()}
         end
     end
+  end
+
+  @doc """
+  The same search, reporting what it has found as it finds it.
+
+  `on_partial` is called with the results so far, grouped by file, and then
+  the finished set comes back the way `search/3` returns it. It is called for
+  the first match as soon as there is one, and no more than once every
+  #{@partial_interval_ms}ms after that: results are useful the moment they
+  exist, and a pane redrawn on every match found would spend the search
+  redrawing instead of drawing.
+
+  Partial sets carry the DISK results only — the overlay of unsaved buffers
+  happens once, at the end. Doing it per batch would fold the same buffer's
+  matches in again on every call, and a provisional answer that is wrong in a
+  way the final one is not is worse than a provisional answer that is merely
+  incomplete.
+  """
+  @spec search_streaming(Path.t(), String.t(), [Backend.option()], ([{Path.t(), [Match.t()]}] -> any)) ::
+          {:ok, [{Path.t(), [Match.t()]}]} | {:error, term()}
+  def search_streaming(root, query, opts, on_partial) when is_function(on_partial, 1) do
+    cond do
+      Backend.scope_excluded?(root, root, Keyword.get(opts, :excludes, [])) ->
+        {:ok, []}
+
+      # Nothing to stream: there is no tree walk, so it is over before a
+      # partial result could mean anything.
+      Keyword.get(opts, :open_buffers_only, false) ->
+        search(root, query, opts)
+
+      true ->
+        with {:ok, stream} <- Backend.pick().stream(root, query, opts) do
+          matches = consume(stream, on_partial)
+          {:ok, matches |> overlay_dirty_buffers(root, query, opts) |> group_by_file()}
+        end
+    end
+  end
+
+  defp consume(stream, on_partial) do
+    {reversed, _last} =
+      Enum.reduce(stream, {[], nil}, fn match, {acc, last} ->
+        acc = [match | acc]
+        now = System.monotonic_time(:millisecond)
+
+        if last == nil or now - last >= @partial_interval_ms do
+          on_partial.(acc |> Enum.reverse() |> group_by_file())
+          {acc, now}
+        else
+          {acc, last}
+        end
+      end)
+
+    Enum.reverse(reversed)
   end
 
   # Every open buffer with a path under the root — saved or not, since what is

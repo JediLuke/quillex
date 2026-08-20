@@ -54,10 +54,19 @@ defmodule Quillex.SearchLoadingStateSpex do
     |> Enum.map(& &1.data)
   end
 
+  # The STATUS LINE, which is a header widget. Told apart from the body's own
+  # "Searching…" line by WHERE it is drawn — a graph's primitives are a map,
+  # and which of two matching strings comes out first is nobody's promise.
   defp status_text do
-    Enum.find(drawn_text(), fn t ->
-      t =~ ~r/^(\d+ in \d+ files?  \(\d+ms\)|no matches|searching…|typing…|Type to search|Searching)/
-    end)
+    graph = pane_graph()
+    body = Enum.map(body_primitives(), & &1.data)
+
+    graph.primitives
+    |> Map.values()
+    |> Enum.filter(&(&1.module == Scenic.Primitive.Text))
+    |> Enum.map(& &1.data)
+    |> Kernel.--(body)
+    |> Enum.find(&(&1 =~ ~r/^(\d+ in \d+ files?  \(\d+ms\)|no matches|searching…|typing…|Type to search)/))
   end
 
   defp drawn_rows do

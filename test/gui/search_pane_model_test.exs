@@ -123,6 +123,30 @@ defmodule Quillex.GUI.SearchPaneModelTest do
     assert root.included?
   end
 
+  test "the scope tree is reused until the project or the exclusions change" do
+    dir = Path.join(System.tmp_dir!(), "qlx_scope_#{System.unique_integer([:positive])}")
+    File.mkdir_p!(Path.join(dir, "lib"))
+    File.write!(Path.join(dir, "lib/a.ex"), "x")
+    on_exit(fn -> File.rm_rf(dir) end)
+
+    first = Model.build(snapshot(%{root: dir}))
+
+    # Results landing is not a reason to walk the project tree again — and a
+    # search that reports as it goes reports several times per keystroke.
+    # Proved by deleting the tree: a rebuild would come back empty.
+    File.rm_rf!(dir)
+
+    again = Model.build(snapshot(%{root: dir, status: :searching}), first)
+    assert again.scope == first.scope, "the scope should have been reused, not rebuilt"
+
+    # But a change of exclusions is exactly when it must NOT be reused.
+    changed =
+      Model.build(snapshot(%{root: dir, excluded: MapSet.new([Path.join(dir, "lib")])}), first)
+
+    refute changed.scope == first.scope,
+           "unticking something has to rebuild the tree that shows the tick"
+  end
+
   test "results become one group per file, each match carrying its own offset" do
     m1 = %Match{path: "#{@root}/lib/a.ex", line: 3, col: 3, text: "  the text", matched: "the"}
     m2 = %Match{path: "#{@root}/lib/a.ex", line: 9, col: 1, text: "then", matched: "the"}

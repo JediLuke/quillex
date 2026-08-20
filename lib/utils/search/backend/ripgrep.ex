@@ -15,6 +15,16 @@ defmodule Quillex.Search.Backend.Ripgrep do
   def available?, do: System.find_executable("rg") != nil
 
   @impl true
+  # rg is handed the whole search and gives back the whole answer: its output
+  # is collected by System.cmd before a line of it is parsed, so there is no
+  # point in the middle at which a piece could be handed over. It also
+  # finishes inside the debounce on trees where the Elixir walk takes a
+  # tenth of a second, so there is nothing to hand over early.
+  def stream(root, query, opts) do
+    with {:ok, matches} <- search(root, query, opts), do: {:ok, matches}
+  end
+
+  @impl true
   def search(root, query, opts) when is_binary(root) and is_binary(query) and query != "" do
     max_results = Keyword.get(opts, :max_results, 5_000)
     excludes = Keyword.get(opts, :excludes, [])

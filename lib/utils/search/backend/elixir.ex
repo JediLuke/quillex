@@ -22,22 +22,37 @@ defmodule Quillex.Search.Backend.Elixir do
   def search(_root, "", _opts), do: {:ok, []}
 
   def search(root, query, opts) when is_binary(root) and is_binary(query) do
+    # Compiled once for the whole walk, and validated here: a regex the user is
+    # halfway through typing must come back as an error the pane can show, not
+    # as a crash in the middle of a directory traversal.
+    with {:ok, stream} <- stream(root, query, opts) do
+      {:ok, Enum.to_list(stream)}
+    end
+  end
+
+  @impl true
+  def stream(_root, "", _opts), do: {:ok, []}
+
+  # The walk was always lazy — every match was known the moment its file was
+  # read, and then sat in a Stream nobody consumed until the last directory
+  # had been visited. This hands the same stream out instead of running it to
+  # the end first.
+  def stream(root, query, opts) when is_binary(root) and is_binary(query) do
     max_results = Keyword.get(opts, :max_results, 5_000)
     excludes = Keyword.get(opts, :excludes, [])
     globs = opts |> Keyword.get(:exclude_globs, []) |> Quillex.Search.Glob.compile_list()
     unignore = opts |> Keyword.get(:unignore_globs, []) |> Quillex.Search.Glob.compile_list()
 
-    # Compiled once for the whole walk, and validated here: a regex the user is
-    # halfway through typing must come back as an error the pane can show, not
-    # as a crash in the middle of a directory traversal.
+    # Compiled once for the whole walk, and validated HERE rather than
+    # somewhere down the stream: a regex the user is halfway through typing
+    # must come back as an error the pane can show, not as a crash in the
+    # middle of a directory traversal.
     with {:ok, regex} <- Search.compile(query, opts) do
-      matches =
-        root
-        |> text_files(root, excludes, globs, unignore)
-        |> Stream.flat_map(&matches_in_file(&1, regex))
-        |> Enum.take(max_results)
-
-      {:ok, matches}
+      {:ok,
+       root
+       |> text_files(root, excludes, globs, unignore)
+       |> Stream.flat_map(&matches_in_file(&1, regex))
+       |> Stream.take(max_results)}
     else
       {:error, message} -> {:error, {:bad_pattern, message}}
     end

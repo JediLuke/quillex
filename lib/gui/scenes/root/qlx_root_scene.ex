@@ -1102,12 +1102,17 @@ defmodule QuillEx.RootScene do
     scene = assign(scene, state: new_state)
 
     if new_state.show_project_search do
-      model = Quillex.GUI.SearchPaneModel.build(snapshot)
+      # The previous model goes back in so its scope tree can be reused: it is
+      # a walk of the whole project, and results land many times per search
+      # while the shape of the project does not change at all.
+      model =
+        Quillex.GUI.SearchPaneModel.build(snapshot, scene.assigns[:search_pane_model])
+
       Scenic.Scene.put_child(scene, :project_search_pane, {:update_model, model})
-
+      {:noreply, assign(scene, search_pane_model: model)}
+    else
+      {:noreply, scene}
     end
-
-    {:noreply, scene}
   end
 
   # Scenic.PubSub lifecycle notifications — deliberately specific clauses, a

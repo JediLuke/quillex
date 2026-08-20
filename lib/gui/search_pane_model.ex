@@ -22,8 +22,18 @@ defmodule Quillex.GUI.SearchPaneModel do
   # When the line is too long, keep this much context before the match.
   @lead_context 12
 
-  @doc "The model for a store snapshot."
-  def build(snapshot) do
+  @doc """
+  The model for a store snapshot.
+
+  `previous` is the last model built, if there is one. Its scope tree is
+  reused whenever the project and the exclusions have not changed — which is
+  nearly always, because results land far more often than the shape of the
+  project does. Building it means walking the whole tree (8.9ms on Quillex
+  itself), and a search that publishes as it goes publishes several times per
+  keystroke; without this, most of the work of showing a partial result was
+  re-answering a question nobody had asked again.
+  """
+  def build(snapshot, previous \\ nil) do
     %{
       status: snapshot.status,
       error: snapshot.error,
@@ -32,7 +42,8 @@ defmodule Quillex.GUI.SearchPaneModel do
       open_buffers_only: snapshot.open_buffers_only,
       results_view: Quillex.RadixCache.ViewStore.get_state().search_results_view,
       use_ignore_files: snapshot.use_ignore_files,
-      scope: scope(snapshot),
+      scope_key: scope_key(snapshot),
+      scope: scope(snapshot, previous),
       files: files(snapshot)
     }
   end
@@ -47,10 +58,22 @@ defmodule Quillex.GUI.SearchPaneModel do
       open_buffers_only: false,
       use_ignore_files: true,
       results_view: :tree,
+      scope_key: nil,
       scope: [],
       files: []
     }
   end
+
+  # What the scope tree is built FROM. Anything else in a snapshot — results,
+  # status, options — leaves the tree exactly as it was.
+  defp scope_key(%{root: nil}), do: nil
+  defp scope_key(%{root: root, excluded: excluded}), do: {root, excluded}
+
+  defp scope(snapshot, %{scope_key: key, scope: scope}) when is_map(snapshot) do
+    if scope_key(snapshot) == key and key != nil, do: scope, else: scope(snapshot)
+  end
+
+  defp scope(snapshot, _previous), do: scope(snapshot)
 
   defp scope(%{root: nil}), do: []
 

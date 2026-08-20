@@ -59,6 +59,21 @@ defmodule Quillex.Search.Backend do
   @callback search(root :: Path.t(), query :: String.t(), [option()]) ::
               {:ok, [Match.t()]} | {:error, term()}
 
+  @doc """
+  The same search, as something you can consume a piece at a time.
+
+  Returns a lazy `Enumerable` of matches in path order, already capped at
+  `:max_results`. A pattern that will not compile still comes back as an
+  error, before any of it is walked.
+
+  Not every backend can genuinely stream, and one that cannot says so by
+  yielding its whole result in one go — which is honest rather than a
+  fallback: ripgrep collects its output before parsing it, and finishes well
+  inside the debounce anyway, so there is nothing to hand over early.
+  """
+  @callback stream(root :: Path.t(), query :: String.t(), [option()]) ::
+              {:ok, Enumerable.t()} | {:error, term()}
+
   # Kept only so a search asked for with no options at all still skips the
   # obvious. What a search ACTUALLY skips comes from Quillex.Search.Excludes,
   # which is a file the person using the editor owns — this list is a

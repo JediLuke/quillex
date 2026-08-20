@@ -168,6 +168,7 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
        raw_files: [],
        task: nil,
        task_query: nil,
+       partial_ref: nil,
        debounce: nil,
        dirty_debounce: nil,
        waiters: [],
@@ -275,6 +276,18 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
   def handle_info({{Scenic.PubSub, :registered}, _}, state), do: {:noreply, state}
   def handle_info({{Scenic.PubSub, :unregistered}, _}, state), do: {:noreply, state}
 
+  # A search in progress has found some of it. Published exactly like a
+  # finished one except for the status, which still says :searching — so the
+  # pane draws these rows faded, under a "searching…" line, which is what a
+  # provisional answer should look like.
+  def handle_info({:partial_results, ref, partial}, %{partial_ref: ref} = state) do
+    {:noreply, publish_visible(%{state | raw_files: partial}, state.view)}
+  end
+
+  # A report from a search that has been superseded. Dropped, ref and all —
+  # the same reason its final result would be.
+  def handle_info({:partial_results, _stale, _partial}, state), do: {:noreply, state}
+
   # Debounce fired: start the search unless the query changed again meanwhile.
   def handle_info({:run_search, ref}, %{debounce: ref} = state) do
     {:noreply, run_search_now(%{state | debounce: nil})}
@@ -293,25 +306,25 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
         # not published: the search that IS current is either running or about
         # to be, and its answer is the one that belongs to this query.
         state.task_query != {state.view.query, backend_opts(state.view)} ->
-          %{state | task: nil}
+          %{state | task: nil, partial_ref: nil}
 
         match?({:ok, _}, result) ->
           {:ok, files} = result
           elapsed = System.monotonic_time(:millisecond) - state.started_at
 
-          %{state | task: nil, raw_files: files}
+          %{state | task: nil, partial_ref: nil, raw_files: files}
           |> publish_visible(state.view, elapsed)
 
         match?({:error, {:bad_pattern, _}}, result) ->
           {:error, {:bad_pattern, message}} = result
 
-          %{state | task: nil, raw_files: []}
+          %{state | task: nil, partial_ref: nil, raw_files: []}
           |> publish(%{state.view | files: [], status: :idle, error: message})
 
         true ->
           {:error, reason} = result
 
-          %{state | task: nil, raw_files: []}
+          %{state | task: nil, partial_ref: nil, raw_files: []}
           |> publish(%{state.view | files: [], status: {:error, reason}})
       end
 
@@ -379,9 +392,18 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
     query = view.query
     opts = backend_opts(view)
 
+    # The task reports in as it walks. `partial_ref` is what tells a report
+    # from THIS search apart from one still arriving from the last: a search
+    # superseded mid-walk goes on sending for as long as it takes to die, and
+    # its results must not land in the pane under the new query's name.
+    partial_ref = make_ref()
+    store = self()
+
     task =
       Task.Supervisor.async_nolink(Quillex.Search.TaskSupervisor, fn ->
-        Project.search(root, query, opts)
+        Project.search_streaming(root, query, opts, fn partial ->
+          send(store, {:partial_results, partial_ref, partial})
+        end)
       end)
 
     state
@@ -392,6 +414,7 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
       # results would then be published under the newer query's label, which
       # is simply wrong. Matching on the ref alone does not catch it.
       task_query: {query, opts},
+      partial_ref: partial_ref,
       started_at: System.monotonic_time(:millisecond)
     })
     |> publish(%{view | status: :searching, error: nil})
@@ -464,7 +487,9 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
 
   defp cancel_task(%{task: task} = state) do
     Task.shutdown(task, :brutal_kill)
-    %{state | task: nil, task_query: nil}
+    # The ref goes with it: anything still in the mailbox from this search is
+    # now a report about a query nobody asked.
+    %{state | task: nil, task_query: nil, partial_ref: nil}
   end
 
   defp notify_waiters(%{task: nil, debounce: nil, waiters: waiters} = state) do
