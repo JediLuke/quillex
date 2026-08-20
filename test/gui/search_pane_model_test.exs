@@ -30,7 +30,7 @@ defmodule Quillex.GUI.SearchPaneModelTest do
     model = Model.build(snapshot(%{}))
     assert model.status == :idle
     assert model.files == []
-    assert model.scope == []
+    assert model.scope == [], "no project, no tree"
     refute model.case_sensitive
   end
 
@@ -43,16 +43,66 @@ defmodule Quillex.GUI.SearchPaneModelTest do
 
     model = Model.build(snapshot(%{root: dir}))
 
-    labels = Enum.map(model.scope, & &1.label)
+    # The tree is rooted in the project itself, so that "search nothing but
+    # this" and "search all of it again" are one click rather than one per
+    # top-level entry.
+    assert [%{label: root_label, children: entries}] = model.scope
+    assert root_label == Path.basename(dir)
+
+    labels = Enum.map(entries, & &1.label)
     assert "lib" in labels, "directories should still be there: #{inspect(labels)}"
 
     # The point of the change: a file is a leaf you can untick, so narrowing a
     # search means pointing at things rather than writing a glob for them.
     assert "top.txt" in labels, "files should be tickable too: #{inspect(labels)}"
 
-    lib = Enum.find(model.scope, &(&1.label == "lib"))
+    lib = Enum.find(entries, &(&1.label == "lib"))
     assert Enum.map(lib.children, & &1.label) == ["a.ex"]
-    assert Enum.all?(model.scope, & &1.included?), "nothing is excluded by default"
+    assert Enum.all?(entries, & &1.included?), "nothing is excluded by default"
+  end
+
+  test "unticking the project root takes everything under it with it" do
+    dir = Path.join(System.tmp_dir!(), "qlx_scope_#{System.unique_integer([:positive])}")
+    File.mkdir_p!(Path.join(dir, "lib"))
+    File.write!(Path.join(dir, "lib/a.ex"), "x")
+    File.write!(Path.join(dir, "top.txt"), "x")
+    on_exit(fn -> File.rm_rf(dir) end)
+
+    model = Model.build(snapshot(%{root: dir, excluded: MapSet.new([dir])}))
+
+    assert [root] = model.scope
+    refute root.included?
+
+    # Exclusion is INHERITED. A file drawn with a tick beside it, sitting
+    # under a folder drawn without one, is the tree contradicting itself.
+    assert Enum.all?(root.children, &(not &1.included?)),
+           "every entry under an excluded root should read as excluded too"
+
+    lib = Enum.find(root.children, &(&1.label == "lib"))
+    assert Enum.all?(lib.children, &(not &1.included?)), "and all the way down"
+  end
+
+  test "unticking a directory excludes what is inside it, and nothing else" do
+    dir = Path.join(System.tmp_dir!(), "qlx_scope_#{System.unique_integer([:positive])}")
+    File.mkdir_p!(Path.join(dir, "lib"))
+    File.mkdir_p!(Path.join(dir, "docs"))
+    File.write!(Path.join(dir, "lib/a.ex"), "x")
+    File.write!(Path.join(dir, "docs/b.md"), "x")
+    on_exit(fn -> File.rm_rf(dir) end)
+
+    model = Model.build(snapshot(%{root: dir, excluded: MapSet.new([Path.join(dir, "lib")])}))
+
+    assert [root] = model.scope
+    assert root.included?, "excluding a directory says nothing about the project"
+
+    lib = Enum.find(root.children, &(&1.label == "lib"))
+    docs = Enum.find(root.children, &(&1.label == "docs"))
+
+    refute lib.included?
+    assert Enum.all?(lib.children, &(not &1.included?)), "the files inside it go too"
+
+    assert docs.included?
+    assert Enum.all?(docs.children, & &1.included?), "and its neighbour is untouched"
   end
 
   test "an unticked file is marked excluded, and only that file" do
@@ -65,10 +115,12 @@ defmodule Quillex.GUI.SearchPaneModelTest do
     model =
       Model.build(snapshot(%{root: dir, excluded: MapSet.new([Path.join(dir, "drop.txt")])}))
 
-    by_label = Map.new(model.scope, &{&1.label, &1.included?})
+    assert [root] = model.scope
+    by_label = Map.new(root.children, &{&1.label, &1.included?})
 
     refute by_label["drop.txt"]
     assert by_label["keep.txt"]
+    assert root.included?
   end
 
   test "results become one group per file, each match carrying its own offset" do

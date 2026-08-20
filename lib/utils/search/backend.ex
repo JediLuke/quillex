@@ -110,11 +110,28 @@ defmodule Quillex.Search.Backend do
     unignored? = Quillex.Search.Glob.any_match?(relative, unignore_globs)
 
     Enum.any?(segments, &(&1 in @default_excludes)) or
-      Enum.any?(excludes, fn exclude ->
-        exclude_rel = exclude |> Path.expand(root) |> Path.relative_to(root)
-        exclude_segments = Path.split(exclude_rel)
-        List.starts_with?(segments, exclude_segments)
-      end) or
+      scope_excluded?(path, root, excludes) or
       (not unignored? and Quillex.Search.Glob.any_match?(relative, globs))
+  end
+
+  @doc """
+  Whether the SCOPE TREE excludes this path — the explicit list of unticked
+  paths, without the globs or the always-skipped names.
+
+  Separated out because the project root is a special case and only the scope
+  list may speak to it. Both backends always walk the root whatever the globs
+  say — a glob or an always-skipped name that happened to match the project's
+  own directory would otherwise silently empty every search made in it.
+  Unticking the ROOT ROW of the scope tree is not that accident, though: it is
+  somebody saying "search nothing", in one click. `Quillex.Search.Project`
+  asks this before picking a backend, so that one answer covers both.
+  """
+  def scope_excluded?(path, root, excludes) do
+    segments = path |> Path.relative_to(root) |> Path.split()
+
+    Enum.any?(excludes, fn exclude ->
+      exclude_segments = exclude |> Path.expand(root) |> Path.relative_to(root) |> Path.split()
+      List.starts_with?(segments, exclude_segments)
+    end)
   end
 end

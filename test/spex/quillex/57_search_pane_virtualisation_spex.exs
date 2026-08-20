@@ -154,7 +154,10 @@ defmodule Quillex.SearchPaneVirtualisationSpex do
     Process.sleep(1_000)
     AppReset.reset!()
 
-    root = Path.expand("test/support/search_pane_virtualisation_fixture")
+    # NOT under test/support, which is compiled into the test build: these
+    # are .ex files full of deliberate nonsense, and a run interrupted before
+    # its on_exit would leave the next `mix test` unable to compile at all.
+    root = Path.join(System.tmp_dir!(), "quillex_search_pane_virtualisation")
     write_fixture(root)
 
     on_exit(fn ->

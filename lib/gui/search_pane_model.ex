@@ -63,18 +63,43 @@ defmodule Quillex.GUI.SearchPaneModel do
   # The whole tree is walked either way: FileTree.build/1 already visits every
   # file to construct the directory items, and the old filter simply threw
   # them away.
+  #
+  # The project itself is the FIRST row, with everything under it. Without it
+  # the only way to say "search nothing but this one folder" — or to put a
+  # narrowed search back the way it was — is a click per top-level entry, and
+  # there is nothing in the tree that stands for the whole of what is being
+  # searched.
   defp scope(%{root: root, excluded: excluded}) do
-    root
-    |> Quillex.Utils.FileTree.build()
-    |> Enum.map(&scope_node(&1, excluded))
+    root_excluded? = MapSet.member?(excluded, root)
+
+    children =
+      root
+      |> Quillex.Utils.FileTree.build()
+      |> Enum.map(&scope_node(&1, excluded, root_excluded?))
+
+    [
+      %{
+        id: root,
+        label: Path.basename(root),
+        included?: not root_excluded?,
+        children: children
+      }
+    ]
   end
 
-  defp scope_node(%Item{id: path, title: name, children: children}, excluded) do
+  # Exclusion is INHERITED: a directory that is not being searched cannot have
+  # anything under it that is. The tree used to tick each node purely on its
+  # own entry in the exclude set, which meant unticking a folder left every
+  # file inside it drawn with a tick beside it — a row saying it is being
+  # searched, sitting under the row that says it is not.
+  defp scope_node(%Item{id: path, title: name, children: children}, excluded, inherited?) do
+    excluded? = inherited? or MapSet.member?(excluded, path)
+
     %{
       id: path,
       label: name,
-      included?: not MapSet.member?(excluded, path),
-      children: Enum.map(children, &scope_node(&1, excluded))
+      included?: not excluded?,
+      children: Enum.map(children, &scope_node(&1, excluded, excluded?))
     }
   end
 

@@ -71,7 +71,7 @@ defmodule Quillex.MixProject do
         :scenic_widget_contrib,
         "../scenic-widget-contrib",
         "https://github.com/JediLuke/scenic-widget-contrib.git",
-        "3ebb7ad5ed593a59f8685bc58a9327ffc5c93333"
+        "a337640851bb11404dd48bbc4f01d3068fc2215c"
       ),
       {:elixir_uuid, "~> 1.2"},
       {:font_metrics, "~> 0.5"},

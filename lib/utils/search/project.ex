@@ -17,15 +17,26 @@ defmodule Quillex.Search.Project do
   @spec search(Path.t(), String.t(), [Backend.option()]) ::
           {:ok, [{Path.t(), [Match.t()]}]} | {:error, term()}
   def search(root, query, opts \\ []) do
-    if Keyword.get(opts, :open_buffers_only, false) do
-      # No disk walk at all. For when you know the thing is in one of the
-      # files already in front of you, and the rest of the project is noise —
-      # and it is instant, because there is nothing to walk.
-      {:ok, root |> open_buffer_matches(query, opts) |> group_by_file()}
-    else
-      with {:ok, matches} <- Backend.pick().search(root, query, opts) do
-        {:ok, matches |> overlay_dirty_buffers(root, query, opts) |> group_by_file()}
-      end
+    cond do
+      # The scope tree's root row has been unticked: nothing is in scope, so
+      # there is nothing to search. Answered here rather than in a backend
+      # because the two would answer it differently — ripgrep is told what to
+      # skip in globs, and the glob for the root ("!/.") excludes nothing at
+      # all, so the same click would clear the results under one backend and
+      # be ignored under the other.
+      Backend.scope_excluded?(root, root, Keyword.get(opts, :excludes, [])) ->
+        {:ok, []}
+
+      Keyword.get(opts, :open_buffers_only, false) ->
+        # No disk walk at all. For when you know the thing is in one of the
+        # files already in front of you, and the rest of the project is noise —
+        # and it is instant, because there is nothing to walk.
+        {:ok, root |> open_buffer_matches(query, opts) |> group_by_file()}
+
+      true ->
+        with {:ok, matches} <- Backend.pick().search(root, query, opts) do
+          {:ok, matches |> overlay_dirty_buffers(root, query, opts) |> group_by_file()}
+        end
     end
   end
 

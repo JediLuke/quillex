@@ -1054,6 +1054,11 @@ defmodule Quillex.DemoSpex do
 
         dwell(3_000)
 
+        # The replacement row lives behind a disclosure, like the find bar's —
+        # so it has to be opened before there is a field to click.
+        Probes.click_element("search_pane_replace_caret")
+        beat(400)
+
         Probes.click_element("search_pane_field_replace")
         beat(600)
         type("g'day")
