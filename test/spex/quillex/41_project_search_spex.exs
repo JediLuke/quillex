@@ -173,7 +173,11 @@ defmodule Quillex.ProjectSearchSpex do
     Process.sleep(1_000)
     AppReset.reset!()
 
-    root = Path.expand("test/support/project_search_fixture")
+    # NOT under test/support, which is compiled into the test build. This
+    # fixture is .ex files full of deliberate nonsense ("line 1 needle here"),
+    # and a run interrupted before its on_exit leaves them behind — after
+    # which `mix test` cannot compile the project at all.
+    root = Path.join(System.tmp_dir!(), "quillex_project_search_fixture")
     write_fixture(root)
 
     Quillex.RadixCache.ViewStore.set_file_nav_path(root)
