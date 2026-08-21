@@ -278,13 +278,19 @@ defmodule QuillEx.RootScene.Renderizer do
   # open dropdown would close under the pointer that just chose the theme.
   defp apply_theme(_scene, nil, _state), do: :ok
 
-  defp apply_theme(_scene, %{theme: theme}, %{theme: theme}), do: :ok
+  # The chrome zoom is part of what a theme IS here — it decides every font
+  # size and every control's size in the chrome. Comparing only `:theme` meant
+  # zooming repainted nothing: the frames moved, because the layout reads the
+  # zoom directly, and the type stayed exactly where it was. Tabs at 13pt in a
+  # bar that had grown to 52.
+  defp apply_theme(_scene, %{theme: theme, chrome_zoom: zoom}, %{theme: theme, chrome_zoom: zoom}),
+    do: :ok
 
   defp apply_theme(scene, _old_state, state) do
     p = palette(state)
 
-    Scenic.Scene.put_child(scene, :tab_bar, {:set_theme, Quillex.GUI.Palette.tab_bar_theme(p)})
-    Scenic.Scene.put_child(scene, :icon_menu, {:set_theme, Quillex.GUI.Palette.icon_menu_theme(p)})
+    Scenic.Scene.put_child(scene, :tab_bar, {:set_theme, tab_bar_theme(state)})
+    Scenic.Scene.put_child(scene, :icon_menu, {:set_theme, icon_menu_theme(state)})
 
     Scenic.Scene.put_child(
       scene,
@@ -297,11 +303,7 @@ defmodule QuillEx.RootScene.Renderizer do
     end
 
     if state.show_file_nav do
-      Scenic.Scene.put_child(
-        scene,
-        :file_nav,
-        {:set_theme, Quillex.GUI.Palette.side_nav_theme(p)}
-      )
+      Scenic.Scene.put_child(scene, :file_nav, {:set_theme, file_nav_theme(state)})
     end
 
     :ok
@@ -443,7 +445,7 @@ defmodule QuillEx.RootScene.Renderizer do
 
     # Sized against the editor's text, but deliberately smaller than it —
     # see SideNavThemes.for_editor/1.
-    side_nav_theme = SideNavThemes.for_editor(scaled(24, state), palette(state))
+    side_nav_theme = file_nav_theme(state)
 
     side_nav_data = %{
       frame: frame,
@@ -467,6 +469,46 @@ defmodule QuillEx.RootScene.Renderizer do
   # The pane is chrome, so it is sized off the chrome zoom rather than the
   # editor's text size — a 24pt document must not turn the sidebar into a
   # billboard. Same reasoning as SideNavThemes.for_editor/1.
+  # Every piece of chrome's theme is built by a NAMED function, and the same
+  # function is used to create it and to repaint it. They used to be written
+  # inline at the point of creation, which is why zooming the chrome moved the
+  # frames and left the type behind: the repaint path had nothing to call but
+  # the palette, and a palette carries colours.
+  defp tab_bar_theme(state) do
+    palette(state)
+    |> Quillex.GUI.Palette.tab_bar_theme()
+    |> Map.merge(%{
+      font: :ibm_plex_mono,
+      italic_font: :ibm_plex_mono_italic,
+      height: scaled(35, state),
+      min_tab_width: scaled(100, state),
+      max_tab_width: scaled(200, state),
+      tab_padding: scaled(12, state),
+      close_button_size: scaled(16, state),
+      close_button_margin: scaled(8, state),
+      font_size: scaled(13, state)
+    })
+  end
+
+  defp icon_menu_theme(state) do
+    palette(state)
+    |> Quillex.GUI.Palette.icon_menu_theme()
+    |> Map.merge(%{
+      font: :ibm_plex_mono,
+      height: scaled(35, state),
+      icon_button_size: scaled(35, state),
+      icon_font_size: scaled(16, state),
+      dropdown_item_height: scaled(28, state),
+      dropdown_slider_height: scaled(52, state),
+      dropdown_font_size: scaled(13, state),
+      max_dropdown_height: max_dropdown_height(state),
+      max_dropdown_width: max_dropdown_width(state)
+    })
+  end
+
+  defp file_nav_theme(state),
+    do: Quillex.Utils.SideNavThemes.for_editor(scaled(24, state), palette(state))
+
   defp search_pane_theme(state) do
     # Sized off the FILE NAVIGATOR, not off numbers of its own. The two share
     # the sidebar slot and show the same kind of thing — a list of file names
@@ -722,20 +764,7 @@ defmodule QuillEx.RootScene.Renderizer do
           menus: menus,
           show_shortcuts: state.show_menu_shortcuts,
           # the library's theme defaults to the built-in :roboto_mono; quillex ships IBM Plex
-          theme:
-            palette(state)
-            |> Quillex.GUI.Palette.icon_menu_theme()
-            |> Map.merge(%{
-              font: :ibm_plex_mono,
-              height: scaled(35, state),
-              icon_button_size: scaled(35, state),
-              icon_font_size: scaled(16, state),
-              dropdown_item_height: scaled(28, state),
-              dropdown_slider_height: scaled(52, state),
-              dropdown_font_size: scaled(13, state),
-              max_dropdown_height: max_dropdown_height(state),
-              max_dropdown_width: max_dropdown_width(state)
-            })
+          theme: icon_menu_theme(state)
         }
 
         graph
@@ -835,20 +864,7 @@ defmodule QuillEx.RootScene.Renderizer do
       tabs: tabs,
       selected_id: selected_id,
       # the library's theme defaults to the built-in :roboto_mono; quillex ships IBM Plex
-      theme:
-        palette(state)
-        |> Quillex.GUI.Palette.tab_bar_theme()
-        |> Map.merge(%{
-          font: :ibm_plex_mono,
-          italic_font: :ibm_plex_mono_italic,
-          height: scaled(35, state),
-          min_tab_width: scaled(100, state),
-          max_tab_width: scaled(200, state),
-          tab_padding: scaled(12, state),
-          close_button_size: scaled(16, state),
-          close_button_margin: scaled(8, state),
-          font_size: scaled(13, state)
-        })
+      theme: tab_bar_theme(state)
     }
 
     graph
