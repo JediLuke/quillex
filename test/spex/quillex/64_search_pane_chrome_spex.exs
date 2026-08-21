@@ -244,23 +244,28 @@ defmodule Quillex.SearchPaneChromeSpex do
       then_ "and it sits ON the results rather than seeping through them", context do
         [panel] = Scenic.Graph.get(pane_graph(), :search_pane_settings)
 
-        rects =
+        body =
           panel.data
           |> Enum.map(&Map.get(pane_graph().primitives, &1))
-          |> Enum.filter(&(&1 && &1.module == Scenic.Primitive.Rectangle))
+          |> Enum.find(fn p ->
+            p && p.module == Scenic.Primitive.RoundedRectangle &&
+              Scenic.Primitive.get_style(p, :stroke)
+          end)
 
-        assert length(rects) >= 2,
+        assert body,
                """
                a floating panel needs a body to sit on and an edge to end at,
-               or the rows underneath read straight through it.
+               or the rows underneath read straight through it. Rounded and
+               bordered, the same shape IconMenu gives its dropdown.
                """
 
-        body = Enum.find(rects, &Scenic.Primitive.get_style(&1, :stroke))
-
-        assert body, "the panel has no border: #{inspect(Enum.map(rects, & &1.styles))}"
-
         assert Scenic.Primitive.get_style(body, :fill),
-               "and it is transparent, so the results show through it"
+               "it is transparent, so the results show through it"
+
+        {_w, _h, radius} = body.data
+
+        assert radius > 0,
+               "a menu panel has rounded corners; this one has #{inspect(radius)}"
 
         {:ok, context}
       end
