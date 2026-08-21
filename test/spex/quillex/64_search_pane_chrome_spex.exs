@@ -209,6 +209,47 @@ defmodule Quillex.SearchPaneChromeSpex do
         {:ok, context}
       end
 
+      then_ "its file names are the size the file navigator draws them", context do
+        # The two share the sidebar slot and list the same kind of thing. The
+        # pane used to size its own text — 13pt against the navigator's 17 —
+        # and the two read as different applications in the same strip.
+        pane = pane_state().theme
+        nav = Quillex.Utils.SideNavThemes.for_editor(24, Quillex.GUI.Palette.get(:dark))
+
+        assert pane.font_size == nav.font_size,
+               """
+               a result's file name is #{pane.font_size}pt where the navigator
+               would draw it #{nav.font_size}pt.
+               """
+
+        assert pane.row_height == nav.item_height,
+               """
+               and its rows are #{pane.row_height} tall against the
+               navigator's #{nav.item_height}.
+               """
+
+        {:ok, context}
+      end
+
+      then_ "and everything else in the pane is measured from that", context do
+        theme = pane_state().theme
+        alias ScenicWidgets.SearchPane.State, as: S
+
+        # These were pixels chosen against an 11pt label. A slider that cannot
+        # hold the word "tree" is what a fixed width becomes the moment the
+        # chrome is zoomed.
+        assert S.slider_width(theme) >= 2 * round(4 * theme.small_font_size * 0.6),
+               "the tree/list slider is too narrow for its own labels"
+
+        assert S.button_size(theme) < theme.row_height,
+               "a square control on the bar should sit inside the row it is on"
+
+        assert theme.small_font_size < theme.font_size,
+               "secondary type should be a step down from the results, not equal to them"
+
+        {:ok, context}
+      end
+
       then_ "the settings are a cog on the bar, not a row above it", context do
         cog = widget(:domain_header)
         view = widget(:results_view)

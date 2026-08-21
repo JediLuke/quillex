@@ -468,14 +468,26 @@ defmodule QuillEx.RootScene.Renderizer do
   # editor's text size — a 24pt document must not turn the sidebar into a
   # billboard. Same reasoning as SideNavThemes.for_editor/1.
   defp search_pane_theme(state) do
+    # Sized off the FILE NAVIGATOR, not off numbers of its own. The two share
+    # the sidebar slot and show the same kind of thing — a list of file names
+    # — and the pane's 13pt against the navigator's 17 made them look like
+    # two applications. A result's file name is now exactly the size the
+    # navigator would have drawn it, and everything else in the pane is
+    # measured from that.
+    label = Quillex.Utils.SideNavThemes.nav_font_size(scaled(24, state))
+
     palette(state)
     |> Quillex.GUI.Palette.search_pane_theme()
     |> Map.merge(%{
       font: :ibm_plex_mono,
-      font_size: scaled(13, state),
-      small_font_size: scaled(11, state),
-      row_height: scaled(20, state),
-      field_height: scaled(24, state)
+      font_size: label,
+      # Secondary type — the status line, the settings, the scope tree — a
+      # step down from the results rather than a fixed 11.
+      small_font_size: max(11, round(label * 0.8)),
+      # The navigator's own row: the glyph plus breathing space.
+      row_height: label + 10,
+      field_height: label + 14,
+      indent: 16
     })
   end
 

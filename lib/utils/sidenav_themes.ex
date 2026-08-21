@@ -25,8 +25,19 @@ defmodule Quillex.Utils.SideNavThemes do
 
   def for_editor(text_size), do: for_editor(text_size, Quillex.GUI.Palette.get(Quillex.GUI.Palette.default()))
 
+  @doc """
+  The label size the file navigator uses, for a given chrome size.
+
+  Exposed because the navigator is not the only piece of the sidebar: the
+  search pane occupies the same slot, shows the same kind of thing — file
+  names — and looked like a different application when it sized its own text
+  independently. One number, one place.
+  """
+  def nav_font_size(text_size) when is_integer(text_size) and text_size > 0,
+    do: max(@nav_text_min, round(text_size * @nav_text_ratio))
+
   def for_editor(text_size, palette) when is_integer(text_size) and text_size > 0 do
-    font_size = max(@nav_text_min, round(text_size * @nav_text_ratio))
+    font_size = nav_font_size(text_size)
 
     dark()
     |> Map.merge(Quillex.GUI.Palette.side_nav_theme(palette))
