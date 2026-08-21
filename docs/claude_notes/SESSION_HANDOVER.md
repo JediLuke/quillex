@@ -1,6 +1,6 @@
-# Handover — 2026-08-20
+# Handover — 2026-08-21
 
-Written to be read cold. Everything here is measured or explicitly flagged as
+Written to be read cold. Everything here is measured, or explicitly flagged as
 unverified.
 
 ---
@@ -9,17 +9,17 @@ unverified.
 
 | repo | branch | HEAD | state |
 |---|---|---|---|
-| `quillex` | `feature/external-file-sync` | `8c9a172` | committed, clean |
-| `scenic-widget-contrib` | `nice_module_attributes` | `11f7ea7` | committed, **pushed** |
+| `quillex` | `feature/external-file-sync` | `3afb560` | committed, clean |
+| `scenic-widget-contrib` | `nice_module_attributes` | `3f9bd3c` | committed, **pushed** |
 
-`mix.exs` pins contrib at `11f7ea7`. Verified compiling and running spex with
-`QUILLEX_LOCAL_DEPS` **unset**.
+`mix.exs` pins contrib at `3f9bd3c`. 18 commits here, 19 there, since the last
+handover.
 
 ### The pin ritual
 
-Unchanged, and it held all session — five contrib commits, five re-pins, no
-blank screens. Push contrib and bump the SHA the moment quillex calls new
-contrib code, not at the end of the batch:
+Held across nine contrib commits and nine re-pins this session, no blank
+screens. Push contrib and bump the SHA the moment quillex calls new contrib
+code, not at the end of a batch:
 
 ```bash
 cd ../scenic-widget-contrib && git commit && git push
@@ -29,212 +29,276 @@ cd ../quillex && unset QUILLEX_LOCAL_DEPS && mix deps.get && mix compile
 
 ---
 
-## What this session did: the search pane is responsive, and its controls work
+## NEXT STEPS — the queue
 
-The task was the three-step plan in the previous handover. All three are done.
+Roughly in the order they were asked for. The search pane is close to done;
+most of what is left is aesthetic, plus one real bug at the end.
 
-### 1. The body is virtualised
+### 1. Scrollbars in dropdowns, replacing the position readout
 
-`SearchPane.Renderizer` built and drew a row for every match in every file —
-~2,500 primitives for 500 results, of which ~40 are ever on screen. Rows are a
-uniform height, so the visible window is arithmetic.
+The scope tree currently says `▲ 13–24 of 31 ▼`. That is a readout where the
+thing itself would do: a scrollbar says how much room there is, where you are
+in it, and that it scrolls at all, without anyone reading a number.
+
+**This is the same job as item 2.** Do them together.
+
+`Widgex.Scroll.ScrollRenderer` already draws bars and `Widgex.Scroll.Drag`
+already handles dragging one, so a dropdown should get a real bar from the
+shared scroll machinery rather than a bespoke label.
+
+### 2. The View dropdown has no visible scroll when the window is short
+
+Resize the window small enough and the View menu is taller than the room under
+the bar. **Verified: it already clamps and scrolls** —
+`IconMenu.State.max_dropdown_height/2` bounds it, `Reducer.scroll_dropdown/2`
+moves it under the wheel, and `Dropdown.render/4` scissors the overflow. What
+is missing is any sign that it does.
+
+So: a **scrollbar**, not scroll buttons. The mechanism exists; only the
+affordance is missing, and buttons would be a second mechanism next to a
+working one. Shown only when there is overflow.
+
+This is probably also the standing `46_menu_layout` failure (below) — worth
+checking whether clamping is being applied on that path before treating them
+as two problems.
+
+### 3. Square buttons in the search pane
+
+The find popup's buttons are perfectly square; the pane's replace-one and
+replace-all buttons are not, and look worse for it. Match the popup.
+`State.header_widgets/1` sizes them from `button_size/1` and `button_w`.
+
+### 4. A darker highlight for dropdown rows
+
+The IconMenu dropdown's row highlight has more contrast than the search bar's.
+Try the darker treatment in the search pane's panel — and consider whether the
+search BAR should move to it too.
+
+The pane maps its palette into menu vocabulary in
+`SearchPane.State.dropdown_theme/1`; `item_hover_bg` is the key. It is
+currently `theme.button_active` (the accent) — deliberately, because the
+obvious choice (`row_hover`) is the same colour as the panel background and
+lit nothing at all. Do not go back to that.
+
+### 5. Borders on dropdowns
+
+Try a border on the settings panel again, and on the top-right IconMenu
+dropdowns. The panel had an accent border early on, which read as a focused
+input; it has an ordinary one now, and no shadow. The shadow was removed on
+request but looked good against the buffer — it is one line in
+`Menu.Dropdown.render/4` if it comes back.
+
+### 6. The aesthetic overhaul
+
+Flagged as coming. When it happens, `Menu.Dropdown` is one place and both the
+menubar and the search pane follow it.
+
+### 7. Generalising `Submenu`, if wanted
+
+`Menu.Model.Submenu` is still declared and unimplemented. `Tree` now covers the
+inline-expanding case, so `Submenu` (a flyout) may simply not be needed —
+decide rather than leave it declared.
+
+---
+
+## What this session did
+
+### The search pane is responsive
+
+Three steps, each measured before and after.
+
+**Virtualised the body.** It built and drew a row for every match in every
+file; ~40 are ever on screen.
 
 | result set | build before | after | primitives before | after |
 |---|---|---|---|---|
 | 550 rows | 38.9 ms | 3.5 ms | 2180 | 209 |
 | 1100 rows | 78.8 ms | 3.5 ms | 4330 | 209 |
 
-`State.visible_rows/1` replaces `rows/1` on the drawing path; `row_count/1`
-counts without building; `rows_window/3` skips whole files by arithmetic. Hit
-testing is an index into one built row. Semantic registration publishes the
-window, not the result set. `scroll_to` stays a transform inside a 6-row
-overscan and rebuilds the window past it.
+**A real loading state.** The store publishes `:debouncing` on the keystroke,
+so the three in-flight states are `:idle | :debouncing | :searching | {:done,
+…}`. Results are FADED for as long as they are the last answer rather than
+this one, and a search with nothing to fade says so in the body.
 
-### 2. A real loading state
+Faded, not removed: the debounce fires on every character, so a pane that
+emptied itself between letters would be blank most of the time you typed at
+it. That reasoning is in the store's moduledoc beside the contract.
 
-The store now publishes `:debouncing` on the keystroke, so the three states are
-`:idle | :debouncing | :searching | {:done, …} | {:error, …}`. The pane draws
-all three: the status line says "typing…" / "searching…" / the count; results
-are **faded** for exactly as long as they are the last answer rather than this
-one; and a search with nothing to fade says "Searching…" in the body.
+**Streaming.** Measured on Quillex itself: the tree walk takes 9.8ms, the
+first file matches at 4.4ms, the last at ~85ms — so ~95% of the wait was after
+the answer's first line was already known. Results now arrive as they are
+found: first results on screen ~160ms before the search finishes on a 250-file
+fixture.
 
-Faded, not removed. The debounce fires on every character, so a pane that
-emptied itself between letters would be blank most of the time you were typing
-at it. The reasoning is in the store's moduledoc beside the contract — if you
-disagree it is one line in `render_row`.
+Partials carry DISK results only; the unsaved-buffer overlay runs once at the
+end. Ripgrep declares it cannot stream and yields in one go — and **rg is not
+installed here**, so that path stays unexercised.
 
-Side benefit: `search_done?` in spex 41/57/60 could previously pass on the
-PREVIOUS search's `{:done, …}` during the debounce window. It cannot now.
+### The pane's controls actually work now
 
-### 3. Results stream in as they are found
+Every spex it had drove ONE feature. **Features tested one at a time are
+features that work one at a time.** `58_global_search_journey_spex` is one
+person, one project, one continuous session, clicking only what a person can
+see, by the names the pane publishes, believing only what it has DRAWN.
 
-Measured on Quillex itself, before writing any of it:
+It found four things in a pane with a green suite:
 
-```
-walking the tree alone        9.8 ms   (466 files)
-until the FIRST file matches  4.4 ms
-until the LAST               ~85 ms
-```
+1. the tree/list slider had a dead zone down its middle;
+2. a scope row whose directory had children spent every click expanding
+   itself, so no folder containing anything could be excluded;
+3. every list row said its line number twice and highlighted the wrong ten
+   characters;
+4. the × cleared the query and took the keyboard with it.
 
-~95% of the wait was after the answer's first line was already known. The walk
-was lazy all along — `Backend.Elixir` built a `Stream` and ran it to the end
-before anyone saw a match.
+Plus: the scope tree is rooted in the PROJECT, exclusion is inherited, and an
+unticked root actually empties the search.
 
-`Project.search_streaming/4` consumes that stream, reporting on the first match
-and then at most every 60ms. The store publishes each report exactly like a
-finished search except the status still says `:searching` — so step 2's fade
-draws partials faded, knowing nothing about streaming.
+### The scrollbar, and where dragging belongs
 
-```
-250-file fixture: the walk takes ~300 ms
-first results on screen ~160 ms before the search finished
-```
+The pane's scrollbar could be looked at and not moved — `State` carried the
+three `scrollbar_drag*` fields from its first commit and nothing ever read
+them. Nothing caught it because **every scroll spex tests the wheel, and the
+wheel worked**.
 
-Three things to know:
+`Widgex.Scrollable` gave hosts scroll state, a wheel and scrollbars, and never
+gave them dragging — so SideNav wrote it, TextField wrote it again, and
+SearchPane got the fields with no code. It lives in `Widgex.Scroll.Drag` now;
+SideNav delegates. **TextField still has its own** and was left alone
+deliberately: it works, it is the most used surface in the editor, and its
+version has quirks that deserve their own pass.
 
-- **Partials are disk results only.** The unsaved-buffer overlay runs once at
-  the end; per batch it would fold the same buffer's matches in repeatedly. A
-  provisional answer that is *wrong* is worse than one that is incomplete.
-- **Ripgrep declares it cannot stream** and yields its whole result in one go.
-  `System.cmd` collects all output before parsing, so there is no midpoint —
-  and rg finishes inside the debounce anyway. **rg is not installed here**, so
-  that path is untested and the Elixir walk is what actually runs.
-- **The scope tree is cached** between snapshots (`SearchPaneModel.build/2`
-  takes the previous model). It cost 8.9ms of walking the project on every
-  publish to rebuild something that changes only when the project or the
-  exclusions do. Without it, streaming would pay for each partial with a full
-  tree walk.
+### Tree and list are two views
+
+They were the same idea twice. `tree` keeps the project's shape (only the
+directories a match is in); `list` is the flat run with paths shown. The
+per-match view is gone; the list still shows every match without repeating the
+filename to do it.
+
+### The dropdown is separated from the bar
+
+`ScenicWidgets.Menu.Dropdown` — `layout/3`, `render/4`, `row_at/2` — owns the
+three things that must agree about where a row is. The caller supplies only
+the anchor. `IconMenu` is 460 lines lighter and behaves identically; the
+search pane's settings ARE menu rows now.
+
+What made it un-reusable was never the drawing: every function took the BAR's
+state and read `active_menu` out of it.
+
+`Menu.Model.Tree` is a menu row you can pick a SET out of (the scope tree is
+the first customer). `Menu.Model.Segmented` is an either/or with a position
+per choice (tree/list is the first customer). Both are generic; both publish
+every node or position by name.
+
+### The settings are a popover
+
+A cog on the status bar, and a panel that FLOATS over the results. Three
+inline arrangements were tried and all moved something — above the bar pushed
+the cog out from under the pointer that clicked it, below the bar shoved the
+results, and a header row of its own was the row the cog replaced. It is
+narrower than the pane and hung a third/two thirds around the cog, so it reads
+as hanging off the button rather than as part of the pane.
+
+The panel claims the pointer over itself, because this pane takes input from
+its own primitives and the panel overhangs the buffer.
+
+### Zoom scales the chrome
+
+It didn't. The layout reads the zoom directly so the frames moved, while every
+child kept the theme it was created with — 13pt tabs in a bar grown to 52
+tall. The repaint fired only on a palette change and pushed only colours.
+Every chrome theme is now built by a NAMED function used both to create and to
+repaint it.
+
+### The search pane is sized off the file navigator
+
+They shared the sidebar and were sized by different systems: the navigator's
+17pt labels against the pane's 13. One function decides it now, and the pane's
+own pixels (slider, buttons, caret column) derive from the type rather than
+from a memory of 11pt.
+
+### Find what you have highlighted
+
+Select a symbol, press Ctrl+F or Ctrl+Shift+F, and it is in the box. Both
+paths seeded from the word under the CURSOR, and project search preferred what
+it last searched for — so the second time you did it you got the previous
+symbol. Selection wins over both now.
+
+And `Ctrl+Shift+Arrow` now selects a word: `:ctrl` was tested first, so the
+combination went down the plain movement branch and the Shift was never
+looked at.
 
 ---
 
-## The bugs, and the spex that found them
-
-The pane had a green suite and three controls that did not work. Every spex it
-had drove ONE feature: set the store, click one control, check one flag.
-**Features tested one at a time are features that work one at a time.**
-
-`58_global_search_journey_spex` is a JOURNEY — one person, one project, one
-continuous session. It opens the pane with the keyboard, types the query a
-character at a time, and from there touches nothing but controls a person can
-see: clicked **by semantic name**, believing only what the pane has **drawn**.
-No store is called, no state is set.
-
-It found four things:
-
-1. **The tree/list slider had a dead zone down its middle.** It resolved a
-   click to a half and selected that half, so clicking the centre of a 74px
-   control chose the position it was already in and sent nothing. It is one
-   control with two positions, so a click now flips it.
-2. **A scope row whose directory had children spent every click expanding
-   itself**, so no folder with anything in it could be excluded — the entire
-   job of a scope tree. The triangle is now its own control
-   (`search_pane_scope_expand_<path>`): triangle expands, row ticks.
-3. **Every list row said its line number twice** (`README.md:3  3  find the
-   needle`) and highlighted ten characters left of the match.
-4. **The × cleared the query and took the keyboard with it** — type after
-   clearing and nothing happened.
-
-Plus, on the quillex side:
-
-- **The scope tree is rooted in the PROJECT**, expanded by default, so "search
-  nothing but this" and "search everything again" are one click.
-- **Exclusion is inherited.** A file drawn with a tick under a folder drawn
-  without one was the tree contradicting itself.
-- **An unticked root empties the search.** Both backends deliberately always
-  walk the root (so a stray glob cannot silently empty every search), so
-  `Search.Project` answers it once above both. Ripgrep would otherwise have
-  ignored the click entirely — its glob for the root is `!/.`.
-
----
-
-## The spex now covering this
+## The spex
 
 | file | what it holds |
 |---|---|
-| `41_project_search_spex` | the pane's own controls, as before |
-| `57_search_pane_virtualisation_spex` | only the visible window is DRAWN; scrolling moves it |
-| `58_global_search_journey_spex` | the whole journey, front-end only, by semantic name |
-| `59_search_loading_state_spex` | samples every 15ms; asserts the ORDER the states appeared in |
-| `61_search_streaming_spex` | 250 files; results on screen while the status still says "searching…" |
+| `41_project_search_spex` | the pane's own controls |
+| `57_search_pane_virtualisation_spex` | only the visible window is DRAWN |
+| `58_global_search_journey_spex` | the whole journey, front-end only, by name |
+| `59_search_loading_state_spex` | samples every 15ms; asserts the ORDER of states |
+| `61_search_streaming_spex` | results on screen while still searching |
+| `62_search_pane_scrollbar_spex` | the bar can be dragged, and released |
+| `63_search_results_tree_spex` | tree keeps the project's shape; list does not |
+| `64_search_pane_chrome_spex` | cog, cancel sign, panel, hover, sizing, tree scroll |
+| `65_chrome_zoom_spex` | zoom scales the chrome, up AND back down |
+| `66_search_from_selection_spex` | find and project search seed from a selection |
+| `test/menu_tree_test.exs` | the generic tree row (9 unit tests) |
+| `test/word_selection_test.exs` | Ctrl+Shift+Arrow, both halves (6 unit tests) |
 
-All five green against the pin. Every new assertion was verified by breaking
-the code and watching it fail — that is not decoration, it caught two spex that
-would have passed regardless.
+Every new assertion was verified by breaking the code and watching it fail.
+That is not decoration — it caught two spex that would have passed regardless,
+and a hover assertion that would have passed for the wrong reason.
 
-**A loading state and a streaming search can only be tested by SAMPLING.** They
-are states the pane passes through; a single look after the fact sees the end
-of it and nothing else. Both spex poll every 10–15ms and assert on the sequence.
+**A loading state, a streaming search and a hover can only be tested by
+SAMPLING or by COUNTING.** They are states the pane passes through; a single
+look after the fact sees the end of it. And "nothing lit" and "everything lit"
+are both bugs, so the hover spex counts rather than checks.
 
 ---
 
 ## Traps worth keeping
 
 - **Do not `git checkout <file>` to undo a break-test.** It reverts the whole
-  uncommitted file. This cost two reimplementations of work this session.
-- **Do not `mix compile` (or anything that rebuilds) while a spex run is in
-  flight.** It rebuilds the app underneath the run and kills it, leaving an
-  orphaned `mix spex` holding port 9987 so nothing else can start.
-- **Spex fixtures must not live under `test/support/`.** It is compiled into the
-  test build, so a run interrupted before its `on_exit` leaves `.ex` files
-  behind and `mix test` stops compiling entirely. All search fixtures now write
-  to `System.tmp_dir!()`; this bit for real this session.
-- `body_changed?` compares an input signature, never rebuilt rows. Do not put a
-  `rows/1` call into a change check or a hover handler.
-- Graph primitives are a **map**. There is no drawn order in `graph.primitives`
-  — sort by the translate, or walk down from the group you mean.
-- The pane and the find bar still share a **design but not code**. Five-plus
-  fixes have now had to be made twice. A shared header component is the flagged
-  refactor; still nobody has done it.
+  uncommitted file. This destroyed finished work three times this session.
+- **Do not rebuild while a spex run is in flight.** It kills the run and
+  leaves an orphaned `mix spex` holding port 9987, after which nothing starts.
+- **Spex fixtures must not live under `test/support/`** — it is compiled into
+  the test build. All search fixtures write to `System.tmp_dir!()` now.
+- **The spex driver cannot send Ctrl+Shift+Arrow.** It passes `[:ctrl,
+  :shift]` and Scenic hands the component `[:shift]`. Confirmed by
+  instrumenting the field. Ctrl+Shift+F works, so it is specific to arrows.
+- **A change-check that compares the wrong thing is silent.** Three bugs this
+  session were a signature missing a field: the scope tick (in the label, not
+  the id), the tree scroll offset, and the panel hover.
+- **Graph primitives are a map.** No drawn order — sort by translate, or walk
+  down from the group you mean.
+- The pane and the find bar still share a **design but not code**. Six-plus
+  fixes have now been made twice.
 
 ---
 
-## The suite
-
-Last full run against the pin: **168/185**, 17 failures, ~31 minutes. **None of
-them are in search** — 41, 57, 58, 59 and 61 all pass.
-
-The failing set churns badly between runs. Three full runs this session:
-
-| | failures | notes |
-|---|---|---|
-| after step 1 | 13 | included "Find No Matches", not menu layout |
-| after the bug fixes | 14 | word wrap appeared, "Find No Matches" passed |
-| after steps 2 and 3 | 17 | +2 spex files added (183 → 185 tests) |
-
-Every failure is outside search: word wrap, external file sync, scroll routing,
-scrollbar drag, side-nav scroll, clipboard, folding, syntax-highlighting fonts,
-discoverability, menu layout, saved settings, release visuals, and the demo.
-**Treat the count as a signal, not a gate** — but do not read the churn as "all
-flaky", because at least one of them is not:
-
-- **`46_menu_layout_spex` fails reproducibly, alone, every time**: *"the view
-  dropdown is 3px taller than the window; its last rows cannot be clicked."*
-  Confirmed pre-existing by checking out `8e4c02d` (the commit before this
-  session) and reproducing it identically. It is a real bug — the last rows of
-  the View menu genuinely cannot be clicked — and it is worth fixing.
-  It passed in two of this session's three full runs, so something about
-  ordering or window size hides it. That is a second bug: a layout assertion
-  that only sometimes notices.
-
-- **`60_demo_spex`** used to die at the search section, clicking the
-  replacement field without opening the disclosure it now lives behind. That is
-  fixed and it now reaches much further, dying on the shortcut reference. Not
-  investigated.
-
 ## Known, unfixed
-- **ripgrep is not installed**, so every `Backend.Ripgrep` path — including the
-  new `stream/3` — is unexercised. Installing rg is also the single biggest
-  remaining win for search latency: it would put the whole search inside the
-  debounce and make streaming moot.
-- **2px overshoot at 130% zoom** (unchanged from last session).
-- **The scope tree is capped at 12 rows** (`@scope_cap`), and the root node now
-  takes one of them. A project with many top-level entries will truncate.
+
+- **`46_menu_layout` fails alone, every time**: the View dropdown is 3px
+  taller than the window. Confirmed pre-existing at `8e4c02d`. It PASSES in
+  group runs, so there is a second bug behind it: a layout assertion that only
+  sometimes notices. See queue item 2 — these may be the same thing.
+- **Clipboard spex fail against the real system clipboard** (`left: "menu"` is
+  another application's content). Measured 2/5 without this session's changes
+  and 3/5 with, so: environment, not regression.
+- **`04_view_settings`' Line Numbers Toggle** fails in a group run and passes
+  alone — the zoom-left-behind hazard.
+- **ripgrep is not installed**, so `Backend.Ripgrep` — including its
+  `stream/3` — is unexercised. Installing rg is also the single biggest
+  remaining win for search latency.
+- **TextField has its own scrollbar drag**, not yet migrated to
+  `Widgex.Scroll.Drag`.
+- The scope tree is capped at `@scope_cap` rows and scrolls past it.
 
 ## Open question from the user, still unanswered
 
-> "do we do syntax highlighting for markdown? We could do the same type of
-> bold/italic/etc we did for code syntax"
+> "do we do syntax highlighting for markdown?"
 
-Unchanged from last session: no markdown lexer in the dependency list, so this
-is currently a "no". Somebody needs to check whether `makeup_markdown` exists
-or whether it means writing a lexer.
+No markdown lexer in the dependency list, so currently "no". Somebody needs to
+check whether `makeup_markdown` exists or whether it means writing a lexer.
