@@ -231,19 +231,7 @@ defmodule Quillex.Buffer.Process do
     "'#{preview}#{suffix}'"
   end
 
-  defp selected_text(%{data: lines, selection: %{start: start_pos, end: end_pos}}) do
-    {{start_line, start_col}, {end_line, end_col}} =
-      if start_pos <= end_pos, do: {start_pos, end_pos}, else: {end_pos, start_pos}
-
-    lines
-    |> Enum.slice((start_line - 1)..(end_line - 1))
-    |> Enum.with_index(start_line)
-    |> Enum.map_join("\n", fn {line, line_no} ->
-      from = if line_no == start_line, do: start_col - 1, else: 0
-      to = if line_no == end_line, do: end_col - 1, else: String.length(line)
-      String.slice(line, from, max(to - from, 0))
-    end)
-  end
+  defp selected_text(state), do: Quillex.Buffer.Core.Selection.selected_text(state)
 
   defp read_only_violation?(%{read_only?: false}, _actions), do: false
 

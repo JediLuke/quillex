@@ -505,6 +505,30 @@ defmodule Quillex.Buffer.Core.Selection do
   end
 
   # Delete selected text and return buffer with cursor at selection start
+  @doc """
+  The text a buffer currently has selected, or `""`.
+
+  Moved here from `Quillex.Buffer.Process`, where it was private to the
+  clipboard: it is a pure reading of a buffer, and copying is not the only
+  thing that wants it — searching for what you have just highlighted wants it
+  too.
+  """
+  def selected_text(%{selection: nil}), do: ""
+
+  def selected_text(%{data: lines, selection: %{start: start_pos, end: end_pos}}) do
+    {{start_line, start_col}, {end_line, end_col}} =
+      if start_pos <= end_pos, do: {start_pos, end_pos}, else: {end_pos, start_pos}
+
+    lines
+    |> Enum.slice((start_line - 1)..(end_line - 1))
+    |> Enum.with_index(start_line)
+    |> Enum.map_join("\n", fn {line, line_no} ->
+      from = if line_no == start_line, do: start_col - 1, else: 0
+      to = if line_no == end_line, do: end_col - 1, else: String.length(line)
+      String.slice(line, from, max(to - from, 0))
+    end)
+  end
+
   def delete_selected_text(%{selection: nil} = buf), do: buf
 
   def delete_selected_text(%{selection: %{start: start_pos, end: end_pos}} = buf) do

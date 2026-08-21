@@ -2307,10 +2307,15 @@ defmodule QuillEx.RootScene do
     replace_mode = Keyword.get(opts, :replace_mode, false)
     old_state = scene.assigns.state
 
+    # What you have HIGHLIGHTED wins. Selecting a word and pressing Ctrl+F is
+    # a person saying which word; anything the bar happens to remember is a
+    # worse answer to a question they have just answered.
     initial_query =
-      if old_state.show_search_bar and old_state.search_query != "",
-        do: old_state.search_query,
-        else: word_under_cursor(old_state)
+      cond do
+        (selection = selected_in_buffer(old_state)) != "" -> selection
+        old_state.show_search_bar and old_state.search_query != "" -> old_state.search_query
+        true -> word_under_cursor(old_state)
+      end
 
     cond do
       # Already showing: grow into replace mode (and keep everything else)
@@ -2339,6 +2344,22 @@ defmodule QuillEx.RootScene do
   # not by calling synchronously into the live TextField. That call blocks on
   # whatever the component is rendering; on a large document it timed out
   # and crashed the scene.
+  # What the active buffer has highlighted, as a single line of query.
+  #
+  # A selection spanning lines is not a search term — a query field holds one
+  # line — so a multi-line selection is declined rather than flattened into
+  # something nobody asked to search for.
+  defp selected_in_buffer(state) do
+    with buf_ref when not is_nil(buf_ref) <- state.active_buf,
+         {:ok, buf_state} <- Quillex.Buffer.Process.fetch_buf(buf_ref),
+         text when is_binary(text) <- Quillex.Buffer.Core.Selection.selected_text(buf_state),
+         false <- String.contains?(text, "\n") do
+      String.trim(text)
+    else
+      _ -> ""
+    end
+  end
+
   defp word_under_cursor(state) do
     alias ScenicWidgets.TextField.State, as: TFState
 
@@ -2362,8 +2383,12 @@ defmodule QuillEx.RootScene do
     focus = Keyword.get(opts, :focus, :query)
     remembered = Quillex.RadixCache.ProjectSearchStore.get_state().query
 
+    # Same order as the find bar's, and for the same reason: double-clicking a
+    # symbol and pressing Ctrl+Shift+F is the way you go looking for its other
+    # references, and the last thing you searched for is not what you meant.
     seed =
       cond do
+        (selection = selected_in_buffer(old_state)) != "" -> selection
         remembered != "" -> remembered
         true -> word_under_cursor(old_state)
       end
