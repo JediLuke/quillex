@@ -73,6 +73,66 @@ defmodule Quillex.SearchPaneChromeSpex do
     |> Enum.filter(&(&1.module == Scenic.Primitive.Line))
   end
 
+  # Anything in the settings panel drawn in the hover colour.
+  defp hovered_fills do
+    theme = ScenicWidgets.SearchPane.State.dropdown_theme(pane_state())
+    want = theme.item_hover_bg
+
+    case Scenic.Graph.get(pane_graph(), :search_pane_settings) do
+      [panel] ->
+        panel
+        |> descendants(pane_graph())
+        |> Enum.filter(fn p ->
+          case Scenic.Primitive.get_style(p, :fill) do
+            {:color, {:color_rgba, {r, g, b, _a}}} -> {r, g, b} == want
+            _ -> false
+          end
+        end)
+
+      _ ->
+        []
+    end
+  end
+
+  defp descendants(%{module: Scenic.Primitive.Group, data: uids}, graph) do
+    Enum.flat_map(uids, fn uid ->
+      case Map.get(graph.primitives, uid) do
+        nil -> []
+        child -> descendants(child, graph)
+      end
+    end)
+  end
+
+  defp descendants(primitive, _graph), do: [primitive]
+
+  defp semantic_entry(id) do
+    viewport = :sys.get_state(Process.whereis(QuillEx.RootScene)).viewport
+
+    case :ets.lookup(viewport.semantic_index, String.to_atom(id)) do
+      [{_id, key}] ->
+        case :ets.lookup(viewport.semantic_table, key) do
+          [{_key, entry}] -> entry
+          _ -> nil
+        end
+
+      _ ->
+        nil
+    end
+  end
+
+  defp scope_entries do
+    viewport = :sys.get_state(Process.whereis(QuillEx.RootScene)).viewport
+
+    :ets.match_object(viewport.semantic_table, {{:search_pane, :_}, :_})
+    |> Enum.map(fn {{_, id}, entry} -> {id, entry} end)
+    |> Enum.filter(fn {id, _} ->
+      id = to_string(id)
+
+      String.starts_with?(id, "search_pane_scope_") and
+        not String.starts_with?(id, "search_pane_scope_expand_")
+    end)
+  end
+
   defp wait_until(predicate, timeout \\ 8_000) do
     deadline = System.monotonic_time(:millisecond) + timeout
     do_wait(predicate, deadline)
@@ -266,6 +326,62 @@ defmodule Quillex.SearchPaneChromeSpex do
 
         assert radius > 0,
                "a menu panel has rounded corners; this one has #{inspect(radius)}"
+
+        {:ok, context}
+      end
+
+      when_ "the pointer moves onto one of the settings rows", context do
+        entry = semantic_entry("search_pane_domain_use_ignore_files")
+        assert entry, "the settings row publishes no position"
+
+        %{left: l, top: t, width: w, height: h} = entry.screen_bounds
+        Probes.send_mouse_move(trunc(l + w / 2), trunc(t + h / 2))
+        Process.sleep(250)
+
+        {:ok, context}
+      end
+
+      then_ "it lights up, the way a menu row does", context do
+        assert hovered_fills() != [],
+               """
+               nothing in the panel changed colour under the pointer. Sharing
+               the menubar's dropdown is supposed to bring its behaviour with
+               it, not just its shape — a row that gives no sign it is a row
+               is one people click twice to check.
+               """
+
+        {:ok, context}
+      end
+
+      when_ "the pointer moves onto a directory in the scope tree", context do
+        Probes.click_element("search_pane_scope")
+        assert wait_until(fn -> pane_state().scope_open? end), "the scope tree would not open"
+
+        entry =
+          Enum.find_value(scope_entries(), fn {id, e} ->
+            if String.ends_with?(to_string(id), "/lib"), do: e
+          end)
+
+        assert entry, "no scope node to hover: #{inspect(Enum.map(scope_entries(), &elem(&1, 0)))}"
+
+        %{left: l, top: t, width: w, height: h} = entry.screen_bounds
+        Probes.send_mouse_move(trunc(l + w / 2), trunc(t + h / 2))
+        Process.sleep(250)
+
+        {:ok, Map.put(context, :node_top, entry.local_bounds.top)}
+      end
+
+      then_ "that ONE directory lights, not the whole tree", context do
+        fills = hovered_fills()
+
+        refute fills == [], "hovering a directory in the tree lit nothing"
+
+        assert length(fills) == 1,
+               """
+               a tree is one menu ROW holding many, so lighting the row lights
+               the whole tree. Only the node under the pointer should light:
+               #{length(fills)} things did.
+               """
 
         {:ok, context}
       end
