@@ -283,8 +283,18 @@ defmodule QuillEx.RootScene.Renderizer do
   # zooming repainted nothing: the frames moved, because the layout reads the
   # zoom directly, and the type stayed exactly where it was. Tabs at 13pt in a
   # bar that had grown to 52.
-  defp apply_theme(_scene, %{theme: theme, chrome_zoom: zoom}, %{theme: theme, chrome_zoom: zoom}),
-    do: :ok
+  #
+  # And so is the WINDOW, because `max_dropdown_height/1` is measured from it.
+  # A window made smaller left the menus holding the height they were built
+  # with, so the View dropdown believed it had room it no longer had: it drew
+  # past the bottom of the viewport, and would not scroll, because by its own
+  # arithmetic there was nothing to scroll.
+  defp apply_theme(
+         _scene,
+         %{theme: theme, chrome_zoom: zoom, frame: frame},
+         %{theme: theme, chrome_zoom: zoom, frame: frame}
+       ),
+       do: :ok
 
   defp apply_theme(scene, _old_state, state) do
     p = palette(state)

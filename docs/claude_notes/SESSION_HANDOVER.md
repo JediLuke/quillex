@@ -40,27 +40,42 @@ The scope tree currently says `▲ 13–24 of 31 ▼`. That is a readout where t
 thing itself would do: a scrollbar says how much room there is, where you are
 in it, and that it scrolls at all, without anyone reading a number.
 
-**This is the same job as item 2.** Do them together.
+Item 2 (below) turned out to be a different job and is already done — the
+menus scroll now, they just do not SAY they scroll. This is the affordance.
 
 `Widgex.Scroll.ScrollRenderer` already draws bars and `Widgex.Scroll.Drag`
 already handles dragging one, so a dropdown should get a real bar from the
 shared scroll machinery rather than a bespoke label.
 
-### 2. The View dropdown has no visible scroll when the window is short
+### 2. ~~The View dropdown has no visible scroll~~ — DONE, but read this
 
-Resize the window small enough and the View menu is taller than the room under
-the bar. **Verified: it already clamps and scrolls** —
-`IconMenu.State.max_dropdown_height/2` bounds it, `Reducer.scroll_dropdown/2`
-moves it under the wheel, and `Dropdown.render/4` scissors the overflow. What
-is missing is any sign that it does.
+Fixed on 2026-08-21. Recorded because the *diagnosis* was wrong twice before
+it was right, and the wrong ones are instructive.
 
-So: a **scrollbar**, not scroll buttons. The mechanism exists; only the
-affordance is missing, and buttons would be a second mechanism next to a
-working one. Shown only when there is overflow.
+There were TWO bugs, not one:
 
-This is probably also the standing `46_menu_layout` failure (below) — worth
-checking whether clamping is being applied on that path before treating them
-as two problems.
+  * a window made smaller left every menu holding the `max_dropdown_height`
+    it was built with, because that number is part of the theme and themes
+    were only re-pushed on a palette or zoom change. The menu believed it had
+    room it no longer had and drew past the viewport;
+
+  * and the wheel never reached it at all. `IconMenu.request_input/2` listed
+    `:cursor_pos`, `:cursor_button` and `:key` — no `:cursor_scroll` — and no
+    primitive named it either, so Scenic hit-tested the wheel against nothing.
+    `scroll_dropdown/2` had been there the whole time with nothing to call it.
+
+**I read the code and concluded it already scrolled and merely lacked an
+affordance. It did not, and the person using the editor had tested it.** Read
+the code to find out where to look; do not read it to find out what happens.
+
+This also fixed the standing `46_menu_layout` 3px failure, which had
+reproduced at `8e4c02d` and passed only in group runs — spex runs resize the
+window, so whether the menu was clipped depended on what had run before it.
+
+`67_menu_fits_any_window_spex` is the guard, written as a PROPERTY: it varies
+the window across four heights and asserts of every size that each dropdown
+stays inside the window, that one too short to fit still scrolls, and that
+going back up leaves nothing clamped.
 
 ### 3. Square buttons in the search pane
 
@@ -88,12 +103,27 @@ input; it has an ordinary one now, and no shadow. The shadow was removed on
 request but looked good against the buffer — it is one line in
 `Menu.Dropdown.render/4` if it comes back.
 
-### 6. The aesthetic overhaul
+### 6. More property-shaped spex
+
+`67_menu_fits_any_window_spex` was the user's idea and it immediately paid:
+vary the window size, then assert the same few things of every size rather
+than picking one and hoping. The shape generalises —
+
+  * vary the SIDEBAR width and assert every pane control stays reachable;
+  * vary the chrome zoom the same way (65 covers two points, not a range);
+  * vary the result count and assert the pane draws a bounded window at all
+    of them.
+
+A case picks a number and hopes it is the interesting one. A property says
+what must be true of all of them, and the window-size bug had been sitting
+under a suite that only ever tested one size.
+
+### 7. The aesthetic overhaul
 
 Flagged as coming. When it happens, `Menu.Dropdown` is one place and both the
 menubar and the search pane follow it.
 
-### 7. Generalising `Submenu`, if wanted
+### 8. Generalising `Submenu`, if wanted
 
 `Menu.Model.Submenu` is still declared and unimplemented. `Tree` now covers the
 inline-expanding case, so `Submenu` (a flyout) may simply not be needed —
@@ -280,10 +310,6 @@ are both bugs, so the hover spex counts rather than checks.
 
 ## Known, unfixed
 
-- **`46_menu_layout` fails alone, every time**: the View dropdown is 3px
-  taller than the window. Confirmed pre-existing at `8e4c02d`. It PASSES in
-  group runs, so there is a second bug behind it: a layout assertion that only
-  sometimes notices. See queue item 2 — these may be the same thing.
 - **Clipboard spex fail against the real system clipboard** (`left: "menu"` is
   another application's content). Measured 2/5 without this session's changes
   and 3/5 with, so: environment, not regression.
