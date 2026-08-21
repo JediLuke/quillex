@@ -78,6 +78,7 @@ defmodule Quillex.GlobalSearchJourneySpex do
   end
 
   defp drawn_files, do: drawn_rows() |> Enum.filter(&match?({:file, _}, &1))
+  defp drawn_dirs, do: drawn_rows() |> Enum.filter(&match?({:dir, _}, &1))
   defp drawn_matches, do: drawn_rows() |> Enum.filter(&match?({:match, _, _, _}, &1))
 
   defp drawn_file_paths, do: drawn_files() |> Enum.map(fn {:file, path} -> path end)
@@ -371,42 +372,30 @@ defmodule Quillex.GlobalSearchJourneySpex do
       end
     end
 
-    scenario "reading the results as a list, and back as a tree" do
+    scenario "reading the results as a list, and back as the project's tree" do
       when_ "the tree/list slider is pushed over to list", context do
         click_named("search_pane_view")
         {:ok, context}
       end
 
-      then_ "every row is a match now, and no file headings are drawn", context do
-        assert wait_until(fn -> drawn_files() == [] end),
+      then_ "the results are a flat run of files, with no directories", context do
+        assert wait_until(fn -> drawn_dirs() == [] end),
                """
-               the slider did not change the results.
-                 file headings still drawn: #{inspect(drawn_files())}
+               the slider did not change the results — directory rows are
+               still drawn: #{inspect(drawn_dirs())}
                """
 
-        assert drawn_matches() != [], "a list with nothing in it"
+        assert drawn_files() != [], "a list of files with no files in it"
+        assert drawn_matches() != [], "and no matches under them"
 
         {:ok, context}
       end
 
-      then_ "and each row says which file and line it came from, once", context do
-        labels = Enum.filter(drawn_text(), &String.contains?(&1, "needle"))
-
-        assert labels != [], "no result rows are drawn at all"
-
-        assert Enum.all?(labels, &(&1 =~ ~r{^[\w./-]+\.(ex|exs|md):\d+  })),
-               """
-               a list row has to carry its own file — that is what makes it a
-               list rather than a tree with the headings hidden.
-                 rows: #{inspect(labels)}
-               """
-
-        refute Enum.any?(labels, &(&1 =~ ~r/:(\d+)  \1  /)),
-               """
-               the line number is in the row twice. The file and line were
-               pasted onto a label that already began with the line number.
-                 rows: #{inspect(labels)}
-               """
+      then_ "and each file says where it is, in full", context do
+        # With no folders above it, the row itself has to say where the file
+        # is — which is the difference between this view and the other one.
+        assert drawn?("lib/core/engine.ex"),
+               "a list row should carry its whole path: #{inspect(drawn_text())}"
 
         {:ok, context}
       end
@@ -416,11 +405,23 @@ defmodule Quillex.GlobalSearchJourneySpex do
         {:ok, context}
       end
 
-      then_ "the file headings come back", context do
-        assert wait_until(fn -> drawn_files() != [] end),
+      then_ "the project's directories come back around the results", context do
+        assert wait_until(fn -> drawn_dirs() != [] end),
                "the slider would not go back to tree"
 
-        assert MapSet.new(drawn_file_paths()) == expected_paths(context.root)
+        dirs = drawn_dirs() |> Enum.map(fn {:dir, path} -> path end)
+
+        assert "lib" in dirs and "lib/core" in dirs,
+               "the tree should show the folders the matches are in: #{inspect(dirs)}"
+
+        assert MapSet.new(drawn_file_paths()) == expected_paths(context.root),
+               "and all the same files, still: #{inspect(drawn_file_paths())}"
+
+        refute drawn?("lib/core/engine.ex"),
+               """
+               in a tree the folders say where the file is, so its own row
+               should not say it again: #{inspect(drawn_text())}
+               """
 
         {:ok, context}
       end

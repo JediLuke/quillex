@@ -566,10 +566,13 @@ defmodule Quillex.ProjectSearchSpex do
         {:ok, context}
       end
 
-      then_ "as a tree, files head their matches", context do
+      then_ "as a tree, the project's directories hold the files", context do
         kinds = pane_state() |> ScenicWidgets.SearchPane.State.rows() |> Enum.map(& &1.kind)
 
-        assert :file in kinds, "a tree has file headings: #{inspect(Enum.uniq(kinds))}"
+        assert :dir in kinds,
+               "a tree keeps the shape of the project: #{inspect(Enum.uniq(kinds))}"
+
+        assert :file in kinds, "with the files inside it: #{inspect(Enum.uniq(kinds))}"
         {:ok, context}
       end
 
@@ -594,14 +597,18 @@ defmodule Quillex.ProjectSearchSpex do
         {:ok, context}
       end
 
-      then_ "as a list, every row is a match and carries its file", context do
+      then_ "as a list, the files run one after another with their paths", context do
         rows = pane_state() |> ScenicWidgets.SearchPane.State.rows()
         kinds = rows |> Enum.map(& &1.kind) |> Enum.uniq()
 
-        assert kinds == [:match], "a list is matches and nothing else: #{inspect(kinds)}"
+        refute :dir in kinds, "a list has no directories in it: #{inspect(kinds)}"
+        assert :file in kinds and :match in kinds, "#{inspect(kinds)}"
 
-        assert Enum.all?(rows, &String.contains?(&1.label, ":")),
-               "each row should say which file and line it is from"
+        # Nothing above a row says where its file is, so the row says it.
+        assert Enum.any?(rows, fn row ->
+                 row.kind == :file and String.contains?(row.label, "/")
+               end),
+               "a file row should carry its path: #{inspect(Enum.map(rows, & &1.label))}"
 
         {:ok, context}
       end
@@ -618,7 +625,7 @@ defmodule Quillex.ProjectSearchSpex do
         {:ok, context}
       end
 
-      then_ "and pushing it back to tree restores the headings", context do
+      then_ "and pushing it back to tree restores the directories", context do
         slider =
           pane_state()
           |> ScenicWidgets.SearchPane.State.header_widgets()
@@ -634,7 +641,7 @@ defmodule Quillex.ProjectSearchSpex do
         assert wait_until(fn -> pane_state().results_view == :tree end)
 
         kinds = pane_state() |> ScenicWidgets.SearchPane.State.rows() |> Enum.map(& &1.kind)
-        assert :file in kinds
+        assert :dir in kinds and :file in kinds
 
         {:ok, context}
       end
