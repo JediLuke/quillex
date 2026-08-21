@@ -36,6 +36,9 @@ defmodule Quillex.GUI.SearchPaneModel do
   def build(snapshot, previous \\ nil) do
     %{
       status: snapshot.status,
+      # So an empty pane can say which project it is about to search, rather
+      # than describing what searching is.
+      root: snapshot.root,
       error: snapshot.error,
       case_sensitive: snapshot.case_sensitive,
       regex: snapshot.regex,
@@ -52,6 +55,7 @@ defmodule Quillex.GUI.SearchPaneModel do
   def empty do
     %{
       status: :idle,
+      root: nil,
       error: nil,
       case_sensitive: false,
       regex: false,

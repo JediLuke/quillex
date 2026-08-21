@@ -111,7 +111,12 @@ defmodule Quillex.GlobalSearchJourneySpex do
 
   # The status line, as drawn: "12 in 4 files  (7ms)".
   defp status_text do
-    Enum.find(drawn_text(), &(&1 =~ ~r/^(\d+ in \d+ files?  \(\d+ms\)|no matches|searching…|Type to search)/))
+    # "Search " with its trailing space is the empty pane naming the project;
+    # "Searching…" is the body's own line and has no space there.
+    Enum.find(
+      drawn_text(),
+      &(&1 =~ ~r/^(\d+ in \d+ files?  \(\d+ms\)|no matches|searching…|typing…|Type to search|Search )/)
+    )
   end
 
   defp match_count do
@@ -153,6 +158,12 @@ defmodule Quillex.GlobalSearchJourneySpex do
       _ -> true
     end
   end
+
+  # An empty pane now names the project it is about to search, rather than
+  # describing what searching is. It still says the old thing when there is no
+  # project open at all.
+  defp idle?(nil), do: false
+  defp idle?(text), do: String.starts_with?(text, "Search ") or text =~ "Type to search"
 
   defp wait_until(predicate, timeout \\ 8_000) do
     deadline = System.monotonic_time(:millisecond) + timeout
@@ -281,7 +292,7 @@ defmodule Quillex.GlobalSearchJourneySpex do
       end
 
       then_ "it is empty, and says what to do with it", context do
-        assert wait_until(fn -> status_text() =~ "Type to search" end),
+        assert wait_until(fn -> idle?(status_text()) end),
                "the clear button left the pane saying: #{inspect(status_text())}"
 
         assert drawn_rows() == [], "clearing left rows on the screen"
@@ -897,7 +908,7 @@ defmodule Quillex.GlobalSearchJourneySpex do
       end
 
       then_ "the pane goes back to waiting to be typed into", context do
-        assert wait_until(fn -> status_text() =~ "Type to search" end),
+        assert wait_until(fn -> idle?(status_text()) end),
                "clearing the query left the pane saying: #{inspect(status_text())}"
 
         assert drawn_rows() == [], "clearing the query left rows on the screen"

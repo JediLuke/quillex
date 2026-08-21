@@ -476,26 +476,25 @@ defmodule Quillex.ProjectSearchSpex do
         status = Enum.find(widgets, &(&1.id == :status))
         options = Enum.filter(widgets, &match?({:domain, _}, &1.id))
 
-        assert Enum.all?(options, &(&1.y + &1.h <= status.y)),
-               "the status line is the boundary: the options belong above it"
+        # The settings are a PANEL now, dropped out of the cog on the status
+        # bar and drawn over the results — so the options hang below that bar
+        # rather than sitting above it. They used to be rows in the header,
+        # and every inline arrangement of them moved something: above the bar
+        # it pushed the cog down out from under the pointer that had clicked
+        # it, below the bar it shoved the results about.
+        assert Enum.all?(options, &(&1.y >= status.y)),
+               "the options hang below the bar the cog is on"
 
-        # And the DRAWN header has to be as tall as the state says it is. This
-        # is the assertion that catches it: everything above reads state, and
-        # the state was always right — it was the graph that had not caught up,
-        # leaving a band of bare pane between the old backdrop and the results.
-        [%{data: {_w, drawn_height}}] =
-          Scenic.Graph.get(pane_scene().assigns.graph, :search_pane_header_bg)
-
-        assert_in_delta drawn_height,
-                        ScenicWidgets.SearchPane.State.header_height(st),
-                        1,
-                        "the header backdrop is #{drawn_height} tall but the header is " <>
-                          "#{ScenicWidgets.SearchPane.State.header_height(st)} — it did not redraw"
+        # And the panel has to be DRAWN, not merely known about — this is the
+        # assertion that catches a header which has not caught up with its own
+        # state, which is what used to leave a band of bare pane behind.
+        assert Scenic.Graph.get(pane_scene().assigns.graph, :search_pane_settings) != [],
+               "the settings are open and no panel was drawn for them"
 
         {:ok, context}
       end
 
-      then_ "the scope tree is in the settings section, ABOVE the status line", context do
+      then_ "the scope tree is in the settings panel, below the bar", context do
         st = pane_state()
         widgets = ScenicWidgets.SearchPane.State.header_widgets(st)
 
@@ -504,8 +503,8 @@ defmodule Quillex.ProjectSearchSpex do
 
         status = Enum.find(widgets, &(&1.id == :status))
 
-        assert Enum.all?(scope, &(&1.y + &1.h <= status.y)),
-               "the status line is the boundary — the scope belongs above it, not below"
+        assert Enum.all?(scope, &(&1.y >= status.y)),
+               "the scope belongs in the panel, which hangs below the bar"
 
         # And NOT among the results, which is where it used to sit.
         kinds = st |> ScenicWidgets.SearchPane.State.rows() |> Enum.map(& &1.kind)
@@ -514,24 +513,26 @@ defmodule Quillex.ProjectSearchSpex do
         {:ok, context}
       end
 
-      then_ "expanding the tree moves the status line down with it", context do
-        # Expanding a folder adds rows to the HEADER, so everything below them
-        # moves. With only the open/shut flags in the layout signature this
-        # was invisible to the header while the body moved anyway — the tree
-        # appeared to do nothing except shove the results down.
+      then_ "expanding the tree grows the PANEL, and moves nothing else", context do
+        # Expanding a folder adds rows to the panel, which is drawn over the
+        # results — so the panel gets taller and the pane behind it does not
+        # move at all. It used to add rows to the HEADER, which pushed the
+        # status line, the cog and every result down the screen.
         before_status = status_widget().y
-        before_height = drawn_header_height()
+        before_panel = ScenicWidgets.SearchPane.State.settings_height(pane_state())
 
         Probes.click_element("search_pane_scope")
 
         assert wait_until(fn -> pane_state().scope_open? end),
                "clicking the scope summary should open the tree"
 
-        assert wait_until(fn -> status_widget().y > before_status end),
-               "the status line should move down as the tree grows"
+        assert wait_until(fn ->
+                 ScenicWidgets.SearchPane.State.settings_height(pane_state()) > before_panel
+               end),
+               "the panel should grow as the tree does"
 
-        assert wait_until(fn -> drawn_header_height() > before_height end),
-               "and the DRAWN header should grow with it, not just the state's idea of it"
+        assert status_widget().y == before_status,
+               "and nothing behind it should move: #{status_widget().y} vs #{before_status}"
 
         rows = ScenicWidgets.SearchPane.State.scope_rows(pane_state())
         assert length(rows) > 1, "the tree itself should be showing: #{inspect(rows)}"

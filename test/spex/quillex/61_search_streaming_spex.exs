@@ -62,7 +62,7 @@ defmodule Quillex.SearchStreamingSpex do
     |> Enum.map(fn {_uid, p} -> p end)
     |> Enum.filter(&(&1.module == Scenic.Primitive.Text))
     |> Enum.map(& &1.data)
-    |> Enum.find(&(&1 =~ ~r/^(\d+ in \d+ files?  \(\d+ms\)|no matches|searching…|typing…|Type to search)/))
+    |> Enum.find(&(&1 =~ ~r/^(\d+ in \d+ files?  \(\d+ms\)|no matches|searching…|typing…|Type to search|Search )/))
   end
 
   defp body_uids(graph) do
@@ -88,6 +88,12 @@ defmodule Quillex.SearchStreamingSpex do
 
   defp in_flight?(status), do: status in ["typing…", "searching…"]
   defp done?(status), do: is_binary(status) and status =~ ~r/^(\d+ in \d+ files?|no matches)/
+
+  # An empty pane now names the project it is about to search, rather than
+  # describing what searching is. It still says the old thing when there is no
+  # project open at all.
+  defp idle?(nil), do: false
+  defp idle?(text), do: String.starts_with?(text, "Search ") or text =~ "Type to search"
 
   defp wait_until(predicate, timeout \\ 30_000) do
     deadline = System.monotonic_time(:millisecond) + timeout
@@ -151,7 +157,7 @@ defmodule Quillex.SearchStreamingSpex do
     true = wait_until(fn -> pane_open?() end)
 
     Probes.click_element("search_pane_clear")
-    true = wait_until(fn -> status_text() =~ "Type to search" end)
+    true = wait_until(fn -> idle?(status_text()) end)
     :ok
   end
 
