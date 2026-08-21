@@ -101,8 +101,11 @@ defmodule Quillex.SearchFromSelectionSpex do
     Probes.send_keys("home", [:ctrl])
     Process.sleep(150)
 
-    # Shift+Right a character at a time. Ctrl+Shift+Right moves the cursor and
-    # selects nothing — worth knowing, and not this spex's business.
+    # Shift+Right a character at a time. Ctrl+Shift+Right is what a person
+    # presses, and it selects a word now — see test/word_selection_test.exs.
+    # The driver cannot send that chord: it passes [:ctrl, :shift] and Scenic
+    # hands the component [:shift]. HOW the selection is made is not what this
+    # spex is about, so it is made a way the driver can manage.
     Enum.each(1..String.length(@word), fn _ ->
       Probes.send_keys("right", [:shift])
       Process.sleep(40)

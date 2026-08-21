@@ -403,6 +403,18 @@ defmodule Quillex.Buffer.Process.Reducer do
     |> Navigation.move_cursor({new_line, 1})
   end
 
+  # Ctrl+Shift+Arrow: move a word AND take the text with you. Ctrl+Shift+Right
+  # used to move the cursor a word and select nothing at all — every other
+  # movement key extends the selection when Shift is held, and this one
+  # quietly did not.
+  def process(buf, {:select_text, :next_word}) do
+    Selection.select_to(buf, Quillex.Buffer.Utils.next_word_coords(buf))
+  end
+
+  def process(buf, {:select_text, :prev_word}) do
+    Selection.select_to(buf, Quillex.Buffer.Utils.prev_word_coords(buf))
+  end
+
   def process(buf, {:move_cursor, :next_word}) do
     new_cursor_coords = Quillex.Buffer.Utils.next_word_coords(buf)
 
