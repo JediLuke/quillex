@@ -66,7 +66,7 @@ defmodule Quillex.SearchLoadingStateSpex do
     |> Enum.filter(&(&1.module == Scenic.Primitive.Text))
     |> Enum.map(& &1.data)
     |> Kernel.--(body)
-    |> Enum.find(&(&1 =~ ~r/^(\d+ in \d+ files?  \(\d+ms\)|no matches|searching…|typing…|Type to search|Search )/))
+    |> Enum.find(&(&1 =~ ~r/^(\d+ in \d+ files?  \(\d+ms\)|no matches|searching…|typing…|Type to search|Search [~\/…])/))
   end
 
   defp drawn_rows do
@@ -119,7 +119,7 @@ defmodule Quillex.SearchLoadingStateSpex do
   # describing what searching is. It still says the old thing when there is no
   # project open at all.
   defp idle?(nil), do: false
-  defp idle?(text), do: String.starts_with?(text, "Search ") or text =~ "Type to search"
+  defp idle?(text), do: (text =~ ~r/^Search [~\/…]/) or text =~ "Type to search"
 
   defp wait_until(predicate, timeout \\ 8_000) do
     deadline = System.monotonic_time(:millisecond) + timeout

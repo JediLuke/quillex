@@ -48,7 +48,7 @@ defmodule Quillex.SearchPaneChromeSpex do
   end
 
   defp status_text do
-    Enum.find(texts(), &(&1 =~ ~r/^(\d+ in \d+ files?  \(\d+ms\)|no matches|searching…|typing…|Type to search|Search )/))
+    Enum.find(texts(), &(&1 =~ ~r/^(\d+ in \d+ files?  \(\d+ms\)|no matches|searching…|typing…|Type to search|Search [~\/…])/))
   end
 
   # Shapes drawn inside a rectangle — how a control made of primitives is
@@ -132,7 +132,7 @@ defmodule Quillex.SearchPaneChromeSpex do
       then_ "it says which project it is about to search", context do
         status = status_text()
 
-        assert status && String.starts_with?(status, "Search "),
+        assert status && (status =~ ~r/^Search [~\/…]/),
                """
                an empty pane described what searching is — true of every
                project there has ever been. It should name the one in front of

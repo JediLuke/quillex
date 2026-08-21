@@ -115,7 +115,7 @@ defmodule Quillex.GlobalSearchJourneySpex do
     # "Searching…" is the body's own line and has no space there.
     Enum.find(
       drawn_text(),
-      &(&1 =~ ~r/^(\d+ in \d+ files?  \(\d+ms\)|no matches|searching…|typing…|Type to search|Search )/)
+      &(&1 =~ ~r/^(\d+ in \d+ files?  \(\d+ms\)|no matches|searching…|typing…|Type to search|Search [~\/…])/)
     )
   end
 
@@ -129,14 +129,25 @@ defmodule Quillex.GlobalSearchJourneySpex do
     end
   end
 
-  # The scope tree as DRAWN, top to bottom: `[x] lib` / `[ ] docs`.
+  # The scope tree, top to bottom, as `[x] lib` / `[ ] docs`.
   #
-  # The two switches in the settings section draw a tick box in the same
-  # style, so they have to be told apart. They are labelled with a leading gap
-  # ("[x]  Use exclude settings…") where a tree row is a single space then the
-  # directory's name, which is the difference this leans on.
+  # The tick is DRAWN now — a box with a check in it, since the tree is a
+  # generic Menu.Model.Tree row and a font cannot be trusted with a tick any
+  # more than with a triangle. So its state is read from what the pane
+  # PUBLISHES for each node, which is the surface anything driving the pane
+  # uses and is generated from the same layout that draws it.
   defp scope_labels do
-    drawn_text() |> Enum.filter(&(&1 =~ ~r/^\[[ x]\] [^ ]/))
+    viewport = :sys.get_state(Process.whereis(QuillEx.RootScene)).viewport
+
+    :ets.match_object(viewport.semantic_table, {{:search_pane, :_}, :_})
+    |> Enum.map(fn {{_, id}, entry} -> {id, entry} end)
+    |> Enum.filter(fn {id, _entry} ->
+      id = to_string(id)
+      String.starts_with?(id, "search_pane_scope_") and
+        not String.starts_with?(id, "search_pane_scope_expand_")
+    end)
+    |> Enum.sort_by(fn {_id, entry} -> entry.local_bounds.top end)
+    |> Enum.map(fn {_id, entry} -> entry.label end)
   end
 
   defp ticked?(name), do: "[x] #{name}" in scope_labels()
@@ -163,7 +174,7 @@ defmodule Quillex.GlobalSearchJourneySpex do
   # describing what searching is. It still says the old thing when there is no
   # project open at all.
   defp idle?(nil), do: false
-  defp idle?(text), do: String.starts_with?(text, "Search ") or text =~ "Type to search"
+  defp idle?(text), do: (text =~ ~r/^Search [~\/…]/) or text =~ "Type to search"
 
   defp wait_until(predicate, timeout \\ 8_000) do
     deadline = System.monotonic_time(:millisecond) + timeout
@@ -448,8 +459,11 @@ defmodule Quillex.GlobalSearchJourneySpex do
         assert wait_until(fn -> drawn?("SCOPE") end),
                "the settings section has no scope line: #{inspect(drawn_text())}"
 
-        assert drawn?("whole project"),
-               "nothing is excluded yet, so it should say so: #{inspect(drawn_text())}"
+        # The row is a generic Menu.Model.Tree now, and says how many of its
+        # nodes are switched off — a tree of anything can count that, where
+        # "excluded" only means something to a search.
+        refute Enum.any?(drawn_text(), &String.contains?(&1, "off)")),
+               "nothing is switched off yet, so nothing should be counted: #{inspect(drawn_text())}"
 
         {:ok, context}
       end
@@ -527,10 +541,10 @@ defmodule Quillex.GlobalSearchJourneySpex do
                  drawn: #{inspect(drawn_file_paths())}
                """
 
-        assert drawn?("1 excluded"),
+        assert drawn?("1 off"),
                """
-               the summary counts an excluded folder ONCE, not once per file
-               inside it: #{inspect(drawn_text())}
+               the summary counts a switched-off branch ONCE, not once per
+               thing inside it: #{inspect(drawn_text())}
                """
 
         # And the rest of the project is untouched.
@@ -565,8 +579,8 @@ defmodule Quillex.GlobalSearchJourneySpex do
                  drawn: #{inspect(drawn_file_paths())}
                """
 
-        assert drawn?("nothing selected"),
-               "and the summary should say so rather than count it: #{inspect(drawn_text())}"
+        assert drawn?("1 off"),
+               "and the project itself counts as the one thing switched off: #{inspect(drawn_text())}"
 
         assert Enum.all?(scope_labels(), &String.starts_with?(&1, "[ ] ")),
                """
@@ -588,8 +602,8 @@ defmodule Quillex.GlobalSearchJourneySpex do
         assert wait_until(fn -> MapSet.new(drawn_file_paths()) == expected_paths(context.root) end),
                "re-ticking the root did not restore the search: #{inspect(drawn_file_paths())}"
 
-        assert drawn?("whole project"),
-               "and the summary should say so again: #{inspect(drawn_text())}"
+        refute Enum.any?(drawn_text(), &String.contains?(&1, "off)")),
+               "and nothing should be counted as off again: #{inspect(drawn_text())}"
 
         {:ok, context}
       end
