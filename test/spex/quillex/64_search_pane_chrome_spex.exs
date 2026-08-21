@@ -124,6 +124,12 @@ defmodule Quillex.SearchPaneChromeSpex do
     end
   end
 
+  defp scope_node_ids do
+    scope_entries()
+    |> Enum.map(fn {id, _} -> to_string(id) end)
+    |> Enum.sort()
+  end
+
   defp scope_entries do
     viewport = :sys.get_state(Process.whereis(QuillEx.RootScene)).viewport
 
@@ -150,10 +156,21 @@ defmodule Quillex.SearchPaneChromeSpex do
     end
   end
 
+  # More directories than the scope tree will show at once, so that reaching
+  # the ones past the cap is a thing this can test at all.
+  @scope_dirs 20
+
   defp write_fixture(root) do
     File.rm_rf!(root)
     File.mkdir_p!(Path.join(root, "lib"))
     File.write!(Path.join(root, "lib/a.ex"), "def needle(x), do: x\n")
+
+    Enum.each(1..@scope_dirs, fn i ->
+      dir = Path.join(root, "pkg_#{String.pad_leading("#{i}", 2, "0")}")
+      File.mkdir_p!(dir)
+      File.write!(Path.join(dir, "mod.ex"), "# needle #{i}\n")
+    end)
+
     :ok
   end
 
@@ -458,6 +475,104 @@ defmodule Quillex.SearchPaneChromeSpex do
                a tree is one menu ROW holding many, so lighting the row lights
                the whole tree. Only the node under the pointer should light:
                #{length(fills)} things did.
+               """
+
+        {:ok, context}
+      end
+
+      when_ "the scope tree is open on a project with many directories", context do
+        unless pane_state().scope_open? do
+          Probes.click_element("search_pane_scope")
+          assert wait_until(fn -> pane_state().scope_open? end), "the scope tree would not open"
+        end
+
+        {:ok, context}
+      end
+
+      then_ "it shows a window of the tree, and says where in it you are", context do
+        note = Enum.find(texts(), &(&1 =~ ~r/\d+–\d+ of \d+/))
+
+        assert note,
+               """
+               a tree longer than the menu can show has to say so, and say
+               WHERE — "11 more…" tells you something is hidden and nothing
+               about reaching it: #{inspect(texts())}
+               """
+
+        assert note =~ ~r/^\s*1–/, "it should start at the top: #{inspect(note)}"
+
+        {:ok, Map.put(context, :first_nodes, scope_node_ids())}
+      end
+
+      when_ "the wheel is turned over the panel", context do
+        panel = ScenicWidgets.SearchPane.State.settings_frame(pane_state())
+        {px, py} = panel.pin.point
+        {pin_x, pin_y} = pane_state().frame.pin.point
+
+        Enum.each(1..4, fn _ ->
+          Probes.send_scroll(
+            0,
+            -1,
+            trunc(pin_x + px + panel.size.width / 2),
+            trunc(pin_y + py + panel.size.height / 2)
+          )
+
+          Process.sleep(80)
+        end)
+
+        {:ok, context}
+      end
+
+      then_ "the tree moves, and shows directories it could not before", context do
+        assert wait_until(fn -> pane_state().scope_scroll > 0 end),
+               "the wheel over the settings panel did not move the tree"
+
+        now = scope_node_ids()
+
+        refute MapSet.equal?(MapSet.new(now), MapSet.new(context.first_nodes)),
+               "the same directories are published after scrolling past them"
+
+        note = Enum.find(texts(), &(&1 =~ ~r/\d+–\d+ of \d+/))
+        refute note =~ ~r/^\s*1–/, "and the position should have moved: #{inspect(note)}"
+
+        {:ok, context}
+      end
+
+      then_ "and the results underneath did NOT move", context do
+        # The wheel belongs to whatever is under it. With the panel over the
+        # results, scrolling it must not slide the results about behind it.
+        assert pane_state().scroll.offset_y == 0,
+               "the results scrolled while the pointer was over the settings"
+
+        {:ok, context}
+      end
+
+      when_ "it is wound all the way down", context do
+        panel = ScenicWidgets.SearchPane.State.settings_frame(pane_state())
+        {px, py} = panel.pin.point
+        {pin_x, pin_y} = pane_state().frame.pin.point
+
+        Enum.each(1..40, fn _ ->
+          Probes.send_scroll(
+            0,
+            -1,
+            trunc(pin_x + px + panel.size.width / 2),
+            trunc(pin_y + py + panel.size.height / 2)
+          )
+        end)
+
+        Process.sleep(400)
+        {:ok, context}
+      end
+
+      then_ "the last directory in the project can be reached", context do
+        last = "pkg_#{String.pad_leading("#{@scope_dirs}", 2, "0")}"
+
+        assert Enum.any?(scope_node_ids(), &String.ends_with?(&1, last)),
+               """
+               the end of the tree cannot be reached, so a directory past the
+               cap can be counted and never excluded:
+               #{inspect(scope_node_ids())}
                """
 
         {:ok, context}
