@@ -2394,6 +2394,21 @@ defmodule QuillEx.RootScene do
     # it — otherwise every character typed into the query field is also typed
     # into the document.
     Scenic.Scene.put_child(new_scene, :buffer_pane, :blur)
+
+    # Built from the STORE rather than from this scene's cached snapshot. The
+    # cache is only as fresh as the last publish, and a pane opened before the
+    # project's root had been published would never learn it — clearing an
+    # already-empty query publishes nothing, so nothing would come along
+    # later to tell it either. It would sit there unable to say which project
+    # it was about to search.
+    Scenic.Scene.put_child(
+      new_scene,
+      :project_search_pane,
+      {:update_model,
+       Quillex.RadixCache.ProjectSearchStore.get_state()
+       |> Quillex.GUI.SearchPaneModel.build(new_scene.assigns[:search_pane_model])}
+    )
+
     Scenic.Scene.put_child(new_scene, :project_search_pane, {:set_query, seed})
     Scenic.Scene.put_child(new_scene, :project_search_pane, {:focus_field, focus})
     Scenic.Scene.put_child(new_scene, :project_search_pane, :focus)
