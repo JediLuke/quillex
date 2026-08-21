@@ -88,6 +88,10 @@ defmodule Quillex.SearchPaneChromeSpex do
             _ -> false
           end
         end)
+        # The either/or control fills its ACTIVE position in the same accent.
+        # That is a selection, not a hover, and counting it would make every
+        # assertion here one too many.
+        |> Enum.reject(&match?({:segmented_thumb, _}, Map.get(&1, :id)))
 
       _ ->
         []
@@ -180,8 +184,15 @@ defmodule Quillex.SearchPaneChromeSpex do
         Quillex.RadixCache.ViewStore.set_file_nav_path(context.root)
         Process.sleep(400)
 
+        # Opening the pane is what points the search at the navigator's
+        # directory, so the root can only be checked afterwards.
         Probes.send_keys("f", [:ctrl, :shift])
         assert wait_until(fn -> pane_open?() end)
+
+        assert wait_until(fn ->
+                 Quillex.RadixCache.ProjectSearchStore.get_state().root == context.root
+               end),
+               "opening the pane did not point the search at this project"
 
         Probes.click_element("search_pane_clear")
         Process.sleep(300)
@@ -252,7 +263,7 @@ defmodule Quillex.SearchPaneChromeSpex do
 
       then_ "the settings are a cog on the bar, not a row above it", context do
         cog = widget(:domain_header)
-        view = widget(:results_view)
+        clear = widget(:clear)
         status = widget(:status)
 
         assert cog, "there is no settings control at all"
@@ -260,11 +271,19 @@ defmodule Quillex.SearchPaneChromeSpex do
         assert cog.y == status.y,
                "the cog belongs on the status bar (#{cog.y} vs #{status.y})"
 
-        assert cog.x + cog.w <= view.x,
-               "and beside the tree/list slider (#{cog.x + cog.w} vs #{view.x})"
+        assert cog.x + cog.w <= clear.x,
+               "beside the clear button (#{cog.x + cog.w} vs #{clear.x})"
 
         refute Enum.any?(texts(), &String.contains?(&1, "SEARCH SETTINGS")),
                "a whole row saying so is what the cog replaced: #{inspect(texts())}"
+
+        # And the tree/list control is NOT on the bar any more. It took a
+        # third of a narrow bar to say something you change rarely.
+        refute widget(:results_view),
+               "the view control is still on the status bar"
+
+        refute Enum.any?(texts(), &(&1 in ["tree", "list"])),
+               "and its labels are still drawn there: #{inspect(texts())}"
 
         {:ok, context}
       end
@@ -331,6 +350,23 @@ defmodule Quillex.SearchPaneChromeSpex do
                the header changed height, so the results moved
                (#{State.header_height(state)} vs #{context.header_before})
                """
+
+        {:ok, context}
+      end
+
+      then_ "the view control is in there, as an either/or", context do
+        # It is a Menu.Model.Segmented row now — a reusable one, so the next
+        # thing needing a two-position control does not draw its own.
+        assert semantic_entry("search_pane_view"),
+               "the tree/list control did not move into the settings"
+
+        for position <- ["tree", "list"] do
+          assert semantic_entry("search_pane_view_#{position}"),
+                 """
+                 each position needs its own name, or choosing one is
+                 arithmetic on which half of a control to aim at.
+                 """
+        end
 
         {:ok, context}
       end

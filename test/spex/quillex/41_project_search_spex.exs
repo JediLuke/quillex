@@ -51,6 +51,22 @@ defmodule Quillex.ProjectSearchSpex do
 
   defp results, do: root_state().project_search
 
+  # The tree/list control moved off the status bar and into the settings
+  # drawer, where it is an either/or menu row with a name per position.
+  defp choose_view(view) do
+    unless pane_state().domain_open? do
+      Probes.click_element("search_pane_domain")
+      true = wait_until(fn -> pane_state().domain_open? end)
+    end
+
+    Probes.click_element("search_pane_view_#{view}")
+    true = wait_until(fn -> pane_state().results_view == view end)
+
+    Probes.click_element("search_pane_domain")
+    true = wait_until(fn -> not pane_state().domain_open? end)
+    :ok
+  end
+
   defp match_at(path_suffix) do
     {path, [match | _]} =
       Enum.find(results().files, fn {path, _} -> String.ends_with?(path, path_suffix) end)
@@ -577,23 +593,13 @@ defmodule Quillex.ProjectSearchSpex do
         {:ok, context}
       end
 
-      when_ "the slider is pushed to list", context do
-        # It is ONE control with two halves, so where you click inside it is
-        # the whole of the interaction — clicking its right half means list.
-        slider =
-          pane_state()
-          |> ScenicWidgets.SearchPane.State.header_widgets()
-          |> Enum.find(&(&1.id == :results_view))
-
-        {px, py} = pane_state().frame.pin.point
-
-        Probes.click(
-          trunc(px + slider.x + slider.w * 0.75),
-          trunc(py + slider.y + slider.h / 2)
-        )
+      when_ "the view control is set to list", context do
+        # It lives in the settings drawer now, as an either/or menu row, and
+        # each position publishes its own name.
+        :ok = choose_view(:list)
 
         assert wait_until(fn -> pane_state().results_view == :list end),
-               "the right half of the slider means list"
+               "clicking the list position should show a list"
 
         {:ok, context}
       end
@@ -626,19 +632,8 @@ defmodule Quillex.ProjectSearchSpex do
         {:ok, context}
       end
 
-      then_ "and pushing it back to tree restores the directories", context do
-        slider =
-          pane_state()
-          |> ScenicWidgets.SearchPane.State.header_widgets()
-          |> Enum.find(&(&1.id == :results_view))
-
-        {px, py} = pane_state().frame.pin.point
-
-        Probes.click(
-          trunc(px + slider.x + slider.w * 0.25),
-          trunc(py + slider.y + slider.h / 2)
-        )
-
+      then_ "and setting it back to tree restores the directories", context do
+        :ok = choose_view(:tree)
         assert wait_until(fn -> pane_state().results_view == :tree end)
 
         kinds = pane_state() |> ScenicWidgets.SearchPane.State.rows() |> Enum.map(& &1.kind)

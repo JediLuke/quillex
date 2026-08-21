@@ -395,8 +395,10 @@ defmodule Quillex.GlobalSearchJourneySpex do
     end
 
     scenario "reading the results as a list, and back as the project's tree" do
-      when_ "the tree/list slider is pushed over to list", context do
-        click_named("search_pane_view")
+      when_ "the view is set to list, from the settings drawer", context do
+        click_named("search_pane_domain")
+        click_named("search_pane_view_list")
+        click_named("search_pane_domain")
         {:ok, context}
       end
 
@@ -422,8 +424,10 @@ defmodule Quillex.GlobalSearchJourneySpex do
         {:ok, context}
       end
 
-      when_ "the slider is pushed back to tree", context do
-        click_named("search_pane_view")
+      when_ "it is set back to tree", context do
+        click_named("search_pane_domain")
+        click_named("search_pane_view_tree")
+        click_named("search_pane_domain")
         {:ok, context}
       end
 

@@ -2371,6 +2371,12 @@ defmodule QuillEx.RootScene do
     root = old_state.file_nav_path || File.cwd!()
     Quillex.RadixCache.ProjectSearchStore.set_root(root)
     Quillex.RadixCache.ProjectSearchStore.set_query(seed)
+
+    # Both of those are CASTS, and the snapshot the pane's model is built from
+    # below is only written when they have been handled. Without waiting, the
+    # pane opens holding the previous project's root — and then never learns
+    # better, because nothing else will publish until somebody searches.
+    Quillex.RadixCache.ProjectSearchStore.sync()
     Quillex.RadixCache.ViewStore.open_project_search()
 
     new_state = %{

@@ -427,7 +427,15 @@ defmodule QuillEx.RootScene.Renderizer do
     |> ScenicWidgets.SearchPane.add_to_graph(
       %{
         frame: frame,
-        model: Quillex.GUI.SearchPaneModel.build(project_search_snapshot(state)),
+        # From the STORE, not this scene's cached snapshot. The cache is
+        # written when the scene handles the store's publish — which it cannot
+        # do while it is still inside the message that opened the pane and
+        # pointed the search at a new project. Built from the cache, the pane
+        # is born holding the previous project's root and never learns better,
+        # because nothing publishes again until somebody searches.
+        model:
+          Quillex.RadixCache.ProjectSearchStore.get_state()
+          |> Quillex.GUI.SearchPaneModel.build(),
         query: state.project_search_query,
         focus_field: state.project_search_focus_field,
         theme: search_pane_theme(state),

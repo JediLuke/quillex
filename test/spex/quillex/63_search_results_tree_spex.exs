@@ -145,13 +145,24 @@ defmodule Quillex.SearchResultsTreeSpex do
     :ok
   end
 
-  # Through the slider, the way a person changes it — the setting lives in the
-  # view store and only reaches the pane with a model push, so setting the
-  # store behind the pane's back changes nothing on the screen.
+  # Through the control, the way a person changes it. It lives in the settings
+  # drawer now — an either/or menu row — so the drawer has to be open, and
+  # each position can be clicked by its own name.
   defp set_view(view) do
     unless pane_scene().assigns.state.results_view == view do
-      Probes.click_element("search_pane_view")
+      unless pane_scene().assigns.state.domain_open? do
+        Probes.click_element("search_pane_domain")
+        true = wait_until(fn -> pane_scene().assigns.state.domain_open? end)
+      end
+
+      Probes.click_element("search_pane_view_#{view}")
       true = wait_until(fn -> pane_scene().assigns.state.results_view == view end)
+
+      # And shut the drawer again: it floats OVER the results, so leaving it
+      # open would put a panel between the next click and the row it is aimed
+      # at — which is what a person would find too.
+      Probes.click_element("search_pane_domain")
+      true = wait_until(fn -> not pane_scene().assigns.state.domain_open? end)
     end
 
     :ok
