@@ -9,15 +9,15 @@ unverified.
 
 | repo | branch | HEAD | state |
 |---|---|---|---|
-| `quillex` | `feature/external-file-sync` | `3afb560` | committed, clean |
-| `scenic-widget-contrib` | `nice_module_attributes` | `3f9bd3c` | committed, **pushed** |
+| `quillex` | `feature/external-file-sync` | `90079b0` | committed, clean |
+| `scenic-widget-contrib` | `nice_module_attributes` | `d650062` | committed, **pushed** |
 
-`mix.exs` pins contrib at `3f9bd3c`. 18 commits here, 19 there, since the last
+`mix.exs` pins contrib at `d650062`. 21 commits in each repo since the previous
 handover.
 
 ### The pin ritual
 
-Held across nine contrib commits and nine re-pins this session, no blank
+Held across twelve contrib commits and twelve re-pins this session, no blank
 screens. Push contrib and bump the SHA the moment quillex calls new contrib
 code, not at the end of a batch:
 
@@ -34,18 +34,39 @@ cd ../quillex && unset QUILLEX_LOCAL_DEPS && mix deps.get && mix compile
 Roughly in the order they were asked for. The search pane is close to done;
 most of what is left is aesthetic, plus one real bug at the end.
 
-### 1. Scrollbars in dropdowns, replacing the position readout
+### 1. One scroll system for dropdowns, with a visible scrollbar
 
-The scope tree currently says `▲ 13–24 of 31 ▼`. That is a readout where the
-thing itself would do: a scrollbar says how much room there is, where you are
-in it, and that it scrolls at all, without anyone reading a number.
+**Start here. It is the largest loose end and it is half-built.**
 
-Item 2 (below) turned out to be a different job and is already done — the
-menus scroll now, they just do not SAY they scroll. This is the affordance.
+There are currently TWO scroll systems for what is now one component:
 
-`Widgex.Scroll.ScrollRenderer` already draws bars and `Widgex.Scroll.Drag`
-already handles dragging one, so a dropdown should get a real bar from the
-shared scroll machinery rather than a bespoke label.
+  * `IconMenu` scrolls its dropdown through `Reducer.scroll_dropdown/2` and
+    `State.max_dropdown_scroll/1`, with the offset baked into
+    `dropdown_bounds` so drawing and hit testing read the same map;
+  * the search pane's settings panel scrolls its scope tree through
+    `SearchPane.State.scroll_scope/2` and a `scope_scroll` field on the PANE,
+    which `settings_rows/1` feeds into the `Tree` row's `scroll_offset`.
+
+That happened because the pane's panel was built before the dropdown was
+extracted, and the extraction never reached the scrolling. The pane's version
+also exists for a real reason worth preserving: rows are rebuilt from the
+model every time results land, so an offset kept inside a row would be thrown
+away by the next search. Whatever replaces it needs somewhere durable to keep
+the offset.
+
+On top of that, neither says it scrolls. The scope tree prints
+`▲ 13–24 of 31 ▼`, which is a readout where the thing itself would do, and
+`IconMenu`'s clamped dropdowns show nothing at all.
+
+So: move scrolling into `Menu.Dropdown` — offset, wheel, and a real scrollbar
+from `Widgex.Scroll.ScrollRenderer` (which already draws bars) and
+`Widgex.Scroll.Drag` (which already drags them, since this session). Shown
+only when there is overflow. Then delete `scope_scroll` and the readout.
+
+Answering the question that was asked: **a scrollbar, not clickable scroll
+buttons.** The clamp-and-scroll mechanism exists and works now; buttons would
+be a second mechanism beside a working one, and a bar also says how much there
+is, which buttons cannot.
 
 ### 2. ~~The View dropdown has no visible scroll~~ — DONE, but read this
 
@@ -132,6 +153,41 @@ decide rather than leave it declared.
 ---
 
 ## What this session did
+
+### Dropdowns behave like dropdowns
+
+Three requirements that are obvious the moment they are missing and invisible
+the rest of the time. All three were found by USING the editor; none of them
+would ever have been written down as a feature.
+
+**Escape puts it away — and puts away the menu, not everything.** It was
+handled only where a focused field reported it, and by the time you have been
+clicking around a menu the field has not got the keyboard, so nothing happened
+at all. Handled once now, in the pane's own key input, which it hears whatever
+has focus. Closing the whole pane because a menu happened to be open would
+throw away the search as well as the menu; a second Escape still closes it.
+
+*The key atom is `:key_esc`, not `:key_escape`.* Every other component in the
+repo already knew that.
+
+**Scrolling somewhere else puts it away**, in the search pane and the top bar
+alike. `IconMenu` returned `:noop` for a wheel outside its dropdown, so the top
+bar kept its menu up while you read the document underneath.
+
+**Nothing that redraws underneath it lands on top of it.** This one has a
+mechanism worth remembering: *a replaced piece of a Scenic graph lands at the
+END, which is what puts it on top.* Every other piece of this pane is disjoint
+so it never mattered — but the settings panel deliberately overlaps the
+results, so results rebuilt after it were drawn over it. Toggling a settings
+option is exactly that sequence: the panel redraws for the option, and then the
+search that toggle STARTED comes back and rebuilds the body over it. The panel
+is now re-rendered whenever anything under it is.
+
+`68_dropdown_manners_spex` guards all three. It waits for the SEARCH rather
+than the click, because the click was never the problem, and it measures draw
+order the way Scenic resolves it — the root group's child list — rather than by
+uid (a primitive does not carry one) or by position in `graph.primitives` (a
+map, with no order to read).
 
 ### The search pane is responsive
 
@@ -273,6 +329,8 @@ looked at.
 | `64_search_pane_chrome_spex` | cog, cancel sign, panel, hover, sizing, tree scroll |
 | `65_chrome_zoom_spex` | zoom scales the chrome, up AND back down |
 | `66_search_from_selection_spex` | find and project search seed from a selection |
+| `67_menu_fits_any_window_spex` | PROPERTY: no window size clips or strands a menu row |
+| `68_dropdown_manners_spex` | Escape, scroll-away, and nothing redrawing over the top |
 | `test/menu_tree_test.exs` | the generic tree row (9 unit tests) |
 | `test/word_selection_test.exs` | Ctrl+Shift+Arrow, both halves (6 unit tests) |
 
@@ -302,7 +360,12 @@ are both bugs, so the hover spex counts rather than checks.
   session were a signature missing a field: the scope tick (in the label, not
   the id), the tree scroll offset, and the panel hover.
 - **Graph primitives are a map.** No drawn order — sort by translate, or walk
-  down from the group you mean.
+  down from the group you mean. Between two SIBLING pieces, the order that
+  matters is the parent group's child list, and a replaced piece goes to the
+  end of it.
+- **Read the code to find where to look, not to find out what happens.** The
+  View menu scroll was diagnosed wrong twice from reading, and right once from
+  the person using the editor saying it did not work.
 - The pane and the find bar still share a **design but not code**. Six-plus
   fixes have now been made twice.
 
@@ -320,7 +383,23 @@ are both bugs, so the hover spex counts rather than checks.
   remaining win for search latency.
 - **TextField has its own scrollbar drag**, not yet migrated to
   `Widgex.Scroll.Drag`.
+- **The search pane's panel and IconMenu's dropdown scroll by different
+  machinery** — see queue item 1. They are the same component now and should
+  not be.
 - The scope tree is capped at `@scope_cap` rows and scrolls past it.
+
+## How to work on this
+
+The pane and the menus are now mostly ONE thing —
+`ScenicWidgets.Menu.Dropdown` draws both, `ScenicWidgets.Menu.Model` describes
+their rows. A change to how a menu row looks or behaves should almost always
+land there rather than in a host. Two hosts exist: `IconMenu` (the top bar)
+and `SearchPane` (the settings cog). Changing one and not the other is how
+they drifted apart in the first place.
+
+The remaining queue is almost entirely aesthetic, and the user has an
+"aesthetic overhaul" planned that will touch all of it — worth asking whether
+items 3–5 should simply be folded into that rather than done twice.
 
 ## Open question from the user, still unanswered
 
