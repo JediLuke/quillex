@@ -1710,6 +1710,12 @@ defmodule QuillEx.RootScene do
 
   defp jump_to_line(scene, _line), do: {:noreply, hide_goto_line(scene)}
 
+  defp dialog_theme(state) do
+    state.theme
+    |> Quillex.GUI.Palette.get()
+    |> Quillex.GUI.Palette.dialog_theme()
+  end
+
   # NOTE: SearchBar communicates via cast_parent/2, so search/replace UI events
   # arrive as handle_cast — see the "Search bar" handle_cast clauses above.
   # TextField communicates via send_parent_event, handled below.
@@ -1955,6 +1961,7 @@ defmodule QuillEx.RootScene do
       |> ScenicWidgets.ConfirmDialog.add_to_graph(
         %{
           frame: state.frame,
+          theme: dialog_theme(state),
           title: "Delete #{count} #{entry_word(count)}?",
           message: "This permanently deletes the selected files and directories.",
           buttons: [{:discard, "Delete"}, {:cancel, "Cancel"}]
@@ -2015,6 +2022,7 @@ defmodule QuillEx.RootScene do
       |> ScenicWidgets.ConfirmDialog.add_to_graph(
         %{
           frame: state.frame,
+          theme: dialog_theme(state),
           title:
             "Replace #{match_count} #{project_plural(match_count, "occurrence")} across " <>
               "#{file_count} #{project_plural(file_count, "file")}?",
@@ -2058,6 +2066,7 @@ defmodule QuillEx.RootScene do
       |> ScenicWidgets.ConfirmDialog.add_to_graph(
         %{
           frame: state.frame,
+          theme: dialog_theme(state),
           title: "Save these settings as the default?",
           message:
             "Every new session will start with the settings you have now — " <>
@@ -2889,6 +2898,7 @@ defmodule QuillEx.RootScene do
   # Shows the file picker modal (for opening files).
   defp show_file_picker(scene) do
     new_state = %{scene.assigns.state | show_file_picker: true}
+    project_root = File.cwd!()
 
     # Add the file picker component to the graph
     graph =
@@ -2896,8 +2906,11 @@ defmodule QuillEx.RootScene do
       |> ScenicWidgets.FilePicker.add_to_graph(
         %{
           frame: new_state.frame,
-          start_path: System.user_home!(),
-          mode: :open
+          start_path: project_root,
+          project_root: project_root,
+          home_path: System.user_home!(),
+          mode: :open,
+          theme: dialog_theme(new_state)
         },
         id: :file_picker
       )
@@ -2918,6 +2931,7 @@ defmodule QuillEx.RootScene do
   # Shows the file picker modal in save mode (for saving files).
   defp show_file_picker_save(scene) do
     new_state = %{scene.assigns.state | show_file_picker: true}
+    project_root = File.cwd!()
 
     # Get the current buffer name as default filename
     default_filename =
@@ -2949,10 +2963,13 @@ defmodule QuillEx.RootScene do
       |> ScenicWidgets.FilePicker.add_to_graph(
         %{
           frame: new_state.frame,
-          start_path: System.user_home!(),
+          start_path: project_root,
+          project_root: project_root,
+          home_path: System.user_home!(),
           mode: :save,
           filename: default_filename,
-          font: Quillex.GUI.Theme.editor_font(14)
+          font: Quillex.GUI.Theme.editor_font(14),
+          theme: dialog_theme(new_state)
         },
         id: :file_picker
       )
@@ -3098,6 +3115,7 @@ defmodule QuillEx.RootScene do
       |> ScenicWidgets.ConfirmDialog.add_to_graph(
         %{
           frame: new_state.frame,
+          theme: dialog_theme(new_state),
           title: "Unsaved Changes",
           message: "Save changes to \"#{buf_name}\" before closing?",
           buttons: [{:save, "Save"}, {:discard, "Discard"}, {:cancel, "Cancel"}]
@@ -3148,6 +3166,7 @@ defmodule QuillEx.RootScene do
         scene.assigns.graph,
         %{
           frame: state.frame,
+          theme: dialog_theme(state),
           title: "Unsaved Changes",
           message: "The following buffers have unsaved changes:\n\n#{names}",
           buttons: [{:discard, "Quit Without Saving"}, {:cancel, "Cancel"}]

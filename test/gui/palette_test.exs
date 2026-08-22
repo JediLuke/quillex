@@ -9,7 +9,8 @@ defmodule Quillex.GUI.PaletteTest do
     :icon_menu_theme,
     :side_nav_theme,
     :search_pane_theme,
-    :search_bar_theme
+    :search_bar_theme,
+    :dialog_theme
   ]
 
   test "there are exactly five themes, and the default is one of them" do

@@ -508,6 +508,31 @@ defmodule Quillex.GUI.Palette do
     }
   end
 
+  @doc "Theme shared by blocking dialogs and the open/save file picker."
+  def dialog_theme(p) do
+    %{
+      overlay: {0, 0, 0, 165},
+      panel: p.pane_bg,
+      panel_border: p.dropdown_border,
+      header: p.pane_hover_bg,
+      surface: p.field_bg,
+      text: p.pane_fg,
+      dim_text: p.pane_dim,
+      accent: p.accent,
+      accent_text: p.accent_fg,
+      selected: p.pane_active_bg,
+      selected_text: p.pane_fg,
+      button: p.pane_selection_bg,
+      button_hover: p.pane_hover_bg,
+      button_text: p.pane_fg,
+      danger: p.status_warning,
+      success: p.status_info,
+      field_border: p.field_border,
+      focus_border: p.accent,
+      scrollbar: p.pane_scrollbar
+    }
+  end
+
   @doc "The background of the transient status strip, by severity."
   def status_color(p, :warning), do: p.status_warning
   def status_color(p, :error), do: p.status_error
@@ -517,7 +542,11 @@ defmodule Quillex.GUI.Palette do
   The file navigator's resize handle: `{fill, stroke, arrow}` for whichever of
   its three states it is in.
   """
-  def handle_colors(p, :dragging), do: {p.handle_active_bg, p.handle_active_stroke, p.handle_active_arrow}
-  def handle_colors(p, :hovered), do: {p.handle_hover_bg, p.handle_hover_stroke, p.handle_hover_arrow}
+  def handle_colors(p, :dragging),
+    do: {p.handle_active_bg, p.handle_active_stroke, p.handle_active_arrow}
+
+  def handle_colors(p, :hovered),
+    do: {p.handle_hover_bg, p.handle_hover_stroke, p.handle_hover_arrow}
+
   def handle_colors(p, :idle), do: {p.handle_bg, p.handle_stroke, p.handle_arrow}
 end
