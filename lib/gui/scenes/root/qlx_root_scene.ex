@@ -172,6 +172,7 @@ defmodule QuillEx.RootScene do
       :first -> jump_to_line(scene, 1)
       :last -> jump_to_line(scene, length(active_buffer_lines(scene.assigns.state)))
       :go -> commit_goto_line(scene)
+      :close -> {:noreply, hide_goto_line(scene)}
       :outside -> {:noreply, hide_goto_line(scene)}
       nil -> {:noreply, scene}
     end
@@ -1532,9 +1533,8 @@ defmodule QuillEx.RootScene do
   # ── Go to Line ────────────────────────────────────────────────────────────
   #
   # The prompt takes digits only, so RootScene collects them itself instead of
-  # hosting an editable text field. Keystrokes reach here because the modal
-  # blurs the buffer pane, and `keyboard_overlay_open?/1` keeps document
-  # shortcuts from firing underneath.
+  # hosting an editable text field. It captures keyboard and pointer input
+  # while open; the editor remains visually unchanged underneath it.
 
   defp show_goto_line(%{assigns: %{state: %{show_goto_line: true}}} = scene),
     do: {:noreply, scene}
@@ -1549,7 +1549,7 @@ defmodule QuillEx.RootScene do
       |> assign(graph: goto_line_graph(scene.assigns.graph, new_state))
       |> then(&(&1 |> push_graph(&1.assigns.graph)))
 
-    Scenic.Scene.put_child(new_scene, :buffer_pane, :blur)
+    :ok = capture_input(new_scene, [:key, :cursor_button])
     {:noreply, new_scene}
   end
 
@@ -1573,6 +1573,13 @@ defmodule QuillEx.RootScene do
           translate: {14, 24},
           fill: palette.pane_fg,
           font_size: 15
+        )
+        |> goto_line_button(
+          :goto_line_close,
+          "×",
+          {width - 34, 8},
+          {24, 24},
+          palette
         )
         |> Scenic.Primitives.text("Choose a line from 1 to #{total}",
           translate: {14, 43},
@@ -1628,6 +1635,7 @@ defmodule QuillEx.RootScene do
 
     cond do
       px < x or px > x + width or py < y or py > y + height -> :outside
+      inside_rect?({px, py}, {x + width - 34, y + 8, 24, 24}) -> :close
       inside_rect?({px, py}, {x + 14, y + 89, 70, 28}) -> :first
       inside_rect?({px, py}, {x + 92, y + 89, 100, 28}) -> :last
       inside_rect?({px, py}, {x + width - 72, y + 89, 58, 28}) -> :go
@@ -1639,6 +1647,7 @@ defmodule QuillEx.RootScene do
     do: px >= x and px <= x + w and py >= y and py <= y + h
 
   defp hide_goto_line(scene) do
+    :ok = release_input(scene, [:key, :cursor_button])
     state = %{scene.assigns.state | show_goto_line: false, goto_line_input: ""}
     graph = Scenic.Graph.delete(scene.assigns.graph, :goto_line_prompt)
 

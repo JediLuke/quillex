@@ -175,5 +175,46 @@ defmodule Quillex.GotoLineSpex do
         {:ok, context}
       end
     end
+
+    scenario "Every dismissal escape hatch closes the prompt" do
+      when_ "Escape is pressed while the prompt owns captured input", context do
+        Probes.send_keys("g", [:ctrl])
+        Process.sleep(200)
+        Probes.send_keys("escape", [])
+        Process.sleep(200)
+        {:ok, context}
+      end
+
+      then_ "the prompt closes", context do
+        refute root_state().show_goto_line
+        {:ok, context}
+      end
+
+      when_ "the editor outside the prompt is clicked", context do
+        Probes.send_keys("g", [:ctrl])
+        Process.sleep(200)
+        Probes.click(30, 300)
+        Process.sleep(200)
+        {:ok, context}
+      end
+
+      then_ "click-away closes it", context do
+        refute root_state().show_goto_line
+        {:ok, context}
+      end
+
+      when_ "the explicit close button is clicked", context do
+        Probes.send_keys("g", [:ctrl])
+        Process.sleep(200)
+        Probes.click_element("goto_line_close")
+        Process.sleep(200)
+        {:ok, context}
+      end
+
+      then_ "the close button also dismisses it", context do
+        refute root_state().show_goto_line
+        {:ok, context}
+      end
+    end
   end
 end
