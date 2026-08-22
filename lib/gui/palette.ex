@@ -93,6 +93,7 @@ defmodule Quillex.GUI.Palette do
       dropdown_bg: {50, 50, 50},
       dropdown_border: {70, 70, 70},
       dropdown_fg: {220, 220, 220},
+      dropdown_row_hover: {60, 80, 120},
       accent: {0, 150, 255},
       accent_fg: {255, 255, 255},
       pane_bg: {35, 37, 47},
@@ -154,6 +155,7 @@ defmodule Quillex.GUI.Palette do
       dropdown_bg: {250, 249, 255},
       dropdown_border: {206, 200, 228},
       dropdown_fg: {50, 44, 78},
+      dropdown_row_hover: {206, 198, 240},
       accent: {96, 76, 214},
       accent_fg: {255, 255, 255},
       pane_bg: {244, 242, 252},
@@ -214,6 +216,7 @@ defmodule Quillex.GUI.Palette do
       dropdown_bg: {7, 54, 66},
       dropdown_border: {0, 43, 54},
       dropdown_fg: {147, 161, 161},
+      dropdown_row_hover: {14, 78, 94},
       accent: {38, 139, 210},
       accent_fg: {253, 246, 227},
       pane_bg: {0, 36, 46},
@@ -274,6 +277,7 @@ defmodule Quillex.GUI.Palette do
       dropdown_bg: {253, 246, 227},
       dropdown_border: {225, 219, 200},
       dropdown_fg: {88, 110, 117},
+      dropdown_row_hover: {212, 226, 236},
       accent: {38, 139, 210},
       accent_fg: {253, 246, 227},
       pane_bg: {245, 239, 220},
@@ -335,6 +339,7 @@ defmodule Quillex.GUI.Palette do
       dropdown_bg: {0, 0, 0},
       dropdown_border: {255, 255, 255},
       dropdown_fg: {255, 255, 255},
+      dropdown_row_hover: {255, 255, 0},
       accent: {255, 255, 0},
       accent_fg: {0, 0, 0},
       pane_bg: {0, 0, 0},
@@ -409,7 +414,20 @@ defmodule Quillex.GUI.Palette do
     }
   end
 
-  @doc "Colour half of a `ScenicWidgets.IconMenu` theme."
+  @doc """
+  Colour half of a `ScenicWidgets.IconMenu` theme.
+
+  `item_hover_bg` is `dropdown_row_hover` and not `accent`. A menu row you are
+  merely pointing at was the loudest thing on the screen — louder than the
+  search match and the focus ring, which are the two things that should be —
+  so every palette carries a damped version of its accent for the purpose. The
+  high-contrast theme's is the accent, undamped, because that is what a
+  high-contrast theme is for.
+
+  `ScenicWidgets.Menu.Dropdown` draws the menubar's panels AND the search
+  pane's settings, so `search_pane_theme/1` reads the same value. They drifted
+  apart last time precisely because one host was changed and the other was not.
+  """
   def icon_menu_theme(p) do
     %{
       background: p.chrome_bg,
@@ -420,7 +438,7 @@ defmodule Quillex.GUI.Palette do
       icon_active_bg: p.chrome_selected_bg,
       dropdown_bg: p.dropdown_bg,
       dropdown_border: p.dropdown_border,
-      item_hover_bg: p.accent,
+      item_hover_bg: p.dropdown_row_hover,
       item_text_color: p.dropdown_fg,
       item_hover_text_color: p.accent_fg
     }
@@ -462,6 +480,14 @@ defmodule Quillex.GUI.Palette do
       match_highlight: p.match_highlight_bg,
       match_text: p.pane_fg,
       row_hover: p.pane_hover_bg,
+      # The pane's settings panel is a `Menu.Dropdown`, so its rows light and
+      # its edge is drawn the same way the menubar's are — see
+      # `icon_menu_theme/1`. `pane_border` is DARKER than the panel it would
+      # edge, so the panel had no visible rim at all while the menubar's had
+      # one; a floating thing needs an edge or it is a hole in what is behind
+      # it.
+      menu_row_hover: p.dropdown_row_hover,
+      menu_border: p.dropdown_border,
       button_background: p.pane_selection_bg,
       button_active: p.accent,
       button_text: p.pane_fg,

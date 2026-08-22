@@ -311,8 +311,16 @@ defmodule Quillex.SearchPaneChromeSpex do
 
         assert cog, "there is no settings control at all"
 
-        assert cog.y == status.y,
-               "the cog belongs on the status bar (#{cog.y} vs #{status.y})"
+        # INSIDE the bar's row, not sharing its exact y. The cog and the clear
+        # button are square now, and a square control shorter than the row it
+        # sits on has to be centred in it — the row is the assertion, and the
+        # y they used to have in common was a coincidence of their being the
+        # full height of it.
+        assert cog.y >= status.y and cog.y + cog.h <= status.y + status.h,
+               """
+               the cog belongs on the status bar: it spans #{cog.y}..#{cog.y + cog.h}
+               and the bar is #{status.y}..#{status.y + status.h}
+               """
 
         assert cog.x + cog.w <= clear.x,
                "beside the clear button (#{cog.x + cog.w} vs #{clear.x})"
@@ -358,6 +366,7 @@ defmodule Quillex.SearchPaneChromeSpex do
         {:ok,
          context
          |> Map.put(:status_before, widget(:status).y)
+         |> Map.put(:cog_before, widget(:domain_header).y)
          |> Map.put(:header_before, State.header_height(pane_state()))}
       end
 
@@ -385,7 +394,7 @@ defmodule Quillex.SearchPaneChromeSpex do
         assert widget(:status).y == context.status_before,
                "the bar moved (#{widget(:status).y} vs #{context.status_before})"
 
-        assert widget(:domain_header).y == context.status_before,
+        assert widget(:domain_header).y == context.cog_before,
                "the cog moved out from under the pointer that clicked it"
 
         assert State.header_height(state) == context.header_before,
