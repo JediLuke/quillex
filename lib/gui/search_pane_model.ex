@@ -45,6 +45,13 @@ defmodule Quillex.GUI.SearchPaneModel do
       open_buffers_only: snapshot.open_buffers_only,
       results_view: Quillex.RadixCache.ViewStore.get_state().search_results_view,
       use_ignore_files: snapshot.use_ignore_files,
+      active_match: Map.get(snapshot, :active_match),
+      skipped: Map.get(snapshot, :dismissed, MapSet.new()),
+      total_matches: count_matches(snapshot.files),
+      eligible_matches:
+        eligible_count(snapshot.files, Map.get(snapshot, :dismissed, MapSet.new())),
+      eligible_files:
+        eligible_file_count(snapshot.files, Map.get(snapshot, :dismissed, MapSet.new())),
       scope_key: scope_key(snapshot),
       scope: scope(snapshot, previous),
       files: files(snapshot)
@@ -61,6 +68,11 @@ defmodule Quillex.GUI.SearchPaneModel do
       regex: false,
       open_buffers_only: false,
       use_ignore_files: true,
+      active_match: nil,
+      skipped: MapSet.new(),
+      total_matches: 0,
+      eligible_matches: 0,
+      eligible_files: 0,
       results_view: :tree,
       scope_key: nil,
       scope: [],
@@ -130,17 +142,38 @@ defmodule Quillex.GUI.SearchPaneModel do
     }
   end
 
-  defp files(%{files: files, root: root}) do
+  defp files(%{files: files, root: root} = snapshot) do
     Enum.map(files, fn {path, matches} ->
       %{
         path: path,
         label: Path.relative_to(path, root || "/"),
-        matches: Enum.map(matches, &match_row/1)
+        matches: Enum.map(matches, &match_row(&1, snapshot))
       }
     end)
   end
 
-  defp match_row(%Quillex.Search.Match{line: line, col: col, text: text, matched: matched}) do
+  defp count_matches(files), do: Enum.sum(for {_path, matches} <- files, do: length(matches))
+
+  defp eligible_count(files, skipped) do
+    files
+    |> Enum.flat_map(&elem(&1, 1))
+    |> Enum.count(fn match ->
+      not MapSet.member?(skipped, {match.path, match.line, match.col})
+    end)
+  end
+
+  defp eligible_file_count(files, skipped) do
+    Enum.count(files, fn {_path, matches} ->
+      Enum.any?(matches, fn match ->
+        not MapSet.member?(skipped, {match.path, match.line, match.col})
+      end)
+    end)
+  end
+
+  defp match_row(
+         %Quillex.Search.Match{path: path, line: line, col: col, text: text, matched: matched},
+         snapshot
+       ) do
     {excerpt, offset} = excerpt(text, col)
 
     %{
@@ -148,7 +181,9 @@ defmodule Quillex.GUI.SearchPaneModel do
       col: col,
       text: excerpt,
       match_start: offset,
-      match_len: String.length(matched)
+      match_len: String.length(matched),
+      current?: Map.get(snapshot, :active_match) == {path, line, col},
+      skipped?: MapSet.member?(Map.get(snapshot, :dismissed, MapSet.new()), {path, line, col})
     }
   end
 

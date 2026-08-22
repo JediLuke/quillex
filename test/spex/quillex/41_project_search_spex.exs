@@ -19,6 +19,7 @@ defmodule Quillex.ProjectSearchSpex do
   alias Quillex.RadixCache.ProjectSearchStore
 
   defp root_state, do: :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state
+  defp root_scene, do: :sys.get_state(Process.whereis(QuillEx.RootScene))
 
   defp status_widget do
     pane_state()
@@ -51,6 +52,16 @@ defmodule Quillex.ProjectSearchSpex do
 
   defp results, do: root_state().project_search
 
+  defp drawn_action?(action),
+    do: Scenic.Graph.get(pane_scene().assigns.graph, {:action_glyph, action}) != []
+
+  defp pane_texts do
+    pane_scene().assigns.graph.primitives
+    |> Map.values()
+    |> Enum.filter(&(&1.module == Scenic.Primitive.Text))
+    |> Enum.map(& &1.data)
+  end
+
   # The tree/list control moved off the status bar and into the settings
   # drawer, where it is an either/or menu row with a name per position.
   defp choose_view(view) do
@@ -65,6 +76,42 @@ defmodule Quillex.ProjectSearchSpex do
     Probes.click_element("search_pane_domain")
     true = wait_until(fn -> not pane_state().domain_open? end)
     :ok
+  end
+
+  spex "Project results navigate like ordinary Find",
+    description: "Previous and next select, open and strongly mark one exact project occurrence",
+    tags: [:phase_41, :project_search, :navigation] do
+    scenario "next and previous walk the flattened result set" do
+      given_ "eight project matches", context do
+        :ok = open_pane_with(context.root, "needle")
+        assert "1 of 8" in pane_texts()
+        {:ok, Map.put(context, :first, results().active_match)}
+      end
+
+      when_ "Next is clicked", context do
+        Probes.click_element("search_pane_next")
+        assert wait_until(fn -> results().active_match != context.first end)
+        {path, line, col} = results().active_match
+        assert wait_until(fn -> root_state().active_buf.path == path end)
+        assert wait_until(fn -> buffer_pane_state().cursor == {line, col} end)
+        assert wait_until(fn -> "2 of 8" in pane_texts() end)
+        {:ok, context}
+      end
+
+      then_ "Previous returns to the exact first occurrence", context do
+        Probes.click_element("search_pane_previous")
+        assert wait_until(fn -> results().active_match == context.first end)
+        {_path, line, col} = context.first
+
+        assert Enum.at(
+                 buffer_pane_state().search_matches,
+                 buffer_pane_state().search_current_index
+               )
+               |> then(fn {l, c, _} -> {l, c} == {line, col} end)
+
+        {:ok, context}
+      end
+    end
   end
 
   defp match_at(path_suffix) do
@@ -132,7 +179,10 @@ defmodule Quillex.ProjectSearchSpex do
   # Every row and button the pane draws publishes a semantic id; these mirror
   # ScenicWidgets.SearchPane.semantic_id/1.
   defp match_id(path, %{line: line, col: col}), do: "search_pane_match_#{line}_#{col}_#{path}"
-  defp dismiss_match_id(path, %{line: l, col: c}), do: "search_pane_dismiss_match_#{l}_#{c}_#{path}"
+
+  defp dismiss_match_id(path, %{line: l, col: c}),
+    do: "search_pane_dismiss_match_#{l}_#{c}_#{path}"
+
   defp replace_file_id(path), do: "search_pane_replace_file_#{path}"
 
   # Component ids reach the semantic index as strings from some widgets and as
@@ -321,6 +371,13 @@ defmodule Quillex.ProjectSearchSpex do
                end),
                "including the one that was clicked"
 
+        assert Enum.at(
+                 buffer_pane_state().search_matches,
+                 buffer_pane_state().search_current_index
+               )
+               |> then(fn {line, col, _text} -> {line, col} == {match.line, match.col} end),
+               "the stronger current-match highlight should mark the clicked occurrence"
+
         {:ok, Map.put(context, :readme_uuid, root_state().active_buf.uuid)}
       end
 
@@ -373,8 +430,8 @@ defmodule Quillex.ProjectSearchSpex do
     end
   end
 
-  spex "Dismissal is what makes Replace All reviewable",
-    description: "A dismissed match leaves the results and every replace path",
+  spex "Skipped matches make Replace All reviewable",
+    description: "A skipped match stays visible but leaves every replace path",
     tags: [:phase_41, :project_search, :replace] do
     scenario "dismiss one match, replace one file, then replace the rest" do
       given_ "a fresh search for 'needle'", context do
@@ -405,10 +462,35 @@ defmodule Quillex.ProjectSearchSpex do
 
       when_ "one match in beta.txt is dismissed", context do
         {path, match} = match_at("beta.txt")
+
+        visible_match =
+          ScenicWidgets.SearchPane.State.visible_rows(pane_state())
+          |> Enum.find(&(&1.kind == :match))
+
+        assert drawn_action?(
+                 {:dismiss_match, visible_match.path, visible_match.line, visible_match.col}
+               ),
+               "skip must have a drawn glyph, not merely an invisible hit target"
+
+        assert drawn_action?(
+                 {:replace_match, visible_match.path, visible_match.line, visible_match.col}
+               ),
+               "replace must have a drawn glyph, not merely an invisible hit target"
+
         Probes.click_element(dismiss_match_id(path, match))
 
-        assert wait_until(fn -> match?({:done, 7, 3, _}, results().status) end),
-               "the dismissed match should leave the visible results"
+        assert wait_until(fn ->
+                 MapSet.member?(results().dismissed, {path, match.line, match.col})
+               end),
+               "the match should be marked as skipped"
+
+        assert match?({:done, 8, 3, _}, results().status),
+               "a skipped match should remain in the visible result count"
+
+        assert Enum.any?(ScenicWidgets.SearchPane.State.rows(pane_state()), fn row ->
+                 row.id == {:match, path, match.line, match.col} and row.skipped?
+               end),
+               "the skipped result should remain drawn with review state"
 
         assert MapSet.member?(results().dismissed, {path, match.line, match.col})
         Probes.take_screenshot("41_search_pane_dismissed")
@@ -433,6 +515,12 @@ defmodule Quillex.ProjectSearchSpex do
 
       then_ "Replace All rewrites what is left, everywhere", context do
         Probes.click_element("search_pane_replace_all")
+
+        assert wait_until(fn -> root_state().show_project_replace_prompt end),
+               "a project-wide replace should ask for full-window confirmation"
+
+        assert Scenic.Graph.get(root_scene().assigns.graph, :project_replace_prompt) != []
+        Probes.click_element("project_replace_prompt_btn_discard")
 
         assert wait_until(fn ->
                  (root_state().status_message || "") =~ "Replaced 6 matches in 2 files"

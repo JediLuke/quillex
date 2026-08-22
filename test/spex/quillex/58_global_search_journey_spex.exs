@@ -66,6 +66,8 @@ defmodule Quillex.GlobalSearchJourneySpex do
   end
 
   defp pane_open?, do: pane_scene() != nil
+  defp pane_state, do: pane_scene().assigns.state
+  defp root_state, do: :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state
 
   defp pane_graph, do: pane_scene().assigns.graph
 
@@ -109,23 +111,27 @@ defmodule Quillex.GlobalSearchJourneySpex do
   # the pane's graph.
   defp on_screen?(text), do: ScenicMcp.Query.text_visible?(text)
 
-  # The status line, as drawn: "12 in 4 files  (7ms)".
+  # The status line, as drawn: "3 of 12".
   defp status_text do
     # "Search " with its trailing space is the empty pane naming the project;
     # "Searching…" is the body's own line and has no space there.
     Enum.find(
       drawn_text(),
-      &(&1 =~ ~r/^(\d+ in \d+ files?  \(\d+ms\)|no matches|searching…|typing…|Type to search|Search [~\/…])/)
+      &(&1 =~
+          ~r/^(\d+ of \d+|no matches|searching…|typing…|Type to search|Search [~\/…])/)
     )
   end
 
   defp match_count do
     case status_text() do
-      nil -> nil
-      text -> case Regex.run(~r/^(\d+) in (\d+)/, text) do
-                [_, n, f] -> {String.to_integer(n), String.to_integer(f)}
-                nil -> {0, 0}
-              end
+      nil ->
+        nil
+
+      text ->
+        case Regex.run(~r/^(\d+) of (\d+)/, text) do
+          [_, _current, total] -> {String.to_integer(total), length(drawn_file_paths())}
+          nil -> {0, 0}
+        end
     end
   end
 
@@ -143,6 +149,7 @@ defmodule Quillex.GlobalSearchJourneySpex do
     |> Enum.map(fn {{_, id}, entry} -> {id, entry} end)
     |> Enum.filter(fn {id, _entry} ->
       id = to_string(id)
+
       String.starts_with?(id, "search_pane_scope_") and
         not String.starts_with?(id, "search_pane_scope_expand_")
     end)
@@ -174,7 +181,7 @@ defmodule Quillex.GlobalSearchJourneySpex do
   # describing what searching is. It still says the old thing when there is no
   # project open at all.
   defp idle?(nil), do: false
-  defp idle?(text), do: (text =~ ~r/^Search [~\/…]/) or text =~ "Type to search"
+  defp idle?(text), do: text =~ ~r/^Search [~\/…]/ or text =~ "Type to search"
 
   defp wait_until(predicate, timeout \\ 8_000) do
     deadline = System.monotonic_time(:millisecond) + timeout
@@ -197,7 +204,8 @@ defmodule Quillex.GlobalSearchJourneySpex do
 
   defp fixture_files do
     %{
-      "lib/core/engine.ex" => "defmodule Engine do\n  def needle(x), do: x\n  # another needle\nend\n",
+      "lib/core/engine.ex" =>
+        "defmodule Engine do\n  def needle(x), do: x\n  # another needle\nend\n",
       "lib/core/parser.ex" => "defmodule Parser do\n  def parse(needle), do: needle\nend\n",
       "lib/web/router.ex" => "defmodule Router do\n  # routes the needle\nend\n",
       "test/engine_test.exs" => "test \"needle\" do\n  assert true\nend\n",
@@ -215,8 +223,14 @@ defmodule Quillex.GlobalSearchJourneySpex do
   # case-insensitive until told otherwise, so the capitalised NEEDLE in the
   # docs is in here too — it is what the Match Case scenario takes away.
   defp expected_paths(root) do
-    ["lib/core/engine.ex", "lib/core/parser.ex", "lib/web/router.ex",
-     "test/engine_test.exs", "docs/guide.md", "README.md"]
+    [
+      "lib/core/engine.ex",
+      "lib/core/parser.ex",
+      "lib/web/router.ex",
+      "test/engine_test.exs",
+      "docs/guide.md",
+      "README.md"
+    ]
     |> Enum.map(&Path.join(root, &1))
     |> MapSet.new()
   end
@@ -564,7 +578,9 @@ defmodule Quillex.GlobalSearchJourneySpex do
       end
 
       then_ "its files come back", context do
-        assert wait_until(fn -> MapSet.new(drawn_file_paths()) == expected_paths(context.root) end),
+        assert wait_until(fn ->
+                 MapSet.new(drawn_file_paths()) == expected_paths(context.root)
+               end),
                "re-ticking core did not bring its results back: #{inspect(drawn_file_paths())}"
 
         {:ok, context}
@@ -603,7 +619,9 @@ defmodule Quillex.GlobalSearchJourneySpex do
       end
 
       then_ "the whole project is being searched again", context do
-        assert wait_until(fn -> MapSet.new(drawn_file_paths()) == expected_paths(context.root) end),
+        assert wait_until(fn ->
+                 MapSet.new(drawn_file_paths()) == expected_paths(context.root)
+               end),
                "re-ticking the root did not restore the search: #{inspect(drawn_file_paths())}"
 
         refute Enum.any?(drawn_text(), &String.contains?(&1, "off)")),
@@ -690,7 +708,9 @@ defmodule Quillex.GlobalSearchJourneySpex do
       end
 
       then_ "the same query finds every needle in the project", context do
-        assert wait_until(fn -> MapSet.new(drawn_file_paths()) == expected_paths(context.root) end),
+        assert wait_until(fn ->
+                 MapSet.new(drawn_file_paths()) == expected_paths(context.root)
+               end),
                """
                read as a pattern, ne+dle matches needle everywhere.
                  drawn: #{inspect(drawn_file_paths())}
@@ -712,7 +732,9 @@ defmodule Quillex.GlobalSearchJourneySpex do
       end
 
       then_ "the results are as they were", context do
-        assert wait_until(fn -> MapSet.new(drawn_file_paths()) == expected_paths(context.root) end),
+        assert wait_until(fn ->
+                 MapSet.new(drawn_file_paths()) == expected_paths(context.root)
+               end),
                "the search did not come back to where it started: #{inspect(drawn_file_paths())}"
 
         {:ok, context}
@@ -722,6 +744,7 @@ defmodule Quillex.GlobalSearchJourneySpex do
     scenario "changing which files are in scope at all" do
       when_ "the settings are opened and the ignore files switched off", context do
         click_named("search_pane_domain")
+
         assert wait_until(fn -> semantic?("search_pane_domain_use_ignore_files") end),
                "the settings section has no ignore-files switch"
 
@@ -777,7 +800,10 @@ defmodule Quillex.GlobalSearchJourneySpex do
 
       when_ "the whole project is searched again and the settings shut", context do
         click_named("search_pane_domain_open_buffers_only")
-        assert wait_until(fn -> MapSet.new(drawn_file_paths()) == expected_paths(context.root) end),
+
+        assert wait_until(fn ->
+                 MapSet.new(drawn_file_paths()) == expected_paths(context.root)
+               end),
                "the results did not come back: #{inspect(drawn_file_paths())}"
 
         click_named("search_pane_domain")
@@ -795,7 +821,12 @@ defmodule Quillex.GlobalSearchJourneySpex do
     end
 
     scenario "acting on the results" do
-      when_ "the one match in the README is dismissed with the × beside it", context do
+      when_ "replace review is opened and the README match is skipped", context do
+        click_named("search_pane_replace_caret")
+
+        assert wait_until(fn -> semantic?("search_pane_field_replace") end),
+               "the disclosure did not open the replacement controls"
+
         readme = Path.join(context.root, "README.md")
 
         {:match, ^readme, line, col} =
@@ -804,30 +835,37 @@ defmodule Quillex.GlobalSearchJourneySpex do
         before = length(drawn_matches())
         click_named("search_pane_dismiss_match_#{line}_#{col}_#{readme}")
 
-        {:ok, context |> Map.put(:readme, readme) |> Map.put(:before_dismiss, before)}
+        {:ok,
+         context
+         |> Map.put(:readme, readme)
+         |> Map.put(:skipped_match, {line, col})
+         |> Map.put(:before_dismiss, before)}
       end
 
-      then_ "it leaves the screen, and takes its file heading with it", context do
-        assert wait_until(fn -> length(drawn_matches()) == context.before_dismiss - 1 end),
-               "dismissing a match did not remove it from the results"
+      then_ "it stays visible as a skipped replacement", context do
+        assert wait_until(fn ->
+                 {line, col} = context.skipped_match
 
-        refute context.readme in drawn_file_paths(),
-               "it was the file's only match, so the heading has nothing left to head"
+                 Enum.any?(ScenicWidgets.SearchPane.State.rows(pane_state()), fn row ->
+                   row.id == {:match, context.readme, line, col} and row.skipped?
+                 end)
+               end),
+               "skipping should leave a visibly reviewable row"
+
+        assert length(drawn_matches()) == context.before_dismiss,
+               "skipping should not hide the result"
+
+        assert context.readme in drawn_file_paths()
 
         {n, _files} = match_count()
 
         assert n == length(drawn_matches()),
-               "the status still counts the dismissed match: says #{n}, drew #{length(drawn_matches())}"
+               "navigation should still count skipped visible matches"
 
         {:ok, context}
       end
 
-      when_ "the replacement row is opened and a replacement typed", context do
-        click_named("search_pane_replace_caret")
-
-        assert wait_until(fn -> semantic?("search_pane_field_replace") end),
-               "the disclosure did not open the replacement field"
-
+      when_ "a replacement is typed", context do
         click_named("search_pane_field_replace")
         Probes.send_text("thimble")
         Process.sleep(400)
@@ -876,15 +914,18 @@ defmodule Quillex.GlobalSearchJourneySpex do
 
       when_ "Replace All is clicked", context do
         click_named("search_pane_replace_all")
+        assert wait_until(fn -> root_state().show_project_replace_prompt end)
+        click_named("project_replace_prompt_btn_discard")
         Process.sleep(1_500)
         {:ok, context}
       end
 
       then_ "every match on the screen was replaced, in the files themselves", context do
-        assert wait_until(fn -> status_text() =~ "no matches" end, 10_000),
-               "after replacing every match the search should find none: #{inspect(status_text())}"
+        assert wait_until(fn -> status_text() == "1 of 1" end, 10_000),
+               "only the explicitly skipped match should remain: #{inspect(status_text())}"
 
-        assert drawn_matches() == [], "results are still drawn after Replace All"
+        assert length(drawn_matches()) == 1,
+               "Replace All should leave exactly the skipped result visible"
 
         replaced =
           context.root

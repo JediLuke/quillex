@@ -585,6 +585,7 @@ defmodule QuillEx.RootScene.Renderizer do
       excluded: MapSet.new(),
       dismissed: MapSet.new(),
       dismissed_files: MapSet.new(),
+      active_match: nil,
       error: nil,
       case_sensitive: false,
       regex: false
@@ -592,6 +593,13 @@ defmodule QuillEx.RootScene.Renderizer do
   end
 
   defp maybe_create_file_nav_resize_handle(graph, _state, nil), do: graph
+
+  defp maybe_create_file_nav_resize_handle(
+         graph,
+         %{project_search_settings_open?: true},
+         _frame
+       ),
+       do: graph
 
   defp maybe_create_file_nav_resize_handle(graph, state, %Widgex.Frame{} = frame) do
     hit_width = 32
@@ -1003,148 +1011,150 @@ defmodule QuillEx.RootScene.Renderizer do
         id: :view,
         icon: :view,
         tooltip: "View and editor controls",
-        items: [
-          # What is on screen, then how the text itself is drawn, then folding,
-          # then sizes, then the palette, then preferences about the interface.
-          %Toggle{
-            id: "file_nav",
-            label: "File Navigator",
-            checked?: state.show_file_nav,
-            tooltip: "Show or hide the project file navigator."
-          },
-          %Divider{id: "view_text_divider"},
-          %Toggle{
-            id: "line_numbers",
-            label: "Line Numbers",
-            checked?: state.show_line_numbers,
-            tooltip: "Show or hide source line numbers beside the editor."
-          },
-          %Toggle{
-            id: "word_wrap",
-            label: "Word Wrap",
-            checked?: state.word_wrap,
-            tooltip: "Wrap long lines at word boundaries instead of scrolling horizontally."
-          },
-          %Toggle{
-            id: "auto_indent",
-            label: "Auto Indent",
-            checked?: state.auto_indent,
-            tooltip:
-              "Carry the current line's indentation onto the next one when you press Enter."
-          },
-          %Toggle{
-            id: "matching_brace",
-            label: "Show Matching Brace",
-            checked?: state.show_matching_brace,
-            tooltip: "Outline a brace beside the cursor and its matching partner."
-          },
-          %Toggle{
-            id: "current_line_highlight",
-            label: "Highlight Current Line",
-            checked?: state.highlight_current_line,
-            tooltip: "Draw a subtle horizontal guide beneath the current line."
-          },
-          %Toggle{
-            id: "current_column_highlight",
-            label: "Highlight Current Column",
-            checked?: state.highlight_current_column,
-            tooltip: "Draw a subtle vertical guide beneath the current column."
-          },
-          %Toggle{
-            id: "syntax_highlighting",
-            label: "Syntax Highlighting",
-            checked?: state.syntax_highlighting,
-            tooltip:
-              "Mark keywords, names, strings and comments by weight, slant and underline (no colour needed)."
-          },
-          # Folding is three controls that belong together and read as one
-          # idea. They used to sit alone below Zoom, after everything else,
-          # which made "Set Fold Level" look like an afterthought rather than
-          # the third member of a group.
-          %Divider{id: "view_folding_divider"},
-          command_item.(:toggle_fold),
-          command_item.(:unfold_all),
-          %Select{
-            id: "fold_level",
-            label: "Set Fold Level",
-            value: state.fold_level,
-            options: [1, 2, 3, 4],
-            tooltip: "Collapse all code blocks at the selected nesting level or deeper."
-          },
-          %Divider{id: "view_display_divider"},
-          %Slider{
-            id: "text_size",
-            label: "Text Size",
-            value: state.text_size,
-            min: 12,
-            max: 32,
-            tooltip: "Change the active editor font size from 12 to 32 points."
-          },
-          %Slider{
-            id: "tab_width",
-            label: "Tab Stops",
-            value: state.tab_width,
-            min: 2,
-            max: 12,
-            step: 1,
-            tooltip: "Set the visual distance between tab stops from 2 to 12 spaces."
-          },
-          %Stepper{
-            id: "chrome_zoom",
-            label: "Zoom",
-            value: state.chrome_zoom,
-            min: 50,
-            max: 200,
-            step: 10,
-            tooltip:
-              "Scale application chrome independently from editor text. " <>
-                "#{Quillex.Commands.shortcut(:zoom_in)} and " <>
-                "#{Quillex.Commands.shortcut(:zoom_out)} change it; " <>
-                "#{Quillex.Commands.shortcut(:zoom_reset)} resets it."
-          },
-          # A bare list of five palette names needs a noun over it; the other
-          # groups are legible from their rows and get a divider instead.
-          %Divider{id: "view_theme_divider"},
-          %Item{id: "theme_heading", label: "Theme", enabled?: false},
-          theme_items(state),
-          %Divider{id: "view_interface_divider"},
-          %Toggle{
-            id: "action_feedback",
-            label: "Action Feedback",
-            checked?: state.show_action_feedback,
-            tooltip: "Show low-level confirmations such as copied text, undo, and reload actions."
-          },
-          %Toggle{
-            id: "menu_shortcuts",
-            label: "Keyboard Shortcuts in Menus",
-            checked?: state.show_menu_shortcuts,
-            tooltip: "Show or hide the right-aligned shortcut column in menus."
-          },
-          # Which key means "command". A Mac user's hands know ⌘; a Linux
-          # user's know Ctrl; and someone with a foot in both camps knows
-          # whichever they decided on, which is why this is a setting and not
-          # a detection. Changing it re-letters every shortcut in every menu.
-          %Divider{id: "view_modifier_divider"},
-          %Item{id: "modifier_heading", label: "Command Key", enabled?: false},
-          modifier_items(state),
-          # Changing a setting changes this session. Making it the one every
-          # session starts with is a separate, deliberate act — so it is a
-          # command sitting under the settings it saves, not a toggle.
-          %Divider{id: "view_defaults_divider"},
-          %Item{
-            id: "save_default_settings",
-            label: "Save Settings as Default",
-            tooltip: "Start every future session with the settings you have now."
-          },
-          # The exclude list is a text file, and this is a text editor. That
-          # is the whole of its "settings UI": open it, type, save.
-          %Item{
-            id: "edit_search_excludes",
-            label: "Edit Search Excludes",
-            tooltip: "What a project search skips, as a list you can change."
-          }
-        ]
-        |> List.flatten()
+        items:
+          [
+            # What is on screen, then how the text itself is drawn, then folding,
+            # then sizes, then the palette, then preferences about the interface.
+            %Toggle{
+              id: "file_nav",
+              label: "File Navigator",
+              checked?: state.show_file_nav,
+              tooltip: "Show or hide the project file navigator."
+            },
+            %Divider{id: "view_text_divider"},
+            %Toggle{
+              id: "line_numbers",
+              label: "Line Numbers",
+              checked?: state.show_line_numbers,
+              tooltip: "Show or hide source line numbers beside the editor."
+            },
+            %Toggle{
+              id: "word_wrap",
+              label: "Word Wrap",
+              checked?: state.word_wrap,
+              tooltip: "Wrap long lines at word boundaries instead of scrolling horizontally."
+            },
+            %Toggle{
+              id: "auto_indent",
+              label: "Auto Indent",
+              checked?: state.auto_indent,
+              tooltip:
+                "Carry the current line's indentation onto the next one when you press Enter."
+            },
+            %Toggle{
+              id: "matching_brace",
+              label: "Show Matching Brace",
+              checked?: state.show_matching_brace,
+              tooltip: "Outline a brace beside the cursor and its matching partner."
+            },
+            %Toggle{
+              id: "current_line_highlight",
+              label: "Highlight Current Line",
+              checked?: state.highlight_current_line,
+              tooltip: "Draw a subtle horizontal guide beneath the current line."
+            },
+            %Toggle{
+              id: "current_column_highlight",
+              label: "Highlight Current Column",
+              checked?: state.highlight_current_column,
+              tooltip: "Draw a subtle vertical guide beneath the current column."
+            },
+            %Toggle{
+              id: "syntax_highlighting",
+              label: "Syntax Highlighting",
+              checked?: state.syntax_highlighting,
+              tooltip:
+                "Mark keywords, names, strings and comments by weight, slant and underline (no colour needed)."
+            },
+            # Folding is three controls that belong together and read as one
+            # idea. They used to sit alone below Zoom, after everything else,
+            # which made "Set Fold Level" look like an afterthought rather than
+            # the third member of a group.
+            %Divider{id: "view_folding_divider"},
+            command_item.(:toggle_fold),
+            command_item.(:unfold_all),
+            %Select{
+              id: "fold_level",
+              label: "Set Fold Level",
+              value: state.fold_level,
+              options: [1, 2, 3, 4],
+              tooltip: "Collapse all code blocks at the selected nesting level or deeper."
+            },
+            %Divider{id: "view_display_divider"},
+            %Slider{
+              id: "text_size",
+              label: "Text Size",
+              value: state.text_size,
+              min: 12,
+              max: 32,
+              tooltip: "Change the active editor font size from 12 to 32 points."
+            },
+            %Slider{
+              id: "tab_width",
+              label: "Tab Stops",
+              value: state.tab_width,
+              min: 2,
+              max: 12,
+              step: 1,
+              tooltip: "Set the visual distance between tab stops from 2 to 12 spaces."
+            },
+            %Stepper{
+              id: "chrome_zoom",
+              label: "Zoom",
+              value: state.chrome_zoom,
+              min: 50,
+              max: 200,
+              step: 10,
+              tooltip:
+                "Scale application chrome independently from editor text. " <>
+                  "#{Quillex.Commands.shortcut(:zoom_in)} and " <>
+                  "#{Quillex.Commands.shortcut(:zoom_out)} change it; " <>
+                  "#{Quillex.Commands.shortcut(:zoom_reset)} resets it."
+            },
+            # A bare list of five palette names needs a noun over it; the other
+            # groups are legible from their rows and get a divider instead.
+            %Divider{id: "view_theme_divider"},
+            %Item{id: "theme_heading", label: "Theme", enabled?: false},
+            theme_items(state),
+            %Divider{id: "view_interface_divider"},
+            %Toggle{
+              id: "action_feedback",
+              label: "Action Feedback",
+              checked?: state.show_action_feedback,
+              tooltip:
+                "Show low-level confirmations such as copied text, undo, and reload actions."
+            },
+            %Toggle{
+              id: "menu_shortcuts",
+              label: "Keyboard Shortcuts in Menus",
+              checked?: state.show_menu_shortcuts,
+              tooltip: "Show or hide the right-aligned shortcut column in menus."
+            },
+            # Which key means "command". A Mac user's hands know ⌘; a Linux
+            # user's know Ctrl; and someone with a foot in both camps knows
+            # whichever they decided on, which is why this is a setting and not
+            # a detection. Changing it re-letters every shortcut in every menu.
+            %Divider{id: "view_modifier_divider"},
+            %Item{id: "modifier_heading", label: "Command Key", enabled?: false},
+            modifier_items(state),
+            # Changing a setting changes this session. Making it the one every
+            # session starts with is a separate, deliberate act — so it is a
+            # command sitting under the settings it saves, not a toggle.
+            %Divider{id: "view_defaults_divider"},
+            %Item{
+              id: "save_default_settings",
+              label: "Save Settings as Default",
+              tooltip: "Start every future session with the settings you have now."
+            },
+            # The exclude list is a text file, and this is a text editor. That
+            # is the whole of its "settings UI": open it, type, save.
+            %Item{
+              id: "edit_search_excludes",
+              label: "Edit Search Excludes",
+              tooltip: "What a project search skips, as a list you can change."
+            }
+          ]
+          |> List.flatten()
       },
       %{
         id: :help,

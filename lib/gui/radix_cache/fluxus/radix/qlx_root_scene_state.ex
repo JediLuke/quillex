@@ -59,6 +59,7 @@ defmodule QuillEx.RootScene.State do
             # Which of the pane's fields the keyboard lands in when it opens:
             # Ctrl+Shift+F means the query, Ctrl+Shift+H the replacement.
             project_search_focus_field: :query,
+            project_search_settings_open?: false,
             # The reusable preview tab. Walking thirty results must leave one
             # tab open, not thirty, so a result opens into this slot and the
             # next result replaces it. Double-clicking the tab, or editing the
@@ -88,6 +89,8 @@ defmodule QuillEx.RootScene.State do
             quit_dirty_buffers: [],
             pending_nav_delete: [],
             show_nav_delete_prompt: false,
+            show_project_replace_prompt: false,
+            pending_project_replacement: nil,
             # "Save Settings as Default" explains itself before it writes
             # anything — it is the one action here that outlives the session.
             show_save_settings_prompt: false,

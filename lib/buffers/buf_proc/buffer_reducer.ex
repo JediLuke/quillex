@@ -37,6 +37,11 @@ defmodule Quillex.Buffer.Process.Reducer do
     Search.set(buf, nil)
   end
 
+  def process(%BufState{} = buf, {:search_at, query, opts, position})
+      when is_binary(query) and query != "" do
+    Search.set_at(buf, query, opts, position)
+  end
+
   def process(%BufState{} = buf, {:search, query}) when is_binary(query) and query != "" do
     Search.set(buf, query)
   end

@@ -156,7 +156,7 @@ defmodule Quillex.Search.ProjectTest do
     assert Enum.map(files, fn {p, _ms} -> Path.basename(p) end) == ["a.ex", "c.txt"]
   end
 
-  test "the store hides dismissed matches from results and from replace", %{root: root} do
+  test "the store keeps skipped matches visible and excludes them from replace", %{root: root} do
     ProjectSearchStore.set_root(root)
     ProjectSearchStore.set_query("the")
     :ok = ProjectSearchStore.await_idle()
@@ -166,14 +166,50 @@ defmodule Quillex.Search.ProjectTest do
     ProjectSearchStore.dismiss_match(a_path, 1, 1)
     ProjectSearchStore.sync()
 
-    snapshot = eventually(&match?(%{status: {:done, 4, _, _}}, &1))
-    assert {:done, 4, 3, _} = snapshot.status
+    snapshot = eventually(&(MapSet.size(&1.dismissed) == 1))
+    assert {:done, 5, 3, _} = snapshot.status
+
+    assert Enum.any?(snapshot.files, fn {_path, matches} ->
+             Enum.any?(matches, &({&1.path, &1.line, &1.col} == {a_path, 1, 1}))
+           end)
 
     ProjectSearchStore.replace_all("a")
     :ok = ProjectSearchStore.await_idle()
 
     # The dismissed occurrence is the only "the" left in the file.
     assert File.read!(a_path) == "the cat\nno match here\na end — a\n"
+  end
+
+  test "project navigation selects exact matches and wraps", %{root: root} do
+    ProjectSearchStore.set_root(root)
+    ProjectSearchStore.set_query("the")
+    :ok = ProjectSearchStore.await_idle()
+    snapshot = eventually(&match?(%{status: {:done, 5, _, _}}, &1))
+    all = for {_path, matches} <- snapshot.files, match <- matches, do: match
+
+    assert ProjectSearchStore.select_match(
+             List.last(all).path,
+             List.last(all).line,
+             List.last(all).col
+           ) ==
+             List.last(all)
+
+    assert ProjectSearchStore.select_next() == List.first(all)
+    assert ProjectSearchStore.select_previous() == List.last(all)
+  end
+
+  test "a descendant can be re-enabled beneath an excluded root", %{root: root} do
+    wanted = Path.join(root, "lib/a.ex")
+    ProjectSearchStore.set_root(root)
+    ProjectSearchStore.set_query("the")
+    ProjectSearchStore.toggle_scope(root)
+    :ok = ProjectSearchStore.await_idle()
+    assert {:done, 0, 0, _} = eventually(&match?(%{status: {:done, 0, 0, _}}, &1)).status
+
+    ProjectSearchStore.toggle_scope(wanted)
+    :ok = ProjectSearchStore.await_idle()
+    snapshot = eventually(&match?(%{status: {:done, 2, 1, _}}, &1))
+    assert Enum.map(snapshot.files, &elem(&1, 0)) == [wanted]
   end
 
   test "dismissals are cleared when the query changes, not when a replace re-runs",
@@ -185,7 +221,9 @@ defmodule Quillex.Search.ProjectTest do
 
     ProjectSearchStore.dismiss_file(Path.join(root, "vendor/c.txt"))
     ProjectSearchStore.sync()
-    assert eventually(&(MapSet.size(&1.dismissed_files) == 1)).dismissed_files |> MapSet.size() == 1
+
+    assert eventually(&(MapSet.size(&1.dismissed_files) == 1)).dismissed_files |> MapSet.size() ==
+             1
 
     ProjectSearchStore.set_query("cat")
     :ok = ProjectSearchStore.await_idle()

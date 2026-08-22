@@ -117,7 +117,11 @@ defmodule QuillEx.RootScene do
 
   # Go to Line prompt owns the keyboard entirely while it is open. These clauses
   # come FIRST so a digit does not also trip a document shortcut underneath.
-  defp route_input({:key, {key, 1, _mods}}, _context, %{assigns: %{state: %{show_goto_line: true}}} = scene) do
+  defp route_input(
+         {:key, {key, 1, _mods}},
+         _context,
+         %{assigns: %{state: %{show_goto_line: true}}} = scene
+       ) do
     state = scene.assigns.state
 
     case key do
@@ -145,11 +149,19 @@ defmodule QuillEx.RootScene do
 
   # Swallow key-release and codepoint events too, so nothing leaks to the
   # document while the prompt is up.
-  defp route_input({:key, {_key, 0, _mods}}, _context, %{assigns: %{state: %{show_goto_line: true}}} = scene),
-    do: {:noreply, scene}
+  defp route_input(
+         {:key, {_key, 0, _mods}},
+         _context,
+         %{assigns: %{state: %{show_goto_line: true}}} = scene
+       ),
+       do: {:noreply, scene}
 
-  defp route_input({:codepoint, _}, _context, %{assigns: %{state: %{show_goto_line: true}}} = scene),
-    do: {:noreply, scene}
+  defp route_input(
+         {:codepoint, _},
+         _context,
+         %{assigns: %{state: %{show_goto_line: true}}} = scene
+       ),
+       do: {:noreply, scene}
 
   # Handle Ctrl+N keyboard shortcut for New Buffer
   # Creates a new empty buffer, equivalent to File → New Buffer.
@@ -179,7 +191,7 @@ defmodule QuillEx.RootScene do
   # so there is nothing for the shifted-H variant to reveal — it exists because
   # people's fingers know it, and it lands on the replacement field.
   defp route_input({:key, {key, 1, mods}}, _context, scene)
-      when key in [:key_f, :key_h] and is_list(mods) do
+       when key in [:key_f, :key_h] and is_list(mods) do
     if :shift in mods and Enum.any?(mods, &(&1 in [:ctrl, :meta, :super])) do
       open_project_search(scene, focus: if(key == :key_h, do: :replace, else: :query))
     else
@@ -188,13 +200,13 @@ defmodule QuillEx.RootScene do
   end
 
   defp route_input({:key, {key, 1, mods}}, _context, scene)
-      when key in [:key_equal, :key_kp_add, :"key_="] do
+       when key in [:key_equal, :key_kp_add, :"key_="] do
     if Enum.any?(mods, &(&1 in [:ctrl, :meta, :super])), do: adjust_chrome_zoom(10)
     {:noreply, scene}
   end
 
   defp route_input({:key, {key, 1, mods}}, _context, scene)
-      when key in [:key_minus, :key_kp_subtract, :"key_-"] do
+       when key in [:key_minus, :key_kp_subtract, :"key_-"] do
     if Enum.any?(mods, &(&1 in [:ctrl, :meta, :super])), do: adjust_chrome_zoom(-10)
     {:noreply, scene}
   end
@@ -219,7 +231,7 @@ defmodule QuillEx.RootScene do
   # root so the command registry and Help dialog describe real shortcuts even
   # when focus has just moved between editor children.
   defp route_input({:key, {:key_left_bracket, 1, mods}}, _context, scene)
-      when mods in [[:ctrl, :alt], [:alt, :ctrl]] do
+       when mods in [[:ctrl, :alt], [:alt, :ctrl]] do
     if keyboard_overlay_open?(scene.assigns.state) do
       {:noreply, scene}
     else
@@ -230,7 +242,7 @@ defmodule QuillEx.RootScene do
   end
 
   defp route_input({:key, {:key_right_bracket, 1, mods}}, _context, scene)
-      when mods in [[:ctrl, :alt], [:alt, :ctrl]] do
+       when mods in [[:ctrl, :alt], [:alt, :ctrl]] do
     unless keyboard_overlay_open?(scene.assigns.state) do
       Scenic.Scene.put_child(scene, :buffer_pane, {:action, :unfold_all})
     end
@@ -256,7 +268,7 @@ defmodule QuillEx.RootScene do
   # Every other movement key extends the selection when Shift is held, and
   # these are movement keys.
   defp route_input({:key, {:key_home, 1, mods}}, _context, scene)
-      when is_list(mods) do
+       when is_list(mods) do
     if :ctrl in mods and :shift in mods do
       dispatch_to_active_buffer(scene, {:select_to, {1, 1}})
     else
@@ -265,7 +277,7 @@ defmodule QuillEx.RootScene do
   end
 
   defp route_input({:key, {:key_end, 1, mods}}, _context, scene)
-      when is_list(mods) do
+       when is_list(mods) do
     if :ctrl in mods and :shift in mods do
       dispatch_to_active_buffer(scene, {:select_to, document_end(scene)})
     else
@@ -299,16 +311,16 @@ defmodule QuillEx.RootScene do
   # correct code path.
 
   defp route_input({:viewport, {input, _coords}}, _context, scene)
-      when input in [:enter, :exit] do
+       when input in [:enter, :exit] do
     # don't do anything when the mouse enters/leaves the viewport
     {:noreply, scene}
   end
 
   defp route_input(
-        {:viewport, {:reshape, {_new_vp_width, _new_vp_height} = new_vp_size}},
-        _context,
-        scene
-      ) do
+         {:viewport, {:reshape, {_new_vp_width, _new_vp_height} = new_vp_size}},
+         _context,
+         scene
+       ) do
     current = scene.assigns.state.frame.size.box
 
     if current == new_vp_size do
@@ -355,7 +367,7 @@ defmodule QuillEx.RootScene do
   # File navigator resize drag. The root scene owns this short-lived gesture;
   # ViewStore remains authoritative for the committed width and visibility.
   defp route_input({:cursor_pos, {x, _y} = coords}, _context, scene)
-      when scene.assigns.state.file_nav_resizing do
+       when scene.assigns.state.file_nav_resizing do
     state = scene.assigns.state
 
     max_width =
@@ -401,10 +413,10 @@ defmodule QuillEx.RootScene do
   end
 
   defp route_input(
-        {:cursor_button, {:btn_left, 0, _mods, _coords}},
-        _context,
-        %{assigns: %{state: %{file_nav_resizing: true}}} = scene
-      ) do
+         {:cursor_button, {:btn_left, 0, _mods, _coords}},
+         _context,
+         %{assigns: %{state: %{file_nav_resizing: true}}} = scene
+       ) do
     :ok = release_input(scene, [:cursor_pos, :cursor_button])
     state = scene.assigns.state
 
@@ -520,7 +532,7 @@ defmodule QuillEx.RootScene do
     scene =
       if click_y > @top_bar_height and not state.show_unsaved_prompt and
            not state.show_nav_delete_prompt and not state.show_about and
-           not state.show_shortcuts do
+           not state.show_shortcuts and not state.show_project_replace_prompt do
         if side_pane_open?(state) and click_x < state.file_nav_width do
           grant_keyboard(scene, :side_pane)
         else
@@ -581,7 +593,8 @@ defmodule QuillEx.RootScene do
     content_height = state.frame.size.height - @top_bar_height
     center_y = @top_bar_height + content_height * 0.9
 
-    side_pane_open?(state) and abs(x - state.file_nav_width) <= 16 and
+    side_pane_open?(state) and not state.project_search_settings_open? and
+      abs(x - state.file_nav_width) <= 16 and
       abs(y - center_y) <= 26
   end
 
@@ -636,6 +649,7 @@ defmodule QuillEx.RootScene do
       state.show_goto_line or
         state.show_search_bar or state.show_unsaved_prompt or
         state.show_nav_delete_prompt or
+        state.show_project_replace_prompt or
         Map.get(state, :show_about, false) or Map.get(state, :show_shortcuts, false) or
           state.show_file_picker ->
         {:noreply, scene}
@@ -649,6 +663,7 @@ defmodule QuillEx.RootScene do
     state.show_goto_line or
       state.show_search_bar or state.show_unsaved_prompt or state.show_file_picker or
       state.show_nav_delete_prompt or state.show_save_settings_prompt or
+      state.show_project_replace_prompt or
       Map.get(state, :show_about, false) or Map.get(state, :show_shortcuts, false)
   end
 
@@ -1057,6 +1072,7 @@ defmodule QuillEx.RootScene do
         active_buf: active,
         preview_buf_uuid: surviving_preview(scene.assigns.state.preview_buf_uuid, buffers)
     }
+
     new_scene = render_snapshot(scene, new_state)
 
     if new_state.show_file_nav do
@@ -1652,6 +1668,7 @@ defmodule QuillEx.RootScene do
 
   def handle_event({:search_pane, :close}, _from, scene) do
     Quillex.RadixCache.ViewStore.close_project_search()
+    scene = assign(scene, state: %{scene.assigns.state | project_search_settings_open?: false})
     {:noreply, grant_keyboard(scene, :buffer)}
   end
 
@@ -1699,12 +1716,14 @@ defmodule QuillEx.RootScene do
   # it repeatedly walks down them, which is the reviewable way to do a
   # replace you are not sure about.
   def handle_event({:search_pane, :replace_one, replacement}, _from, scene) do
-    case Quillex.RadixCache.ProjectSearchStore.get_state().files do
-      [{path, [match | _]} | _] ->
+    search = Quillex.RadixCache.ProjectSearchStore.get_state()
+
+    case search.active_match do
+      {path, line, col} ->
         Quillex.RadixCache.ProjectSearchStore.replace_match(
           path,
-          match.line,
-          match.col,
+          line,
+          col,
           replacement
         )
 
@@ -1720,22 +1739,37 @@ defmodule QuillEx.RootScene do
     {:noreply, scene}
   end
 
+  def handle_event({:search_pane, :settings_open, open?}, _from, scene) do
+    old_state = scene.assigns.state
+    new_state = %{old_state | project_search_settings_open?: open?}
+    graph = QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+    {:noreply, scene |> assign(state: new_state, graph: graph) |> push_graph(graph)}
+  end
+
   def handle_event({:search_pane, :toggle_scope, dir}, _from, scene) do
     Quillex.RadixCache.ProjectSearchStore.toggle_scope(dir)
     {:noreply, scene}
   end
 
   def handle_event({:search_pane, :open_match, path, line, col}, _from, scene) do
+    _ = Quillex.RadixCache.ProjectSearchStore.select_match(path, line, col)
     open_preview_at(scene, path, {line, col})
   end
 
+  def handle_event({:search_pane, :previous_match}, _from, scene),
+    do: open_selected_preview(scene, Quillex.RadixCache.ProjectSearchStore.select_previous())
+
+  def handle_event({:search_pane, :next_match}, _from, scene),
+    do: open_selected_preview(scene, Quillex.RadixCache.ProjectSearchStore.select_next())
+
   def handle_event({:search_pane, :dismiss_match, path, line, col}, _from, scene) do
-    Quillex.RadixCache.ProjectSearchStore.dismiss_match(path, line, col)
+    _ = Quillex.RadixCache.ProjectSearchStore.select_match(path, line, col)
+    Quillex.RadixCache.ProjectSearchStore.toggle_skip_match(path, line, col)
     {:noreply, scene}
   end
 
   def handle_event({:search_pane, :dismiss_file, path}, _from, scene) do
-    Quillex.RadixCache.ProjectSearchStore.dismiss_file(path)
+    Quillex.RadixCache.ProjectSearchStore.toggle_scope(path)
     {:noreply, scene}
   end
 
@@ -1750,8 +1784,7 @@ defmodule QuillEx.RootScene do
   end
 
   def handle_event({:search_pane, :replace_all, replacement}, _from, scene) do
-    Quillex.RadixCache.ProjectSearchStore.replace_all(replacement)
-    {:noreply, scene}
+    show_project_replace_dialog(scene, replacement)
   end
 
   # Handle file navigation from SideNav (file explorer sidebar)
@@ -1855,6 +1888,60 @@ defmodule QuillEx.RootScene do
   # :discard — close without saving (changes are lost).
   # :cancel  — leave the buffer open with its unsaved changes intact.
 
+  # --- Project Replace All ---
+  defp show_project_replace_dialog(scene, replacement) do
+    state = scene.assigns.state
+    search = state.project_search || %{}
+    skipped = Map.get(search, :dismissed, MapSet.new())
+
+    eligible =
+      search
+      |> Map.get(:files, [])
+      |> Enum.map(fn {path, matches} ->
+        {path,
+         Enum.reject(matches, fn match ->
+           MapSet.member?(skipped, {match.path, match.line, match.col})
+         end)}
+      end)
+      |> Enum.reject(fn {_path, matches} -> matches == [] end)
+
+    match_count = Enum.sum(Enum.map(eligible, fn {_path, matches} -> length(matches) end))
+    file_count = length(eligible)
+
+    graph =
+      scene.assigns.graph
+      |> ScenicWidgets.ConfirmDialog.add_to_graph(
+        %{
+          frame: state.frame,
+          title:
+            "Replace #{match_count} #{project_plural(match_count, "occurrence")} across " <>
+              "#{file_count} #{project_plural(file_count, "file")}?",
+          message:
+            "This changes every eligible project-search result. Skipped occurrences are left unchanged.",
+          buttons: [{:discard, "Replace All"}, {:cancel, "Cancel"}]
+        },
+        id: :project_replace_prompt
+      )
+
+    new_state = %{
+      state
+      | show_project_replace_prompt: true,
+        pending_project_replacement: replacement
+    }
+
+    new_scene =
+      scene
+      |> assign(state: new_state, graph: graph)
+      |> push_graph(graph)
+
+    Scenic.Scene.put_child(new_scene, :buffer_pane, :blur)
+    Scenic.Scene.put_child(new_scene, :project_search_pane, :blur)
+    {:noreply, new_scene}
+  end
+
+  defp project_plural(1, word), do: word
+  defp project_plural(_count, word), do: word <> "s"
+
   # --- Save Settings as Default ---
   #
   # Every other editor writes your preferences back the moment you change one,
@@ -1908,6 +1995,29 @@ defmodule QuillEx.RootScene do
       |> push_graph(graph)
 
     {:noreply, grant_keyboard(new_scene, :buffer)}
+  end
+
+  def handle_event({:confirm_dialog_response, :project_replace_prompt, action}, _from, scene) do
+    state = scene.assigns.state
+    graph = Scenic.Graph.delete(scene.assigns.graph, :project_replace_prompt)
+
+    if action == :discard and is_binary(state.pending_project_replacement) do
+      Quillex.RadixCache.ProjectSearchStore.replace_all(state.pending_project_replacement)
+    end
+
+    new_state = %{
+      state
+      | show_project_replace_prompt: false,
+        pending_project_replacement: nil
+    }
+
+    new_scene =
+      scene
+      |> assign(state: new_state, graph: graph)
+      |> push_graph(graph)
+      |> grant_keyboard(:side_pane)
+
+    {:noreply, new_scene}
   end
 
   # --- About dialog ---
@@ -2468,9 +2578,8 @@ defmodule QuillEx.RootScene do
 
         {:ok, _snapshot} =
           Quillex.Buffer.dispatch(buf_ref, [
-            {:search, search.query,
-             [case_sensitive: search.case_sensitive, regex: search.regex]},
-            {:set_cursor, {line, col}}
+            {:search_at, search.query,
+             [case_sensitive: search.case_sensitive, regex: search.regex], {line, col}}
           ])
 
         close_stale_preview(old_state, buf_ref)
@@ -2484,6 +2593,12 @@ defmodule QuillEx.RootScene do
         Quillex.RadixCache.ViewStore.show_status(to_string(reason), :warning)
         {:noreply, scene}
     end
+  end
+
+  defp open_selected_preview(scene, nil), do: {:noreply, scene}
+
+  defp open_selected_preview(scene, match) do
+    open_preview_at(scene, match.path, {match.line, match.col})
   end
 
   # The previous preview goes away when the next result takes the slot — but

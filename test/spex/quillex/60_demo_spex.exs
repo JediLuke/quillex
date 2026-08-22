@@ -968,6 +968,7 @@ defmodule Quillex.DemoSpex do
         {:ok, notes} = Quillex.Buffer.fetch(buffer_named("notes.txt"))
 
         assert "kernel.ex" in names
+
         assert "notes.txt" in names,
                "found #{inspect(names)}; query=#{inspect(root_state().project_search.query)} " <>
                  "notes buffer=#{inspect(notes.lines)} dirty=#{notes.ref.dirty?}"
@@ -1064,6 +1065,8 @@ defmodule Quillex.DemoSpex do
         type("g'day")
         dwell(2_000)
         Probes.click_element("search_pane_replace_all")
+        assert wait_until(fn -> root_state().show_project_replace_prompt end)
+        Probes.click_element("project_replace_prompt_btn_discard")
 
         assert wait_until(fn -> (root_state().status_message || "") =~ "Replaced" end),
                "Replace All reported nothing"

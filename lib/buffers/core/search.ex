@@ -21,9 +21,15 @@ defmodule Quillex.Buffer.Core.Search do
     apply_matches(%{buf | search_query: query, search_opts: opts}, found, index)
   end
 
-
   def set(%BufState{} = buf, _, _opts),
     do: %{buf | search_query: nil, search_opts: [], search_matches: [], search_current_index: 0}
+
+  @doc "Set a search while making an exact occurrence current."
+  def set_at(%BufState{} = buf, query, opts, {line, col}) do
+    found = matches(buf.data, query, opts)
+    index = Enum.find_index(found, fn {l, c, _text} -> {l, c} == {line, col} end) || 0
+    apply_matches(%{buf | search_query: query, search_opts: opts}, found, index)
+  end
 
   def clear(%BufState{} = buf), do: set(buf, nil)
 

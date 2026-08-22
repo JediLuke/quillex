@@ -37,6 +37,7 @@ defmodule Quillex.SearchPaneChromeSpex do
   defp pane_open?, do: pane_scene() != nil
   defp pane_state, do: pane_scene().assigns.state
   defp pane_graph, do: pane_scene().assigns.graph
+  defp root_graph, do: :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.graph
 
   defp widget(id), do: Enum.find(State.header_widgets(pane_state()), &(&1.id == id))
 
@@ -48,7 +49,10 @@ defmodule Quillex.SearchPaneChromeSpex do
   end
 
   defp status_text do
-    Enum.find(texts(), &(&1 =~ ~r/^(\d+ in \d+ files?  \(\d+ms\)|no matches|searching…|typing…|Type to search|Search [~\/…])/))
+    Enum.find(
+      texts(),
+      &(&1 =~ ~r/^(\d+ of \d+|no matches|searching…|typing…|Type to search|Search [~\/…])/)
+    )
   end
 
   # Shapes drawn inside a rectangle — how a control made of primitives is
@@ -246,7 +250,7 @@ defmodule Quillex.SearchPaneChromeSpex do
       then_ "it says which project it is about to search", context do
         status = status_text()
 
-        assert status && (status =~ ~r/^Search [~\/…]/),
+        assert status && status =~ ~r/^Search [~\/…]/,
                """
                an empty pane described what searching is — true of every
                project there has ever been. It should name the one in front of
@@ -363,6 +367,7 @@ defmodule Quillex.SearchPaneChromeSpex do
     scenario "opening the settings" do
       given_ "the settings shut", context do
         assert pane_state().domain_open? == false
+
         {:ok,
          context
          |> Map.put(:status_before, widget(:status).y)
@@ -377,7 +382,8 @@ defmodule Quillex.SearchPaneChromeSpex do
       end
 
       then_ "a panel drops out of the cog, and NOTHING moves", context do
-        assert wait_until(fn -> pane_state().domain_open? end), "the cog did not open the settings"
+        assert wait_until(fn -> pane_state().domain_open? end),
+               "the cog did not open the settings"
 
         state = pane_state()
         panel = State.settings_frame(state)
@@ -426,6 +432,9 @@ defmodule Quillex.SearchPaneChromeSpex do
       then_ "and it is drawn over the results, not among them", context do
         assert Scenic.Graph.get(pane_graph(), :search_pane_settings) != [],
                "the panel is not a piece of the graph of its own"
+
+        assert Scenic.Graph.get(root_graph(), :file_nav_resize_handle_group) == [],
+               "the root-owned resize handle must not draw over the settings panel"
 
         {:ok, context}
       end
@@ -491,7 +500,8 @@ defmodule Quillex.SearchPaneChromeSpex do
             if String.ends_with?(to_string(id), "/lib"), do: e
           end)
 
-        assert entry, "no scope node to hover: #{inspect(Enum.map(scope_entries(), &elem(&1, 0)))}"
+        assert entry,
+               "no scope node to hover: #{inspect(Enum.map(scope_entries(), &elem(&1, 0)))}"
 
         %{left: l, top: t, width: w, height: h} = entry.screen_bounds
         Probes.send_mouse_move(trunc(l + w / 2), trunc(t + h / 2))
@@ -637,8 +647,12 @@ defmodule Quillex.SearchPaneChromeSpex do
         {pin_x, pin_y} = pane_state().frame.pin.point
 
         Enum.each(1..60, fn _ ->
-          Probes.send_scroll(0, 1, trunc(pin_x + px + panel.size.width / 2),
-            trunc(pin_y + py + panel.size.height / 2))
+          Probes.send_scroll(
+            0,
+            1,
+            trunc(pin_x + px + panel.size.width / 2),
+            trunc(pin_y + py + panel.size.height / 2)
+          )
         end)
 
         Process.sleep(400)
@@ -703,6 +717,9 @@ defmodule Quillex.SearchPaneChromeSpex do
 
         assert Scenic.Graph.get(pane_graph(), :search_pane_settings) == [],
                "the panel outlived the click that shut it"
+
+        assert Scenic.Graph.get(root_graph(), :file_nav_resize_handle_group) != [],
+               "the resize handle should return when the overlapping panel closes"
 
         assert widget(:status).y == context.status_before,
                "the bar has not moved through any of this, which is the point"

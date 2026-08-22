@@ -61,6 +61,10 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
     excluded: MapSet.new(),
     dismissed: MapSet.new(),
     dismissed_files: MapSet.new(),
+    # The exact project result being inspected. This is independent of the
+    # buffer's local-find session: the pane owns project navigation and merely
+    # asks the buffer to present this occurrence.
+    active_match: nil,
     error: nil,
     # How the query is read. Part of the snapshot because the pane draws the
     # toggles from it, and because a search is only reproducible together with
@@ -97,6 +101,18 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
   def dismiss_match(path, line, col),
     do: GenServer.cast(__MODULE__, {:dismiss_match, path, line, col})
 
+  @doc "Include/exclude one visible occurrence from replacement without hiding it."
+  def toggle_skip_match(path, line, col),
+    do: GenServer.cast(__MODULE__, {:toggle_skip_match, path, line, col})
+
+  @doc "Select an exact result and return it after the snapshot is committed."
+  def select_match(path, line, col),
+    do: GenServer.call(__MODULE__, {:select_match, path, line, col})
+
+  @doc "Move through project results in display order, wrapping at the ends."
+  def select_next, do: GenServer.call(__MODULE__, {:select_relative, 1})
+  def select_previous, do: GenServer.call(__MODULE__, {:select_relative, -1})
+
   @doc "Hide a whole file's matches."
   def dismiss_file(path) when is_binary(path),
     do: GenServer.cast(__MODULE__, {:dismiss_file, path})
@@ -122,7 +138,7 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
   @doc "Flip a search option (`:case_sensitive` or `:regex`) and re-run."
   def toggle_option(option)
       when option in [:case_sensitive, :regex, :use_ignore_files, :open_buffers_only],
-    do: GenServer.cast(__MODULE__, {:toggle_option, option})
+      do: GenServer.cast(__MODULE__, {:toggle_option, option})
 
   @doc "Set a search option outright."
   def set_option(option, value) when option in [:case_sensitive, :regex] and is_boolean(value),
@@ -184,6 +200,22 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
   def handle_call(:await_idle, from, state),
     do: {:noreply, %{state | waiters: [from | state.waiters]}}
 
+  def handle_call({:select_match, path, line, col}, _from, state) do
+    wanted = {path, line, col}
+    selected = Enum.find(flat_matches(state.view.files), &(match_id(&1) == wanted))
+    view = %{state.view | active_match: if(selected, do: wanted, else: state.view.active_match)}
+    state = publish(state, view)
+    {:reply, selected, state}
+  end
+
+  def handle_call({:select_relative, delta}, _from, state) do
+    matches = flat_matches(state.view.files)
+    selected = relative_match(matches, state.view.active_match, delta)
+    view = %{state.view | active_match: if(selected, do: match_id(selected), else: nil)}
+    state = publish(state, view)
+    {:reply, selected, state}
+  end
+
   def handle_cast({:set_root, root}, %{view: %{root: root}} = state), do: {:noreply, state}
 
   def handle_cast({:set_root, root}, state) do
@@ -198,8 +230,8 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
 
   def handle_cast({:toggle_scope, path}, state) do
     excluded =
-      if MapSet.member?(state.view.excluded, path),
-        do: MapSet.delete(state.view.excluded, path),
+      if effectively_excluded?(state.view.root, path, state.view.excluded),
+        do: include_beneath_excluded(state.view.root, path, state.view.excluded),
         else: MapSet.put(state.view.excluded, path)
 
     {:noreply, restart_search(state, %{state.view | excluded: excluded})}
@@ -217,10 +249,20 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
     end
   end
 
-  # Dismissals do not re-run anything: they hide matches the search already
-  # found. Republishing from the raw results is the whole of it.
-  def handle_cast({:dismiss_match, path, line, col}, %{view: view} = state) do
-    dismissed = MapSet.put(view.dismissed, {path, line, col})
+  # Kept as an API alias for older callers. A reviewed occurrence stays on
+  # screen now; the mark means "skip during replacement", not "make vanish".
+  def handle_cast({:dismiss_match, path, line, col}, state) do
+    handle_cast({:toggle_skip_match, path, line, col}, state)
+  end
+
+  def handle_cast({:toggle_skip_match, path, line, col}, %{view: view} = state) do
+    id = {path, line, col}
+
+    dismissed =
+      if MapSet.member?(view.dismissed, id),
+        do: MapSet.delete(view.dismissed, id),
+        else: MapSet.put(view.dismissed, id)
+
     {:noreply, publish_visible(state, %{view | dismissed: dismissed})}
   end
 
@@ -238,19 +280,24 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
   end
 
   def handle_cast({:replace_all, replacement}, %{view: view} = state),
-    do: {:noreply, do_replace(state, view.files, replacement)}
+    do: {:noreply, do_replace(state, eligible_files(view), replacement)}
 
   def handle_cast({:replace_file, path, replacement}, %{view: view} = state),
-    do: {:noreply, do_replace(state, Enum.filter(view.files, &(elem(&1, 0) == path)), replacement)}
+    do:
+      {:noreply,
+       do_replace(state, Enum.filter(eligible_files(view), &(elem(&1, 0) == path)), replacement)}
 
   def handle_cast({:replace_match, path, line, col, replacement}, %{view: view} = state) do
     selected =
-      view.files
+      eligible_files(view)
       |> Enum.filter(fn {file_path, _matches} -> file_path == path end)
       |> Enum.map(fn {file_path, matches} ->
         {file_path, Enum.filter(matches, &(&1.line == line and &1.col == col))}
       end)
 
+    matches = flat_matches(eligible_files(view))
+    next = relative_match(matches, {path, line, col}, 1)
+    state = %{state | view: %{view | active_match: id_or_nil(next)}}
     {:noreply, do_replace(state, selected, replacement)}
   end
 
@@ -355,6 +402,7 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
       view
       | dismissed: MapSet.new(),
         dismissed_files: MapSet.new(),
+        active_match: nil,
         error: nil,
         status: pending_status(view)
     })
@@ -456,9 +504,9 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
     run_search_now(state)
   end
 
-  # Publish the raw results minus whatever the user has dismissed. The status
-  # counts what is VISIBLE — a count that included dismissed matches would
-  # contradict the rows right underneath it.
+  # Reviewed/skipped matches remain visible. The same rows support interactive
+  # navigation and batch review; hiding a skipped row made the latter
+  # impossible to understand or undo.
   defp publish_visible(state, view, elapsed \\ nil) do
     files = visible(state.raw_files, view)
     count = files |> Enum.map(fn {_path, matches} -> length(matches) end) |> Enum.sum()
@@ -470,17 +518,86 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
         {ms, _} -> {:done, count, length(files), ms}
       end
 
-    publish(state, %{view | files: files, status: status, error: nil})
+    active_match = keep_or_seed_active(view.active_match, files)
+    publish(state, %{view | files: files, active_match: active_match, status: status, error: nil})
   end
 
   defp visible(raw_files, view) do
     raw_files
     |> Enum.reject(fn {path, _matches} -> MapSet.member?(view.dismissed_files, path) end)
-    |> Enum.map(fn {path, matches} ->
-      {path,
-       Enum.reject(matches, &MapSet.member?(view.dismissed, {&1.path, &1.line, &1.col}))}
+    |> Enum.reject(fn {_path, matches} -> matches == [] end)
+  end
+
+  defp eligible_files(view) do
+    Enum.map(view.files, fn {path, matches} ->
+      {path, Enum.reject(matches, &MapSet.member?(view.dismissed, match_id(&1)))}
     end)
     |> Enum.reject(fn {_path, matches} -> matches == [] end)
+  end
+
+  defp flat_matches(files), do: for({_path, matches} <- files, match <- matches, do: match)
+  defp match_id(match), do: {match.path, match.line, match.col}
+
+  defp keep_or_seed_active(nil, files), do: files |> flat_matches() |> List.first() |> id_or_nil()
+
+  defp keep_or_seed_active(active, files) do
+    if Enum.any?(flat_matches(files), &(match_id(&1) == active)),
+      do: active,
+      else: files |> flat_matches() |> List.first() |> id_or_nil()
+  end
+
+  defp id_or_nil(nil), do: nil
+  defp id_or_nil(match), do: match_id(match)
+
+  defp relative_match([], _active, _delta), do: nil
+
+  defp relative_match(matches, active, delta) do
+    current =
+      Enum.find_index(matches, &(match_id(&1) == active)) || if(delta > 0, do: -1, else: 0)
+
+    Enum.at(matches, Integer.mod(current + delta, length(matches)))
+  end
+
+  defp effectively_excluded?(root, path, excluded) do
+    path
+    |> then(&ancestor_chain(root, &1))
+    |> Enum.any?(&MapSet.member?(excluded, &1))
+  end
+
+  # Re-enabling a descendant of an excluded directory means "only this way
+  # back in". Remove exclusions on its ancestor chain and exclude the sibling
+  # branches at each level, producing a plain exclusion set both backends can
+  # understand without inventing a second include-exception dialect.
+  defp include_beneath_excluded(root, path, excluded) do
+    chain = ancestor_chain(root, path)
+    cleaned = Enum.reduce(chain, excluded, &MapSet.delete(&2, &1))
+    first_closed = Enum.find_index(chain, &MapSet.member?(excluded, &1)) || length(chain)
+
+    chain
+    |> Enum.drop(first_closed)
+    |> Enum.chunk_every(2, 1, :discard)
+    |> Enum.reduce(cleaned, fn [parent, wanted_child], acc ->
+      parent
+      |> immediate_children()
+      |> Enum.reject(&(&1 == wanted_child))
+      |> Enum.reduce(acc, &MapSet.put(&2, &1))
+    end)
+  end
+
+  defp ancestor_chain(root, path) do
+    relative = Path.relative_to(path, root)
+
+    case relative do
+      "." -> [root]
+      rel -> Enum.scan(Path.split(rel), root, &Path.join(&2, &1)) |> then(&[root | &1])
+    end
+  end
+
+  defp immediate_children(path) do
+    case File.ls(path) do
+      {:ok, names} -> Enum.map(names, &Path.join(path, &1))
+      _ -> []
+    end
   end
 
   defp cancel_task(%{task: nil} = state), do: state
