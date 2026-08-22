@@ -156,9 +156,35 @@ defmodule Quillex.SearchPaneChromeSpex do
     end
   end
 
-  # More directories than the scope tree will show at once, so that reaching
-  # the ones past the cap is a thing this can test at all.
-  @scope_dirs 20
+  # The settings panel's scrollbar: drawn only when there is something to
+  # scroll, so its presence IS the assertion.
+  defp settings_thumb do
+    case Scenic.Graph.get(pane_graph(), {:scrollbar_y_thumb, :search_pane_settings}) do
+      [thumb] -> thumb
+      _ -> nil
+    end
+  end
+
+  # Where to press to grab it, in screen coordinates. The bar is drawn inside
+  # the panel group, inset by the same padding `ScrollRenderer` uses for every
+  # other bar in the editor.
+  defp settings_thumb_centre do
+    thumb = settings_thumb()
+    {_w, h, _r} = thumb.data
+    {_tx, ty} = Map.fetch!(thumb.transforms, :translate)
+
+    layout = State.settings_layout(pane_state())
+    {pin_x, pin_y} = pane_state().frame.pin.point
+    inset = Widgex.Scroll.ScrollRenderer.inset()
+    pad = Widgex.Scroll.ScrollRenderer.padding()
+
+    {trunc(pin_x + layout.x + layout.width - inset / 2),
+     trunc(pin_y + layout.y + pad + ty + h / 2)}
+  end
+
+  # More directories than the settings panel can show at once, so that
+  # reaching the ones past its bottom edge is a thing this can test at all.
+  @scope_dirs 60
 
   defp write_fixture(root) do
     File.rm_rf!(root)
@@ -489,17 +515,34 @@ defmodule Quillex.SearchPaneChromeSpex do
         {:ok, context}
       end
 
-      then_ "it shows a window of the tree, and says where in it you are", context do
-        note = Enum.find(texts(), &(&1 =~ ~r/\d+–\d+ of \d+/))
+      then_ "the panel is clamped to the pane, and draws a bar to say so", context do
+        layout = State.settings_layout(pane_state())
 
-        assert note,
+        assert ScenicWidgets.Menu.Dropdown.scrollable?(layout),
                """
-               a tree longer than the menu can show has to say so, and say
-               WHERE — "11 more…" tells you something is hidden and nothing
-               about reaching it: #{inspect(texts())}
+               this project has #{@scope_dirs} directories in it precisely so
+               that the panel cannot show them all at once. It fits
+               (#{layout.content_height} in #{layout.height}), so nothing below
+               this proves anything.
                """
 
-        assert note =~ ~r/^\s*1–/, "it should start at the top: #{inspect(note)}"
+        assert layout.y + layout.height <= pane_state().frame.size.height,
+               """
+               the panel reaches #{trunc(layout.y + layout.height - pane_state().frame.size.height)}px
+               past the bottom of the pane. A row below the edge cannot be
+               clicked, so it may as well not be in the panel.
+               """
+
+        assert settings_thumb(),
+               """
+               the panel clamps and scrolls and says nothing about it. A menu
+               that hides its own tail behind a silent offset is a menu whose
+               last rows can be counted and never reached — which is the whole
+               reason this bar exists.
+               """
+
+        assert pane_state().settings_scroll == 0,
+               "a panel opens at its top, whatever the last visit left it at"
 
         {:ok, Map.put(context, :first_nodes, scope_node_ids())}
       end
@@ -523,17 +566,18 @@ defmodule Quillex.SearchPaneChromeSpex do
         {:ok, context}
       end
 
-      then_ "the tree moves, and shows directories it could not before", context do
-        assert wait_until(fn -> pane_state().scope_scroll > 0 end),
-               "the wheel over the settings panel did not move the tree"
+      then_ "the panel moves, and shows directories it could not before", context do
+        assert wait_until(fn -> pane_state().settings_scroll > 0 end),
+               "the wheel over the settings panel did not move it"
 
         now = scope_node_ids()
 
         refute MapSet.equal?(MapSet.new(now), MapSet.new(context.first_nodes)),
-               "the same directories are published after scrolling past them"
-
-        note = Enum.find(texts(), &(&1 =~ ~r/\d+–\d+ of \d+/))
-        refute note =~ ~r/^\s*1–/, "and the position should have moved: #{inspect(note)}"
+               """
+               the same directories are published after scrolling past them.
+               A panel that names rows it has wound off its own edge offers a
+               click that lands on the document behind the pane.
+               """
 
         {:ok, context}
       end
@@ -570,10 +614,71 @@ defmodule Quillex.SearchPaneChromeSpex do
 
         assert Enum.any?(scope_node_ids(), &String.ends_with?(&1, last)),
                """
-               the end of the tree cannot be reached, so a directory past the
-               cap can be counted and never excluded:
+               the end of the tree cannot be reached, so a directory below the
+               panel's bottom edge can be counted and never excluded:
                #{inspect(scope_node_ids())}
                """
+
+        {:ok, context}
+      end
+
+      when_ "the panel is wound back to the top and its thumb dragged down", context do
+        panel = State.settings_frame(pane_state())
+        {px, py} = panel.pin.point
+        {pin_x, pin_y} = pane_state().frame.pin.point
+
+        Enum.each(1..60, fn _ ->
+          Probes.send_scroll(0, 1, trunc(pin_x + px + panel.size.width / 2),
+            trunc(pin_y + py + panel.size.height / 2))
+        end)
+
+        Process.sleep(400)
+
+        assert wait_until(fn -> pane_state().settings_scroll == 0 end),
+               "the wheel would not wind the panel back up again"
+
+        {x, y} = settings_thumb_centre()
+        Probes.mouse_down(x, y)
+        Process.sleep(120)
+
+        # In steps, the way a hand does it — a single jump would not catch a
+        # handler that only works from where the press happened.
+        Enum.each(1..5, fn i ->
+          Probes.send_mouse_move(x, y + i * 25)
+          Process.sleep(60)
+        end)
+
+        {:ok, Map.put(context, :drag_to, {x, y + 125})}
+      end
+
+      then_ "the panel follows it", context do
+        assert wait_until(fn -> pane_state().settings_scroll > 0 end),
+               """
+               the bar can be looked at and not moved. This pane has shipped
+               that exact bug once already — three drag fields on the state
+               and no code reading them — so it is asserted rather than
+               assumed.
+               """
+
+        {:ok, context}
+      end
+
+      when_ "the button is released and the pointer moves on", context do
+        {x, y} = context.drag_to
+        Probes.mouse_up(x, y)
+        Process.sleep(150)
+
+        settled = pane_state().settings_scroll
+
+        Probes.send_mouse_move(x, y + 150)
+        Process.sleep(200)
+
+        {:ok, Map.put(context, :settled, settled)}
+      end
+
+      then_ "nothing more moves, because the drag is over", context do
+        assert pane_state().settings_scroll == context.settled,
+               "the panel went on following a pointer that had let go of it"
 
         {:ok, context}
       end

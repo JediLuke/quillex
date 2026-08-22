@@ -52,6 +52,29 @@ defmodule Quillex.MenuFitsAnyWindowSpex do
 
   defp dropdown(id), do: Map.get(icon_menu_state().dropdown_bounds, id)
 
+  defp icon_menu_graph do
+    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    {:ok, [pid | _]} = Scenic.Scene.child(root, :icon_menu)
+    :sys.get_state(pid, 30_000).assigns.graph
+  end
+
+  # Where the topmost DRAWN row of the open dropdown sits, read out of the
+  # graph rather than out of the state that feeds it.
+  defp drawn_row_y do
+    icon_menu_graph().primitives
+    |> Map.values()
+    |> Enum.filter(&match?({:dropdown_item, _}, &1.id))
+    |> Enum.map(fn p -> p.transforms |> Map.fetch!(:translate) |> elem(1) end)
+    |> Enum.min(fn -> nil end)
+  end
+
+  defp scrollbar_thumb do
+    case Scenic.Graph.get(icon_menu_graph(), {:scrollbar_y_thumb, :dropdown_group}) do
+      [thumb] -> thumb
+      _ -> nil
+    end
+  end
+
   defp wait_until(predicate, timeout \\ 8_000) do
     deadline = System.monotonic_time(:millisecond) + timeout
     do_wait(predicate, deadline)
@@ -139,6 +162,7 @@ defmodule Quillex.MenuFitsAnyWindowSpex do
                """
 
         first_row_y = bounds.items |> Map.values() |> Enum.map(& &1.y) |> Enum.min()
+        context = Map.put(context, :drawn_first, drawn_row_y())
 
         # dropdown_bounds are in the icon menu's OWN space; the wheel is sent
         # in the viewport's.
@@ -164,6 +188,21 @@ defmodule Quillex.MenuFitsAnyWindowSpex do
                already — what it lacked was ever being told the window had
                shrunk, so by its own arithmetic there was nothing to scroll.
                """
+
+        # And it moved ON SCREEN, not merely in the state. Everything above is
+        # read out of `dropdown_bounds`, which is where the scroll arithmetic
+        # lands — the graph is a separate step, and the renderer rebuilds the
+        # dropdown only for a change it recognises. Scrolling changes nothing
+        # it used to look at.
+        assert drawn_row_y() < context.drawn_first,
+               """
+               the menu scrolled in its state and stayed where it was on the
+               screen. A person turning the wheel is told nothing at all until
+               something else — the next pixel of pointer movement — happens to
+               rebuild the panel.
+               """
+
+        assert scrollbar_thumb(), "a clamped menu draws no scrollbar"
 
         :ok = close_menu()
         {:ok, context}
