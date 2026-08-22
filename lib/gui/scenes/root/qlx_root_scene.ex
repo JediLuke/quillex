@@ -2234,7 +2234,11 @@ defmodule QuillEx.RootScene do
   end
 
   def handle_event({:dropdown_closed}, _from, scene) do
-    Scenic.Scene.put_child(scene, :buffer_pane, {:set_overlay_open, false})
+    # A menu item can open a modal before IconMenu reports that its dropdown
+    # closed. In that ordering the modal, not the vanished menu, still owns all
+    # pointer input.
+    overlay_open = if scene.assigns.state.show_file_picker, do: true, else: false
+    Scenic.Scene.put_child(scene, :buffer_pane, {:set_overlay_open, overlay_open})
     {:noreply, scene}
   end
 
@@ -2906,6 +2910,7 @@ defmodule QuillEx.RootScene do
 
     # Blur the buffer pane so keystrokes go to FilePicker, not TextField
     Scenic.Scene.put_child(new_scene, :buffer_pane, :blur)
+    Scenic.Scene.put_child(new_scene, :buffer_pane, {:set_overlay_open, true})
 
     {:noreply, new_scene}
   end
@@ -2960,6 +2965,7 @@ defmodule QuillEx.RootScene do
 
     # IMPORTANT: Blur the buffer pane so keystrokes go to FilePicker, not TextField
     Scenic.Scene.put_child(new_scene, :buffer_pane, :blur)
+    Scenic.Scene.put_child(new_scene, :buffer_pane, {:set_overlay_open, true})
 
     {:noreply, new_scene}
   end
@@ -2980,6 +2986,7 @@ defmodule QuillEx.RootScene do
       |> push_graph(graph)
 
     # Refocus the buffer pane
+    Scenic.Scene.put_child(new_scene, :buffer_pane, {:set_overlay_open, false})
     Scenic.Scene.put_child(new_scene, :buffer_pane, :focus)
 
     # If a file was selected, open it
@@ -3004,6 +3011,8 @@ defmodule QuillEx.RootScene do
       |> assign(state: new_state)
       |> assign(graph: graph)
       |> push_graph(graph)
+
+    Scenic.Scene.put_child(new_scene, :buffer_pane, {:set_overlay_open, false})
 
     # Save the current buffer to the specified path
     save_buffer_as(new_scene, file_path)

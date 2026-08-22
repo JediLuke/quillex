@@ -36,6 +36,12 @@ defmodule Quillex.MenuFitsAnyWindowSpex do
     :sys.get_state(pid, 30_000).assigns.state
   end
 
+  defp buffer_pane_state do
+    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    {:ok, [pid | _]} = Scenic.Scene.child(root, :buffer_pane)
+    :sys.get_state(pid, 30_000).assigns.state
+  end
+
   defp window_height, do: root_state().frame.size.height
 
   defp open_menu(id) do
@@ -91,6 +97,7 @@ defmodule Quillex.MenuFitsAnyWindowSpex do
   defp resize_to(height) do
     {w, _h} = ViewportResizer.viewport_size()
     ViewportResizer.resize(w, height)
+
     assert wait_until(fn -> window_height() == height end, 5_000),
            "the viewport never reached #{height} (got #{window_height()})"
 
@@ -105,6 +112,14 @@ defmodule Quillex.MenuFitsAnyWindowSpex do
     Process.sleep(1_000)
     AppReset.reset!()
 
+    {:ok, _buf} =
+      Quillex.Buffer.new(%{
+        name: "menu-wheel-routing.txt",
+        data: Enum.map(1..300, &"line #{&1}")
+      })
+
+    Process.sleep(500)
+
     {original_w, original_h} = ViewportResizer.viewport_size()
 
     on_exit(fn ->
@@ -116,7 +131,8 @@ defmodule Quillex.MenuFitsAnyWindowSpex do
   end
 
   spex "No window size leaves a menu row you cannot reach",
-    description: "Shrink the window; every dropdown still fits, scrolls, and can be read to the end",
+    description:
+      "Shrink the window; every dropdown still fits, scrolls, and can be read to the end",
     tags: [:phase_46, :menubar, :resize, :property] do
     scenario "every size, every menu" do
       then_ "each dropdown is inside the window, whatever size it is", context do
@@ -162,7 +178,12 @@ defmodule Quillex.MenuFitsAnyWindowSpex do
                """
 
         first_row_y = bounds.items |> Map.values() |> Enum.map(& &1.y) |> Enum.min()
-        context = Map.put(context, :drawn_first, drawn_row_y())
+        buffer_scroll_before = buffer_pane_state().scroll.offset_y
+
+        context =
+          context
+          |> Map.put(:drawn_first, drawn_row_y())
+          |> Map.put(:buffer_scroll_before, buffer_scroll_before)
 
         # dropdown_bounds are in the icon menu's OWN space; the wheel is sent
         # in the viewport's.
@@ -188,6 +209,9 @@ defmodule Quillex.MenuFitsAnyWindowSpex do
                already — what it lacked was ever being told the window had
                shrunk, so by its own arithmetic there was nothing to scroll.
                """
+
+        assert buffer_pane_state().scroll.offset_y == context.buffer_scroll_before,
+               "scrolling the open View dropdown also scrolled the document beneath it"
 
         # And it moved ON SCREEN, not merely in the state. Everything above is
         # read out of `dropdown_bounds`, which is where the scroll arithmetic

@@ -120,6 +120,12 @@ defmodule Quillex.FileOperationsSpex do
     :sys.get_state(field_pid).assigns.state
   end
 
+  defp buffer_pane_state do
+    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    {:ok, [pane_pid | _]} = Scenic.Scene.child(root, :buffer_pane)
+    :sys.get_state(pane_pid, 30_000).assigns.state
+  end
+
   # Type filename in the save dialog
   defp type_filename(filename) do
     # Clear existing filename first
@@ -360,6 +366,9 @@ defmodule Quillex.FileOperationsSpex do
 
         assert filename_field_state().focused,
                "the filename TextField should own keyboard focus as soon as Save As opens"
+
+        assert buffer_pane_state().overlay_open == true,
+               "the modal picker should capture wheel input before it reaches the editor"
 
         {:ok, context}
       end
