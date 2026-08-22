@@ -163,6 +163,20 @@ defmodule QuillEx.RootScene do
        ),
        do: {:noreply, scene}
 
+  defp route_input(
+         {:cursor_button, {:btn_left, 1, _mods, coords}},
+         _context,
+         %{assigns: %{state: %{show_goto_line: true}}} = scene
+       ) do
+    case goto_line_hit(scene.assigns.state, coords) do
+      :first -> jump_to_line(scene, 1)
+      :last -> jump_to_line(scene, length(active_buffer_lines(scene.assigns.state)))
+      :go -> commit_goto_line(scene)
+      :outside -> {:noreply, hide_goto_line(scene)}
+      nil -> {:noreply, scene}
+    end
+  end
+
   # Handle Ctrl+N keyboard shortcut for New Buffer
   # Creates a new empty buffer, equivalent to File → New Buffer.
   defp route_input({:key, {:key_n, 1, [:ctrl]}}, _context, scene) do
@@ -976,6 +990,11 @@ defmodule QuillEx.RootScene do
     hide_file_picker(scene)
   end
 
+  def handle_cast({:file_picker, :filename_focused}, scene) do
+    Scenic.Scene.put_child(scene, :buffer_pane, :blur)
+    {:noreply, scene}
+  end
+
   # ===========================================================================
   # SearchBar events (via cast_parent)
   # ===========================================================================
@@ -1537,22 +1556,87 @@ defmodule QuillEx.RootScene do
   defp goto_line_graph(graph, state) do
     typed = state.goto_line_input
     total = length(active_buffer_lines(state))
+    {x, y, width, height} = goto_line_bounds(state)
+    palette = Quillex.GUI.Palette.get(state.theme)
+    field_text = if typed == "", do: "Line number", else: typed
 
     graph
     |> Scenic.Graph.delete(:goto_line_prompt)
-    |> ScenicWidgets.PopupModal.add_to_graph(
-      %{
-        frame: state.frame,
-        title: "Go to Line",
-        body: [
-          "Line number:  #{if typed == "", do: "_", else: typed}",
-          "",
-          "1 - #{total}      Enter to jump, Escape to cancel"
-        ]
-      },
-      id: :goto_line_prompt
+    |> Scenic.Primitives.group(
+      fn g ->
+        g
+        |> Scenic.Primitives.rrect({width, height, 5},
+          fill: palette.pane_bg,
+          stroke: {1, palette.pane_border}
+        )
+        |> Scenic.Primitives.text("Go to Line",
+          translate: {14, 24},
+          fill: palette.pane_fg,
+          font_size: 15
+        )
+        |> Scenic.Primitives.text("Choose a line from 1 to #{total}",
+          translate: {14, 43},
+          fill: palette.pane_dim,
+          font_size: 11
+        )
+        |> Scenic.Primitives.rrect({width - 28, 30, 3},
+          translate: {14, 51},
+          fill: palette.field_bg,
+          stroke: {1, palette.field_border}
+        )
+        |> Scenic.Primitives.text(field_text,
+          translate: {23, 72},
+          fill: if(typed == "", do: palette.pane_dim, else: palette.pane_fg),
+          font_size: 14
+        )
+        |> goto_line_button(:goto_line_first, "First", {14, 89}, {70, 28}, palette)
+        |> goto_line_button(:goto_line_last, "End of file", {92, 89}, {100, 28}, palette)
+        |> goto_line_button(:goto_line_go, "Go", {width - 72, 89}, {58, 28}, palette, :primary)
+      end,
+      id: :goto_line_prompt,
+      translate: {x, y}
     )
   end
+
+  defp goto_line_button(graph, id, label, {x, y}, {w, h}, palette, style \\ :normal) do
+    fill = if style == :primary, do: palette.accent, else: palette.pane_hover_bg
+    text = if style == :primary, do: palette.accent_fg, else: palette.pane_fg
+
+    graph
+    |> Scenic.Primitives.rrect({w, h, 3},
+      id: id,
+      translate: {x, y},
+      fill: fill,
+      stroke: {1, palette.pane_border},
+      input: :cursor_button
+    )
+    |> Scenic.Primitives.text(label,
+      translate: {x + w / 2, y + h - 8},
+      text_align: :center,
+      fill: text,
+      font_size: 12
+    )
+  end
+
+  defp goto_line_bounds(state) do
+    width = min(430, max(340, state.frame.size.width * 0.42))
+    {(state.frame.size.width - width) / 2, @top_bar_height + 10, width, 128}
+  end
+
+  defp goto_line_hit(state, {px, py}) do
+    {x, y, width, height} = goto_line_bounds(state)
+
+    cond do
+      px < x or px > x + width or py < y or py > y + height -> :outside
+      inside_rect?({px, py}, {x + 14, y + 89, 70, 28}) -> :first
+      inside_rect?({px, py}, {x + 92, y + 89, 100, 28}) -> :last
+      inside_rect?({px, py}, {x + width - 72, y + 89, 58, 28}) -> :go
+      true -> nil
+    end
+  end
+
+  defp inside_rect?({px, py}, {x, y, w, h}),
+    do: px >= x and px <= x + w and py >= y and py <= y + h
 
   defp hide_goto_line(scene) do
     state = %{scene.assigns.state | show_goto_line: false, goto_line_input: ""}
@@ -1607,6 +1691,15 @@ defmodule QuillEx.RootScene do
         {:noreply, scene}
     end
   end
+
+  defp jump_to_line(scene, line) when line >= 1 do
+    scene = hide_goto_line(scene)
+    Scenic.Scene.put_child(scene, :buffer_pane, {:action, {:set_cursor, {line, 1}}})
+    Quillex.RadixCache.ViewStore.show_status("Line #{line}", :info)
+    {:noreply, scene}
+  end
+
+  defp jump_to_line(scene, _line), do: {:noreply, hide_goto_line(scene)}
 
   # NOTE: SearchBar communicates via cast_parent/2, so search/replace UI events
   # arrive as handle_cast — see the "Search bar" handle_cast clauses above.

@@ -46,7 +46,8 @@ defmodule Quillex.GotoLineSpex do
   end
 
   spex "Ctrl+G jumps to a line",
-    description: "Go to Line is reachable by shortcut and by menu, and clamps rather than refusing",
+    description:
+      "Go to Line is reachable by shortcut and by menu, and clamps rather than refusing",
     tags: [:phase_43, :navigation, :goto_line] do
     scenario "The prompt opens, takes digits, and moves the cursor" do
       given_ "the editor is focused on a 300-line buffer", context do
@@ -141,6 +142,36 @@ defmodule Quillex.GotoLineSpex do
 
         Probes.send_keys("escape", [])
         Process.sleep(300)
+        {:ok, context}
+      end
+    end
+
+    scenario "The compact prompt offers document-boundary shortcuts" do
+      when_ "First is clicked", context do
+        Probes.send_keys("g", [:ctrl])
+        Process.sleep(250)
+        Probes.click_element("goto_line_first")
+        Process.sleep(300)
+        {:ok, context}
+      end
+
+      then_ "the cursor moves to the first line", context do
+        assert {1, 1} = cursor()
+        refute root_state().show_goto_line
+        {:ok, context}
+      end
+
+      when_ "End of file is clicked", context do
+        Probes.send_keys("g", [:ctrl])
+        Process.sleep(250)
+        Probes.click_element("goto_line_last")
+        Process.sleep(300)
+        {:ok, context}
+      end
+
+      then_ "the cursor moves to the final line", context do
+        assert {300, 1} = cursor()
+        refute root_state().show_goto_line
         {:ok, context}
       end
     end
