@@ -17,8 +17,6 @@ defmodule Quillex.ViewportResizeSpex do
   alias Quillex.TestHelpers.ViewportResizer
   alias Quillex.TestHelpers.Perf
 
-  # The :test window boots at 2000x1200 (QuillEx.App.window_size/0).
-  @boot_size {2000, 1200}
   @shrunk_size {1400, 900}
 
   defp child_pid(id) do
@@ -54,7 +52,27 @@ defmodule Quillex.ViewportResizeSpex do
     # closed) without touching buffers — an open navigator shifts the
     # editor pane 250px right and makes fixed-x clicks miss it.
     Quillex.TestHelpers.AppReset.reset_layout!()
-    :ok
+
+    # What the viewport ACTUALLY is when this file starts, not what the app
+    # asked the window manager for. `ViewportResizer` reshapes Scenic's
+    # viewport and not the OS window, so a size restored from a hardcoded pair
+    # is a size the window may never have been: everything anchored to the
+    # right edge — the IconMenu is `align: :right` — is then laid out past the
+    # edge of the window and cannot be seen at all, and its dropdowns, which
+    # hang leftward from those icons, show only their leftmost sliver.
+    #
+    # Every spex that runs after this file inherits whatever it leaves behind,
+    # and they are not resize spex — they have no reason to suspect the
+    # geometry. So it goes back, from an on_exit rather than from a scenario,
+    # because a scenario that fails halfway leaves the mess for everyone else.
+    boot = ViewportResizer.viewport_size()
+
+    on_exit(fn ->
+      ViewportResizer.resize(elem(boot, 0), elem(boot, 1))
+      Process.sleep(600)
+    end)
+
+    {:ok, boot: boot}
   end
 
   spex "Reshape reflows the layout without losing editor state",
@@ -122,7 +140,7 @@ defmodule Quillex.ViewportResizeSpex do
       end
 
       when_ "the viewport is reshaped back to the boot size", context do
-        {w, h} = @boot_size
+        {w, h} = context.boot
         ViewportResizer.resize(w, h)
         Process.sleep(600)
         {:ok, context}
