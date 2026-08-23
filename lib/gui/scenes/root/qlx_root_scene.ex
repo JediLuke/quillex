@@ -2808,9 +2808,13 @@ defmodule QuillEx.RootScene do
         # keystroke.
         if state.show_search_bar do
           Scenic.Scene.put_child(scene, :search_bar, :blur)
-          Scenic.Scene.put_child(scene, :buffer_pane, {:set_overlay_open, false})
         end
 
+        # Owning the editor and retaining an overlay gate are contradictory.
+        # In particular, opening a file from the navigator comes through this
+        # path; a stale menu/modal gate otherwise leaves wheel and pointer
+        # input blocked on the newly opened document despite its focus flag.
+        Scenic.Scene.put_child(scene, :buffer_pane, {:set_overlay_open, false})
         Scenic.Scene.put_child(scene, :buffer_pane, :focus)
 
       :side_pane ->
