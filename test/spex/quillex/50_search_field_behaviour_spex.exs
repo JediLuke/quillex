@@ -27,7 +27,7 @@ defmodule Quillex.SearchFieldBehaviourSpex do
     :ok
   end
 
-  defp root_scene, do: :sys.get_state(Process.whereis(QuillEx.RootScene))
+  defp root_scene, do: :sys.get_state(Process.whereis(Quillex.RootScene))
 
   defp wait_until(predicate, timeout \\ 4_000) do
     deadline = System.monotonic_time(:millisecond) + timeout
@@ -72,7 +72,8 @@ defmodule Quillex.SearchFieldBehaviourSpex do
     scenario "behaviour the pane never implemented" do
       given_ "the query field holding a phrase", context do
         open_pane()
-        assert :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state.show_project_search
+
+        assert :sys.get_state(Process.whereis(Quillex.RootScene)).assigns.state.show_project_search
 
         # Clear whatever it was seeded with, then type a phrase of our own.
         Probes.send_keys("a", [:ctrl])

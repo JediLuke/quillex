@@ -1,6 +1,4 @@
-defmodule QuillEx.RootScene.Renderizer do
-  require Logger
-
+defmodule Quillex.RootScene.Renderizer do
   import Scenic.Primitives, only: [group: 3, line: 3, rect: 3, rrect: 3, text: 3]
 
   alias Quillex.Utils.FileTree
@@ -40,7 +38,7 @@ defmodule QuillEx.RootScene.Renderizer do
   # Guard: no frame means we cannot lay out components yet.  This happens during
   # process startup or in unit-test contexts where a bare state struct (frame: nil)
   # is passed.  Return the graph unchanged so callers don't crash.
-  def render(%Scenic.Graph{} = graph, _scene, _old_state, %QuillEx.RootScene.State{frame: nil}) do
+  def render(%Scenic.Graph{} = graph, _scene, _old_state, %Quillex.RootScene.State{frame: nil}) do
     graph
   end
 
@@ -48,7 +46,7 @@ defmodule QuillEx.RootScene.Renderizer do
         %Scenic.Graph{} = graph,
         scene,
         old_state,
-        %QuillEx.RootScene.State{} = state
+        %Quillex.RootScene.State{} = state
       ) do
     # Split frame: top bar and buffer pane below
     [top_bar_frame, buffer_frame] =
@@ -445,9 +443,8 @@ defmodule QuillEx.RootScene.Renderizer do
     end
   end
 
-  # Create the sidebar child if a frame is provided (something is visible)
-  defp maybe_create_file_nav(graph, _state, nil), do: graph
-
+  # Create the sidebar child. The caller has already matched a %Widgex.Frame{},
+  # so there is no "no frame" case to handle here.
   defp maybe_create_file_nav(graph, %{show_project_search: true} = state, %Widgex.Frame{} = frame) do
     graph
     |> ScenicWidgets.SearchPane.add_to_graph(
@@ -569,7 +566,7 @@ defmodule QuillEx.RootScene.Renderizer do
   end
 
   defp file_nav_theme(state),
-    do: Quillex.Utils.SideNavThemes.for_editor(scaled(24, state), palette(state))
+    do: SideNavThemes.for_editor(scaled(24, state), palette(state))
 
   defp search_pane_theme(state) do
     # Sized off the FILE NAVIGATOR, not off numbers of its own. The two share
@@ -578,7 +575,7 @@ defmodule QuillEx.RootScene.Renderizer do
     # two applications. A result's file name is now exactly the size the
     # navigator would have drawn it, and everything else in the pane is
     # measured from that.
-    label = Quillex.Utils.SideNavThemes.nav_font_size(scaled(24, state))
+    label = SideNavThemes.nav_font_size(scaled(24, state))
 
     palette(state)
     |> Quillex.GUI.Palette.search_pane_theme()
@@ -993,7 +990,7 @@ defmodule QuillEx.RootScene.Renderizer do
   @doc """
   Build menus with current toggle states from state.
   """
-  def build_menus(%QuillEx.RootScene.State{} = state) do
+  def build_menus(%Quillex.RootScene.State{} = state) do
     alias ScenicWidgets.Menu.Model.{Divider, Item, Select, Slider, Stepper, Toggle}
 
     command_item = fn id ->

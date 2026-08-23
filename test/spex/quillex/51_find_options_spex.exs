@@ -24,7 +24,7 @@ defmodule Quillex.FindOptionsSpex do
     :ok
   end
 
-  defp root_scene, do: :sys.get_state(Process.whereis(QuillEx.RootScene))
+  defp root_scene, do: :sys.get_state(Process.whereis(Quillex.RootScene))
   defp root_state, do: root_scene().assigns.state
 
   defp child!(id) do
@@ -39,6 +39,7 @@ defmodule Quillex.FindOptionsSpex do
     {:ok, c} = Scenic.Scene.child(bar, :search_bar_query_field)
     if is_list(c), do: List.first(c), else: c
   end
+
   defp pane_state, do: :sys.get_state(child!(:buffer_pane)).assigns.state
 
   defp matches, do: pane_state().search_matches
@@ -65,8 +66,6 @@ defmodule Quillex.FindOptionsSpex do
 
     Probes.click(trunc(fx + w.x + w.w / 2), trunc(fy + w.y + w.h / 2))
     Process.sleep(600)
-
-
   end
 
   # Select all, then type over it. This is the whole point of the fields being

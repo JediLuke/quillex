@@ -7,7 +7,7 @@ defmodule Quillex do
   environment with file navigation, search and replace, undo and redo,
   selections, configurable editor views, and mouse and keyboard interaction.
   Quillex can also supply its buffer backend to another application or run
-  without its own graphical viewport; see `QuillEx.App` for the standalone and
+  without its own graphical viewport; see `Quillex.App` for the standalone and
   headless runtime contracts.
 
   ## Programmatic interface

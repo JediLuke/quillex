@@ -26,10 +26,10 @@ defmodule Quillex.KeyboardOwnershipSpex do
     :ok
   end
 
-  defp root_state, do: :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state
+  defp root_state, do: :sys.get_state(Process.whereis(Quillex.RootScene)).assigns.state
 
   defp child_state(id) do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
     {:ok, child} = Scenic.Scene.child(root, id)
     pid = if is_list(child), do: List.first(child), else: child
     :sys.get_state(pid).assigns.state

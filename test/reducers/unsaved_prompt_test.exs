@@ -1,8 +1,8 @@
-defmodule QuillEx.RootScene.UnsavedPromptTest do
+defmodule Quillex.RootScene.UnsavedPromptTest do
   use ExUnit.Case, async: true
 
-  alias QuillEx.RootScene
-  alias QuillEx.RootScene.State, as: RootState
+  alias Quillex.RootScene
+  alias Quillex.RootScene.State, as: RootState
   alias Quillex.Buffer.Ref
 
   # Build a RootScene.State skeleton that satisfies the struct invariants.

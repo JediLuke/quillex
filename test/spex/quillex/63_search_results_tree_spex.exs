@@ -34,7 +34,7 @@ defmodule Quillex.SearchResultsTreeSpex do
   alias Quillex.TestHelpers.AppReset
 
   defp pane_scene do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
 
     case Scenic.Scene.child(root, :project_search_pane) do
       {:ok, [pid | _]} -> :sys.get_state(pid, 30_000)
@@ -116,7 +116,8 @@ defmodule Quillex.SearchResultsTreeSpex do
     File.rm_rf!(root)
 
     %{
-      "lib/core/engine.ex" => "defmodule Engine do\n  def needle(x), do: x\n  # another needle\nend\n",
+      "lib/core/engine.ex" =>
+        "defmodule Engine do\n  def needle(x), do: x\n  # another needle\nend\n",
       "lib/web/router.ex" => "defmodule Router do\n  # routes the needle\nend\n",
       "test/engine_test.exs" => "test \"needle\" do\nend\n",
       "README.md" => "# Fixture\n\nfind the needle here\n"

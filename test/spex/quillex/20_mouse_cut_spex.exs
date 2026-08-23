@@ -118,7 +118,6 @@ defmodule Quillex.MouseCutSpex do
   spex "Bug 001 - Ctrl+X cuts a keyboard-selected range",
     description: "Shift+arrow selects a range, Ctrl+X removes the selection",
     tags: [:bug_001, :ctrl_x, :cut, :keyboard_selection] do
-
     scenario "Shift+Right then Ctrl+X removes the selected suffix", _context do
       given_ "a fresh buffer contains 'hello world' with cursor just before 'world'", context do
         new_focused_buffer()
@@ -145,6 +144,7 @@ defmodule Quillex.MouseCutSpex do
           Probes.send_keys("right", [:shift])
           Process.sleep(30)
         end
+
         Process.sleep(120)
         Probes.send_keys("x", [:ctrl])
         Process.sleep(250)
@@ -154,15 +154,19 @@ defmodule Quillex.MouseCutSpex do
       then_ "the buffer now contains only 'hello ' (the 'world' suffix is gone)", context do
         {:ok, _} = wait_for_active_buffer_content("hello ")
         content = active_buffer_content()
+
         assert content == "hello ",
                "Expected buffer content 'hello ' after cutting 'world', got #{inspect(content)}"
+
         {:ok, context}
       end
 
       then_ "the app is still rendering normally (no crash)", context do
         rendered = Query.rendered_text()
+
         assert is_binary(rendered) and rendered != "",
                "App should keep rendering after Ctrl+X"
+
         {:ok, context}
       end
     end
@@ -175,7 +179,6 @@ defmodule Quillex.MouseCutSpex do
   spex "Bug 001 - Ctrl+X cuts a mouse-selected range",
     description: "Mouse-drag selects a range, Ctrl+X removes the selection",
     tags: [:bug_001, :ctrl_x, :cut, :mouse_selection] do
-
     scenario "mouse-drag then Ctrl+X does not crash the app", _context do
       given_ "a fresh buffer contains 'abcdefghij' on a single line", context do
         new_focused_buffer()
@@ -204,13 +207,16 @@ defmodule Quillex.MouseCutSpex do
         rescue
           _ -> :deferred
         end
+
         {:ok, context}
       end
 
       then_ "the app is still rendering and has not crashed", context do
         rendered = Query.rendered_text()
+
         assert is_binary(rendered) and rendered != "",
                "App must keep rendering after mouse-drag + Ctrl+X"
+
         {:ok, context}
       end
     end

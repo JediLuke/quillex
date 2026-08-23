@@ -23,7 +23,7 @@ defmodule Quillex.FileNavResizeSpex do
   end
 
   defp handle_y do
-    root_state = :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state
+    root_state = :sys.get_state(Process.whereis(Quillex.RootScene)).assigns.state
     @top_bar_h + trunc((root_state.frame.size.height - @top_bar_h) * 0.9)
   end
 
@@ -36,14 +36,14 @@ defmodule Quillex.FileNavResizeSpex do
     Probes.mouse_down(from_x, y)
     Process.sleep(100)
 
-    root_state = :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state
+    root_state = :sys.get_state(Process.whereis(Quillex.RootScene)).assigns.state
 
     assert root_state.file_nav_resizing,
            "resize pill did not capture the press at #{inspect({from_x, y})}"
 
     assert resize_bubble_fill() == {:color, {:color_rgba, {205, 216, 236, 255}}}
 
-    root_scene = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root_scene = :sys.get_state(Process.whereis(Quillex.RootScene))
     assert {:ok, captures} = Scenic.Scene.fetch_captures(root_scene)
     assert :cursor_button in captures
     assert :cursor_pos in captures
@@ -52,7 +52,7 @@ defmodule Quillex.FileNavResizeSpex do
     Process.sleep(150)
 
     if live_width = Keyword.get(opts, :live_width) do
-      root_scene = :sys.get_state(Process.whereis(QuillEx.RootScene))
+      root_scene = :sys.get_state(Process.whereis(Quillex.RootScene))
       {:ok, child} = Scenic.Scene.child(root_scene, :file_nav)
       nav_pid = if is_list(child), do: List.first(child), else: child
       nav_state = :sys.get_state(nav_pid).assigns.state
@@ -75,7 +75,7 @@ defmodule Quillex.FileNavResizeSpex do
     end
 
     if Keyword.get(opts, :expect_collapse, false) do
-      root_state = :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state
+      root_state = :sys.get_state(Process.whereis(Quillex.RootScene)).assigns.state
 
       assert root_state.file_nav_resize_hide?,
              "dragging to #{to_x} did not enter the navigator collapse zone"
@@ -84,7 +84,7 @@ defmodule Quillex.FileNavResizeSpex do
     Probes.mouse_up(to_x, y)
     Process.sleep(700)
 
-    root_state = :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state
+    root_state = :sys.get_state(Process.whereis(Quillex.RootScene)).assigns.state
     refute root_state.file_nav_resizing, "resize gesture did not receive mouse-up"
 
     unless Keyword.get(opts, :expect_collapse, false) do
@@ -93,7 +93,7 @@ defmodule Quillex.FileNavResizeSpex do
   end
 
   defp resize_bubble_fill do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
     [bubble] = Scenic.Graph.get(root.assigns.graph, :file_nav_resize_bubble)
     Scenic.Primitive.get_style(bubble, :fill)
   end
@@ -109,7 +109,7 @@ defmodule Quillex.FileNavResizeSpex do
         ViewStore.sync()
         Process.sleep(700)
 
-        root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+        root = :sys.get_state(Process.whereis(Quillex.RootScene))
         {:ok, nav_pid} = Scenic.Scene.child(root, :file_nav)
         {:ok, pane_child} = Scenic.Scene.child(root, :buffer_pane)
         pane_pid = child_pid(pane_child)
@@ -142,7 +142,7 @@ defmodule Quillex.FileNavResizeSpex do
         assert visible?
         assert width == 340
 
-        root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+        root = :sys.get_state(Process.whereis(Quillex.RootScene))
         assert Scenic.Scene.child(root, :file_nav) == {:ok, context.nav_pid}
         {:ok, pane_child} = Scenic.Scene.child(root, :buffer_pane)
         assert child_pid(pane_child) == context.pane_pid

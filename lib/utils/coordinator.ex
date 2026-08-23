@@ -30,7 +30,7 @@ defmodule Quillex.Lifecycle.Coordinator do
         {:stop, :normal, state}
 
       dirty ->
-        if scene = Process.whereis(QuillEx.RootScene), do: send(scene, {:quit_requested, dirty})
+        if scene = Process.whereis(Quillex.RootScene), do: send(scene, {:quit_requested, dirty})
         {:noreply, %{state | pending?: true}}
     end
   end

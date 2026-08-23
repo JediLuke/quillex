@@ -78,7 +78,7 @@ defmodule Quillex.ClipboardSpex do
   end
 
   defp buffer_pane_graph do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
     {:ok, child} = Scenic.Scene.child(root, :buffer_pane)
     pane_pid = if is_list(child), do: List.first(child), else: child
     :sys.get_state(pane_pid).assigns.graph

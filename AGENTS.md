@@ -23,7 +23,7 @@
 ## Coding Style & Naming Conventions
 - Elixir code uses standard `mix format` conventions; run it before committing.
 - Indentation is two spaces (Elixir default).
-- Module and file names follow Elixir conventions (e.g., `QuillEx.Foo` in `lib/foo.ex`).
+- Module and file names follow Elixir conventions (e.g., `Quillex.Foo` in `lib/foo.ex`).
 - Test files use the `_test.exs` suffix and live under `test/`.
 
 ## Testing Guidelines
@@ -72,7 +72,7 @@ Rules when touching state:
 - NEVER add a catch-all `handle_info({{Scenic.PubSub, _}, _}, ...)` clause
   above the specific `:data` clauses — it silently swallows store updates.
 - Scene-owned exceptions (search-bar/dialog flags) are documented in
-  `QuillEx.RootScene.State`'s moduledoc; don't move them without reading it.
+  `Quillex.RootScene.State`'s moduledoc; don't move them without reading it.
 
 ## Scenic Rendering Patterns
 

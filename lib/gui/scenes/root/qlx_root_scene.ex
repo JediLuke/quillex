@@ -1,6 +1,6 @@
-defmodule QuillEx.RootScene do
+defmodule Quillex.RootScene do
   use Scenic.Scene
-  alias QuillEx.RootScene
+  alias Quillex.RootScene
   require Logger
 
   # Layout constants — must stay in sync with qlx_root_scene_renderizer.ex
@@ -8,7 +8,6 @@ defmodule QuillEx.RootScene do
   # Taken from the component rather than guessed at. The bar owns its own
   # height, and a copy of it here drifts the moment the bar is restyled —
   # leaving the editor's frame carved for a bar of the wrong size.
-  @search_bar_height ScenicWidgets.SearchBar.State.bar_height()
 
   # Line height of the buffer pane text (must match BufferPane font_size).
   # Used to estimate the visible page size for Page Up / Page Down navigation.
@@ -50,14 +49,14 @@ defmodule QuillEx.RootScene do
       end
 
     state =
-      QuillEx.RootScene.State.new(%{
+      Quillex.RootScene.State.new(%{
         frame: Widgex.Frame.new(scene.viewport),
         buffers: buffers
       })
 
     # need to pass in scene so we can cast to children, even though we would never do that during init
     # On init, old_state is nil (no previous state)
-    graph = QuillEx.RootScene.Renderizer.render(Scenic.Graph.build(), scene, nil, state)
+    graph = Quillex.RootScene.Renderizer.render(Scenic.Graph.build(), scene, nil, state)
 
     scene =
       scene
@@ -373,7 +372,7 @@ defmodule QuillEx.RootScene do
       new_state = %{old_state | frame: Widgex.Frame.new(pin: {0, 0}, size: new_vp_size)}
 
       graph =
-        QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+        Quillex.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
       {:noreply, scene |> assign(state: new_state, graph: graph) |> push_graph(graph)}
     end
@@ -404,7 +403,7 @@ defmodule QuillEx.RootScene do
     # feedback. Renderizer's width path preserves both component PIDs; it only
     # updates their frames/transforms and the divider graph.
     new_graph =
-      QuillEx.RootScene.Renderizer.render(
+      Quillex.RootScene.Renderizer.render(
         scene.assigns.graph,
         scene,
         state,
@@ -470,7 +469,7 @@ defmodule QuillEx.RootScene do
         file_nav_resize_hide?: false
     }
 
-    graph = QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, state, new_state)
+    graph = Quillex.RootScene.Renderizer.render(scene.assigns.graph, scene, state, new_state)
 
     new_scene =
       scene
@@ -525,7 +524,7 @@ defmodule QuillEx.RootScene do
         file_nav_resize_hide?: false
     }
 
-    graph = QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, state)
+    graph = Quillex.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, state)
 
     new_scene =
       scene
@@ -600,7 +599,7 @@ defmodule QuillEx.RootScene do
       {:noreply, assign(scene, state: new_state)}
     else
       new_graph =
-        QuillEx.RootScene.Renderizer.render(
+        Quillex.RootScene.Renderizer.render(
           scene.assigns.graph,
           scene,
           old_state,
@@ -818,7 +817,7 @@ defmodule QuillEx.RootScene do
       # during rapid buffer switches. Pass old_state to enable smart component updates
       # (only recreate when truly necessary, like switching buffers).
       new_graph =
-        QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+        Quillex.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
       {new_state, new_graph}
     end)
@@ -847,7 +846,7 @@ defmodule QuillEx.RootScene do
   def handle_cast({:action, :run_verification}, scene) do
     # Access active buffer directly from scene state to avoid a GenServer.call deadlock.
     # FileAPI.verify_file_integrity() goes through Buffer.active_buf() which calls
-    # GenServer.call(QuillEx.RootScene, :get_active_buffer) — a self-call that deadlocks
+    # GenServer.call(Quillex.RootScene, :get_active_buffer) — a self-call that deadlocks
     # because run_verification is always invoked from within the RootScene GenServer.
     # Instead, read buf_ref from scene assigns and call Buffer.Process.fetch_buf/1 directly
     # (which calls the separate Buffer.Process GenServer, not RootScene — no deadlock).
@@ -1199,7 +1198,7 @@ defmodule QuillEx.RootScene do
   # previous state, preserving component PIDs where the Renderizer allows.
   defp render_snapshot(scene, new_state) do
     new_graph =
-      QuillEx.RootScene.Renderizer.render(
+      Quillex.RootScene.Renderizer.render(
         scene.assigns.graph,
         scene,
         scene.assigns.state,
@@ -1870,7 +1869,7 @@ defmodule QuillEx.RootScene do
     if scene.assigns.state.show_project_search do
       model =
         scene.assigns.state
-        |> QuillEx.RootScene.Renderizer.project_search_snapshot()
+        |> Quillex.RootScene.Renderizer.project_search_snapshot()
         |> Quillex.GUI.SearchPaneModel.build()
         |> Map.put(:results_view, which)
 
@@ -1926,7 +1925,7 @@ defmodule QuillEx.RootScene do
   def handle_event({:search_pane, :settings_open, open?}, _from, scene) do
     old_state = scene.assigns.state
     new_state = %{old_state | project_search_settings_open?: open?}
-    graph = QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+    graph = Quillex.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
     {:noreply, scene |> assign(state: new_state, graph: graph) |> push_graph(graph)}
   end
 
@@ -2468,7 +2467,7 @@ defmodule QuillEx.RootScene do
       new_state = %{state | buffers: updated_buffers, active_buf: new_active}
 
       new_graph =
-        QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+        Quillex.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
       scene
       |> assign(state: new_state)
@@ -2530,7 +2529,7 @@ defmodule QuillEx.RootScene do
     first_visible_line = get_first_visible_line(scene)
 
     # Update the IconMenu checkmarks to reflect new state
-    new_menus = QuillEx.RootScene.Renderizer.build_menus(new_state)
+    new_menus = Quillex.RootScene.Renderizer.build_menus(new_state)
     # put_child sends message to child but returns :ok, not scene
     Scenic.Scene.put_child(scene, :icon_menu, {:update_menus, new_menus})
 
@@ -2545,7 +2544,7 @@ defmodule QuillEx.RootScene do
     old_state = scene.assigns.state
 
     new_graph =
-      QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+      Quillex.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
     # Remove the temporary restore keys from state
     final_state = %{new_state | _restore_cursor: nil, _restore_first_visible_line: nil}
@@ -2579,7 +2578,7 @@ defmodule QuillEx.RootScene do
     Scenic.Scene.put_child(
       scene,
       :buffer_pane,
-      {:set_overlay_open, QuillEx.RootScene.Renderizer.search_bar_overlay_rect(state)}
+      {:set_overlay_open, Quillex.RootScene.Renderizer.search_bar_overlay_rect(state)}
     )
 
     :ok
@@ -2591,7 +2590,7 @@ defmodule QuillEx.RootScene do
     new_state = %{old_state | show_replace: false}
 
     new_graph =
-      QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+      Quillex.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
     new_scene =
       scene
@@ -2629,7 +2628,7 @@ defmodule QuillEx.RootScene do
         new_state = %{old_state | show_replace: true}
 
         new_graph =
-          QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+          Quillex.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
         new_scene =
           scene
@@ -2729,7 +2728,7 @@ defmodule QuillEx.RootScene do
     }
 
     new_graph =
-      QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+      Quillex.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
     new_scene =
       scene
@@ -2897,7 +2896,7 @@ defmodule QuillEx.RootScene do
         Scenic.Scene.put_child(
           scene,
           :buffer_pane,
-          {:set_overlay_open, QuillEx.RootScene.Renderizer.search_bar_overlay_rect(state)}
+          {:set_overlay_open, Quillex.RootScene.Renderizer.search_bar_overlay_rect(state)}
         )
 
         Scenic.Scene.put_child(scene, :search_bar, :focus)
@@ -2933,12 +2932,12 @@ defmodule QuillEx.RootScene do
     Scenic.Scene.put_child(
       scene,
       :buffer_pane,
-      {:set_overlay_open, QuillEx.RootScene.Renderizer.search_bar_overlay_rect(new_state)}
+      {:set_overlay_open, Quillex.RootScene.Renderizer.search_bar_overlay_rect(new_state)}
     )
 
     # Reuse existing graph to preserve component PIDs and avoid race conditions
     new_graph =
-      QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+      Quillex.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
     new_scene =
       scene
@@ -2983,7 +2982,7 @@ defmodule QuillEx.RootScene do
     old_state = scene.assigns.state
 
     new_graph =
-      QuillEx.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
+      Quillex.RootScene.Renderizer.render(scene.assigns.graph, scene, old_state, new_state)
 
     new_scene =
       scene
@@ -3202,7 +3201,7 @@ defmodule QuillEx.RootScene do
   #   nil            → :noop (nothing to close)
   #   dirty? = true  → {:show_prompt, buf_ref, new_state} (state marks the prompt open)
   #   dirty? = false → {:close, buf_ref}
-  def decide_close(%QuillEx.RootScene.State{} = state, active_buf) do
+  def decide_close(%Quillex.RootScene.State{} = state, active_buf) do
     case active_buf do
       nil ->
         :noop
@@ -3313,7 +3312,7 @@ defmodule QuillEx.RootScene do
 
             # Re-render to update the tab bar with new filename
             new_graph =
-              QuillEx.RootScene.Renderizer.render(
+              Quillex.RootScene.Renderizer.render(
                 scene.assigns.graph,
                 scene,
                 old_state,

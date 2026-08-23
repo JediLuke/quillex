@@ -57,7 +57,11 @@ defmodule Quillex.Search.Backend.Ripgrep do
   def search(_root, "", _opts), do: {:ok, []}
 
   defp first_line(output) do
-    output |> String.split("\n", trim: true) |> List.first() |> to_string() |> String.slice(0, 200)
+    output
+    |> String.split("\n", trim: true)
+    |> List.first()
+    |> to_string()
+    |> String.slice(0, 200)
   end
 
   # ripgrep's own equivalents of the search options. `--fixed-strings` is what

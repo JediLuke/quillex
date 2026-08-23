@@ -1,10 +1,10 @@
-defmodule QuillEx.Lib.Utils do
+defmodule Quillex.Lib.Utils do
   # def register_process(%{uuid: buf_uuid}, mod) do
   #   # this will register the GUI widget the same way we register the actual Buffer process
   #   Registry.register(Quillex.BufferRegistry, {buf_uuid, mod}, nil)
   # end
 
-  # these functions are used to cap scrolling (referenced by QuillEx.Tools.TextEdit)
+  # these functions are used to cap scrolling (referenced by Quillex.Tools.TextEdit)
   def apply_floor({x, y}, {min_x, min_y}) do
     {max(x, min_x), max(y, min_y)}
   end

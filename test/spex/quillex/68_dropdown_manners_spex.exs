@@ -29,7 +29,7 @@ defmodule Quillex.DropdownMannersSpex do
   alias Quillex.TestHelpers.AppReset
 
   defp pane_scene do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
 
     case Scenic.Scene.child(root, :project_search_pane) do
       {:ok, [pid | _]} -> :sys.get_state(pid, 30_000)
@@ -63,7 +63,7 @@ defmodule Quillex.DropdownMannersSpex do
   end
 
   defp icon_menu_state do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
     {:ok, [pid | _]} = Scenic.Scene.child(root, :icon_menu)
     :sys.get_state(pid, 30_000).assigns.state
   end
@@ -163,9 +163,15 @@ defmodule Quillex.DropdownMannersSpex do
 
         # And wait for the RESULTS to come back, which is the redraw that used
         # to bury it — not for the click, which is not the problem.
-        assert wait_until(fn ->
-                 match?({:done, _, _, _}, Quillex.RadixCache.ProjectSearchStore.get_state().status)
-               end, 10_000),
+        assert wait_until(
+                 fn ->
+                   match?(
+                     {:done, _, _, _},
+                     Quillex.RadixCache.ProjectSearchStore.get_state().status
+                   )
+                 end,
+                 10_000
+               ),
                "the toggle never produced a finished search"
 
         Process.sleep(300)
@@ -268,7 +274,9 @@ defmodule Quillex.DropdownMannersSpex do
     scenario "the menubar's dropdowns keep the same manners" do
       when_ "a top-bar menu is open and the wheel turned elsewhere", context do
         Probes.click_element("icon_menu_view")
-        assert wait_until(fn -> icon_menu_state().active_menu != nil end), "the view menu did not open"
+
+        assert wait_until(fn -> icon_menu_state().active_menu != nil end),
+               "the view menu did not open"
 
         # Down in the document, nowhere near the dropdown.
         {_w, h} = Quillex.TestHelpers.ViewportResizer.viewport_size()

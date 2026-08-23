@@ -30,7 +30,7 @@ defmodule Quillex.GotoLineSpex do
     {:ok, buf: buf}
   end
 
-  defp root_state, do: :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state
+  defp root_state, do: :sys.get_state(Process.whereis(Quillex.RootScene)).assigns.state
 
   # Snapshot.cursor is a {line, col} tuple, not a struct.
   defp cursor do

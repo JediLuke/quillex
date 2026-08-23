@@ -20,7 +20,7 @@ defmodule Quillex.DragVisualProbeSpex do
   end
 
   defp nav_state do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
     {:ok, child} = Scenic.Scene.child(root, :file_nav)
     pid = if is_list(child), do: List.first(child), else: child
     :sys.get_state(pid).assigns.state
@@ -46,7 +46,13 @@ defmodule Quillex.DragVisualProbeSpex do
     scenario "capture a drag in flight" do
       given_ "the navigator is showing the repo", context do
         cwd = File.cwd!()
-        {:ok, Map.merge(context, %{lib: Path.join(cwd, "lib"), mix: Path.join(cwd, "mix.exs"), root: cwd})}
+
+        {:ok,
+         Map.merge(context, %{
+           lib: Path.join(cwd, "lib"),
+           mix: Path.join(cwd, "mix.exs"),
+           root: cwd
+         })}
       end
 
       when_ "a file is dragged over a directory", context do
@@ -60,7 +66,11 @@ defmodule Quillex.DragVisualProbeSpex do
         Process.sleep(200)
 
         s = nav_state()
-        IO.puts("VALID-DROP target=#{inspect(s.drag_target)} valid=#{inspect(s.drop_valid)} pos=#{inspect(s.drag_pos)}")
+
+        IO.puts(
+          "VALID-DROP target=#{inspect(s.drag_target)} valid=#{inspect(s.drop_valid)} pos=#{inspect(s.drag_pos)}"
+        )
+
         Probes.take_screenshot("probe_drag_valid")
         {:ok, Map.merge(context, %{to: to})}
       end

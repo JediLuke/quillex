@@ -37,7 +37,7 @@ defmodule Quillex.ShortcutsTest do
       #
       # If the menu font is ever replaced with one that covers them, this is
       # the test that should be changed on purpose rather than discovered.
-      for shortcut <- ["Mod+S", "Mod+Shift+S", "Mod+Alt+[" ] do
+      for shortcut <- ["Mod+S", "Mod+Shift+S", "Mod+Alt+["] do
         rendered = Shortcuts.render(shortcut, :meta)
 
         for glyph <- ["⌘", "⇧", "⌥", "⌃", "⌫", "⌦", "⎋", "⇥"] do

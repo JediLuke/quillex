@@ -15,14 +15,14 @@ defmodule Quillex.ThemesSpex do
   alias Quillex.TestHelpers.AppReset
   alias Quillex.GUI.Palette
 
-  defp root_state, do: :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state
+  defp root_state, do: :sys.get_state(Process.whereis(Quillex.RootScene)).assigns.state
 
   defp child_state(id) do
     child_assigns(id).state
   end
 
   defp child_assigns(id) do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
     {:ok, [pid | _]} = Scenic.Scene.child(root, id)
     :sys.get_state(pid, 30_000).assigns
   end
@@ -70,7 +70,7 @@ defmodule Quillex.ThemesSpex do
   end
 
   defp icon_menu_state do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
     {:ok, [pid | _]} = Scenic.Scene.child(root, :icon_menu)
     :sys.get_state(pid, 30_000).assigns.state
   end

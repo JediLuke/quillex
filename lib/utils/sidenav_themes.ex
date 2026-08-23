@@ -23,7 +23,8 @@ defmodule Quillex.Utils.SideNavThemes do
   @nav_text_ratio 0.7
   @nav_text_min 11
 
-  def for_editor(text_size), do: for_editor(text_size, Quillex.GUI.Palette.get(Quillex.GUI.Palette.default()))
+  def for_editor(text_size),
+    do: for_editor(text_size, Quillex.GUI.Palette.get(Quillex.GUI.Palette.default()))
 
   @doc """
   The label size the file navigator uses, for a given chrome size.
@@ -108,5 +109,4 @@ defmodule Quillex.Utils.SideNavThemes do
       chevron_margin: 6
     }
   end
-
 end

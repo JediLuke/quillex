@@ -48,9 +48,7 @@ defmodule Quillex.ScrollbarDragSpex do
         Process.sleep(200)
 
         :ok =
-          Quillex.TestHelpers.FileOpener.open_file(
-            Path.expand("biblio/spinozas_ethics_p1.txt")
-          )
+          Quillex.TestHelpers.FileOpener.open_file(Path.expand("biblio/spinozas_ethics_p1.txt"))
 
         Process.sleep(800)
 

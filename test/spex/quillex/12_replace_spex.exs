@@ -44,7 +44,9 @@ defmodule Quillex.ReplaceSpex do
 
     scenario "Ctrl+H opens the search bar with replace row" do
       given_ "Quillex has launched with some text", context do
-        {:ok, buf} = Quillex.Buffer.new(%{name: "replace_all.txt", data: ["cat dog cat fish cat"]})
+        {:ok, buf} =
+          Quillex.Buffer.new(%{name: "replace_all.txt", data: ["cat dog cat fish cat"]})
+
         :ok = Quillex.Buffer.activate(buf)
         Process.sleep(500)
         # And close whatever the scenario before left open: the editor cannot

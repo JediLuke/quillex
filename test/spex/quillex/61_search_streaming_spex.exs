@@ -32,7 +32,7 @@ defmodule Quillex.SearchStreamingSpex do
   @lines_per_file 800
 
   defp pane_scene do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
 
     case Scenic.Scene.child(root, :project_search_pane) do
       {:ok, [pid | _]} -> :sys.get_state(pid, 30_000)
@@ -62,7 +62,10 @@ defmodule Quillex.SearchStreamingSpex do
     |> Enum.map(fn {_uid, p} -> p end)
     |> Enum.filter(&(&1.module == Scenic.Primitive.Text))
     |> Enum.map(& &1.data)
-    |> Enum.find(&(&1 =~ ~r/^(\d+ in \d+ files?  \(\d+ms\)|no matches|searching…|typing…|Type to search|Search [~\/…])/))
+    |> Enum.find(
+      &(&1 =~
+          ~r/^(\d+ in \d+ files?  \(\d+ms\)|no matches|searching…|typing…|Type to search|Search [~\/…])/)
+    )
   end
 
   defp body_uids(graph) do
@@ -77,8 +80,11 @@ defmodule Quillex.SearchStreamingSpex do
       %{module: Scenic.Primitive.Group, data: kids} ->
         [uid | Enum.flat_map(kids, &expand_uid(graph, &1))]
 
-      nil -> []
-      _ -> [uid]
+      nil ->
+        []
+
+      _ ->
+        [uid]
     end
   end
 
@@ -93,7 +99,7 @@ defmodule Quillex.SearchStreamingSpex do
   # describing what searching is. It still says the old thing when there is no
   # project open at all.
   defp idle?(nil), do: false
-  defp idle?(text), do: (text =~ ~r/^Search [~\/…]/) or text =~ "Type to search"
+  defp idle?(text), do: text =~ ~r/^Search [~\/…]/ or text =~ "Type to search"
 
   defp wait_until(predicate, timeout \\ 30_000) do
     deadline = System.monotonic_time(:millisecond) + timeout
@@ -266,9 +272,7 @@ defmodule Quillex.SearchStreamingSpex do
 
         saved = done_at - first_at
 
-        IO.puts(
-          "  [streaming] first results on screen #{saved} ms before the search finished\n"
-        )
+        IO.puts("  [streaming] first results on screen #{saved} ms before the search finished\n")
 
         assert saved > 0,
                "results and the end of the search arrived together: nothing was gained"

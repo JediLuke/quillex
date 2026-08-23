@@ -177,7 +177,7 @@ defmodule Quillex.SideNavScrollSpex do
   defp mark_clicked(id), do: Process.put(:clicked_dirs, [id | Process.get(:clicked_dirs, [])])
 
   defp side_nav_state do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
     {:ok, child} = Scenic.Scene.child(root, :file_nav)
     pid = if is_list(child), do: List.first(child), else: child
     :sys.get_state(pid).assigns.state
@@ -199,7 +199,7 @@ defmodule Quillex.SideNavScrollSpex do
         assert state.scroll.scrollbar_visible
         assert state.scroll.scrollbar_opacity == 255
 
-        root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+        root = :sys.get_state(Process.whereis(Quillex.RootScene))
         {:ok, child} = Scenic.Scene.child(root, :file_nav)
         nav_pid = if is_list(child), do: List.first(child), else: child
         graph = :sys.get_state(nav_pid).assigns.graph

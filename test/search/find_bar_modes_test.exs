@@ -35,6 +35,7 @@ defmodule Quillex.Search.FindBarModesTest do
       {count, matches} = search("hello", [])
 
       assert count == 4
+
       assert Enum.map(matches, fn {_l, _c, text} -> text end) ==
                ["Hello", "hello", "HELLO", "heLLo"]
     end
@@ -56,6 +57,7 @@ defmodule Quillex.Search.FindBarModesTest do
       {count, matches} = search("h.llo", regex: true)
 
       assert count == 4
+
       assert Enum.map(matches, fn {_l, _c, text} -> text end) ==
                ["Hello", "hello", "HELLO", "heLLo"]
     end

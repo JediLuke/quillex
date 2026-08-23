@@ -1,6 +1,6 @@
 import Config
 
-config :scenic, :assets, module: QuillEx.Assets
+config :scenic, :assets, module: Quillex.Assets
 
 # scenic_mcp is configured in dev.exs and test.exs, not here: it's a dev/test
 # dependency, and configuring an application that isn't in the build makes Mix

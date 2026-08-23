@@ -14,8 +14,9 @@ defmodule Quillex.TestHelpers.ScriptInspector do
     case get_script_table() do
       script_entries when is_list(script_entries) ->
         # Extract text with position information
-        text_with_positions = script_entries
-        |> Enum.flat_map(&extract_text_with_position_from_entry/1)
+        text_with_positions =
+          script_entries
+          |> Enum.flat_map(&extract_text_with_position_from_entry/1)
 
         # Sort by Y position (vertical), then X position (horizontal)
         text_with_positions
@@ -23,7 +24,8 @@ defmodule Quillex.TestHelpers.ScriptInspector do
         |> Enum.map(fn {text, _pos} -> text end)
         |> Enum.uniq()
 
-      _ -> []
+      _ ->
+        []
     end
   end
 
@@ -32,6 +34,7 @@ defmodule Quillex.TestHelpers.ScriptInspector do
     case ScenicMcp.Tools.viewport_state() do
       {:ok, %{script_table: script_table}} when script_table != nil ->
         :ets.tab2list(script_table)
+
       _ ->
         []
     end
@@ -56,9 +59,9 @@ defmodule Quillex.TestHelpers.ScriptInspector do
     user_content = extract_user_content()
 
     user_content == [] or
-    Enum.all?(user_content, fn text ->
-      String.trim(text) == ""
-    end)
+      Enum.all?(user_content, fn text ->
+        String.trim(text) == ""
+      end)
   end
 
   @doc """
@@ -73,13 +76,32 @@ defmodule Quillex.TestHelpers.ScriptInspector do
   defp is_gui_element?(text) when is_binary(text) do
     gui_patterns = [
       # Button/menu text
-      "Help", "About", "Options", "Buffers",
+      "Help",
+      "About",
+      "Options",
+      "Buffers",
       # Common symbols
-      "[+]", "{ }", "[=]", "(o)", "<*>", ">_", "Y",
+      "[+]",
+      "{ }",
+      "[=]",
+      "(o)",
+      "<*>",
+      ">_",
+      "Y",
       # Single characters that are likely UI elements
-      "1", "2", "3", "4", "5", "6", "7", "8", "9", "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "0",
       # Scenic script identifiers
-      "_main_", "_root_"
+      "_main_",
+      "_root_"
     ]
 
     # Check for exact matches with GUI patterns
@@ -87,45 +109,49 @@ defmodule Quillex.TestHelpers.ScriptInspector do
 
     # Check for font hashes (long alphanumeric strings that look like hashes)
     # Font hashes typically have mixed case, numbers, and underscores/hyphens
-    font_hash = String.length(text) > 30 and 
-                String.match?(text, ~r/^[A-Za-z0-9_-]+$/) and
-                (String.contains?(text, "_") or String.contains?(text, "-") or
-                 String.match?(text, ~r/[0-9]/))  # Must have numbers or special chars to be a hash
+    # Must have numbers or special chars to be a hash
+    font_hash =
+      String.length(text) > 30 and
+        String.match?(text, ~r/^[A-Za-z0-9_-]+$/) and
+        (String.contains?(text, "_") or String.contains?(text, "-") or
+           String.match?(text, ~r/[0-9]/))
 
     # Check for script IDs (UUIDs or similar)
     # More specific pattern: must have multiple segments separated by hyphens
     # and look like a UUID or hash (all alphanumeric except hyphens)
-    script_id = String.contains?(text, "-") and 
-                String.length(text) > 10 and
-                String.match?(text, ~r/^[A-Za-z0-9_-]+$/) and
-                length(String.split(text, "-")) >= 3
+    script_id =
+      String.contains?(text, "-") and
+        String.length(text) > 10 and
+        String.match?(text, ~r/^[A-Za-z0-9_-]+$/) and
+        length(String.split(text, "-")) >= 3
 
     # Check for underscore-prefixed identifiers (Scenic internal names)
     internal_id = String.starts_with?(text, "_") and String.ends_with?(text, "_")
 
     # Don't filter out all single characters - only those in gui_patterns
     # This allows legitimate single-character user input like 'A', 'B', etc.
-    
+
     exact_match or font_hash or script_id or internal_id
   end
 
   defp is_gui_element?(_), do: false
 
-
   # These functions are no longer used - we now use position-based extraction
   # Keeping them commented for reference if needed later
-  
+
   # # Private helper to extract text from a single script table entry
   # defp extract_text_from_script_entry({_id, script_data, _pid}) when is_list(script_data) do
   #   ...removed for brevity...
   # end
 
   # Private helper to extract text with position from a single script table entry
-  defp extract_text_with_position_from_entry({_id, script_data, _pid}) when is_list(script_data) do
+  defp extract_text_with_position_from_entry({_id, script_data, _pid})
+       when is_list(script_data) do
     extract_text_with_position_from_operations(script_data)
   end
 
-  defp extract_text_with_position_from_entry({{_id, script_data}, _pid}) when is_list(script_data) do
+  defp extract_text_with_position_from_entry({{_id, script_data}, _pid})
+       when is_list(script_data) do
     extract_text_with_position_from_operations(script_data)
   end
 
@@ -140,29 +166,30 @@ defmodule Quillex.TestHelpers.ScriptInspector do
   # Extract text with position from a list of operations
   defp extract_text_with_position_from_operations(operations) do
     # Track current transform position as we process operations
-    {texts, _} = operations
-    |> Enum.reduce({[], {0, 0}}, fn op, {acc, current_pos} ->
-      case op do
-        # Update position when we see a translate operation
-        {:translate, {x, y}} ->
-          {acc, {x, y}}
-          
-        # Extract text at current position
-        {:draw_text, text, _spacing} when is_binary(text) ->
-          {[{text, current_pos} | acc], current_pos}
-          
-        {:draw_text, text} when is_binary(text) ->
-          {[{text, current_pos} | acc], current_pos}
-          
-        {:text, text} when is_binary(text) ->
-          {[{text, current_pos} | acc], current_pos}
-          
-        # Skip other operations
-        _ ->
-          {acc, current_pos}
-      end
-    end)
-    
+    {texts, _} =
+      operations
+      |> Enum.reduce({[], {0, 0}}, fn op, {acc, current_pos} ->
+        case op do
+          # Update position when we see a translate operation
+          {:translate, {x, y}} ->
+            {acc, {x, y}}
+
+          # Extract text at current position
+          {:draw_text, text, _spacing} when is_binary(text) ->
+            {[{text, current_pos} | acc], current_pos}
+
+          {:draw_text, text} when is_binary(text) ->
+            {[{text, current_pos} | acc], current_pos}
+
+          {:text, text} when is_binary(text) ->
+            {[{text, current_pos} | acc], current_pos}
+
+          # Skip other operations
+          _ ->
+            {acc, current_pos}
+        end
+      end)
+
     Enum.reverse(texts)
   end
 

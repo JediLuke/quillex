@@ -37,8 +37,9 @@ level. Matching braces. Optional line and column guides. Word wrap.
 **The project.** A file navigator with drag-and-drop, spring-loaded folders and
 rename/delete. Files edited outside Quillex are noticed and offered for reload.
 
-**Looking at it.** Five themes — Alchemical Wedding in dark and light, Solarized
-in both, and High Contrast — each driving the editor *and* the whole interface,
+**Looking at it.** Six themes — Alchemical Wedding in dark and light, Solarized
+in both, High Contrast and Typewriter — each driving the editor *and* the whole
+interface,
 because a light buffer inside a dark sidebar reads as broken rather than as a
 theme. Editor text size and interface scale adjust independently.
 
@@ -152,10 +153,25 @@ the launch fail somewhere you'd never see it.
 
 `mix` has to run from the project root, so the wrapper passes your shell's
 context across in the environment (`QLX_CWD`, `QLX_TARGET`) and
-`QuillEx.CLI` adopts it during boot — before the stores start, since the file
+`Quillex.CLI` adopts it during boot — before the stores start, since the file
 tree reads the working directory. A file argument is opened into a buffer
 ahead of Scenic, so the editor comes up with your file already in it rather
 than flashing an empty one first.
+
+### The two gates
+
+`mix precommit` is the fast one — compile with all warnings shown, a format
+check, a stale-dependency check, and the unit and property suites. It runs in
+seconds, so it works as a git hook:
+
+```bash
+echo 'mix precommit' > .git/hooks/pre-commit
+chmod +x .git/hooks/pre-commit
+```
+
+`mix check` is everything above plus the spex suite, which drives a real GLFW
+window and takes minutes. Run that one by hand, and see `CLAUDE.md` for why
+spex go through `scripts/run_spex_quiet.sh` rather than `mix spex`.
 
 ## Requirements
 

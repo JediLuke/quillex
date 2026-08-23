@@ -58,7 +58,7 @@ defmodule Quillex.FileNavOperationsSpex do
   end
 
   defp nav_scene do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
     {:ok, child} = Scenic.Scene.child(root, :file_nav)
     pid = if is_list(child), do: List.first(child), else: child
     :sys.get_state(pid)
@@ -70,7 +70,7 @@ defmodule Quillex.FileNavOperationsSpex do
   # a recreated SideNav looks identical from the outside until you notice every
   # folder has closed.
   defp nav_pid do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
     {:ok, child} = Scenic.Scene.child(root, :file_nav)
     if is_list(child), do: List.first(child), else: child
   end
@@ -85,7 +85,7 @@ defmodule Quillex.FileNavOperationsSpex do
   end
 
   defp root_state do
-    :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state
+    :sys.get_state(Process.whereis(Quillex.RootScene)).assigns.state
   end
 
   defp row_center(path) do
@@ -456,7 +456,9 @@ defmodule Quillex.FileNavOperationsSpex do
         # The root has no row, so the pane border is the drop affordance.
         assert nav_state().drag_target == context.root
         assert nav_state().drop_valid
-        assert [_outline] = Scenic.Graph.get(nav_scene().assigns.graph, :side_nav_root_drop_target)
+
+        assert [_outline] =
+                 Scenic.Graph.get(nav_scene().assigns.graph, :side_nav_root_drop_target)
 
         drag_release(empty)
         refresh_tree()

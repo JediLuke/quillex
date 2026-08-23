@@ -38,7 +38,7 @@ defmodule Quillex.FoldingSpex do
   end
 
   defp text_field_scene do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
     {:ok, child} = Scenic.Scene.child(root, :buffer_pane)
     pid = if is_list(child), do: List.first(child), else: child
     :sys.get_state(pid)

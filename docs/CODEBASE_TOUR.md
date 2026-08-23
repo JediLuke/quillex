@@ -38,7 +38,7 @@ Note where the store layer sits: *inside* `lib/gui/`, not beside it. That is
 not where the doctrine would put it, and it is worth knowing before you go
 looking for `lib/radix_cache/` and fail to find it.
 
-The frontend is a single `Scenic.Scene` — `QuillEx.RootScene` — and
+The frontend is a single `Scenic.Scene` — `Quillex.RootScene` — and
 everything visible inside it is a reusable component from
 `scenic-widget-contrib`. Quillex itself contains no widgets. That was not
 true for most of its life; it is the result of the 2026 refactors, and it's
@@ -47,7 +47,7 @@ why the whole editor surface is now three lines of configuration (§5).
 ```mermaid
 flowchart LR
     subgraph Frontend["Frontend (owns raw input)"]
-        RS[QuillEx.RootScene]
+        RS[Quillex.RootScene]
         RZ[Renderizer]
         TF[TextField<br/><i>scenic-widget-contrib</i>]
     end
@@ -82,16 +82,16 @@ the rest of this tour shows where each one is enforced in code.
 
 `lib/cli.ex` opens with a 25-line moduledoc whose thesis is that the boot
 order *is* the whole design. It's right, and it's worth walking through
-`QuillEx.App.start/2` (`lib/app.ex:9`) child by child, because every
+`Quillex.App.start/2` (`lib/app.ex:9`) child by child, because every
 position in this list is a decision:
 
 ```mermaid
 flowchart TD
-    A["0. QuillEx.CLI.chdir!()<br/><i>before any child starts</i>"] --> B
+    A["0. Quillex.CLI.chdir!()<br/><i>before any child starts</i>"] --> B
     B["1. PerfMonitor<br/>telemetry on render start/finish"] --> C
     C["2. RadixCache.Supervisor<br/>starts Scenic.PubSub itself,<br/>then ViewStore, then PaneStore"] --> D
     D["3. Buffers.TopSupervisor<br/>Registry → BufferManager → DynamicSupervisor"] --> E
-    E["4. QuillEx.CLI child_spec<br/>opens the qlx file arg, returns :ignore"] --> F
+    E["4. Quillex.CLI child_spec<br/>opens the qlx file arg, returns :ignore"] --> F
     F["5. Scenic<br/>viewport + RootScene + GLFW driver"]
 ```
 
@@ -104,7 +104,7 @@ flowchart TD
   This is what the scenic fork exists for: upstream Scenic would try to
   start its own PubSub and crash; the fork skips it when one is already
   running. The stores must exist before any scene subscribes to them.
-- **Child 4 is a fake process.** `QuillEx.CLI.child_spec` runs
+- **Child 4 is a fake process.** `Quillex.CLI.child_spec` runs
   `start_link`, which opens the file passed to `qlx` and returns `:ignore`
   — it occupies a slot in the supervision order purely so the buffer exists
   before RootScene's `init` runs. A supervisor list used as a sequencing

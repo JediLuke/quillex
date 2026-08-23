@@ -103,6 +103,7 @@ defmodule Quillex.Buffer.Process.ReducerCursorSelectionTest do
       assert result.cursor.col == 7
     end
   end
+
   describe "select_to — extending a selection to an absolute position" do
     setup do
       buf = %BufState{

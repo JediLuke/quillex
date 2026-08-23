@@ -18,7 +18,7 @@ defmodule Quillex.FindSpex do
   alias ScenicMcp.Probes
 
   defp pane_pid do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
     {:ok, child} = Scenic.Scene.child(root, :buffer_pane)
     if is_list(child), do: List.first(child), else: child
   end
@@ -60,7 +60,7 @@ defmodule Quillex.FindSpex do
       then_ "the same pane process remains alive and the popup is visible", context do
         assert pane_pid() == context.pane_pid
         assert Process.alive?(context.pane_pid)
-        assert :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state.show_search_bar
+        assert :sys.get_state(Process.whereis(Quillex.RootScene)).assigns.state.show_search_bar
         {:ok, context}
       end
     end
@@ -372,7 +372,7 @@ defmodule Quillex.FindSpex do
         # coordinate. It used to be on the left; it is on the right now, and a
         # guess of {16, 50} lands on the disclosure caret instead — which
         # opens the replace row, the opposite of closing.
-        root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+        root = :sys.get_state(Process.whereis(Quillex.RootScene))
         {:ok, child} = Scenic.Scene.child(root, :search_bar)
         bar = :sys.get_state(if(is_list(child), do: List.first(child), else: child)).assigns.state
 
@@ -464,7 +464,7 @@ defmodule Quillex.FindSpex do
         # The scene's own flag first: it is the truth, and it says whether the
         # bar reopened even when what it happens to be DRAWING depends on what
         # the previous scenario left in the query.
-        assert :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state.show_search_bar,
+        assert :sys.get_state(Process.whereis(Quillex.RootScene)).assigns.state.show_search_bar,
                "Ctrl+F should reopen the search bar"
 
         # And then that it is actually drawn. "Aa" is the Match Case toggle,

@@ -20,7 +20,7 @@ defmodule Quillex.ViewportResizeSpex do
   @shrunk_size {1400, 900}
 
   defp child_pid(id) do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
     {:ok, child} = Scenic.Scene.child(root, id)
     if is_list(child), do: List.first(child), else: child
   end
@@ -29,7 +29,7 @@ defmodule Quillex.ViewportResizeSpex do
   defp wait_for_size(_size, 0), do: flunk("resize did not converge")
 
   defp wait_for_size(size, attempts) do
-    frame = :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state.frame
+    frame = :sys.get_state(Process.whereis(Quillex.RootScene)).assigns.state.frame
 
     if frame.size.box == size do
       :ok
@@ -187,7 +187,7 @@ defmodule Quillex.ViewportResizeSpex do
       end
 
       then_ "only current frames render and the existing components remain responsive", context do
-        assert :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state.frame.size.box ==
+        assert :sys.get_state(Process.whereis(Quillex.RootScene)).assigns.state.frame.size.box ==
                  context.final_size
 
         Enum.each(context.pids, fn {id, original_pid} ->

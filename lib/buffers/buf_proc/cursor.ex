@@ -2,10 +2,10 @@ defmodule Quillex.Structs.BufState.Cursor do
   use ScenicWidgets.Core.Utils.CustomGuards
 
   @type t :: %__MODULE__{
-    num: pos_integer() | nil,
-    line: pos_integer(),
-    col: pos_integer()
-  }
+          num: pos_integer() | nil,
+          line: pos_integer(),
+          col: pos_integer()
+        }
 
   defstruct [
     # TODO maybe we don't need cursor nums, we can just use the place in the list of cursors as their number...
