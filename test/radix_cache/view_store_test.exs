@@ -99,7 +99,7 @@ defmodule Quillex.RadixCache.ViewStoreTest do
     original = ViewStore.get_state().fold_level
     on_exit(fn -> ViewStore.set_fold_level(original) end)
 
-    for level <- 1..4 do
+    for level <- 1..5 do
       ViewStore.set_fold_level(level)
       ViewStore.sync()
       assert wait_for_view(&(&1.fold_level == level)).fold_level == level

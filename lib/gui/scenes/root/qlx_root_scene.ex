@@ -1258,7 +1258,7 @@ defmodule QuillEx.RootScene do
     {:noreply, scene}
   end
 
-  def handle_event({:fold_level_changed, _id, level}, _from, scene) when level in 1..4 do
+  def handle_event({:fold_level_changed, _id, level}, _from, scene) when level in 1..5 do
     Quillex.RadixCache.ViewStore.set_fold_level(level)
     {:noreply, scene}
   end
@@ -1463,7 +1463,7 @@ defmodule QuillEx.RootScene do
         Scenic.Scene.put_child(scene, :buffer_pane, {:action, :unfold_all})
         {:noreply, scene}
 
-      "fold_level_" <> level when level in ["1", "2", "3", "4"] ->
+      "fold_level_" <> level when level in ["1", "2", "3", "4", "5"] ->
         Scenic.Scene.put_child(
           scene,
           :buffer_pane,

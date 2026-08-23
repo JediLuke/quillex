@@ -110,13 +110,18 @@ defmodule Quillex.MenuLayoutSpex do
         menu = icon_menu_state().menus |> Enum.find(&(&1.id == :view))
         theme = Enum.find(menu.items, &match?(%{id: "theme"}, &1))
         command = Enum.find(menu.items, &match?(%{id: "primary_modifier"}, &1))
+        fold_level = Enum.find(menu.items, &match?(%{id: "fold_level"}, &1))
 
         assert %ScenicWidgets.Menu.Model.Select{} = theme
         assert theme.options == Quillex.GUI.Palette.themes()
         assert map_size(theme.swatches) == length(theme.options)
+        assert theme.closed_caret == :left
+        assert theme.options_full_width?
         assert %ScenicWidgets.Menu.Model.Select{} = command
         assert command.options == Quillex.Shortcuts.choices()
+        assert command.closed_caret == :left
         assert String.contains?(command.tooltip, "Mac")
+        assert fold_level.closed_caret == :left
 
         {:ok, context}
       end

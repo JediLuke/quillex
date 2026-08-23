@@ -24,6 +24,7 @@ defmodule Quillex.Buffer.Core.History do
       | data: data,
         cursor: cursor,
         selection: selection,
+        dirty?: data != buf.clean_data,
         undo_stack: rest,
         redo_stack: [current | buf.redo_stack]
     }
@@ -39,6 +40,7 @@ defmodule Quillex.Buffer.Core.History do
       | data: data,
         cursor: cursor,
         selection: selection,
+        dirty?: data != buf.clean_data,
         redo_stack: rest,
         undo_stack: [current | buf.undo_stack]
     }

@@ -206,6 +206,7 @@ defmodule QuillEx.RootScene.Renderizer do
              auto_indent: state.auto_indent,
              tab_width: state.tab_width,
              fold_level: state.fold_level,
+             gutter_menu_theme: icon_menu_theme(state),
              font: Quillex.GUI.Theme.editor_font(state.text_size),
              highlight_styles: highlight_styles(state),
              frame: frame
@@ -264,6 +265,7 @@ defmodule QuillEx.RootScene.Renderizer do
            auto_indent: state.auto_indent,
            tab_width: state.tab_width,
            fold_level: state.fold_level,
+           gutter_menu_theme: icon_menu_theme(state),
            font: Quillex.GUI.Theme.editor_font(state.text_size),
            highlight_styles: highlight_styles(state),
            frame: frame
@@ -485,7 +487,7 @@ defmodule QuillEx.RootScene.Renderizer do
       frame: content_frame,
       tree: file_tree,
       active_id: state.active_buf && state.active_buf.path,
-      theme: side_nav_theme,
+      theme: Map.put(side_nav_theme, :border_sides, [:left, :right, :bottom]),
       # Lets a drop on the empty space below the tree mean "move to the top
       # level"; without it there is no way to drag a file back out of a
       # subdirectory, because the root has no row of its own to aim at.
@@ -516,11 +518,12 @@ defmodule QuillEx.RootScene.Renderizer do
       frame: frame,
       path: state.file_nav_path || File.cwd!(),
       theme: %{
-        background: palette.pane_hover_bg,
+        # A quiet breadcrumb, not another selected/hovered row.
+        background: palette.pane_bg,
         border: palette.pane_border,
         dim_text: palette.pane_dim,
         font: :ibm_plex_mono,
-        font_size: scaled(11, state)
+        font_size: file_nav_theme(state).font_size
       }
     }
   end
@@ -835,10 +838,13 @@ defmodule QuillEx.RootScene.Renderizer do
     case Scenic.Graph.get(graph, :icon_menu) do
       [] ->
         menus = build_menus(state)
+        preserved = preserved_icon_menu_state(scene)
 
         icon_menu_data = %{
           frame: frame,
           menus: menus,
+          active_menu: preserved.active_menu,
+          dropdown_scroll: preserved.dropdown_scroll,
           show_shortcuts: state.show_menu_shortcuts,
           # the library's theme defaults to the built-in :roboto_mono; quillex ships IBM Plex
           theme: icon_menu_theme(state)
@@ -864,6 +870,31 @@ defmodule QuillEx.RootScene.Renderizer do
           do: Scenic.Scene.put_child(scene, :icon_menu, {:update_frame, frame})
 
         move_component(graph, :icon_menu, frame)
+    end
+  end
+
+  defp preserved_icon_menu_state(scene) do
+    child =
+      case Scenic.Scene.child(scene, :icon_menu) do
+        {:ok, children} when is_list(children) ->
+          Enum.find(children, &(is_pid(&1) and Process.alive?(&1)))
+
+        {:ok, pid} when is_pid(pid) ->
+          if Process.alive?(pid), do: pid
+
+        _ ->
+          nil
+      end
+
+    if child do
+      try do
+        state = :sys.get_state(child, 100).assigns.state
+        %{active_menu: state.active_menu, dropdown_scroll: state.dropdown_scroll}
+      catch
+        :exit, _ -> %{active_menu: nil, dropdown_scroll: 0}
+      end
+    else
+      %{active_menu: nil, dropdown_scroll: 0}
     end
   end
 
@@ -1098,13 +1129,14 @@ defmodule QuillEx.RootScene.Renderizer do
             # which made "Set Fold Level" look like an afterthought rather than
             # the third member of a group.
             %Divider{id: "view_folding_divider"},
-            command_item.(:toggle_fold),
-            command_item.(:unfold_all),
+            %{command_item.(:toggle_fold) | flush_left?: true},
+            %{command_item.(:unfold_all) | flush_left?: true},
             %Select{
               id: "fold_level",
               label: "Set Fold Level",
               value: state.fold_level,
-              options: [1, 2, 3, 4],
+              options: [1, 2, 3, 4, 5],
+              closed_caret: :left,
               tooltip: "Collapse all code blocks at the selected nesting level or deeper."
             },
             %Divider{id: "view_display_divider"},
@@ -1144,8 +1176,9 @@ defmodule QuillEx.RootScene.Renderizer do
               label: "Theme",
               value: state.theme,
               options: Quillex.GUI.Palette.themes(),
-              option_width: scaled(250, state),
               swatches: theme_swatches(),
+              closed_caret: :left,
+              options_full_width?: true,
               tooltip: "Choose the colour scheme used by the editor and the whole interface."
             },
             %Divider{id: "view_interface_divider"},
@@ -1173,6 +1206,7 @@ defmodule QuillEx.RootScene.Renderizer do
               value: state.primary_modifier,
               options: Quillex.Shortcuts.choices(),
               option_width: scaled(130, state),
+              closed_caret: :left,
               tooltip:
                 "Choose the main shortcut modifier. Select Command when using a Mac keyboard."
             },
@@ -1183,6 +1217,7 @@ defmodule QuillEx.RootScene.Renderizer do
             %Item{
               id: "save_default_settings",
               label: "Save Settings as Default",
+              flush_left?: true,
               tooltip: "Start every future session with the settings you have now."
             }
             # Search exclusions live beside the project-search controls; they
@@ -1312,6 +1347,7 @@ defmodule QuillEx.RootScene.Renderizer do
         auto_indent: state.auto_indent,
         tab_width: state.tab_width,
         fold_level: state.fold_level,
+        gutter_menu_theme: icon_menu_theme(state),
         # QA A5: a thin line either side of the text pane, none on top/bottom
         # (top would double the tab bar's edge; bottom hugs the window edge)
         border_sides: [:left, :right],

@@ -56,6 +56,11 @@ defmodule Quillex.ProjectSearchSpex do
   defp drawn_action?(action),
     do: Scenic.Graph.get(pane_scene().assigns.graph, {:action_glyph, action}) != []
 
+  defp row_actions_hidden?(row_id) do
+    [group] = Scenic.Graph.get(pane_scene().assigns.graph, {:row_actions, row_id})
+    Scenic.Primitive.get_style(group, :hidden)
+  end
+
   defp action_text(action) do
     case Scenic.Graph.get(pane_scene().assigns.graph, {:action_glyph, action}) do
       [%{data: text}] -> text
@@ -103,6 +108,22 @@ defmodule Quillex.ProjectSearchSpex do
         assert wait_until(fn -> root_state().active_buf.path == path end)
         assert wait_until(fn -> buffer_pane_state().cursor == {line, col} end)
         assert wait_until(fn -> "2 of 8" in pane_texts() end)
+
+        assert wait_until(fn ->
+                 current =
+                   ScenicWidgets.SearchPane.State.visible_rows(pane_state())
+                   |> Enum.find(&Map.get(&1, :current?, false))
+
+                 current && current.id == {:match, path, line, col}
+               end)
+
+        current_id = {:match, path, line, col}
+        [current_bg] = Scenic.Graph.get(pane_scene().assigns.graph, {:row_bg, current_id})
+        {r, g, b} = pane_state().theme.button_active
+
+        assert Scenic.Primitive.get_style(current_bg, :fill) ==
+                 {:color, {:color_rgba, {r, g, b, 255}}}
+
         {:ok, context}
       end
 
@@ -454,6 +475,38 @@ defmodule Quillex.ProjectSearchSpex do
       given_ "a fresh search for 'needle'", context do
         :ok = open_pane_with(context.root, "needle")
         assert {:done, 8, 3, _} = results().status
+
+        visible_match =
+          ScenicWidgets.SearchPane.State.visible_rows(pane_state())
+          |> Enum.find(&(&1.kind == :match))
+
+        assert row_actions_hidden?(visible_match.id),
+               "match actions should be hidden until their row is hovered"
+
+        {:ok, _} =
+          Tools.hover_element(%{
+            "element_id" =>
+              "search_pane_match_#{visible_match.line}_#{visible_match.col}_#{visible_match.path}"
+          })
+
+        assert wait_until(fn -> pane_state().hovered == visible_match.id end)
+        refute row_actions_hidden?(visible_match.id)
+
+        refute drawn_action?(
+                 {:replace_match, visible_match.path, visible_match.line, visible_match.col}
+               ),
+               "replace-one must not exist until replacement mode is opened"
+
+        refute drawn_action?(
+                 {:dismiss_match, visible_match.path, visible_match.line, visible_match.col}
+               ),
+               "bulk-replace review controls must not exist during ordinary search"
+
+        refute drawn_action?({:replace_file, visible_match.path})
+
+        assert drawn_action?({:dismiss_file, visible_match.path}),
+               "removing a file from search scope remains an ordinary-search action"
+
         {:ok, context}
       end
 
@@ -506,7 +559,24 @@ defmodule Quillex.ProjectSearchSpex do
                  {:replace_match, visible_match.path, visible_match.line, visible_match.col}
                ) == "Replace"
 
+        [replace_text] =
+          Scenic.Graph.get(
+            pane_scene().assigns.graph,
+            {:action_glyph,
+             {:replace_match, visible_match.path, visible_match.line, visible_match.col}}
+          )
+
+        assert Scenic.Primitive.get_style(replace_text, :text_base) == :middle
+
         assert action_text({:replace_file, path}) == "Replace all"
+
+        dismiss_action = {:dismiss_match, path, match.line, match.col}
+
+        {:ok, _} =
+          Tools.hover_element(%{"element_id" => dismiss_match_id(path, match)})
+
+        assert wait_until(fn -> pane_state().hovered == dismiss_action end)
+        assert Scenic.Graph.get(pane_scene().assigns.graph, :search_pane_action_tooltip) != []
 
         Probes.click_element(dismiss_match_id(path, match))
 
@@ -523,7 +593,7 @@ defmodule Quillex.ProjectSearchSpex do
                end),
                "the skipped result should remain drawn with review state"
 
-        assert action_text({:dismiss_match, path, match.line, match.col}) == "↺",
+        assert action_text({:dismiss_match, path, match.line, match.col}) == "Add back",
                "a skipped result should offer a visible add-back control"
 
         assert MapSet.member?(results().dismissed, {path, match.line, match.col})

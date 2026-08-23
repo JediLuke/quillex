@@ -4,7 +4,7 @@ defmodule Quillex.MixProject do
   def project do
     [
       app: :quillex,
-      version: "0.7.4",
+      version: "0.8.2",
       elixir: "~> 1.20",
       start_permanent: Mix.env() == :prod,
       elixirc_paths: elixirc_paths(Mix.env()),
@@ -71,7 +71,7 @@ defmodule Quillex.MixProject do
         :scenic_widget_contrib,
         "../scenic-widget-contrib",
         "https://github.com/JediLuke/scenic-widget-contrib.git",
-        "7ec13f5ede9ee7efd17be2be436ccf137e405066"
+        "02e1077c91cd41de5966d30091fc50a9f84c7cdf"
       ),
       {:elixir_uuid, "~> 1.2"},
       {:font_metrics, "~> 0.5"},

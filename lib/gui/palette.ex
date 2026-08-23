@@ -541,6 +541,7 @@ defmodule Quillex.GUI.Palette do
       # no visible rim at all while the menubar's had one; a floating thing
       # needs an edge or it is a hole in what is behind it.
       menu_row_hover: p.accent,
+      menu_row_hover_text: p.accent_fg,
       menu_border: p.dropdown_border,
       button_background: p.pane_selection_bg,
       button_active: p.accent,

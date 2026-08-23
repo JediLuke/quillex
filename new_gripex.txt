@@ -1,0 +1,26 @@
+new gripes
+
+- can we remove the background text in the "pwd" thing in the file navigator - use like a muted grey, and the text can be a little bigger, maybe same size as the directories/files
+- the little x's in the boolean toggles do look good but maybe its clearer to just leave them empty after all - leave the little boxes that causes it to line up nicely, but have either tick or nothing
+- some of the toggled work without redrawing the menu, e.g. "highlight current line" but toggling file navigator causes the menu to dissapear, I think its cooler if the menu stays open then we can toggle file nav on/off
+- "toggle fold" and "unfold all" can be moved to be left aligned with "set fold level" now since they are activation clicks not toggles (dont need space in left margin) - if they were, then they would have little tick boxes aswell now
+- the dropdowns for "command key", "set fold level" and "theme" are still not good - first the word "theme" and the dropdown overlap, put the dropdown below Theme I think (this can be a bigger section, like our text size or whatever - but in all of them, we still dont have good dropdown behaviour
+- "save settings as default" also needs some left alignment love
+- the width of the menubar isnt enough for our color themes, which is fine - this is something our dropdowns ought to handle gracefully. I think the theme one should actually, instead of being a list, it should be like a 6pack :D like this
+- in the high contrast & typewriter themes, I cant see the text in the color scheme dropdown any more
+- for global search pane, the "results as" should be "show results as" and clicking anywhere on that row should make it toggle, also we need to adjust the highlight cause when I hover highlight I cant see which part of the toggle is active, when highlighted this needs a color inversion, and this should have been said in final_gripes too
+- when the mouse leave the "global search pane" search settings dropdown, it should dissapear just like normal menus
+- instead of "setup search domain" lets say something like "
+- in the "save file" popup, ctrl and right doesnt move an entire word, just moves us one character
+- in global search bar, I see "replace all" and "x" permanently (the buttons) on each file - these should only show when we hover that filename row. Also I DONT see any "skip replacement" button on each individual row, even upon hover! Both should only have buttons show up when we hover
+- in high contrast color scheme, when I hover over stuff like the search domain selections, I cant see the test cause the yellow highlight is too powerful, we need some color inversion here
+- in the search domain - ok this is how I recreated this issue, so I clicked the x on one file to remove it from the search domain, how it shows "1 off" in the results which is good - however then I deselected everything and reselected the top node, it still says "1 off" which if true, is bad - because I have to dig through all these nodes to find which one is off, deselecting and reselecting directories above the other ones needs to reset it - this was my strategy to basically reset the search domain, toggle all off and then all on, so it needs to remove whatever was in effect on stuff below it if it gets toggled (for all levels of directory)
+- all the popups like "unsaved buffer" or whatever - first the text needs to be bigger, the text in buttons needs to be center aligned in all axis, that needs to be bigger, and can we get rid of the colors on each button - it gives the user hints that I dont actually want to give them, they should read and make a choice
+- when I save a file I notice it doesnt show up in the mini action bar, that seems like useful feedback to have pop up! Like it shows if I "cut" something it should so if we save the file
+- same if we delete a line (which is easy to do by accident now with our shortcuts!) it should show that action in the little mini thingy down below
+- "about quillex" and "keyboard shortcuts" dont follow our color scheme, did these get migrated to our new popup components or whatever?
+- if we have an edited buffer and we choose "reload from disk" it should have a popup like "warning, unsaved changes - really reload?"
+- can we get a small "new buffer" button (with an icon) that floats next to the tab bar, next to the rightmost tab, so users have that shortcut to make a new blank buffer
+- if I type something & save it, then press undo, it doesnt mark the buffer as edited (though "verify the file" picks up that it is differenton disk
+- the line-number gutter's right-click folding menu must draw above the buffer with an opaque themed background; it currently looks transparent and its options are hard to read
+- that gutter menu should use the normal menubar dropdown font size, colors, and contrasting hover highlight instead of inheriting editor-buffer text sizing

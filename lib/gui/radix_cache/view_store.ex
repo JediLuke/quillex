@@ -127,6 +127,7 @@ defmodule Quillex.RadixCache.ViewStore do
 
   def set_current_column_highlight(on?) when is_boolean(on?),
     do: GenServer.cast(__MODULE__, {:set_current_column_highlight, on?})
+
   def toggle_file_nav, do: GenServer.cast(__MODULE__, :toggle_file_nav)
   def toggle_action_feedback, do: GenServer.cast(__MODULE__, :toggle_action_feedback)
   def toggle_menu_shortcuts, do: GenServer.cast(__MODULE__, :toggle_menu_shortcuts)
@@ -177,7 +178,7 @@ defmodule Quillex.RadixCache.ViewStore do
     GenServer.cast(__MODULE__, {:set_text_size, n})
   end
 
-  def set_fold_level(n) when is_integer(n) and n in 1..4 do
+  def set_fold_level(n) when is_integer(n) and n in 1..5 do
     GenServer.cast(__MODULE__, {:set_fold_level, n})
   end
 

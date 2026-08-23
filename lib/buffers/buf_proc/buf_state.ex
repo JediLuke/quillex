@@ -14,6 +14,7 @@ defmodule Quillex.Structs.BufState do
           selection: selection(),
           read_only?: boolean(),
           dirty?: boolean(),
+          clean_data: [String.t()],
           external_change: nil | :modified | :deleted,
           undo_stack: list(),
           redo_stack: list(),
@@ -42,6 +43,10 @@ defmodule Quillex.Structs.BufState do
     read_only?: false,
     # a `dirty` buffer is one which is changed / modified in memory but not yet written to disk
     dirty?: false,
+    # Exact contents corresponding to the most recent save/reload baseline.
+    # Undo/redo compares against this; a boolean alone cannot tell whether a
+    # history snapshot still matches what is on disk.
+    clean_data: nil,
     # Set by ExternalFileSync when disk changes cannot be applied safely.
     external_change: nil,
 
@@ -95,6 +100,7 @@ defmodule Quillex.Structs.BufState do
       selection: nil,
       read_only?: read_only?,
       dirty?: false,
+      clean_data: data,
       external_change: nil,
       # Undo/Redo - start with empty stacks
       undo_stack: [],

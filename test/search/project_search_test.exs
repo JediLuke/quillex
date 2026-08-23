@@ -212,6 +212,23 @@ defmodule Quillex.Search.ProjectTest do
     assert Enum.map(snapshot.files, &elem(&1, 0)) == [wanted]
   end
 
+  test "re-enabling a directly excluded directory clears every exclusion below it", %{root: root} do
+    child = Path.join(root, "lib/a.ex")
+    ProjectSearchStore.set_root(root)
+    ProjectSearchStore.set_query("the")
+
+    ProjectSearchStore.toggle_scope(child)
+    ProjectSearchStore.toggle_scope(root)
+    :ok = ProjectSearchStore.await_idle()
+    assert MapSet.member?(ProjectSearchStore.get_state().excluded, child)
+
+    ProjectSearchStore.toggle_scope(root)
+    :ok = ProjectSearchStore.await_idle()
+
+    snapshot = eventually(&match?(%{status: {:done, 5, _, _}}, &1))
+    assert snapshot.excluded == MapSet.new()
+  end
+
   test "dismissals are cleared when the query changes, not when a replace re-runs",
        %{root: root} do
     ProjectSearchStore.set_root(root)

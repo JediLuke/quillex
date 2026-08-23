@@ -236,9 +236,16 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
 
   def handle_cast({:toggle_scope, path}, state) do
     excluded =
-      if effectively_excluded?(state.view.root, path, state.view.excluded),
-        do: include_beneath_excluded(state.view.root, path, state.view.excluded),
-        else: MapSet.put(state.view.excluded, path)
+      cond do
+        MapSet.member?(state.view.excluded, path) ->
+          clear_exclusions_beneath(path, state.view.excluded)
+
+        effectively_excluded?(state.view.root, path, state.view.excluded) ->
+          include_beneath_excluded(state.view.root, path, state.view.excluded)
+
+        true ->
+          MapSet.put(state.view.excluded, path)
+      end
 
     {:noreply, restart_search(state, %{state.view | excluded: excluded})}
   end
@@ -570,6 +577,19 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
     path
     |> then(&ancestor_chain(root, &1))
     |> Enum.any?(&MapSet.member?(excluded, &1))
+  end
+
+  defp clear_exclusions_beneath(path, excluded) do
+    Enum.reduce(excluded, excluded, fn excluded_path, acc ->
+      if excluded_path == path or descendant?(excluded_path, path),
+        do: MapSet.delete(acc, excluded_path),
+        else: acc
+    end)
+  end
+
+  defp descendant?(path, parent) do
+    relative = Path.relative_to(path, parent)
+    relative != "." and relative != path and not String.starts_with?(relative, "..")
   end
 
   # Re-enabling a descendant of an excluded directory means "only this way

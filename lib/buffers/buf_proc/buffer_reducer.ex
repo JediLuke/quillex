@@ -125,6 +125,7 @@ defmodule Quillex.Buffer.Process.Reducer do
     %{
       buf
       | data: lines,
+        clean_data: lines,
         selection: nil,
         dirty?: false,
         external_change: nil,
@@ -473,7 +474,7 @@ defmodule Quillex.Buffer.Process.Reducer do
 
   # Mark buffer clean without writing to disk (used by FileAPI after it writes directly)
   def process(%Quillex.Structs.BufState{} = buf, :mark_clean) do
-    %{buf | dirty?: false, external_change: nil}
+    %{buf | dirty?: false, clean_data: buf.data, external_change: nil}
   end
 
   def process(%BufState{} = buf, {:mark_external_change, change})

@@ -181,27 +181,49 @@ defmodule Quillex.FoldingSpex do
         {:ok, context}
       end
 
-      then_ "fold levels are expanded above Clear All Folds", context do
+      then_ "the closed fold-level control is layered over both buffer regions", context do
         assert state().gutter_menu
-        assert Scenic.Graph.get(graph(), :gutter_context_menu) != []
-        assert Scenic.Graph.get(graph(), {:select_option, :gutter_fold_level, 1}) != []
-        assert Scenic.Graph.get(graph(), {:select_option, :gutter_fold_level, 4}) != []
+        assert Scenic.Graph.get(graph(), :gutter_context_menu_gutter) != []
+        assert Scenic.Graph.get(graph(), :gutter_context_menu_content) != []
+
+        menu_theme = ScenicWidgets.TextField.Renderer.gutter_menu_theme(state())
+        clear_text = hd(Scenic.Graph.get(graph(), {:item_text, :gutter_clear_folds}))
+        panel = hd(Scenic.Graph.get(graph(), :dropdown_bg))
+
+        assert menu_theme.dropdown_font_size == state().gutter_menu_theme.dropdown_font_size
+        assert Scenic.Primitive.get_style(clear_text, :font_size) == menu_theme.dropdown_font_size
+
+        refute Scenic.Primitive.get_style(panel, :fill) in [:clear, nil],
+               "the context menu needs an opaque themed surface over buffer text"
+
+        assert Scenic.Graph.get(graph(), {:select_option, :gutter_fold_level, 1}) == []
         assert Scenic.Graph.get(graph(), {:item_text, :gutter_clear_folds}) != []
         {:ok, context}
       end
 
-      when_ "Level 1 is clicked", context do
+      when_ "the fold-level control is opened and Level 1 is clicked", context do
         %{frame: frame} = state()
         bounds = ScenicWidgets.TextField.Renderer.gutter_menu_bounds(state())
 
         row_height =
           ScenicWidgets.TextField.Renderer.gutter_menu_theme(state()).dropdown_item_height
 
-        point =
+        control =
+          {frame.pin.x + bounds.x + bounds.width - 20, frame.pin.y + bounds.y + row_height / 2}
+
+        pointer(:btn_left, 1, control)
+        pointer(:btn_left, 0, control)
+        Process.sleep(150)
+
+        assert state().gutter_menu.select_expanded?
+        assert Scenic.Graph.get(graph(), {:select_option, :gutter_fold_level, 1}) != []
+        assert Scenic.Graph.get(graph(), {:select_option, :gutter_fold_level, 5}) != []
+
+        option =
           {frame.pin.x + bounds.x + bounds.width - 20, frame.pin.y + bounds.y + row_height * 1.5}
 
-        pointer(:btn_left, 1, point)
-        pointer(:btn_left, 0, point)
+        pointer(:btn_left, 1, option)
+        pointer(:btn_left, 0, option)
         Process.sleep(350)
         {:ok, context}
       end

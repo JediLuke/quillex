@@ -15,6 +15,7 @@ defmodule Quillex.Buffer.Process.ReducerTest do
 
     %BufState{
       data: data,
+      clean_data: data,
       cursor: cursor,
       selection: selection,
       undo_stack: undo_stack,
@@ -80,6 +81,32 @@ defmodule Quillex.Buffer.Process.ReducerTest do
       b = %{buf(["hello"], undo_stack: [snapshot]) | dirty?: true}
       b2 = Reducer.process(b, :undo)
       assert b2.data == ["world"]
+    end
+
+    test "undo after save is dirty when it no longer matches the saved contents" do
+      before_edit = {["before"], Cursor.new(1, 1), nil}
+
+      saved =
+        %{buf(["after"], undo_stack: [before_edit]) | dirty?: true}
+        |> Reducer.process(:mark_clean)
+
+      undone = Reducer.process(saved, :undo)
+
+      assert undone.data == ["before"]
+      assert undone.clean_data == ["after"]
+      assert undone.dirty?
+    end
+
+    test "undo back to the saved baseline clears dirty state" do
+      saved = %{
+        buf(["saved"], undo_stack: [{["changed"], Cursor.new(1, 1), nil}])
+        | dirty?: false
+      }
+
+      changed = %{saved | data: ["changed"], clean_data: ["saved"], dirty?: true}
+      changed = %{changed | undo_stack: [{["saved"], Cursor.new(1, 1), nil}]}
+
+      refute Reducer.process(changed, :undo).dirty?
     end
 
     test "moves current state onto redo stack" do

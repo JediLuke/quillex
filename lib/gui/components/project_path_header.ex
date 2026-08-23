@@ -101,6 +101,5 @@ defmodule Quillex.GUI.ProjectPathHeader do
       scissor: {width - @padding * 2, height},
       translate: {@padding, 0}
     )
-    |> line({{0, height - 1}, {width, height - 1}}, stroke: {1, theme.border})
   end
 end
