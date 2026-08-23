@@ -1000,6 +1000,10 @@ defmodule QuillEx.RootScene do
   # SearchBar events (via cast_parent)
   # ===========================================================================
 
+  def handle_cast({:search_bar_focus_taken, _id}, scene) do
+    {:noreply, grant_keyboard(scene, :search_bar)}
+  end
+
   def handle_cast({:search_query_changed, _id, query}, scene) do
     Logger.debug("[search] query changed: #{inspect(query)}")
 
@@ -2768,7 +2772,7 @@ defmodule QuillEx.RootScene do
   # who won — because the renderizer rebuilds the buffer pane from that state,
   # and a rebuild that disagrees hands the keyboard back to a pane that was
   # supposed to have let go of it.
-  defp grant_keyboard(scene, owner) when owner in [:buffer, :side_pane] do
+  defp grant_keyboard(scene, owner) when owner in [:buffer, :side_pane, :search_bar] do
     state = scene.assigns.state
     side_pane = side_pane_id(state)
 
@@ -2790,8 +2794,22 @@ defmodule QuillEx.RootScene do
         Scenic.Scene.put_child(scene, :buffer_pane, :focus)
 
       :side_pane ->
+        if state.show_search_bar, do: Scenic.Scene.put_child(scene, :search_bar, :blur)
         Scenic.Scene.put_child(scene, :buffer_pane, :blur)
         Scenic.Scene.put_child(scene, side_pane, :focus)
+
+      :search_bar ->
+        if side_pane_open?(state), do: Scenic.Scene.put_child(scene, side_pane, :blur)
+
+        Scenic.Scene.put_child(scene, :buffer_pane, :blur)
+
+        Scenic.Scene.put_child(
+          scene,
+          :buffer_pane,
+          {:set_overlay_open, QuillEx.RootScene.Renderizer.search_bar_overlay_rect(state)}
+        )
+
+        Scenic.Scene.put_child(scene, :search_bar, :focus)
     end
 
     assign(scene, state: %{state | keyboard_owner: owner})

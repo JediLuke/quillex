@@ -563,8 +563,7 @@ defmodule Quillex.FindBarSpex do
 
           [%{transforms: %{translate: {_tx, ty}}}] = tooltip
 
-          assert_in_delta ty, want + 4, 1,
-                          "#{inspect(id)}'s tooltip hangs from the wrong row"
+          assert_in_delta ty, want + 4, 1, "#{inspect(id)}'s tooltip hangs from the wrong row"
         end
 
         {:ok, context}
@@ -631,6 +630,31 @@ defmodule Quillex.FindBarSpex do
                "typing after clicking into the document should reach the document"
 
         assert bar().query == "alpha", "and must not reach the query field"
+
+        {:ok, context}
+      end
+
+      then_ "clicking back into Find revokes the document before typing", context do
+        before = buffer().lines
+
+        assert root_state().keyboard_owner == :buffer
+        refute bar().focused
+
+        click_widget(:search_field)
+
+        assert wait_until(fn -> root_state().keyboard_owner == :search_bar end),
+               "the root should record Find as the sole keyboard owner"
+
+        assert wait_until(fn -> bar().focused and field(:search).focused end),
+               "the bar and its query field should both report focus"
+
+        type("z")
+
+        assert wait_until(fn -> bar().query == "alphaz" end),
+               "typing after returning should update only Find"
+
+        assert buffer().lines == before,
+               "the same keystroke must not also modify the document"
 
         {:ok, context}
       end
