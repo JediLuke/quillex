@@ -13,10 +13,10 @@ defmodule Quillex.SyntaxHighlightingSpex do
   alias ScenicMcp.Probes
   alias Quillex.TestHelpers.AppReset
 
-  defp root_state, do: :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state
+  defp root_state, do: :sys.get_state(Process.whereis(Quillex.RootScene)).assigns.state
 
   defp pane_pid do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
     {:ok, [pid | _]} = Scenic.Scene.child(root, :buffer_pane)
     pid
   end

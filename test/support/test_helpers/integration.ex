@@ -135,7 +135,7 @@ defmodule Quillex.TestHelpers.Integration do
 
   @doc false
   def editor_focus_state do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
 
     case Scenic.Scene.child(root, :buffer_pane) do
       {:ok, [pid | _]} ->
@@ -149,7 +149,7 @@ defmodule Quillex.TestHelpers.Integration do
 
   @doc false
   def focus_relevant_view do
-    state = :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state
+    state = :sys.get_state(Process.whereis(Quillex.RootScene)).assigns.state
 
     Map.take(state, [
       :show_file_nav,
@@ -185,7 +185,7 @@ defmodule Quillex.TestHelpers.Integration do
 
   @doc "Does the buffer pane hold the keyboard right now?"
   def editor_focused? do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
 
     case Scenic.Scene.child(root, :buffer_pane) do
       {:ok, [pid | _]} ->

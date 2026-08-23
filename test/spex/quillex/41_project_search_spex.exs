@@ -19,8 +19,8 @@ defmodule Quillex.ProjectSearchSpex do
   alias Quillex.TestHelpers.AppReset
   alias Quillex.RadixCache.ProjectSearchStore
 
-  defp root_state, do: :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state
-  defp root_scene, do: :sys.get_state(Process.whereis(QuillEx.RootScene))
+  defp root_state, do: :sys.get_state(Process.whereis(Quillex.RootScene)).assigns.state
+  defp root_scene, do: :sys.get_state(Process.whereis(Quillex.RootScene))
 
   defp status_widget do
     pane_state()
@@ -34,19 +34,19 @@ defmodule Quillex.ProjectSearchSpex do
   end
 
   defp pane_scene do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
     {:ok, child} = Scenic.Scene.child(root, :project_search_pane)
     :sys.get_state(if(is_list(child), do: List.first(child), else: child))
   end
 
   defp pane_state do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
     {:ok, [pid | _]} = Scenic.Scene.child(root, :project_search_pane)
     :sys.get_state(pid, 30_000).assigns.state
   end
 
   defp buffer_pane_state do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
     {:ok, [pid | _]} = Scenic.Scene.child(root, :buffer_pane)
     :sys.get_state(pid, 30_000).assigns.state
   end
@@ -188,7 +188,7 @@ defmodule Quillex.ProjectSearchSpex do
     # itself the moment anything makes it redraw — wiping the query this
     # helper just set.
     Scenic.Scene.put_child(
-      :sys.get_state(Process.whereis(QuillEx.RootScene)),
+      :sys.get_state(Process.whereis(Quillex.RootScene)),
       :project_search_pane,
       {:set_query, query}
     )
@@ -217,7 +217,7 @@ defmodule Quillex.ProjectSearchSpex do
   # Component ids reach the semantic index as strings from some widgets and as
   # atoms from others; try both rather than guess.
   defp element_centre(id) do
-    viewport = :sys.get_state(Process.whereis(QuillEx.RootScene)).viewport
+    viewport = :sys.get_state(Process.whereis(Quillex.RootScene)).viewport
 
     [{_id, key}] =
       case :ets.lookup(viewport.semantic_index, id) do

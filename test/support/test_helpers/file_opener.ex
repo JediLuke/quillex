@@ -6,7 +6,7 @@ defmodule Quillex.TestHelpers.FileOpener do
   The FileAPI call triggers a PubSub `:new_buffer_opened` event which the
   RootScene handles — so the tab bar and buffer state are updated automatically.
 
-  Use this instead of `GenServer.call(QuillEx.RootScene, {:action, {:open_file, path}})`
+  Use this instead of `GenServer.call(Quillex.RootScene, {:action, {:open_file, path}})`
   which would violate the Quillex.Spex boundary.
   """
 

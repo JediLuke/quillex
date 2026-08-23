@@ -60,7 +60,8 @@ defmodule Quillex.Search.Project do
   way the final one is not is worse than a provisional answer that is merely
   incomplete.
   """
-  @spec search_streaming(Path.t(), String.t(), [Backend.option()], ([{Path.t(), [Match.t()]}] -> any)) ::
+  @spec search_streaming(Path.t(), String.t(), [Backend.option()], ([{Path.t(), [Match.t()]}] ->
+                                                                      any)) ::
           {:ok, [{Path.t(), [Match.t()]}]} | {:error, term()}
   def search_streaming(root, query, opts, on_partial) when is_function(on_partial, 1) do
     cond do

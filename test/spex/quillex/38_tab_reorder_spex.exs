@@ -39,7 +39,7 @@ defmodule Quillex.TabReorderSpex do
         assert Enum.find_index(ids, &(&1 == context.second.uuid)) <
                  Enum.find_index(ids, &(&1 == context.first.uuid))
 
-        root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+        root = :sys.get_state(Process.whereis(Quillex.RootScene))
         {:ok, child} = Scenic.Scene.child(root, :tab_bar)
         pid = if is_list(child), do: List.first(child), else: child
         visible_ids = :sys.get_state(pid).assigns.state.tabs |> Enum.map(& &1.id)
@@ -111,7 +111,7 @@ defmodule Quillex.TabReorderSpex do
   end
 
   defp tab_bar_scene do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
     {:ok, child} = Scenic.Scene.child(root, :tab_bar)
     pid = if is_list(child), do: List.first(child), else: child
     :sys.get_state(pid)

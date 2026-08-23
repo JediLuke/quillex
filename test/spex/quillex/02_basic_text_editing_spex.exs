@@ -28,7 +28,6 @@ defmodule Quillex.BasicTextEditingSpex do
     # Wait for scene to fully initialize
     Process.sleep(2000)
 
-
     # Known LAYOUT to start from (overlays dismissed, file navigator
     # closed) without touching buffers — an open navigator shifts the
     # editor pane 250px right and makes fixed-x clicks miss it.
@@ -39,7 +38,6 @@ defmodule Quillex.BasicTextEditingSpex do
   spex "Basic Text Editing - Character Input",
     description: "Validates that typing characters works correctly",
     tags: [:phase_2, :text_editing, :input] do
-
     # =========================================================================
     # 1. TYPING SINGLE CHARACTERS
     # =========================================================================
@@ -81,6 +79,7 @@ defmodule Quillex.BasicTextEditingSpex do
       then_ "the full text 'Hello World' should be visible" do
         assert Query.text_visible?("Hello World"),
                "Full text 'Hello World' should be visible"
+
         :ok
       end
     end
@@ -110,6 +109,7 @@ defmodule Quillex.BasicTextEditingSpex do
       then_ "the text should show 'Hello WoXrld'" do
         assert Query.text_visible?("Hello WoXrld"),
                "X should be inserted where cursor moved to"
+
         :ok
       end
     end
@@ -133,6 +133,7 @@ defmodule Quillex.BasicTextEditingSpex do
       then_ "the 'X' should be deleted" do
         assert Query.text_visible?("Hello World"),
                "Text should be back to 'Hello World' after backspace"
+
         :ok
       end
     end
@@ -141,7 +142,6 @@ defmodule Quillex.BasicTextEditingSpex do
   spex "Basic Text Editing - Newlines and Lines",
     description: "Validates that Enter key and line numbers work correctly",
     tags: [:phase_2, :text_editing, :lines] do
-
     # =========================================================================
     # 5. ENTER KEY - NEW LINE
     # =========================================================================
@@ -189,7 +189,8 @@ defmodule Quillex.BasicTextEditingSpex do
       when_ "we press Up arrow to go to Line1 and add text", context do
         Probes.send_keys("up", [])
         Process.sleep(50)
-        Probes.send_keys("end", [])  # Go to end of Line1
+        # Go to end of Line1
+        Probes.send_keys("end", [])
         Process.sleep(50)
         Probes.send_text("_modified")
         Process.sleep(100)
@@ -199,6 +200,7 @@ defmodule Quillex.BasicTextEditingSpex do
       then_ "Line1 should show the modification" do
         assert Query.text_visible?("Line1_modified"),
                "First line should show '_modified' appended"
+
         :ok
       end
     end
@@ -220,6 +222,7 @@ defmodule Quillex.BasicTextEditingSpex do
           Probes.send_keys("right", [])
           Process.sleep(30)
         end
+
         Probes.send_text("X")
         Process.sleep(100)
         {:ok, context}
@@ -232,6 +235,7 @@ defmodule Quillex.BasicTextEditingSpex do
         # Check that the X was inserted (we don't know exact position without more state)
         assert String.contains?(rendered, "X"),
                "X should be inserted somewhere in the text"
+
         :ok
       end
     end
@@ -270,7 +274,6 @@ defmodule Quillex.BasicTextEditingSpex do
   spex "Basic Text Editing - Line Splitting",
     description: "Validates that Enter in middle of line splits the line",
     tags: [:phase_2, :text_editing, :line_split] do
-
     # =========================================================================
     # 9. ENTER IN MIDDLE OF LINE
     # =========================================================================
@@ -298,6 +301,7 @@ defmodule Quillex.BasicTextEditingSpex do
           Probes.send_keys("left", [])
           Process.sleep(30)
         end
+
         Probes.send_keys("enter", [])
         Process.sleep(100)
         {:ok, context}
@@ -309,6 +313,7 @@ defmodule Quillex.BasicTextEditingSpex do
         # They should no longer be joined
         refute Query.text_visible?("HelloWorld"),
                "'HelloWorld' should no longer appear as single word"
+
         :ok
       end
     end
@@ -336,6 +341,7 @@ defmodule Quillex.BasicTextEditingSpex do
       then_ "the lines should be joined back to 'HelloWorld'" do
         assert Query.text_visible?("HelloWorld"),
                "Lines should be joined back together"
+
         :ok
       end
     end

@@ -205,7 +205,7 @@ A comprehensive breakdown of current functionality vs target functionality for a
 
 ### Current Component Structure
 ```
-QuillEx.RootScene
+Quillex.RootScene
 ├── TabBar (ScenicWidgets.TabBar)
 │   └── Sends {:tab_selected, id}, {:tab_closed, id}
 ├── IconMenu (ScenicWidgets.IconMenu)

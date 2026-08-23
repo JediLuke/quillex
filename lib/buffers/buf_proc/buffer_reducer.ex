@@ -455,18 +455,6 @@ defmodule Quillex.Buffer.Process.Reducer do
     end
   end
 
-  defp delete_span(buf, line, from_col, to_col) do
-    text = Enum.at(buf.data, line - 1, "")
-    before = String.slice(text, 0, from_col - 1)
-    rest = String.slice(text, to_col - 1, String.length(text) - to_col + 1)
-
-    buf
-    |> History.push()
-    |> Map.put(:data, List.replace_at(buf.data, line - 1, before <> rest))
-    |> Map.put(:dirty?, true)
-    |> Navigation.move_cursor({line, from_col})
-  end
-
   # Mark buffer clean without writing to disk (used by FileAPI after it writes directly)
   def process(%Quillex.Structs.BufState{} = buf, :mark_clean) do
     %{buf | dirty?: false, clean_data: buf.data, external_change: nil}
@@ -502,6 +490,22 @@ defmodule Quillex.Buffer.Process.Reducer do
   def process(%Quillex.Structs.BufState{} = _buf, action) do
     Logger.warning("Unhandled buffer action: #{inspect(action)}")
     :ignore
+  end
+
+  # ---------------------------------------------------------------------------
+  # EDITING HELPERS
+  # ---------------------------------------------------------------------------
+
+  defp delete_span(buf, line, from_col, to_col) do
+    text = Enum.at(buf.data, line - 1, "")
+    before = String.slice(text, 0, from_col - 1)
+    rest = String.slice(text, to_col - 1, String.length(text) - to_col + 1)
+
+    buf
+    |> History.push()
+    |> Map.put(:data, List.replace_at(buf.data, line - 1, before <> rest))
+    |> Map.put(:dirty?, true)
+    |> Navigation.move_cursor({line, from_col})
   end
 
   # ---------------------------------------------------------------------------

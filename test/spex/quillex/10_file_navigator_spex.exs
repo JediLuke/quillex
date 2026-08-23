@@ -69,7 +69,7 @@ defmodule Quillex.FileNavigatorSpex do
   end
 
   defp child_assigns(id) do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
     {:ok, [pid | _]} = Scenic.Scene.child(root, id)
     :sys.get_state(pid, 30_000).assigns
   end

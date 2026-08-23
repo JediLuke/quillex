@@ -93,10 +93,10 @@ defmodule Quillex.DemoSpex do
 
   # ── Reading the editor ────────────────────────────────────────────────────
 
-  defp root_state, do: :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state
+  defp root_state, do: :sys.get_state(Process.whereis(Quillex.RootScene)).assigns.state
 
   defp child_state(id) do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
     {:ok, [pid | _]} = Scenic.Scene.child(root, id)
     :sys.get_state(pid, 30_000).assigns.state
   end

@@ -43,7 +43,7 @@ defmodule Quillex.SearchPaneVirtualisationSpex do
   @render_budget_ms 33
 
   defp pane_scene do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
     {:ok, [pid | _]} = Scenic.Scene.child(root, :project_search_pane)
     :sys.get_state(pid, 30_000)
   end
@@ -67,7 +67,8 @@ defmodule Quillex.SearchPaneVirtualisationSpex do
 
   defp pane_primitive_count, do: map_size(pane_scene().assigns.graph.primitives)
 
-  defp results, do: :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state.project_search
+  defp results,
+    do: :sys.get_state(Process.whereis(Quillex.RootScene)).assigns.state.project_search
 
   defp search_done?, do: match?(%{status: {:done, _, _, _}}, results())
 
@@ -127,7 +128,7 @@ defmodule Quillex.SearchPaneVirtualisationSpex do
     ProjectSearchStore.set_query(query)
 
     Scenic.Scene.put_child(
-      :sys.get_state(Process.whereis(QuillEx.RootScene)),
+      :sys.get_state(Process.whereis(Quillex.RootScene)),
       :project_search_pane,
       {:set_query, query}
     )
@@ -195,7 +196,8 @@ defmodule Quillex.SearchPaneVirtualisationSpex do
 
         # And it drew ENOUGH: a window that is bounded but empty is a blank
         # pane, which passes a ceiling and fails a person.
-        on_screen = ceil(State.body_frame(pane_state()).size.height / pane_state().theme.row_height)
+        on_screen =
+          ceil(State.body_frame(pane_state()).size.height / pane_state().theme.row_height)
 
         assert MapSet.size(drawn) >= on_screen,
                "the viewport holds #{on_screen} rows but only #{MapSet.size(drawn)} were drawn — " <>

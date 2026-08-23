@@ -24,7 +24,7 @@ defmodule Quillex.ChromeZoomSpex do
   alias Quillex.TestHelpers.AppReset
 
   defp child_theme(id) do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
 
     case Scenic.Scene.child(root, id) do
       {:ok, [pid | _]} -> :sys.get_state(pid, 30_000).assigns.state.theme
@@ -112,8 +112,7 @@ defmodule Quillex.ChromeZoomSpex do
         # Not exactly: each is rounded, and the navigator's label has a floor.
         ratio = context.at_150.tabs / context.at_100.tabs
 
-        assert_in_delta ratio, 1.5, 0.15,
-                        "150% zoom scaled the tabs by #{Float.round(ratio, 2)}"
+        assert_in_delta ratio, 1.5, 0.15, "150% zoom scaled the tabs by #{Float.round(ratio, 2)}"
 
         {:ok, context}
       end

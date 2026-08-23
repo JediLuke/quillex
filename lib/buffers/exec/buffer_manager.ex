@@ -227,6 +227,13 @@ defmodule Quillex.Buffer.BufferManager do
     end
   end
 
+  def activate_state(state, %{uuid: uuid} = buf_ref) when is_binary(uuid) do
+    case Enum.find(state.buffers, &(&1.uuid == buf_ref.uuid)) do
+      nil -> :not_found
+      %Quillex.Buffer.Ref{} = found -> {:ok, %{state | active_buf: found}}
+    end
+  end
+
   @doc false
   def reorder_state(state, uuids) do
     current = Enum.map(state.buffers, & &1.uuid)
@@ -236,13 +243,6 @@ defmodule Quillex.Buffer.BufferManager do
       {:ok, %{state | buffers: Enum.map(uuids, &Map.fetch!(by_uuid, &1))}}
     else
       :invalid_order
-    end
-  end
-
-  def activate_state(state, %{uuid: uuid} = buf_ref) when is_binary(uuid) do
-    case Enum.find(state.buffers, &(&1.uuid == buf_ref.uuid)) do
-      nil -> :not_found
-      %Quillex.Buffer.Ref{} = found -> {:ok, %{state | active_buf: found}}
     end
   end
 

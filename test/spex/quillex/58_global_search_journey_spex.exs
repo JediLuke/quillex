@@ -57,7 +57,7 @@ defmodule Quillex.GlobalSearchJourneySpex do
   # and not in the graph is a row nobody can see or click.
 
   defp pane_scene do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
 
     case Scenic.Scene.child(root, :project_search_pane) do
       {:ok, [pid | _]} -> :sys.get_state(pid, 30_000)
@@ -67,7 +67,7 @@ defmodule Quillex.GlobalSearchJourneySpex do
 
   defp pane_open?, do: pane_scene() != nil
   defp pane_state, do: pane_scene().assigns.state
-  defp root_state, do: :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state
+  defp root_state, do: :sys.get_state(Process.whereis(Quillex.RootScene)).assigns.state
 
   defp pane_graph, do: pane_scene().assigns.graph
 
@@ -143,7 +143,7 @@ defmodule Quillex.GlobalSearchJourneySpex do
   # PUBLISHES for each node, which is the surface anything driving the pane
   # uses and is generated from the same layout that draws it.
   defp scope_labels do
-    viewport = :sys.get_state(Process.whereis(QuillEx.RootScene)).viewport
+    viewport = :sys.get_state(Process.whereis(Quillex.RootScene)).viewport
 
     :ets.match_object(viewport.semantic_table, {{:search_pane, :_}, :_})
     |> Enum.map(fn {{_, id}, entry} -> {id, entry} end)
@@ -169,7 +169,7 @@ defmodule Quillex.GlobalSearchJourneySpex do
   end
 
   defp semantic?(id) do
-    viewport = :sys.get_state(Process.whereis(QuillEx.RootScene)).viewport
+    viewport = :sys.get_state(Process.whereis(Quillex.RootScene)).viewport
 
     case :ets.lookup(viewport.semantic_index, id) do
       [] -> :ets.lookup(viewport.semantic_index, String.to_atom(id)) != []

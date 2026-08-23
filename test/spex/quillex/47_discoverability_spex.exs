@@ -60,10 +60,10 @@ defmodule Quillex.DiscoverabilitySpex do
     {"Escape", "RootScene / SearchBar / dialogs"}
   ]
 
-  defp root_state, do: :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state
+  defp root_state, do: :sys.get_state(Process.whereis(Quillex.RootScene)).assigns.state
 
   defp child_state(id) do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
     {:ok, [pid | _]} = Scenic.Scene.child(root, id)
     :sys.get_state(pid, 30_000).assigns.state
   end
@@ -210,7 +210,6 @@ defmodule Quillex.DiscoverabilitySpex do
         assert columns >= 2,
                "the reference is short enough to be one column now; if that is " <>
                  "deliberate, relax this — it is here because the list outgrew the window"
-
 
         assert y >= 0 and y + height <= window_height,
                "the shortcuts panel runs from #{trunc(y)} to #{trunc(y + height)} in a " <>

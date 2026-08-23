@@ -113,7 +113,13 @@ defmodule Quillex.Search.ExcludesTest do
       globs = Quillex.Search.Glob.compile_list(["*.log"])
       unignore = Quillex.Search.Glob.compile_list(["keep.log"])
 
-      assert Quillex.Search.Backend.excluded?(Path.join(root, "noise.log"), root, [], globs, unignore)
+      assert Quillex.Search.Backend.excluded?(
+               Path.join(root, "noise.log"),
+               root,
+               [],
+               globs,
+               unignore
+             )
 
       refute Quillex.Search.Backend.excluded?(
                Path.join(root, "keep.log"),

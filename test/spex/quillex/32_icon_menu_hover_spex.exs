@@ -20,7 +20,7 @@ defmodule Quillex.IconMenuHoverSpex do
   end
 
   defp icon_menu_scene do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
     {:ok, child} = Scenic.Scene.child(root, :icon_menu)
     pid = if is_list(child), do: List.first(child), else: child
     :sys.get_state(pid)
@@ -49,7 +49,7 @@ defmodule Quillex.IconMenuHoverSpex do
         Process.sleep(200)
 
         scene = icon_menu_scene()
-        root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+        root = :sys.get_state(Process.whereis(Quillex.RootScene))
         width = root.assigns.state.frame.size.width
 
         {:ok,

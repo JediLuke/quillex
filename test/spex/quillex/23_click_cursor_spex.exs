@@ -253,7 +253,7 @@ defmodule Quillex.ClickCursorSpex do
   end
 
   defp active_buf do
-    :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state.active_buf
+    :sys.get_state(Process.whereis(Quillex.RootScene)).assigns.state.active_buf
   end
 
   # A fresh, focused buffer holding exactly these lines.

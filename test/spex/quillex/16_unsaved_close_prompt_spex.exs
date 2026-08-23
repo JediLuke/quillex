@@ -77,7 +77,7 @@ defmodule Quillex.UnsavedClosePromptSpex do
   defp tmp_file_path(name), do: Path.join(@tmp_dir, name)
 
   defp active_lines do
-    state = :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state
+    state = :sys.get_state(Process.whereis(Quillex.RootScene)).assigns.state
     {:ok, snapshot} = Quillex.Buffer.fetch(state.active_buf)
     snapshot.lines
   end

@@ -147,7 +147,6 @@ defmodule Quillex.PageNavigationSpex do
   spex "Page Navigation - Page Down moves cursor forward by a full page",
     description: "Page Down advances the cursor by the page size (viewport height in lines)",
     tags: [:page_navigation, :page_down, :cursor_movement] do
-
     scenario "Page Down from line 1 of a 60-line document moves cursor forward", _context do
       given_ "the buffer contains 60 numbered lines with cursor at line 1", context do
         reset_to_empty_single_buffer()
@@ -155,6 +154,7 @@ defmodule Quillex.PageNavigationSpex do
         goto_doc_start()
 
         {:ok, start_pos} = wait_for_cursor({1, 1})
+
         assert start_pos == {1, 1},
                "Cursor should be at {1,1} after Ctrl+Home, got #{inspect(start_pos)}"
 
@@ -231,7 +231,6 @@ defmodule Quillex.PageNavigationSpex do
   spex "Page Navigation - Page Down clamps at the last line",
     description: "Repeated Page Down never moves the cursor past the last line of the document",
     tags: [:page_navigation, :page_down, :clamp] do
-
     scenario "Repeated Page Down from the last line keeps cursor on the last line", _context do
       given_ "the buffer contains 60 lines with cursor at the last line", context do
         reset_to_empty_single_buffer()
@@ -281,7 +280,6 @@ defmodule Quillex.PageNavigationSpex do
   spex "Page Navigation - Page Up moves cursor backward by a full page",
     description: "Page Up retreats the cursor by the page size (viewport height in lines)",
     tags: [:page_navigation, :page_up, :cursor_movement] do
-
     scenario "Page Up from the last line of a 60-line document moves cursor backward", _context do
       given_ "the buffer contains 60 lines with cursor at the last line", context do
         reset_to_empty_single_buffer()
@@ -366,7 +364,6 @@ defmodule Quillex.PageNavigationSpex do
   spex "Page Navigation - Page Up clamps at line 1",
     description: "Repeated Page Up never moves the cursor above line 1",
     tags: [:page_navigation, :page_up, :clamp] do
-
     scenario "Repeated Page Up from line 1 keeps cursor at line 1", _context do
       given_ "the buffer contains 60 lines with cursor at line 1", context do
         reset_to_empty_single_buffer()
@@ -408,11 +405,12 @@ defmodule Quillex.PageNavigationSpex do
   # ===========================================================================
 
   spex "Page Navigation - Page Up and Page Down clear active selection",
-    description: "Pressing Page Up or Page Down while a selection is active dismisses the selection",
+    description:
+      "Pressing Page Up or Page Down while a selection is active dismisses the selection",
     tags: [:page_navigation, :selection, :cursor_movement] do
-
     scenario "Page Down clears a Shift+Down selection", _context do
-      given_ "the buffer has 60 lines and a selection is active (Shift+Down from line 1)", context do
+      given_ "the buffer has 60 lines and a selection is active (Shift+Down from line 1)",
+             context do
         reset_to_empty_single_buffer()
         type_n_lines(60)
         goto_doc_start()
@@ -502,7 +500,6 @@ defmodule Quillex.PageNavigationSpex do
   spex "Page Navigation - Plain Up/Down arrows unaffected",
     description: "Adding Page Up/Down should not disturb plain Up/Down arrow key behaviour",
     tags: [:page_navigation, :regression, :arrow_keys] do
-
     scenario "Plain Down arrow moves exactly one line at a time", _context do
       given_ "the buffer contains 10 lines with cursor at line 1", context do
         reset_to_empty_single_buffer()
@@ -522,8 +519,10 @@ defmodule Quillex.PageNavigationSpex do
 
       then_ "cursor should be on line 3" do
         {:ok, pos} = wait_for_cursor({3, 1})
+
         assert pos == {3, 1},
                "Two Down presses from line 1 should reach line 3, got #{inspect(pos)}"
+
         :ok
       end
     end
@@ -552,8 +551,10 @@ defmodule Quillex.PageNavigationSpex do
 
       then_ "cursor should be on line 4" do
         {:ok, pos} = wait_for_cursor({4, 1})
+
         assert pos == {4, 1},
                "One Up press from line 5 should reach line 4, got #{inspect(pos)}"
+
         :ok
       end
     end

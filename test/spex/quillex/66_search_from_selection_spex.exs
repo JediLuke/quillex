@@ -24,7 +24,7 @@ defmodule Quillex.SearchFromSelectionSpex do
   @other "needle"
 
   defp pane_scene do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
 
     case Scenic.Scene.child(root, :project_search_pane) do
       {:ok, [pid | _]} -> :sys.get_state(pid, 30_000)
@@ -36,7 +36,7 @@ defmodule Quillex.SearchFromSelectionSpex do
   defp pane_query, do: pane_scene().assigns.state.query
 
   defp search_bar_query do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
 
     case Scenic.Scene.child(root, :search_bar) do
       {:ok, [pid | _]} -> :sys.get_state(pid, 30_000).assigns.state.query
@@ -45,7 +45,7 @@ defmodule Quillex.SearchFromSelectionSpex do
   end
 
   defp buffer_selection do
-    state = :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state
+    state = :sys.get_state(Process.whereis(Quillex.RootScene)).assigns.state
 
     with ref when not is_nil(ref) <- state.active_buf,
          {:ok, buf} <- Quillex.Buffer.Process.fetch_buf(ref) do
@@ -56,7 +56,7 @@ defmodule Quillex.SearchFromSelectionSpex do
   end
 
   defp active_buffer_state do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state
+    root = :sys.get_state(Process.whereis(Quillex.RootScene)).assigns.state
     {:ok, state} = Quillex.Buffer.Process.fetch_buf(root.active_buf)
     state
   end

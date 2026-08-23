@@ -28,16 +28,16 @@ defmodule Quillex.MenuFitsAnyWindowSpex do
   # Enough to be sure at least one is too short for the View menu.
   @heights [900, 620, 480, 380]
 
-  defp root_state, do: :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state
+  defp root_state, do: :sys.get_state(Process.whereis(Quillex.RootScene)).assigns.state
 
   defp icon_menu_state do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
     {:ok, [pid | _]} = Scenic.Scene.child(root, :icon_menu)
     :sys.get_state(pid, 30_000).assigns.state
   end
 
   defp buffer_pane_state do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
     {:ok, [pid | _]} = Scenic.Scene.child(root, :buffer_pane)
     :sys.get_state(pid, 30_000).assigns.state
   end
@@ -59,7 +59,7 @@ defmodule Quillex.MenuFitsAnyWindowSpex do
   defp dropdown(id), do: Map.get(icon_menu_state().dropdown_bounds, id)
 
   defp icon_menu_graph do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
     {:ok, [pid | _]} = Scenic.Scene.child(root, :icon_menu)
     :sys.get_state(pid, 30_000).assigns.graph
   end

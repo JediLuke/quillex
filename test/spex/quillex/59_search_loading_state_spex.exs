@@ -36,7 +36,7 @@ defmodule Quillex.SearchLoadingStateSpex do
   # ── What is on the screen ─────────────────────────────────────────────────
 
   defp pane_scene do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
 
     case Scenic.Scene.child(root, :project_search_pane) do
       {:ok, [pid | _]} -> :sys.get_state(pid, 30_000)
@@ -66,7 +66,10 @@ defmodule Quillex.SearchLoadingStateSpex do
     |> Enum.filter(&(&1.module == Scenic.Primitive.Text))
     |> Enum.map(& &1.data)
     |> Kernel.--(body)
-    |> Enum.find(&(&1 =~ ~r/^(\d+ in \d+ files?  \(\d+ms\)|no matches|searching…|typing…|Type to search|Search [~\/…])/))
+    |> Enum.find(
+      &(&1 =~
+          ~r/^(\d+ in \d+ files?  \(\d+ms\)|no matches|searching…|typing…|Type to search|Search [~\/…])/)
+    )
   end
 
   defp drawn_rows do
@@ -119,7 +122,7 @@ defmodule Quillex.SearchLoadingStateSpex do
   # describing what searching is. It still says the old thing when there is no
   # project open at all.
   defp idle?(nil), do: false
-  defp idle?(text), do: (text =~ ~r/^Search [~\/…]/) or text =~ "Type to search"
+  defp idle?(text), do: text =~ ~r/^Search [~\/…]/ or text =~ "Type to search"
 
   defp wait_until(predicate, timeout \\ 8_000) do
     deadline = System.monotonic_time(:millisecond) + timeout
@@ -150,7 +153,7 @@ defmodule Quillex.SearchLoadingStateSpex do
     fills = Enum.uniq(fills ++ row_text_fills())
 
     cond do
-      status && status =~ ~r/^(\d+ in \d+ files?|no matches)/ and length(statuses) > 1 ->
+      (status && status =~ ~r/^(\d+ in \d+ files?|no matches)/) and length(statuses) > 1 ->
         %{statuses: statuses, fills: fills}
 
       System.monotonic_time(:millisecond) >= deadline ->

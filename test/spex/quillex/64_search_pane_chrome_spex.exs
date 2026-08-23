@@ -26,7 +26,7 @@ defmodule Quillex.SearchPaneChromeSpex do
   alias Quillex.TestHelpers.AppReset
 
   defp pane_scene do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
 
     case Scenic.Scene.child(root, :project_search_pane) do
       {:ok, [pid | _]} -> :sys.get_state(pid, 30_000)
@@ -37,7 +37,7 @@ defmodule Quillex.SearchPaneChromeSpex do
   defp pane_open?, do: pane_scene() != nil
   defp pane_state, do: pane_scene().assigns.state
   defp pane_graph, do: pane_scene().assigns.graph
-  defp root_graph, do: :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.graph
+  defp root_graph, do: :sys.get_state(Process.whereis(Quillex.RootScene)).assigns.graph
 
   defp widget(id), do: Enum.find(State.header_widgets(pane_state()), &(&1.id == id))
 
@@ -114,7 +114,7 @@ defmodule Quillex.SearchPaneChromeSpex do
   defp descendants(primitive, _graph), do: [primitive]
 
   defp semantic_entry(id) do
-    viewport = :sys.get_state(Process.whereis(QuillEx.RootScene)).viewport
+    viewport = :sys.get_state(Process.whereis(Quillex.RootScene)).viewport
 
     case :ets.lookup(viewport.semantic_index, String.to_atom(id)) do
       [{_id, key}] ->
@@ -135,7 +135,7 @@ defmodule Quillex.SearchPaneChromeSpex do
   end
 
   defp scope_entries do
-    viewport = :sys.get_state(Process.whereis(QuillEx.RootScene)).viewport
+    viewport = :sys.get_state(Process.whereis(Quillex.RootScene)).viewport
 
     :ets.match_object(viewport.semantic_table, {{:search_pane, :_}, :_})
     |> Enum.map(fn {{_, id}, entry} -> {id, entry} end)

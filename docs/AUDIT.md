@@ -31,7 +31,7 @@ Status vocabulary:
 ## Current audit scope
 
 The top-down pass currently treats **standalone Quillex** as the primary
-product: the normal `QuillEx.App` branch that starts performance monitoring,
+product: the normal `Quillex.App` branch that starts performance monitoring,
 RadixCache, buffer supervision, the CLI startup hook, and Quillex's Scenic
 viewport.
 
@@ -506,7 +506,7 @@ felt as though the application might crash.
 **Expected:** Interactive resize should remain responsive enough to provide
 clear feedback, and closing the window should complete predictably.
 
-**Implementation context:** `QuillEx.RootScene.handle_input/3` handles each
+**Implementation context:** `Quillex.RootScene.handle_input/3` handles each
 distinct viewport reshape. A frame change currently makes the renderizer take
 its full rebuild path, recreating the layout while preserving cursor and scroll
 state. This is relevant context, not yet an established cause.
@@ -686,7 +686,7 @@ top-down exploration through the normal, standalone child list. Return to
 hosted composition after the standalone process responsibilities and public
 contracts have been mapped.
 
-**Observation:** `QuillEx.App.start/2` branches on
+**Observation:** `Quillex.App.start/2` branches on
 `started_by_flamelex?/0`, backed by the application setting
 `:started_by_flamelex?`. This couples Quillex's boot vocabulary directly to
 one consuming application even though the behavior being selected is more

@@ -113,7 +113,7 @@ defmodule Quillex.FileOperationsSpex do
   end
 
   defp filename_field_state do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
     {:ok, [picker_pid | _]} = Scenic.Scene.child(root, :file_picker)
     picker = :sys.get_state(picker_pid)
     {:ok, [field_pid | _]} = Scenic.Scene.child(picker, :filename_input)
@@ -121,7 +121,7 @@ defmodule Quillex.FileOperationsSpex do
   end
 
   defp buffer_pane_state do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
     {:ok, [pane_pid | _]} = Scenic.Scene.child(root, :buffer_pane)
     :sys.get_state(pane_pid, 30_000).assigns.state
   end

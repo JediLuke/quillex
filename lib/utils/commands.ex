@@ -375,7 +375,11 @@ defmodule Quillex.Commands do
 
   defp section(%{section: section}) when is_binary(section), do: section
   defp section(%{menu: :file}), do: "File"
-  defp section(%{menu: :edit, id: id}) when id in [:find, :find_replace, :find_next, :find_in_project, :replace_in_project], do: "Finding"
+
+  defp section(%{menu: :edit, id: id})
+       when id in [:find, :find_replace, :find_next, :find_in_project, :replace_in_project],
+       do: "Finding"
+
   defp section(%{menu: :edit}), do: "Editing"
   defp section(%{menu: :view}), do: "Interface"
   defp section(_command), do: "Interface"

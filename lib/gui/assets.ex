@@ -1,4 +1,4 @@
-defmodule QuillEx.Assets do
+defmodule Quillex.Assets do
   @moduledoc """
   Static assets compiled into the release.
 

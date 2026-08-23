@@ -22,10 +22,10 @@ defmodule Quillex.WrappedCursorSpex do
   alias ScenicWidgets.TextField.Renderer
   import Quillex.TestHelpers.Integration, only: [fresh_editor!: 0, ensure_editor_focused: 0]
 
-  defp root_state, do: :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state
+  defp root_state, do: :sys.get_state(Process.whereis(Quillex.RootScene)).assigns.state
 
   defp pane_state do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
     {:ok, [pid | _]} = Scenic.Scene.child(root, :buffer_pane)
     :sys.get_state(pid, 30_000).assigns.state
   end

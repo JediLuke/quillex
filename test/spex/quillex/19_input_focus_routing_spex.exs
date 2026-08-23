@@ -24,7 +24,7 @@ defmodule Quillex.InputFocusRoutingSpex do
   alias ScenicMcp.Probes
   alias ScenicMcp.Query
 
-  # Test window is 2000x1200 (see QuillEx.App.window_size/0 for :test).
+  # Test window is 2000x1200 (see Quillex.App.window_size/0 for :test).
   # The file nav occupies the left 250px below the 35px top bar.
   @nav_point {125, 500}
   @buffer_point {900, 600}
@@ -54,7 +54,7 @@ defmodule Quillex.InputFocusRoutingSpex do
   end
 
   defp file_nav_visible? do
-    case Process.whereis(QuillEx.RootScene) do
+    case Process.whereis(Quillex.RootScene) do
       nil ->
         false
 
@@ -79,7 +79,7 @@ defmodule Quillex.InputFocusRoutingSpex do
   end
 
   defp buffer_pane_pid do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
     {:ok, child} = Scenic.Scene.child(root, :buffer_pane)
     if is_list(child), do: List.first(child), else: child
   end
@@ -87,7 +87,7 @@ defmodule Quillex.InputFocusRoutingSpex do
   defp buffer_pane_state, do: :sys.get_state(buffer_pane_pid()).assigns.state
 
   defp file_nav_state do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
     {:ok, child} = Scenic.Scene.child(root, :file_nav)
     pid = if is_list(child), do: List.first(child), else: child
     :sys.get_state(pid).assigns.state
@@ -103,7 +103,7 @@ defmodule Quillex.InputFocusRoutingSpex do
   end
 
   defp file_picker_state do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
     {:ok, child} = Scenic.Scene.child(root, :file_picker)
     pid = if is_list(child), do: List.first(child), else: child
     :sys.get_state(pid).assigns.state
@@ -266,7 +266,7 @@ defmodule Quillex.InputFocusRoutingSpex do
         :ok = Quillex.TestHelpers.FileOpener.open_file(Path.expand("mix.exs"))
         Process.sleep(300)
 
-        root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+        root = :sys.get_state(Process.whereis(Quillex.RootScene))
         Scenic.Scene.put_child(root, :buffer_pane, :blur)
         Scenic.Scene.put_child(root, :file_nav, :focus)
         Process.sleep(100)
@@ -389,7 +389,7 @@ defmodule Quillex.InputFocusRoutingSpex do
           click_nav_path(biblio)
         end
 
-        root_scene = :sys.get_state(Process.whereis(QuillEx.RootScene))
+        root_scene = :sys.get_state(Process.whereis(Quillex.RootScene))
         Scenic.Scene.put_child(root_scene, :buffer_pane, {:set_overlay_open, true})
         Process.sleep(100)
         assert buffer_pane_state().overlay_open

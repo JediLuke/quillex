@@ -1,6 +1,5 @@
 defmodule Quillex.BufferSupervisor do
   use DynamicSupervisor
-  require Logger
 
   #   # TODO check if `id` is unique, we could try to use `name` first but should fail if its taken!
   #   # filename also a good id

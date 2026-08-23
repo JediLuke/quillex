@@ -31,7 +31,7 @@ defmodule Quillex.SavedSettingsSpex do
     :ok
   end
 
-  defp root_state, do: :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state
+  defp root_state, do: :sys.get_state(Process.whereis(Quillex.RootScene)).assigns.state
 
   defp menu(menu_id, item_id) do
     Probes.click_element("icon_menu_#{menu_id}")

@@ -20,10 +20,10 @@ defmodule Quillex.MenuLayoutSpex do
   alias ScenicMcp.Probes
   alias Quillex.TestHelpers.AppReset
 
-  defp root_state, do: :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state
+  defp root_state, do: :sys.get_state(Process.whereis(Quillex.RootScene)).assigns.state
 
   defp icon_menu_state do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
     {:ok, [pid | _]} = Scenic.Scene.child(root, :icon_menu)
     :sys.get_state(pid, 30_000).assigns.state
   end
@@ -45,7 +45,7 @@ defmodule Quillex.MenuLayoutSpex do
 
   # Every string a component actually draws, from its live graph.
   defp drawn_text(child_id) do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
     {:ok, [pid | _]} = Scenic.Scene.child(root, child_id)
 
     :sys.get_state(pid, 30_000).assigns.graph

@@ -39,7 +39,7 @@ defmodule Quillex.FindBarSpex do
 
   # ── Reading the editor ────────────────────────────────────────────────────
 
-  defp root_scene, do: :sys.get_state(Process.whereis(QuillEx.RootScene))
+  defp root_scene, do: :sys.get_state(Process.whereis(Quillex.RootScene))
   defp root_state, do: root_scene().assigns.state
 
   defp child(scene, id) do

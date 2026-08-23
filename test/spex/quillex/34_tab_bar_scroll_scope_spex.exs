@@ -33,7 +33,7 @@ defmodule Quillex.TabBarScrollScopeSpex do
   end
 
   defp tab_state do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
     {:ok, child} = Scenic.Scene.child(root, :tab_bar)
     pid = if is_list(child), do: List.first(child), else: child
     :sys.get_state(pid).assigns.state

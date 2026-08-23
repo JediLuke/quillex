@@ -40,7 +40,7 @@ defmodule Quillex.ChromeLayoutSpex do
     :ok
   end
 
-  defp root_state, do: :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state
+  defp root_state, do: :sys.get_state(Process.whereis(Quillex.RootScene)).assigns.state
 
   defp window, do: root_state().frame.size
 
@@ -94,12 +94,16 @@ defmodule Quillex.ChromeLayoutSpex do
     {icons_left, icons_right} = icon_menu_span()
     {label_left, label_right} = cursor_label_span()
 
-    assert_in_delta icons_right, w, @slack,
+    assert_in_delta icons_right,
+                    w,
+                    @slack,
                     "#{situation}: the icon menu ends at #{icons_right} but the window is " <>
                       "#{w} wide — the menubar is #{trunc(abs(icons_right - w))}px " <>
                       "#{if icons_right > w, do: "off the right edge", else: "short of it"}"
 
-    assert_in_delta label_right, icons_left, @slack,
+    assert_in_delta label_right,
+                    icons_left,
+                    @slack,
                     "#{situation}: the cursor label ends at #{label_right} but " <>
                       "the icon menu starts at #{icons_left} — the top bar does not tile"
 
@@ -255,7 +259,9 @@ defmodule Quillex.ChromeLayoutSpex do
         for button <- @icon_buttons do
           b = bounds(button)
 
-          assert_in_delta b.width, 35, 2,
+          assert_in_delta b.width,
+                          35,
+                          2,
                           "#{button} is #{b.width}px wide, not the 35 it should be at 100% zoom"
         end
 

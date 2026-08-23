@@ -17,14 +17,14 @@ defmodule Quillex.ViewGuidesZoomUnindentSpex do
   defp pane_snapshot, do: Scenic.PubSub.get(Quillex.RadixCache.PaneStore.source())
 
   defp pane_component do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
     {:ok, child} = Scenic.Scene.child(root, :buffer_pane)
     pid = if is_list(child), do: List.first(child), else: child
     :sys.get_state(pid)
   end
 
   defp open_view do
-    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
     {:ok, child} = Scenic.Scene.child(root, :icon_menu)
     pid = if is_list(child), do: List.first(child), else: child
 
@@ -47,7 +47,7 @@ defmodule Quillex.ViewGuidesZoomUnindentSpex do
         })
 
         Process.sleep(150)
-        root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+        root = :sys.get_state(Process.whereis(Quillex.RootScene))
         Scenic.Scene.put_child(root, :buffer_pane, :focus)
         Process.sleep(100)
         Probes.send_keys("tab", [:shift])

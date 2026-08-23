@@ -31,14 +31,14 @@ defmodule Quillex.CommandKeySpex do
     :ok
   end
 
-  defp root_state, do: :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state
+  defp root_state, do: :sys.get_state(Process.whereis(Quillex.RootScene)).assigns.state
 
   # What a menu row will actually say — read from the built menus rather than
   # the registry, because the registry stores "Mod+S" and the whole question
   # is what that turns into on the way to the screen.
   defp menu_shortcut(menu_id, row_id) do
     root_state()
-    |> QuillEx.RootScene.Renderizer.build_menus()
+    |> Quillex.RootScene.Renderizer.build_menus()
     |> Enum.find(&(&1.id == menu_id))
     |> Map.fetch!(:items)
     |> List.flatten()
