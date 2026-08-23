@@ -1,6 +1,6 @@
 defmodule Quillex.ThemesSpex do
   @moduledoc """
-  Part II item 6: five themes, one palette, everything at once.
+  Part II item 6: six themes, one palette, everything at once.
 
   A theme is not an editor setting here — it drives the editor *and* the
   chrome, because a light buffer inside a dark sidebar reads as broken rather
@@ -18,9 +18,13 @@ defmodule Quillex.ThemesSpex do
   defp root_state, do: :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state
 
   defp child_state(id) do
+    child_assigns(id).state
+  end
+
+  defp child_assigns(id) do
     root = :sys.get_state(Process.whereis(QuillEx.RootScene))
     {:ok, [pid | _]} = Scenic.Scene.child(root, id)
-    :sys.get_state(pid, 30_000).assigns.state
+    :sys.get_state(pid, 30_000).assigns
   end
 
   defp wait_until(predicate, timeout \\ 4_000) do
@@ -72,7 +76,7 @@ defmodule Quillex.ThemesSpex do
   spex "Every theme reaches every surface",
     description: "Choosing a theme repaints the editor, the tab bar, the menubar and the sidebar",
     tags: [:phase_45, :themes] do
-    scenario "walking all five themes from the View menu" do
+    scenario "walking all six themes from the View menu" do
       given_ "the file navigator is open so the sidebar is on screen", context do
         Quillex.RadixCache.ViewStore.open_file_nav()
         assert wait_until(fn -> root_state().show_file_nav end)
@@ -93,6 +97,9 @@ defmodule Quillex.ThemesSpex do
 
           assert child_state(:icon_menu).theme.background == palette.chrome_bg,
                  "#{label} did not reach the menubar"
+
+          assert child_assigns(:cursor_pos_label).background == palette.chrome_selected_bg,
+                 "#{label} did not retain the distinct line/column background"
 
           assert child_state(:file_nav).theme.background == palette.pane_bg,
                  "#{label} did not reach the file navigator"

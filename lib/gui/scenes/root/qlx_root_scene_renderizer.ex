@@ -305,7 +305,7 @@ defmodule QuillEx.RootScene.Renderizer do
     Scenic.Scene.put_child(
       scene,
       :cursor_pos_label,
-      {:set_theme, %{color: p.chrome_fg, background: p.chrome_bg}}
+      {:set_theme, %{color: p.chrome_fg, background: p.chrome_selected_bg}}
     )
 
     if state.show_project_search do
