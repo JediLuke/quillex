@@ -39,7 +39,8 @@ defmodule Quillex.GUI.Palette do
     {:alchemical_light, "Alchemical Wedding (Light)"},
     {:solarized_dark, "Solarized Dark"},
     {:solarized_light, "Solarized Light"},
-    {:high_contrast, "High Contrast"}
+    {:high_contrast, "High Contrast"},
+    {:typewriter, "Typewriter"}
   ]
 
   @doc "Every theme, as `{id, label}`, in menu order."
@@ -368,6 +369,61 @@ defmodule Quillex.GUI.Palette do
       handle_active_stroke: {255, 255, 255},
       handle_active_arrow: {0, 0, 0}
     }
+  end
+
+  # Paper-white inverse of High Contrast: uncompromising black text and
+  # controls, with greys used only for depth and hover feedback.
+  defp tokens(:typewriter) do
+    Map.merge(tokens(:high_contrast), %{
+      editor_bg: {255, 255, 255},
+      editor_fg: {0, 0, 0},
+      cursor: {0, 0, 0},
+      line_numbers: {45, 45, 45, 255},
+      border: {0, 0, 0, 255},
+      focused_border: {0, 0, 0},
+      selection: {150, 205, 255, 220},
+      search_match: {255, 225, 70, 190},
+      search_current_match: {255, 150, 45, 230},
+      matching_brace: {0, 70, 170},
+      cursor_guide: {0, 0, 0, 35},
+      scrollbar_track: {225, 225, 225, 255},
+      scrollbar_thumb: {35, 35, 35, 255},
+      chrome_bg: {245, 245, 245},
+      chrome_selected_bg: {220, 220, 220},
+      chrome_hover_bg: {205, 205, 205},
+      chrome_fg: {30, 30, 30},
+      chrome_selected_fg: {0, 0, 0},
+      chrome_separator: {0, 0, 0},
+      dropdown_bg: {255, 255, 255},
+      dropdown_border: {0, 0, 0},
+      dropdown_fg: {0, 0, 0},
+      accent: {0, 0, 0},
+      accent_fg: {255, 255, 255},
+      pane_bg: {250, 250, 250},
+      pane_fg: {0, 0, 0},
+      pane_dim: {70, 70, 70},
+      pane_hover_bg: {220, 220, 220},
+      pane_selection_bg: {205, 205, 205},
+      pane_active_bg: {185, 210, 235},
+      pane_border: {0, 0, 0},
+      pane_scrollbar: {35, 35, 35},
+      field_bg: {255, 255, 255},
+      field_border: {0, 0, 0},
+      match_highlight_bg: {255, 220, 80},
+      error_fg: {150, 0, 0},
+      drop_text: {0, 0, 0},
+      ghost_bg: {255, 255, 255},
+      ghost_text: {0, 0, 0},
+      handle_bg: {245, 245, 245},
+      handle_stroke: {0, 0, 0},
+      handle_arrow: {0, 0, 0},
+      handle_hover_bg: {205, 205, 205},
+      handle_hover_stroke: {0, 0, 0},
+      handle_hover_arrow: {0, 0, 0},
+      handle_active_bg: {0, 0, 0},
+      handle_active_stroke: {0, 0, 0},
+      handle_active_arrow: {255, 255, 255}
+    })
   end
 
   # ── Component themes ──────────────────────────────────────────────────────

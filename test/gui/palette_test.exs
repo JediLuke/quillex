@@ -13,9 +13,17 @@ defmodule Quillex.GUI.PaletteTest do
     :dialog_theme
   ]
 
-  test "there are exactly five themes, and the default is one of them" do
-    assert length(Palette.themes()) == 5
+  test "there are exactly six themes, and the default is one of them" do
+    assert length(Palette.themes()) == 6
     assert Palette.default() in Palette.ids()
+  end
+
+  test "Typewriter is the light inverse of High Contrast" do
+    palette = Palette.get(:typewriter)
+    assert palette.editor_bg == {255, 255, 255}
+    assert palette.editor_fg == {0, 0, 0}
+    assert palette.dropdown_bg == {255, 255, 255}
+    assert palette.dropdown_fg == {0, 0, 0}
   end
 
   # A palette missing one token would not fail until the surface that reads it

@@ -101,7 +101,7 @@ defmodule Quillex.MenuLayoutSpex do
 
         # The rows in this menu that outlive the session get a group of their
         # own, so they cannot be read as more preference toggles.
-        assert defaults == ["save_default_settings", "edit_search_excludes"]
+        assert defaults == ["save_default_settings"]
         {:ok, context}
       end
 

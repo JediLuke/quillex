@@ -424,7 +424,20 @@ defmodule QuillEx.RootScene do
   # remains reliable even when the adjacent child component overlaps its edge.
   defp route_input({:cursor_pos, coords}, _context, scene) do
     maybe_clear_icon_menu_hover(scene, scene.assigns.state.cursor_pos, coords)
+    maybe_clear_file_nav_hover(scene, coords)
     update_file_nav_resize_hover(scene, coords, file_nav_resize_handle_hit?(scene, coords))
+  end
+
+  defp maybe_clear_file_nav_hover(scene, {x, y}) do
+    state = scene.assigns.state
+    top = round(@top_bar_height * state.chrome_zoom / 100)
+
+    if state.show_file_nav and not state.show_project_search and
+         (x < 0 or x > state.file_nav_width or y < top) do
+      Scenic.Scene.put_child(scene, :file_nav, :clear_hover)
+    end
+
+    :ok
   end
 
   defp route_input(
@@ -1534,6 +1547,8 @@ defmodule QuillEx.RootScene do
   # Go to Line (Ctrl+G from TextField)
   def handle_event({:goto_line_requested, _id}, _from, scene), do: show_goto_line(scene)
 
+  def handle_event({:cursor_position_clicked, _id}, _from, scene), do: show_goto_line(scene)
+
   # ── Go to Line ────────────────────────────────────────────────────────────
   #
   # The prompt takes digits only, so RootScene collects them itself instead of
@@ -2559,11 +2574,16 @@ defmodule QuillEx.RootScene do
     # What you have HIGHLIGHTED wins. Selecting a word and pressing Ctrl+F is
     # a person saying which word; anything the bar happens to remember is a
     # worse answer to a question they have just answered.
-    initial_query =
+    {initial_query, initial_position} =
       cond do
-        (selection = selected_in_buffer(old_state)) != "" -> selection
-        old_state.show_search_bar and old_state.search_query != "" -> old_state.search_query
-        true -> word_under_cursor(old_state)
+        (selection = selected_in_buffer(old_state)) != "" ->
+          {selection, selection_start(old_state)}
+
+        old_state.show_search_bar and old_state.search_query != "" ->
+          {old_state.search_query, nil}
+
+        true ->
+          {word_under_cursor(old_state), nil}
       end
 
     cond do
@@ -2585,7 +2605,7 @@ defmodule QuillEx.RootScene do
         {:noreply, new_scene}
 
       true ->
-        do_show_search_bar(scene, old_state, initial_query, replace_mode)
+        do_show_search_bar(scene, old_state, initial_query, initial_position, replace_mode)
     end
   end
 
@@ -2606,6 +2626,16 @@ defmodule QuillEx.RootScene do
       String.trim(text)
     else
       _ -> ""
+    end
+  end
+
+  defp selection_start(state) do
+    with buf_ref when not is_nil(buf_ref) <- state.active_buf,
+         {:ok, %{selection: %{start: start_pos, end: end_pos}}} <-
+           Quillex.Buffer.Process.fetch_buf(buf_ref) do
+      min(start_pos, end_pos)
+    else
+      _ -> nil
     end
   end
 
@@ -2839,7 +2869,7 @@ defmodule QuillEx.RootScene do
     assign(scene, state: %{state | keyboard_owner: owner})
   end
 
-  defp do_show_search_bar(scene, old_state, initial_query, replace_mode) do
+  defp do_show_search_bar(scene, old_state, initial_query, initial_position, replace_mode) do
     new_state = %{
       old_state
       | show_search_bar: true,
@@ -2886,7 +2916,13 @@ defmodule QuillEx.RootScene do
     # If we have an initial query, perform search
     if String.length(initial_query) > 0 do
       Scenic.Scene.put_child(new_scene, :search_bar, {:set_query, initial_query})
-      Scenic.Scene.put_child(new_scene, :buffer_pane, {:action, {:search, initial_query}})
+
+      action =
+        if initial_position,
+          do: {:search_at, initial_query, [], initial_position},
+          else: {:search, initial_query}
+
+      Scenic.Scene.put_child(new_scene, :buffer_pane, {:action, action})
     end
 
     {:noreply, new_scene}

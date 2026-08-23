@@ -1,0 +1,56 @@
+The defect list for next session, while I'm in the shower
+
+== Tab bar
+- the "untitled" tab bar can never be closed, even if we have other stable tabs open. If we have other stable tabs open, and its empty (no edits) then it should simply be closeable with one click on the x. If it has edits, we would get the usual "you have unsaved changes" message
+- if we close a tab, it seems like we jump back to the first tab in the tab list every time - we should actually open the one directly to the right (after) the closed tab, if it exists. If it doesnt exist (this was the last tab) then open the one directly to the left of it
+
+== The ln/col indicator
+- this used to have a different colored background - it was a dark black, which I think helped it stand out, and distringued it from the menubar next to it - can we get that back, also, clicking on this thingy ought to open up the "go to line" dialog box, an alternative activation for that feature
+
+== the file navigator
+- can we get a line rendered up the top, similar in color/idea to how we show the search directory in the global search pane now - this line up the very top is inert to clicks, it acts as a buffer zone and pust some space between the tab bar and the activatable dropdowns - it also tells the user the current project directory. If it overflows the room we have, preference the last part of the path, as we do in the existing global search pane place - but here (and there I guess) it we scroll up, that should left scroll the directory, so we could still read the full path this way if we desired (same orientation that we horizontal scroll our tabs with the mouse wheel)
+
+== File navigator
+- the file navigator is actually pretty great - one thing I found, if I'm highlighting one or more files, dragging it around, if I want to cancel the operation then I should be able to press escape
+- we maintain highlight a bit too much / too long, for example if I hover the cursor around in file nav, and then move it out into the file buffer, that thing basically stays highlighted - it does no harm, but its a non-ideal behaviour. Same if we have space space at the bottom, we can move the mouse down the list where  its not hovering over a file, sometimes (and it does seem to work sometims) the highlight will not dissapear, so we highlight something not under our cursor
+
+== Menubar
+- starting with a bug, if I have a lot of tabs open, and I scroll to the left part and open one, then if I go and open a menu by clicking one of the menu buttons, it moves me to the last tab in the list!
+- our current view menu has many boolean toggles, I really like the look though of the "SCOPE" section in global search pane where we use ticks to apply/exclude directories - can we use that same idea, have a box there all the time (either on or off) and then that has either a tick or a croxx in it - this communicates current state clearer and makes the indent less weird when the boolean is off
+- right now the menubar items always render down and to the left of the button placement - if you look in global search bar, they render like 1/3 over - I would like the same 1/3 over treatment, but in reverse (to the left) - as long as we have room, if there isnt room, it would go as far right over as we could. SO when this is working, the "help" button will probably still open same as its already over on far right, but view will probably render, likely in same place as hel p menu! because it is going to try and render further to the right than it currently does, likely not have enough room, and then stop. The next one over, will also be further to the right than it currently is, but probably (and maybe this will even be the case for view menu) there will be enough space to render it with 2/3 menu space to the left of the menuicon and 1/3 to the right of it, so it will render in such a fashion
+- the "set fold level" is currently broken - maybe its just a matter of hover, because I can change the hover level, but - the way it should work is, when we hover over that rown, honestly only the dropdown part of the row should even hover - the rest stays blank. THis way the user knows hey this is the interactive part. CLicking anywhere on the row, including the dropdown, will activate the dropdown (and do the auto-expansion) which then will move the hover highlight around over each selection, until a choice is made. if I expand fold level, then deactivate view menu, then reactivate it it redraws still expanded - which is fine - and interestiny in this case it the highlighting is correct! It highlights over the current selection. btw when we activate the dropdown, stop showing the active current selection (actually I think its always just the default of 1) in the top choice
+- for the theme I want it to work similar to the fold level - when we expand it, we get a selection of themes - ideally the themes will be a little bigger than just the dropdowns of the fold level, we want to show both the names, and maybe a swatch pallette in a little circle or something (even just 2 main colors? or 4 mains? whatever) - also can we get a new theme which is the "light mode" inverse of the current high contrast - call it "Typewriter" since it will be high contrast black on white background I think
+- command key I also think should be a dropdown selector, very similar to fold level I guess - the tooltips should let users know, this is for people on a Mac
+- and I think we can actually remove the "edit exclusion list" menu item from here, since it doesnt naturally belong under "view"
+
+
+== Global search pane
+- I thought we were going to have the ability to "skip replace" individual sections of a file, but I only see buttons for "replace all" and "x" on files. also for both files and invidiual lines, the butons to replace all or x/skip should be hidden until we hover over particular file/line
+- none of the top buttons in global search have tooltips, we should follow the existing too;ltips of the normal single file find mode here
+- also the find/replace button doesnt hover nicely or click nicely like the one in normal find pane - actually all the global find/replace ones seem kinda unresponsive
+
+== global search pane - search settings
+- overall its not bad - I love the look of the little squares with ticks in them in the scope section, so much that I want this to be the new representation of all menubar dropdown booleans - either with a tick, or a cross, in that box - both here (for e.g. "search only open buffers" or "use exclude settings" as well as the normal menubar e.g. the multiple boolean toggles in view menu)
+- these menu items need tooltips aswell, just like normal menubar items
+- the "use ecslude settings & ignore" etc, first it should be 2 options, one is "Show .gitignore files in search" which will default to off, and the other is "Apply custom search excludes" which will be on
+_ then beneath that is the one to edit the exclude list, since its not a tiggle it should be further up on the left margin
+- then for results as - its a good toggle, when we hover highlight it it goes blue, which makes it impossible to know which one is currently active, we need to invert the colors just like how we do when we hover over e.g. the bubble sliders in current view menu dropdown, the sliders go black when hovered. Also, clicking anywhere on the whole row, not just the specific toggle, should apply the toggle
+- the "SCOPE" section is good, when it's collapsed I want the arrow facing the other way (left) and lets change from SCOPE to something like "Setup search domain" - and again these all need tooltips, including the "cencal our search" button, previous, next etc aswell = and they should also have hover click effects, and they're rounded corner buttons
+
+
+== SIngle file find
+
+- right now the app does this thing where if I type a word and press ctrl f, it automatically puts that word into find, but it also automatically jumps to a different search result than the one I'm currently on, so the screen can even move around!
+- find is kinda slow to activate/deactivate, especially de-activate weirdly
+- if we have find bar open (just single file find) if we press ctrl it should toggle find/replace toggle
+
+- in both single & global search pane (maybe all single-liine textfields everywhere) if I double click on a word, I still expect it to highlight, so I can e.g. backspace it
+
+ == Bufferpane
+ - for syntax highlighting, do we support other files? Markdown? shell script? pythong? json?
+ - I do like how we have code folding working, it needs one tweak - if I right click anywhere on line numbers, I want a submenu to appear with 2 menu options repeated (as these are also up in the actual menubar) - note that it will probably have to fold out to the right and down from our click, not left and down like menubar, because we want this to show up over the buffer. The two options are "set fold level" which has the same type of dropdown which self-expands, and "clear all folds" which undoes all folds
+ 
+
+== specific scroll issue
+- in any textfield where its single line, e.g. used in input forms, we need to handle overflow differently - instead of horizontal scrollbar (which there isnt enough room for) we want to keep the cursor on the right margin, and start moving text back towards the left - this is how other input forms with limited space do it - so users can use arrow keys to go back (and when we get to the left side and keep navigating, we start scrolling the text back until we hit that ilmit going that way)
+

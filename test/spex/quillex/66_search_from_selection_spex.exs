@@ -55,6 +55,12 @@ defmodule Quillex.SearchFromSelectionSpex do
     end
   end
 
+  defp active_buffer_state do
+    root = :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state
+    {:ok, state} = Quillex.Buffer.Process.fetch_buf(root.active_buf)
+    state
+  end
+
   defp wait_until(predicate, timeout \\ 8_000) do
     deadline = System.monotonic_time(:millisecond) + timeout
     do_wait(predicate, deadline)
@@ -187,8 +193,10 @@ defmodule Quillex.SearchFromSelectionSpex do
 
       then_ "and found it in the project", context do
         assert wait_until(fn ->
-                 match?({:done, n, _f, _ms} when n > 0,
-                        Quillex.RadixCache.ProjectSearchStore.get_state().status)
+                 match?(
+                   {:done, n, _f, _ms} when n > 0,
+                   Quillex.RadixCache.ProjectSearchStore.get_state().status
+                 )
                end),
                "the seeded query never ran"
 
@@ -220,6 +228,9 @@ defmodule Quillex.SearchFromSelectionSpex do
                the find bar opened holding #{inspect(search_bar_query())} where
                the selection was #{inspect(context.selected)}.
                """
+
+        assert active_buffer_state().search_current_index == 0,
+               "Ctrl+F moved from the selected occurrence to the next match"
 
         {:ok, context}
       end

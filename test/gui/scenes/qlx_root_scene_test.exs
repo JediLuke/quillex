@@ -494,6 +494,28 @@ defmodule QuillEx.RootSceneTest do
              "active_buf must switch to the remaining buffer"
     end
 
+    test "closing the active buffer selects its right neighbour, then its left neighbour" do
+      buf_a = %Quillex.Buffer.Ref{uuid: "a", name: "a.txt"}
+      buf_b = %Quillex.Buffer.Ref{uuid: "b", name: "b.txt"}
+      buf_c = %Quillex.Buffer.Ref{uuid: "c", name: "c.txt"}
+
+      {:ok, middle_closed} =
+        Quillex.Buffer.BufferManager.close_state(
+          %{active_buf: buf_b, buffers: [buf_a, buf_b, buf_c]},
+          buf_b
+        )
+
+      assert middle_closed.active_buf.uuid == "c"
+
+      {:ok, last_closed} =
+        Quillex.Buffer.BufferManager.close_state(
+          %{active_buf: buf_c, buffers: [buf_a, buf_b, buf_c]},
+          buf_c
+        )
+
+      assert last_closed.active_buf.uuid == "b"
+    end
+
     test "returns :last_buffer when only one buffer remains (last-buffer guard)" do
       sole_buf = %Quillex.Buffer.Ref{uuid: "sole-1", name: "last.txt", dirty?: true}
       state = %{active_buf: sole_buf, buffers: [sole_buf]}

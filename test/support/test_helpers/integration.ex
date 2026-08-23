@@ -190,7 +190,7 @@ defmodule Quillex.TestHelpers.Integration do
     case Scenic.Scene.child(root, :buffer_pane) do
       {:ok, [pid | _]} ->
         state = :sys.get_state(pid, 30_000).assigns.state
-        state.focused and not state.overlay_open
+        state.focused and state.overlay_open in [false, nil]
 
       _ ->
         false
@@ -449,5 +449,4 @@ defmodule Quillex.TestHelpers.Integration do
 
     wait_for_active_buffer_content("")
   end
-
 end

@@ -256,11 +256,14 @@ defmodule Quillex.Buffer.BufferManager do
         :last_buffer
 
       true ->
+        closing_index = Enum.find_index(state.buffers, &(&1.uuid == buf_ref.uuid))
         new_buffers = Enum.reject(state.buffers, &(&1.uuid == buf_ref.uuid))
 
         new_active =
           if state.active_buf && state.active_buf.uuid == buf_ref.uuid do
-            List.first(new_buffers)
+            # Keep the user's place in the tab strip: prefer the tab which was
+            # immediately to the right, falling back to the left at the end.
+            Enum.at(new_buffers, closing_index) || List.last(new_buffers)
           else
             state.active_buf
           end
