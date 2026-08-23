@@ -7,6 +7,8 @@ defmodule Mix.Tasks.RunSpexTest do
   """
   use ExUnit.Case, async: false
 
+  import ExUnit.CaptureIO
+
   # Ensure Mix has loaded all tasks from the code path into its ETS registry
   # before any test in this module runs. Without this, Mix.Task.get/1 can return
   # nil even when the module is compiled, because the registry is populated lazily.
@@ -71,6 +73,7 @@ defmodule Mix.Tasks.RunSpexTest do
       # lookup Mix performs internally when you run `mix run_spex`. If it
       # returns nil, the task would show as "Unknown task run_spex" on the CLI.
       task_module = Mix.Task.get("run_spex")
+
       assert task_module == Mix.Tasks.RunSpex,
              "Mix.Task.get(\"run_spex\") must return Mix.Tasks.RunSpex, got: #{inspect(task_module)}"
     end
@@ -85,6 +88,7 @@ defmodule Mix.Tasks.RunSpexTest do
              "Mix.Tasks.RunSpex must declare @preferred_cli_env"
 
       env = List.first(List.flatten(preferred_env_values))
+
       assert env == :test,
              "@preferred_cli_env must be :test, got: #{inspect(env)}"
     end
@@ -125,6 +129,7 @@ defmodule Mix.Tasks.RunSpexTest do
       for value <- ["headless", "wayland", "x11", "custom_driver"] do
         System.put_env("SCENIC_LOCAL_TARGET", value)
         Mix.Tasks.RunSpex.maybe_set_scenic_target()
+
         assert System.get_env("SCENIC_LOCAL_TARGET") == value,
                "Pre-existing value '#{value}' should not be overridden"
       end
@@ -150,10 +155,16 @@ defmodule Mix.Tasks.RunSpexTest do
       pinner_path = Path.join([File.cwd!(), "tools", "window_pinner"])
 
       if File.exists?(pinner_path) and is_binary(System.get_env("DISPLAY")) do
-        port = Mix.Tasks.RunSpex.maybe_start_window_pinner()
+        # Starting and stopping the pinner both announce themselves on stdout.
+        capture_io(fn ->
+          port = Mix.Tasks.RunSpex.maybe_start_window_pinner()
+          send(self(), {:port, port})
+          # Clean up: stop the port so we don't leave a running pinner.
+          Mix.Tasks.RunSpex.stop_window_pinner(port)
+        end)
+
+        assert_received {:port, port}
         assert is_port(port), "Expected a port, got: #{inspect(port)}"
-        # Clean up: stop the port so we don't leave a running pinner.
-        Mix.Tasks.RunSpex.stop_window_pinner(port)
       else
         :ok
       end
@@ -164,7 +175,12 @@ defmodule Mix.Tasks.RunSpexTest do
 
       try do
         System.delete_env("DISPLAY")
-        result = Mix.Tasks.RunSpex.maybe_start_window_pinner()
+
+        capture_io(fn ->
+          send(self(), {:result, Mix.Tasks.RunSpex.maybe_start_window_pinner()})
+        end)
+
+        assert_received {:result, result}
         assert result == nil, "Expected nil when DISPLAY is unset, got: #{inspect(result)}"
       after
         case original_display do
@@ -178,10 +194,13 @@ defmodule Mix.Tasks.RunSpexTest do
       pinner_path = Path.join([File.cwd!(), "tools", "window_pinner"])
 
       if File.exists?(pinner_path) and is_binary(System.get_env("DISPLAY")) do
-        port = Mix.Tasks.RunSpex.maybe_start_window_pinner()
-        assert is_port(port), "Precondition: expected a live port"
+        capture_io(fn ->
+          port = Mix.Tasks.RunSpex.maybe_start_window_pinner()
+          send(self(), {:port, port, Mix.Tasks.RunSpex.stop_window_pinner(port)})
+        end)
 
-        result = Mix.Tasks.RunSpex.stop_window_pinner(port)
+        assert_received {:port, port, result}
+        assert is_port(port), "Precondition: expected a live port"
         assert result == :ok
 
         assert Port.info(port) == nil,
@@ -195,14 +214,18 @@ defmodule Mix.Tasks.RunSpexTest do
       pinner_path = Path.join([File.cwd!(), "tools", "window_pinner"])
 
       if File.exists?(pinner_path) and is_binary(System.get_env("DISPLAY")) do
-        port = Mix.Tasks.RunSpex.maybe_start_window_pinner()
+        capture_io(fn ->
+          port = Mix.Tasks.RunSpex.maybe_start_window_pinner()
+
+          # First stop — normal path. Second, on an already-closed port, must
+          # not crash.
+          Mix.Tasks.RunSpex.stop_window_pinner(port)
+          send(self(), {:port, port, Mix.Tasks.RunSpex.stop_window_pinner(port)})
+        end)
+
+        assert_received {:port, port, second_stop}
         assert is_port(port), "Precondition: expected a live port"
-
-        # First stop — normal path.
-        Mix.Tasks.RunSpex.stop_window_pinner(port)
-
-        # Second stop on already-closed port must not crash.
-        assert Mix.Tasks.RunSpex.stop_window_pinner(port) == :ok
+        assert second_stop == :ok
       else
         :ok
       end

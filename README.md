@@ -157,6 +157,21 @@ tree reads the working directory. A file argument is opened into a buffer
 ahead of Scenic, so the editor comes up with your file already in it rather
 than flashing an empty one first.
 
+### The two gates
+
+`mix precommit` is the fast one — compile with warnings as errors, a format
+check, a stale-dependency check, and the unit and property suites. It runs in
+seconds, so it works as a git hook:
+
+```bash
+echo 'mix precommit' > .git/hooks/pre-commit
+chmod +x .git/hooks/pre-commit
+```
+
+`mix check` is everything above plus the spex suite, which drives a real GLFW
+window and takes minutes. Run that one by hand, and see `CLAUDE.md` for why
+spex go through `scripts/run_spex_quiet.sh` rather than `mix spex`.
+
 ## Requirements
 
 - **Elixir** 1.20+ and **Erlang/OTP** 27+

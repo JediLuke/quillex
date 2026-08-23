@@ -1,5 +1,8 @@
 defmodule Quillex.SettingsFileTest do
   use ExUnit.Case, async: false
+
+  import ExUnit.CaptureLog
+
   alias Quillex.SettingsFile
 
   setup do
@@ -37,7 +40,8 @@ defmodule Quillex.SettingsFileTest do
     File.mkdir_p!(Path.dirname(SettingsFile.path()))
     File.write!(SettingsFile.path(), "{not json")
 
-    assert SettingsFile.load() == %{}
+    # Ignoring it is logged by design; capture it so a passing suite is quiet.
+    capture_log(fn -> assert SettingsFile.load() == %{} end)
   end
 
   test "an unknown theme is dropped, the rest survives" do
