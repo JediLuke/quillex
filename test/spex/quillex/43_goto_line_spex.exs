@@ -38,6 +38,11 @@ defmodule Quillex.GotoLineSpex do
     snapshot.cursor
   end
 
+  defp lines do
+    {:ok, snapshot} = Quillex.Buffer.fetch(root_state().active_buf)
+    snapshot.lines
+  end
+
   defp type_digits(digits) do
     for <<d <- digits>> do
       Probes.send_keys(<<d>>, [])
@@ -129,19 +134,35 @@ defmodule Quillex.GotoLineSpex do
 
     scenario "It is reachable from the menubar, not only by shortcut" do
       when_ "Edit → Go to Line is chosen", context do
+        before = lines()
         Probes.click_element("icon_menu_edit")
         Process.sleep(300)
         Probes.click_element("icon_menu_edit_goto_line")
         Process.sleep(400)
-        {:ok, context}
-      end
 
-      then_ "the same prompt opens", context do
         assert root_state().show_goto_line,
                "Go to Line must be discoverable in the Edit menu, not only via Ctrl+G"
 
+        assert root_state().keyboard_owner == :goto_line,
+               "the prompt must become the sole keyboard owner"
+
+        type_digits("222")
+
+        {:ok, Map.put(context, :before_menu_goto_lines, before)}
+      end
+
+      then_ "digits go only to the prompt, never to the document", context do
+        assert root_state().goto_line_input == "222"
+
+        assert lines() == context.before_menu_goto_lines,
+               "typing 222 into Go to Line must leave the document byte-for-byte unchanged"
+
         Probes.send_keys("escape", [])
         Process.sleep(300)
+
+        assert root_state().keyboard_owner == :buffer,
+               "dismissing the prompt should return keyboard ownership to the editor"
+
         {:ok, context}
       end
     end

@@ -1545,7 +1545,19 @@ defmodule QuillEx.RootScene do
 
   defp show_goto_line(scene) do
     state = scene.assigns.state
-    new_state = %{state | show_goto_line: true, goto_line_input: ""}
+
+    new_state = %{
+      state
+      | show_goto_line: true,
+        goto_line_input: "",
+        keyboard_owner: :goto_line
+    }
+
+    # Capturing at RootScene does not revoke a child's non-positional input
+    # request. The editor must be explicitly blurred and independently gated,
+    # otherwise both RootScene and TextField consume every digit.
+    Scenic.Scene.put_child(scene, :buffer_pane, :blur)
+    Scenic.Scene.put_child(scene, :buffer_pane, {:set_overlay_open, true})
 
     new_scene =
       scene
@@ -1652,10 +1664,18 @@ defmodule QuillEx.RootScene do
 
   defp hide_goto_line(scene) do
     :ok = release_input(scene, [:key, :cursor_button])
-    state = %{scene.assigns.state | show_goto_line: false, goto_line_input: ""}
+
+    state = %{
+      scene.assigns.state
+      | show_goto_line: false,
+        goto_line_input: "",
+        keyboard_owner: :buffer
+    }
+
     graph = Scenic.Graph.delete(scene.assigns.graph, :goto_line_prompt)
 
     new_scene = scene |> assign(state: state) |> assign(graph: graph) |> push_graph(graph)
+    Scenic.Scene.put_child(new_scene, :buffer_pane, {:set_overlay_open, false})
     Scenic.Scene.put_child(new_scene, :buffer_pane, :focus)
     new_scene
   end
