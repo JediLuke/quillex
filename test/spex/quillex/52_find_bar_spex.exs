@@ -44,8 +44,8 @@ defmodule Quillex.FindBarSpex do
 
   defp child(scene, id) do
     case Scenic.Scene.child(scene, id) do
-      {:ok, [pid | _]} -> pid
-      {:ok, pid} when is_pid(pid) -> pid
+      {:ok, pids} when is_list(pids) -> Enum.find(pids, &(is_pid(&1) and Process.alive?(&1)))
+      {:ok, pid} when is_pid(pid) -> if Process.alive?(pid), do: pid
       _ -> nil
     end
   end

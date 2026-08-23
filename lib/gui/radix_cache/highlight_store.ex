@@ -62,6 +62,7 @@ defmodule Quillex.RadixCache.HighlightStore do
         {:noreply, state}
 
       lexer == nil ->
+        state = state |> cancel_debounce() |> cancel_task()
         publish(uuid, nil)
         {:noreply, %{state | buffer_id: uuid, lexer: nil, lines: lines, hash: hash}}
 
@@ -118,10 +119,14 @@ defmodule Quillex.RadixCache.HighlightStore do
   # ── Internals ──
 
   defp schedule(state) do
+    state = cancel_debounce(state)
     ref = make_ref()
     Process.send_after(self(), {:lex, ref}, @debounce_ms)
     %{state | debounce: ref}
   end
+
+  defp cancel_debounce(%{debounce: nil} = state), do: state
+  defp cancel_debounce(state), do: %{state | debounce: nil}
 
   defp cancel_task(%{task: nil} = state), do: state
 

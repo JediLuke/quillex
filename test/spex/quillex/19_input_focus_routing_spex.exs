@@ -60,12 +60,18 @@ defmodule Quillex.InputFocusRoutingSpex do
 
       pid ->
         root = :sys.get_state(pid)
-        match?({:ok, _child}, Scenic.Scene.child(root, :file_nav))
+
+        case Scenic.Scene.child(root, :file_nav) do
+          {:ok, children} when is_list(children) -> Enum.any?(children, &Process.alive?/1)
+          {:ok, child} when is_pid(child) -> Process.alive?(child)
+          _ -> false
+        end
     end
   end
 
   defp ensure_file_nav_visible do
     unless file_nav_visible?(), do: toggle_file_nav()
+    assert file_nav_visible?(), "file navigator did not become a live component"
   end
 
   defp ensure_file_nav_hidden do

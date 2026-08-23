@@ -65,7 +65,14 @@ defmodule Quillex.SyntaxHighlightingSpex do
         unless root_state().syntax_highlighting,
           do: Quillex.RadixCache.ViewStore.toggle_syntax_highlighting()
 
-        :ok = Quillex.TestHelpers.FileOpener.open_file(Path.expand("lib/highlight/highlight.ex"))
+        path = Path.expand("lib/utils/highlight.ex")
+        :ok = Quillex.TestHelpers.FileOpener.open_file(path)
+
+        assert wait_until(fn ->
+                 active = Quillex.Buffer.BufferManager.get_state().active_buf
+                 active && active.path == path && pane_state().buffer_id == active.uuid
+               end),
+               "the pane should be showing the source file before highlights are inspected"
 
         assert wait_until(fn -> is_map(pane_state().highlights) end),
                "the highlight store should publish spans for the file"
