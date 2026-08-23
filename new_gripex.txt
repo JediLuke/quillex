@@ -24,3 +24,5 @@ new gripes
 - if I type something & save it, then press undo, it doesnt mark the buffer as edited (though "verify the file" picks up that it is differenton disk
 - the line-number gutter's right-click folding menu must draw above the buffer with an opaque themed background; it currently looks transparent and its options are hard to read
 - that gutter menu should use the normal menubar dropdown font size, colors, and contrasting hover highlight instead of inheriting editor-buffer text sizing
+- in Alchemical Wedding Light, the global search project-scope tree is unreadable — the font/colour combination there does not survive the light palette
+- High Contrast's highlight is bright yellow on white, so highlighted text cannot be read. Highlighted text should flip to a dark colour — but only in this theme; the other palettes are fine as they are

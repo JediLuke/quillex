@@ -1,6 +1,52 @@
 # Changelog
 
-## Unreleased
+## 0.8.2 — 2026-08-23
+
+The product pass. Every feature 1.0 needs now exists; this release is the one
+where they became findable, legible and consistent with each other.
+
+- Added structural syntax highlighting. Keywords, names, strings and comments
+  are marked by **weight**, *slant* and underline rather than colour, so the
+  code reads the same for every kind of colour vision. Pure-Elixir Makeup
+  lexers cover Elixir, Erlang, EEx, JSON, JavaScript, C and diff; Syntect
+  fills the gaps (Markdown, shell, Python and many more) through the same
+  registry.
+- Added six themes — Alchemical Wedding in dark and light, Solarized in both,
+  High Contrast, and Typewriter — each driving the editor *and* the whole
+  interface. A light buffer inside a dark sidebar reads as broken rather than
+  as a theme. Editor text size and interface scale adjust independently, and
+  interface zoom now scales the chrome rather than only the frames it sits in.
+- Added a project-wide search pane in the sidebar, with its own query,
+  replacement and exclude-glob fields, results grouped by file, and a scope
+  tree you tick directories in and out of. Results stream in as they are
+  found rather than arriving all at once, and only the visible window is
+  drawn — a 1100-row result set builds in 3.5ms instead of 79ms. Dismiss a
+  match or a whole file before replacing, so Replace All is reviewable.
+  Results open into one reusable preview tab.
+- Added Go to Line (`Ctrl+G`), which clamps rather than refuses — `999999` is
+  what people type when they mean "the end". Find Next moved to `F3`.
+- Added code folding, matching-brace highlighting, and optional line and
+  column guides.
+- Added a choice of which key means "command", for people on a Mac, and
+  settings that can be saved as defaults.
+- File navigator: drag-to-move now has spring-loaded folders, edge
+  auto-scroll, a ghost label on the cursor, themed drop colours, and
+  drop-on-empty-space meaning the project root. Fixed the tree losing its
+  expansion twice per file operation — a status toast put the root scene on
+  its z-order rebuild path, and that path deleted the navigator outright.
+- Tab bar: drag-to-reorder now shows a drop line anchored to the dragged
+  tab's slot, with a 5px threshold so ordinary clicks don't flash it.
+- Menus: one dropdown component now draws both the menu bar and the search
+  pane's settings. Dropdowns scroll with a bar you can see and drag, fit
+  inside any window size, close on Escape and on scrolling elsewhere, and
+  nothing that redraws underneath one lands on top of it.
+- Every feature is reachable from the menu bar, every control has a tooltip,
+  and every shortcut is listed in Help → Keyboard Shortcuts.
+- Cursor movement and clicks are wrap-aware, so word wrap no longer strands
+  the end of a document out of reach.
+- `scripts/run_demo` plays the whole feature set, narrated by the editor into
+  its own buffer. It asserts as it goes — a demo that plays through while the
+  feature underneath is broken would be worse than no demo at all.
 
 - Added project-wide find and replace. Ctrl+Shift+F (Edit → Find in Project)
   opens the same top-right find popup plus a results pane in the sidebar slot;
