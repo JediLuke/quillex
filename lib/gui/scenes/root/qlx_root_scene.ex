@@ -1565,7 +1565,7 @@ defmodule QuillEx.RootScene do
       |> assign(graph: goto_line_graph(scene.assigns.graph, new_state))
       |> then(&(&1 |> push_graph(&1.assigns.graph)))
 
-    :ok = capture_input(new_scene, [:key, :cursor_button])
+    :ok = capture_input(new_scene, [:key, :codepoint, :cursor_button])
     {:noreply, new_scene}
   end
 
@@ -1663,7 +1663,7 @@ defmodule QuillEx.RootScene do
     do: px >= x and px <= x + w and py >= y and py <= y + h
 
   defp hide_goto_line(scene) do
-    :ok = release_input(scene, [:key, :cursor_button])
+    :ok = release_input(scene, [:key, :codepoint, :cursor_button])
 
     state = %{
       scene.assigns.state

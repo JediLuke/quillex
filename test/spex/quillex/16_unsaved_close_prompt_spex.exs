@@ -76,6 +76,12 @@ defmodule Quillex.UnsavedClosePromptSpex do
 
   defp tmp_file_path(name), do: Path.join(@tmp_dir, name)
 
+  defp active_lines do
+    state = :sys.get_state(Process.whereis(QuillEx.RootScene)).assigns.state
+    {:ok, snapshot} = Quillex.Buffer.fetch(state.active_buf)
+    snapshot.lines
+  end
+
   # ===========================================================================
   # SPEX 1: Dirty buffer shows dialog on Ctrl+W
   # ===========================================================================
@@ -137,6 +143,16 @@ defmodule Quillex.UnsavedClosePromptSpex do
                "Buffer tab should still be present while dialog is shown. Tab count: #{count}"
 
         :ok
+      end
+
+      then_ "printable input is captured by the modal and cannot edit behind it", context do
+        before = active_lines()
+        type_text("q")
+
+        assert active_lines() == before,
+               "a printable codepoint must not reach the document behind a modal"
+
+        {:ok, context}
       end
 
       then_ "cleanup: dismiss dialog with Escape" do
