@@ -1,7 +1,9 @@
 defmodule Quillex.Highlight do
   @moduledoc """
-  Token spans for syntax highlighting, computed with Makeup's pure-Elixir
-  lexers and reduced to a handful of editor classes.
+  Token spans for syntax highlighting, computed with Makeup lexers and
+  reduced to a handful of editor classes. Common languages use Makeup's
+  standalone Elixir lexers; Syntect supplies Markdown, shell, Python and the
+  wider extension catalogue.
 
   A file's lexer is chosen by extension through `Makeup.Registry`; the
   `makeup_*` packages in mix.exs register their languages on start. Lexing
@@ -39,8 +41,11 @@ defmodule Quillex.Highlight do
     |> suffixes()
     |> Enum.find_value(fn ext ->
       case Makeup.Registry.fetch_lexer_by_extension(ext) do
-        {:ok, lexer_and_opts} -> lexer_and_opts
-        :error -> nil
+        {:ok, {_lexer, opts} = lexer_and_opts} ->
+          if Keyword.get(opts, :language) == "Plain Text", do: nil, else: lexer_and_opts
+
+        :error ->
+          nil
       end
     end)
   end

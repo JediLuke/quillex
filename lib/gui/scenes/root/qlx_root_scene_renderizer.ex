@@ -205,6 +205,7 @@ defmodule QuillEx.RootScene.Renderizer do
              wrap_mode: if(state.word_wrap, do: :word, else: :none),
              auto_indent: state.auto_indent,
              tab_width: state.tab_width,
+             fold_level: state.fold_level,
              font: Quillex.GUI.Theme.editor_font(state.text_size),
              highlight_styles: highlight_styles(state),
              frame: frame
@@ -262,6 +263,7 @@ defmodule QuillEx.RootScene.Renderizer do
            wrap_mode: if(state.word_wrap, do: :word, else: :none),
            auto_indent: state.auto_indent,
            tab_width: state.tab_width,
+           fold_level: state.fold_level,
            font: Quillex.GUI.Theme.editor_font(state.text_size),
            highlight_styles: highlight_styles(state),
            frame: frame
@@ -335,8 +337,20 @@ defmodule QuillEx.RootScene.Renderizer do
   defp apply_file_nav_frame(_scene, nil, _state, _frame), do: :ok
 
   defp apply_file_nav_frame(scene, old_state, state, frame) do
-    if old_state.file_nav_width != state.file_nav_width or old_state.frame != state.frame do
-      Scenic.Scene.put_child(scene, side_pane_id(state), {:update_frame, frame})
+    if old_state.file_nav_width != state.file_nav_width or old_state.frame != state.frame or
+         old_state.file_nav_path != state.file_nav_path or old_state.theme != state.theme or
+         old_state.chrome_zoom != state.chrome_zoom do
+      if state.show_project_search do
+        Scenic.Scene.put_child(scene, :project_search_pane, {:update_frame, frame})
+      else
+        {header_frame, content_frame} = file_nav_frames(state, frame)
+        Scenic.Scene.put_child(scene, :file_nav, {:update_frame, content_frame})
+
+        Scenic.Scene.put_child(scene, :file_nav_path_header, {
+          :update,
+          project_path_header_data(state, header_frame)
+        })
+      end
     end
 
     :ok
@@ -465,8 +479,10 @@ defmodule QuillEx.RootScene.Renderizer do
     # see SideNavThemes.for_editor/1.
     side_nav_theme = file_nav_theme(state)
 
+    {header_frame, content_frame} = file_nav_frames(state, frame)
+
     side_nav_data = %{
-      frame: frame,
+      frame: content_frame,
       tree: file_tree,
       active_id: state.active_buf && state.active_buf.path,
       theme: side_nav_theme,
@@ -477,11 +493,36 @@ defmodule QuillEx.RootScene.Renderizer do
     }
 
     graph
+    |> Quillex.GUI.ProjectPathHeader.add_to_graph(
+      project_path_header_data(state, header_frame),
+      id: :file_nav_path_header,
+      translate: header_frame.pin.point
+    )
     |> ScenicWidgets.SideNav.add_to_graph(
       side_nav_data,
       id: :file_nav,
-      translate: frame.pin.point
+      translate: content_frame.pin.point
     )
+  end
+
+  defp file_nav_frames(state, frame) do
+    Widgex.Frame.v_split(frame, px: scaled(27, state)) |> List.to_tuple()
+  end
+
+  defp project_path_header_data(state, frame) do
+    palette = palette(state)
+
+    %{
+      frame: frame,
+      path: state.file_nav_path || File.cwd!(),
+      theme: %{
+        background: palette.pane_hover_bg,
+        border: palette.pane_border,
+        dim_text: palette.pane_dim,
+        font: :ibm_plex_mono,
+        font_size: scaled(11, state)
+      }
+    }
   end
 
   # The pane is chrome, so it is sized off the chrome zoom rather than the
@@ -555,6 +596,7 @@ defmodule QuillEx.RootScene.Renderizer do
   defp maybe_update_file_nav(graph, _state, nil) do
     graph
     |> Scenic.Graph.delete(:file_nav)
+    |> Scenic.Graph.delete(:file_nav_path_header)
     |> Scenic.Graph.delete(:project_search_pane)
   end
 
@@ -563,9 +605,15 @@ defmodule QuillEx.RootScene.Renderizer do
     other = if wanted == :file_nav, do: :project_search_pane, else: :file_nav
     graph = Scenic.Graph.delete(graph, other)
 
+    graph =
+      if wanted == :file_nav, do: graph, else: Scenic.Graph.delete(graph, :file_nav_path_header)
+
     case Scenic.Graph.get(graph, wanted) do
-      [] -> maybe_create_file_nav(graph, state, frame)
-      _existing -> graph
+      [] ->
+        maybe_create_file_nav(graph, state, frame)
+
+      _existing ->
+        graph
     end
   end
 
@@ -588,7 +636,10 @@ defmodule QuillEx.RootScene.Renderizer do
       active_match: nil,
       error: nil,
       case_sensitive: false,
-      regex: false
+      regex: false,
+      open_buffers_only: false,
+      show_ignored_files: false,
+      apply_custom_excludes: true
     }
   end
 
@@ -901,34 +952,10 @@ defmodule QuillEx.RootScene.Renderizer do
     )
   end
 
-  # One radio row per theme. The list is short and fixed (five, deliberately),
-  # so showing them all beats hiding them behind a submenu the user has to
-  # discover — which is the whole point of item 8.
-  defp theme_items(state) do
-    Enum.map(Quillex.GUI.Palette.themes(), fn {id, label} ->
-      %ScenicWidgets.Menu.Model.Radio{
-        id: "theme_#{id}",
-        label: label,
-        group: "theme",
-        value: id,
-        selected?: state.theme == id,
-        tooltip: "Use the #{label} colour scheme for the editor and the whole interface."
-      }
-    end)
-  end
-
-  # Two rows, same shape as the themes: a short fixed list is better shown
-  # than hidden behind a submenu.
-  defp modifier_items(state) do
-    Enum.map(Quillex.Shortcuts.choices(), fn {id, label} ->
-      %ScenicWidgets.Menu.Model.Radio{
-        id: "primary_modifier_#{id}",
-        label: label,
-        group: "primary_modifier",
-        value: id,
-        selected?: state.primary_modifier == id,
-        tooltip: "Use #{label} for shortcuts like Save and Copy, and print it in every menu."
-      }
+  defp theme_swatches do
+    Map.new(Quillex.GUI.Palette.themes(), fn {id, _label} ->
+      palette = Quillex.GUI.Palette.get(id)
+      {id, [palette.editor_bg, palette.editor_fg, palette.accent, palette.chrome_bg]}
     end)
   end
 
@@ -1111,11 +1138,16 @@ defmodule QuillEx.RootScene.Renderizer do
                   "#{Quillex.Commands.shortcut(:zoom_out)} change it; " <>
                   "#{Quillex.Commands.shortcut(:zoom_reset)} resets it."
             },
-            # A bare list of five palette names needs a noun over it; the other
-            # groups are legible from their rows and get a divider instead.
             %Divider{id: "view_theme_divider"},
-            %Item{id: "theme_heading", label: "Theme", enabled?: false},
-            theme_items(state),
+            %Select{
+              id: "theme",
+              label: "Theme",
+              value: state.theme,
+              options: Quillex.GUI.Palette.themes(),
+              option_width: scaled(250, state),
+              swatches: theme_swatches(),
+              tooltip: "Choose the colour scheme used by the editor and the whole interface."
+            },
             %Divider{id: "view_interface_divider"},
             %Toggle{
               id: "action_feedback",
@@ -1135,8 +1167,15 @@ defmodule QuillEx.RootScene.Renderizer do
             # whichever they decided on, which is why this is a setting and not
             # a detection. Changing it re-letters every shortcut in every menu.
             %Divider{id: "view_modifier_divider"},
-            %Item{id: "modifier_heading", label: "Command Key", enabled?: false},
-            modifier_items(state),
+            %Select{
+              id: "primary_modifier",
+              label: "Command Key",
+              value: state.primary_modifier,
+              options: Quillex.Shortcuts.choices(),
+              option_width: scaled(130, state),
+              tooltip:
+                "Choose the main shortcut modifier. Select Command when using a Mac keyboard."
+            },
             # Changing a setting changes this session. Making it the one every
             # session starts with is a separate, deliberate act — so it is a
             # command sitting under the settings it saves, not a toggle.
@@ -1272,6 +1311,7 @@ defmodule QuillEx.RootScene.Renderizer do
         wrap_mode: wrap_mode,
         auto_indent: state.auto_indent,
         tab_width: state.tab_width,
+        fold_level: state.fold_level,
         # QA A5: a thin line either side of the text pane, none on top/bottom
         # (top would double the tab bar's edge; bottom hugs the window edge)
         border_sides: [:left, :right],

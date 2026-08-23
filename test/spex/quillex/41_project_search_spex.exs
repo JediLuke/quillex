@@ -606,7 +606,12 @@ defmodule Quillex.ProjectSearchSpex do
         st = pane_state()
         widgets = ScenicWidgets.SearchPane.State.header_widgets(st)
 
-        for id <- [{:domain, :open_buffers_only}, {:domain, :use_ignore_files}, :edit_excludes] do
+        for id <- [
+              {:domain, :open_buffers_only},
+              {:domain, :show_ignored_files},
+              {:domain, :apply_custom_excludes},
+              :edit_excludes
+            ] do
           assert Enum.any?(widgets, &(&1.id == id)),
                  "#{inspect(id)} should be in the header once the settings are open"
         end

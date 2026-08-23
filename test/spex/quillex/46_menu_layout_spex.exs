@@ -91,13 +91,13 @@ defmodule Quillex.MenuLayoutSpex do
         assert "line_numbers" in text and "word_wrap" in text
         assert folding == ["toggle_fold", "unfold_all", "fold_level"]
         assert sizes == ["text_size", "tab_width", "chrome_zoom"]
-        assert hd(theme) == "theme_heading"
+        assert theme == ["theme"]
         assert preferences == ["action_feedback", "menu_shortcuts"]
 
         # Which key means "command" is a group of its own: it changes what is
         # printed on every other row in every menu, which is not something to
         # read as a third preference toggle.
-        assert hd(keys) == "modifier_heading"
+        assert keys == ["primary_modifier"]
 
         # The rows in this menu that outlive the session get a group of their
         # own, so they cannot be read as more preference toggles.
@@ -105,12 +105,18 @@ defmodule Quillex.MenuLayoutSpex do
         {:ok, context}
       end
 
-      then_ "every theme is a row of its own under the Theme heading", context do
-        theme_group = group_containing(:view, "theme_heading")
+      then_ "Theme and Command Key use the same expanding selector model as Fold Level",
+            context do
+        menu = icon_menu_state().menus |> Enum.find(&(&1.id == :view))
+        theme = Enum.find(menu.items, &match?(%{id: "theme"}, &1))
+        command = Enum.find(menu.items, &match?(%{id: "primary_modifier"}, &1))
 
-        for {id, _label} <- Quillex.GUI.Palette.themes() do
-          assert "theme_#{id}" in theme_group
-        end
+        assert %ScenicWidgets.Menu.Model.Select{} = theme
+        assert theme.options == Quillex.GUI.Palette.themes()
+        assert map_size(theme.swatches) == length(theme.options)
+        assert %ScenicWidgets.Menu.Model.Select{} = command
+        assert command.options == Quillex.Shortcuts.choices()
+        assert String.contains?(command.tooltip, "Mac")
 
         {:ok, context}
       end

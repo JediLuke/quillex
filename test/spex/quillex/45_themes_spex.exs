@@ -43,12 +43,67 @@ defmodule Quillex.ThemesSpex do
   defp choose_theme(id) do
     Probes.click_element("icon_menu_view")
     Process.sleep(200)
-    Probes.click_element("icon_menu_view_theme_#{id}")
+    menu = icon_menu_state()
+    theme_bounds = menu.dropdown_bounds.view.items["theme"]
+    {pin_x, pin_y} = menu.frame.pin.point
+    Probes.click(pin_x + theme_bounds.x + 12, pin_y + theme_bounds.y + 12)
+    Process.sleep(150)
+
+    index = Enum.find_index(Palette.themes(), fn {theme_id, _} -> theme_id == id end)
+    scroll_theme_option_into_view(index)
+    menu = icon_menu_state()
+    theme_bounds = menu.dropdown_bounds.view.items["theme"]
+    row_height = menu.theme.dropdown_item_height
+
+    {pin_x, pin_y} = menu.frame.pin.point
+
+    Probes.click(
+      pin_x + theme_bounds.x + theme_bounds.width - 20,
+      pin_y + theme_bounds.y + row_height * (index + 1.5)
+    )
+
     Process.sleep(400)
     true = wait_until(fn -> root_state().theme == id end)
     Probes.send_keys("escape", [])
     Process.sleep(200)
     :ok
+  end
+
+  defp icon_menu_state do
+    root = :sys.get_state(Process.whereis(QuillEx.RootScene))
+    {:ok, [pid | _]} = Scenic.Scene.child(root, :icon_menu)
+    :sys.get_state(pid, 30_000).assigns.state
+  end
+
+  defp scroll_theme_option_into_view(index, attempts \\ 30)
+
+  defp scroll_theme_option_into_view(_index, 0), do: :ok
+
+  defp scroll_theme_option_into_view(index, attempts) do
+    menu = icon_menu_state()
+    panel = menu.dropdown_bounds.view
+    theme = panel.items["theme"]
+    row_height = menu.theme.dropdown_item_height
+    y = theme.y + row_height * (index + 1.5)
+    top = panel.y + menu.theme.dropdown_padding
+    bottom = panel.y + panel.height - menu.theme.dropdown_padding
+    x = panel.x + panel.width / 2
+    {pin_x, pin_y} = menu.frame.pin.point
+
+    cond do
+      y > bottom ->
+        Probes.send_scroll(0, -1, pin_x + x, pin_y + bottom - 5)
+        Process.sleep(30)
+        scroll_theme_option_into_view(index, attempts - 1)
+
+      y < top ->
+        Probes.send_scroll(0, 1, pin_x + x, pin_y + top + 5)
+        Process.sleep(30)
+        scroll_theme_option_into_view(index, attempts - 1)
+
+      true ->
+        :ok
+    end
   end
 
   setup_all do

@@ -1258,6 +1258,21 @@ defmodule QuillEx.RootScene do
     {:noreply, scene}
   end
 
+  def handle_event({:fold_level_changed, _id, level}, _from, scene) when level in 1..4 do
+    Quillex.RadixCache.ViewStore.set_fold_level(level)
+    {:noreply, scene}
+  end
+
+  def handle_event({:menu_value_changed, "theme", value}, _from, scene) do
+    Quillex.RadixCache.ViewStore.set_theme(value)
+    {:noreply, scene}
+  end
+
+  def handle_event({:menu_value_changed, "primary_modifier", value}, _from, scene) do
+    Quillex.RadixCache.ViewStore.set_primary_modifier(value)
+    {:noreply, scene}
+  end
+
   def handle_event({:menu_value_changed, "tab_width", value}, _from, scene) do
     Quillex.RadixCache.ViewStore.set_tab_width(round(value))
     {:noreply, scene}

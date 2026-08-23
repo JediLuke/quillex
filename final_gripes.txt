@@ -52,5 +52,11 @@ _ then beneath that is the one to edit the exclude list, since its not a tiggle 
  
 
 == specific scroll issue
-- in any textfield where its single line, e.g. used in input forms, we need to handle overflow differently - instead of horizontal scrollbar (which there isnt enough room for) we want to keep the cursor on the right margin, and start moving text back towards the left - this is how other input forms with limited space do it - so users can use arrow keys to go back (and when we get to the left side and keep navigating, we start scrolling the text back until we hit that ilmit going that way)
+ - in any textfield where its single line, e.g. used in input forms, we need to handle overflow differently - instead of horizontal scrollbar (which there isnt enough room for) we want to keep the cursor on the right margin, and start moving text back towards the left - this is how other input forms with limited space do it - so users can use arrow keys to go back (and when we get to the left side and keep navigating, we start scrolling the text back until we hit that ilmit going that way)
 
+== Follow-up observations from the first implementation pass
+- clicking the ln/col indicator still did not trigger Go To Line after the first attempt; this needs a real primitive-click Spex, not only event wiring
+- boolean tick/cross boxes need more margin before their labels; copy the spacing already perfected by the global-search scope rows
+- Theme should be an expanding selector like Set Fold Level, not a flat list. Its expanded choices should show the theme name and a small palette swatch
+- Command Key should also be an expanding selector like Set Fold Level; its tooltip should explain that choosing Command is for Mac users
+- the full contents of this file remain the acceptance list; do not treat only a later deferred-items summary as the remaining scope

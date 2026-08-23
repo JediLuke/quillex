@@ -47,6 +47,11 @@ defmodule Quillex.FoldingSpex do
   defp state, do: text_field_scene().assigns.state
   defp graph, do: text_field_scene().assigns.graph
 
+  defp pointer(button, action, point) do
+    {:ok, viewport} = Scenic.ViewPort.info(:main_viewport)
+    Scenic.ViewPort.Input.send(viewport, {:cursor_button, {button, action, [], point}})
+  end
+
   spex "Folding is responsive and visible",
     description: "Menu levels and gutter triangles drive persistent TextField folds",
     tags: [:phase_35, :folding, :gutter] do
@@ -162,6 +167,50 @@ defmodule Quillex.FoldingSpex do
         assert Quillex.RadixCache.ViewStore.get_state().fold_level == 2
         assert Scenic.Graph.get(graph(), {:fold_toggle, 2}) != []
         assert Scenic.Graph.get(graph(), {:fold_toggle, 6}) != []
+        {:ok, context}
+      end
+    end
+
+    scenario "right-clicking line numbers opens the in-buffer fold menu" do
+      when_ "the line-number gutter is right-clicked", context do
+        %{frame: frame} = state()
+        point = {frame.pin.x + 12, frame.pin.y + 35}
+        pointer(:btn_right, 1, point)
+        pointer(:btn_right, 0, point)
+        Process.sleep(250)
+        {:ok, context}
+      end
+
+      then_ "fold levels are expanded above Clear All Folds", context do
+        assert state().gutter_menu
+        assert Scenic.Graph.get(graph(), :gutter_context_menu) != []
+        assert Scenic.Graph.get(graph(), {:select_option, :gutter_fold_level, 1}) != []
+        assert Scenic.Graph.get(graph(), {:select_option, :gutter_fold_level, 4}) != []
+        assert Scenic.Graph.get(graph(), {:item_text, :gutter_clear_folds}) != []
+        {:ok, context}
+      end
+
+      when_ "Level 1 is clicked", context do
+        %{frame: frame} = state()
+        bounds = ScenicWidgets.TextField.Renderer.gutter_menu_bounds(state())
+
+        row_height =
+          ScenicWidgets.TextField.Renderer.gutter_menu_theme(state()).dropdown_item_height
+
+        point =
+          {frame.pin.x + bounds.x + bounds.width - 20, frame.pin.y + bounds.y + row_height * 1.5}
+
+        pointer(:btn_left, 1, point)
+        pointer(:btn_left, 0, point)
+        Process.sleep(350)
+        {:ok, context}
+      end
+
+      then_ "the document folds and the shared fold-level setting follows", context do
+        assert state().gutter_menu == nil
+        assert state().fold_level == 1
+        assert Quillex.RadixCache.ViewStore.get_state().fold_level == 1
+        assert MapSet.member?(state().folds, 1)
         {:ok, context}
       end
     end

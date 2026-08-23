@@ -20,7 +20,8 @@ defmodule Quillex.GUI.SearchPaneModelTest do
         case_sensitive: false,
         regex: false,
         open_buffers_only: false,
-        use_ignore_files: true
+        show_ignored_files: false,
+        apply_custom_excludes: true
       },
       overrides
     )
@@ -32,6 +33,8 @@ defmodule Quillex.GUI.SearchPaneModelTest do
     assert model.files == []
     assert model.scope == [], "no project, no tree"
     refute model.case_sensitive
+    refute model.show_ignored_files
+    assert model.apply_custom_excludes
   end
 
   test "the scope tree offers files as well as directories" do
@@ -177,7 +180,12 @@ defmodule Quillex.GUI.SearchPaneModelTest do
 
     model =
       Model.build(
-        snapshot(%{root: @root, query: "needle", status: {:done, 1, 1, 1}, files: [{"#{@root}/f", [m]}]})
+        snapshot(%{
+          root: @root,
+          query: "needle",
+          status: {:done, 1, 1, 1},
+          files: [{"#{@root}/f", [m]}]
+        })
       )
 
     [%{matches: [row]}] = model.files

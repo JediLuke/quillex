@@ -12,6 +12,22 @@ defmodule Quillex.HighlightTest do
     assert Highlight.lexer_for_path(nil) == nil
   end
 
+  test "Markdown, shell, and Python extensions have working registered lexers" do
+    samples = [
+      {"README.md", ["# Heading", "`code`"]},
+      {"build.sh", ["#!/bin/sh", "echo \"hello\""]},
+      {"tool.py", ["def greet(name):", "    return f\"hello {name}\""]}
+    ]
+
+    for {path, lines} <- samples do
+      assert {_lexer, _opts} = lexer = Highlight.lexer_for_path(path),
+             "no registered lexer for #{path}"
+
+      assert map_size(Highlight.spans(lines, lexer)) > 0,
+             "#{path} lexer produced no styled spans"
+    end
+  end
+
   test "spans carry the line text and grapheme ranges per class" do
     lines = ["defmodule Foo do", "  # ünïcode comment", "  def x, do: \"hi\" <> \"—\"", "end"]
     spans = Highlight.spans(lines, Highlight.lexer_for_path("a.ex"))

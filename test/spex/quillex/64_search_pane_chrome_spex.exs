@@ -469,7 +469,7 @@ defmodule Quillex.SearchPaneChromeSpex do
       end
 
       when_ "the pointer moves onto one of the settings rows", context do
-        entry = semantic_entry("search_pane_domain_use_ignore_files")
+        entry = semantic_entry("search_pane_domain_show_ignored_files")
         assert entry, "the settings row publishes no position"
 
         %{left: l, top: t, width: w, height: h} = entry.screen_bounds

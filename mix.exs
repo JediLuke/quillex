@@ -71,7 +71,7 @@ defmodule Quillex.MixProject do
         :scenic_widget_contrib,
         "../scenic-widget-contrib",
         "https://github.com/JediLuke/scenic-widget-contrib.git",
-        "53fd418c55e49c9b39f21f3d1127fc5e0cdf20b6"
+        "7ec13f5ede9ee7efd17be2be436ccf137e405066"
       ),
       {:elixir_uuid, "~> 1.2"},
       {:font_metrics, "~> 0.5"},
@@ -93,6 +93,9 @@ defmodule Quillex.MixProject do
       {:makeup_js, "~> 0.1.0"},
       {:makeup_c, "~> 0.1.1"},
       {:makeup_diff, "~> 0.1.1"},
+      # Syntect fills the gaps in Makeup's standalone lexer set: Markdown,
+      # shell and Python among many others, all through the same registry API.
+      {:makeup_syntect, "~> 0.1.4"},
 
       # dev tools
       constellation_dep(

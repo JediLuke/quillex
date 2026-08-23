@@ -167,6 +167,31 @@ defmodule Quillex.GotoLineSpex do
       end
     end
 
+    scenario "The line and column indicator opens Go to Line" do
+      given_ "no navigation prompt is open", context do
+        Probes.send_keys("escape", [])
+        Process.sleep(200)
+        refute root_state().show_goto_line
+        {:ok, context}
+      end
+
+      when_ "the line and column strip is clicked", context do
+        Probes.click_element("cursor_pos_background")
+        Process.sleep(300)
+        {:ok, context}
+      end
+
+      then_ "Go to Line owns the keyboard", context do
+        assert root_state().show_goto_line,
+               "clicking the visible line/column strip did not open Go to Line"
+
+        assert root_state().keyboard_owner == :goto_line
+        Probes.send_keys("escape", [])
+        Process.sleep(200)
+        {:ok, context}
+      end
+    end
+
     scenario "The compact prompt offers document-boundary shortcuts" do
       when_ "First is clicked", context do
         Probes.send_keys("g", [:ctrl])

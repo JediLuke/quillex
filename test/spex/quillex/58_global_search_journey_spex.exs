@@ -474,7 +474,7 @@ defmodule Quillex.GlobalSearchJourneySpex do
       end
 
       then_ "the scope summary says the whole project is being searched", context do
-        assert wait_until(fn -> drawn?("SCOPE") end),
+        assert wait_until(fn -> drawn?("Setup search domain") end),
                "the settings section has no scope line: #{inspect(drawn_text())}"
 
         # The row is a generic Menu.Model.Tree now, and says how many of its
@@ -742,13 +742,13 @@ defmodule Quillex.GlobalSearchJourneySpex do
     end
 
     scenario "changing which files are in scope at all" do
-      when_ "the settings are opened and the ignore files switched off", context do
+      when_ "the settings are opened and ignored files are shown", context do
         click_named("search_pane_domain")
 
-        assert wait_until(fn -> semantic?("search_pane_domain_use_ignore_files") end),
+        assert wait_until(fn -> semantic?("search_pane_domain_show_ignored_files") end),
                "the settings section has no ignore-files switch"
 
-        click_named("search_pane_domain_use_ignore_files")
+        click_named("search_pane_domain_show_ignored_files")
         {:ok, context}
       end
 
@@ -769,8 +769,8 @@ defmodule Quillex.GlobalSearchJourneySpex do
         {:ok, context}
       end
 
-      when_ "the ignore files are switched back on", context do
-        click_named("search_pane_domain_use_ignore_files")
+      when_ "ignored files are hidden again", context do
+        click_named("search_pane_domain_show_ignored_files")
         {:ok, context}
       end
 

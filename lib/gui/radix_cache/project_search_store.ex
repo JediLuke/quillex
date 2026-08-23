@@ -71,10 +71,10 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
     # the options it ran under.
     case_sensitive: false,
     regex: false,
-    # Honour the project's own .gitignore. On by default: a project already
-    # says what is not source, and searching its build output is never what
-    # anybody wanted. Off searches everything the excludes file allows.
-    use_ignore_files: true,
+    # Ignored files are hidden by default; this switch deliberately reveals
+    # them. Custom excludes are a separate policy and stay enabled by default.
+    show_ignored_files: false,
+    apply_custom_excludes: true,
     # Search only what is already open. For the times you know the thing you
     # are looking for is in one of the files in front of you, and the rest of
     # the project is noise.
@@ -137,7 +137,13 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
 
   @doc "Flip a search option (`:case_sensitive` or `:regex`) and re-run."
   def toggle_option(option)
-      when option in [:case_sensitive, :regex, :use_ignore_files, :open_buffers_only],
+      when option in [
+             :case_sensitive,
+             :regex,
+             :show_ignored_files,
+             :apply_custom_excludes,
+             :open_buffers_only
+           ],
       do: GenServer.cast(__MODULE__, {:toggle_option, option})
 
   @doc "Set a search option outright."
@@ -478,13 +484,15 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
   # The first two are globs and go in together; the third is a set of paths.
   defp backend_opts(view) do
     ignore_patterns =
-      if view.use_ignore_files and view.root,
+      if not view.show_ignored_files and view.root,
         do: Quillex.Search.IgnoreFile.rules(view.root),
         else: %{ignore: [], unignore: []}
 
     [
       excludes: MapSet.to_list(view.excluded),
-      exclude_globs: Quillex.Search.Excludes.patterns() ++ ignore_patterns.ignore,
+      exclude_globs:
+        if(view.apply_custom_excludes, do: Quillex.Search.Excludes.patterns(), else: []) ++
+          ignore_patterns.ignore,
       unignore_globs: ignore_patterns.unignore,
       open_buffers_only: view.open_buffers_only,
       max_results: @max_results
