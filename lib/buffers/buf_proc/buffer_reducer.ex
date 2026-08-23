@@ -9,11 +9,6 @@ defmodule Quillex.Buffer.Process.Reducer do
   # ===========================================================================
 
   @doc """
-  Push current state onto undo stack before making a change.
-  Call this BEFORE modifying data/cursor/selection, not after.
-  Clears the redo stack (new changes invalidate redo history).
-  """
-  @doc """
   Process undo action - restore previous state from undo stack.
   """
   def process(%BufState{} = buf, :undo), do: History.undo(buf)
