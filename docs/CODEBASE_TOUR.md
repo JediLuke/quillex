@@ -318,9 +318,10 @@ and the docstring explains why: the pinner blocks in `XNextEvent` and would
 never notice a closed pipe. A text editor with a bespoke X11 daemon in its
 test tooling is a project that takes its test ergonomics seriously.
 
-`test/old_spex/` — 55 files of retired debug scenarios
-(`final_debug_spex.exs`…) — is the archaeological layer of a hard debugging
-era, kept rather than deleted.
+`test/old_spex/` — 57 files of retired debug scenarios
+(`final_debug_spex.exs`…) — was the archaeological layer of a hard debugging
+era. It was deleted on 2026-08-23 and archived to the `archive/old-spex` tag;
+`git show archive/old-spex:test/old_spex/<file>` still retrieves any of it.
 
 **Scenarios used to share state deliberately, in sequence, like a user
 session — and it was a mistake.** `07_integration_v1_spex.exs` held fifteen

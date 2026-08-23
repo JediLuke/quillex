@@ -161,8 +161,10 @@ reader was consulting the dead. Every semantic-based helper in the suite
 benefits.
 
 - Renumber the duplicate `04_*` pair, fill or close the `19_` gap.
-- Decide `test/old_spex/`'s fate (10,695 LOC): recommend archiving to a git
-  tag + deleting from the working tree — the history is the museum.
+- ~~Decide `test/old_spex/`'s fate (10,695 LOC)~~ — **done 2026-08-23**:
+  archived to the `archive/old-spex` tag and deleted from the working tree,
+  as recommended. Retrieve any of them with
+  `git show archive/old-spex:test/old_spex/<file>`.
 - Make `scripts/run_spex_quiet.sh` the documented default in CLAUDE.md and
   README (full log to file, summary to terminal).
 - A `spex_stability` tag + a rerun-on-failure pass in `mix run_spex` so
