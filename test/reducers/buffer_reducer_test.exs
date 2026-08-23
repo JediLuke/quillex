@@ -38,7 +38,7 @@ defmodule Quillex.Buffer.Process.ReducerTest do
     end
 
     test "clears the redo stack when pushing undo" do
-      snapshot = {["old"], [Cursor.new(1, 1)], nil}
+      snapshot = {["old"], Cursor.new(1, 1), nil}
       b = buf(["new"], redo_stack: [snapshot])
       b2 = History.push(b)
 
@@ -53,7 +53,7 @@ defmodule Quillex.Buffer.Process.ReducerTest do
 
     test "trims undo stack to undo_max_size" do
       # Build a stack that is already at max capacity
-      old_snapshots = for i <- 1..10, do: {["line #{i}"], [Cursor.new(1, 1)], nil}
+      old_snapshots = for i <- 1..10, do: {["line #{i}"], Cursor.new(1, 1), nil}
       b = %{buf(["current"], undo_stack: old_snapshots) | undo_max_size: 10}
       b2 = History.push(b)
 
@@ -77,7 +77,7 @@ defmodule Quillex.Buffer.Process.ReducerTest do
     end
 
     test "restores previous data from undo stack" do
-      snapshot = {["world"], [Cursor.new(1, 1)], nil}
+      snapshot = {["world"], Cursor.new(1, 1), nil}
       b = %{buf(["hello"], undo_stack: [snapshot]) | dirty?: true}
       b2 = Reducer.process(b, :undo)
       assert b2.data == ["world"]
@@ -110,7 +110,7 @@ defmodule Quillex.Buffer.Process.ReducerTest do
     end
 
     test "moves current state onto redo stack" do
-      snapshot = {["world"], [Cursor.new(1, 1)], nil}
+      snapshot = {["world"], Cursor.new(1, 1), nil}
       b = buf(["hello"], cursor: Cursor.new(1, 6), undo_stack: [snapshot])
       b2 = Reducer.process(b, :undo)
 
@@ -120,8 +120,8 @@ defmodule Quillex.Buffer.Process.ReducerTest do
     end
 
     test "pops the restored snapshot from the undo stack" do
-      snap1 = {["first"], [Cursor.new(1, 1)], nil}
-      snap2 = {["second"], [Cursor.new(1, 1)], nil}
+      snap1 = {["first"], Cursor.new(1, 1), nil}
+      snap2 = {["second"], Cursor.new(1, 1), nil}
       b = buf(["current"], undo_stack: [snap2, snap1])
       b2 = Reducer.process(b, :undo)
 
@@ -132,7 +132,7 @@ defmodule Quillex.Buffer.Process.ReducerTest do
 
     test "restores selection from undo snapshot" do
       selection = %{start: {1, 1}, end: {1, 5}}
-      snapshot = {["text"], [Cursor.new(1, 5)], selection}
+      snapshot = {["text"], Cursor.new(1, 5), selection}
       b = buf(["hello"], undo_stack: [snapshot])
       b2 = Reducer.process(b, :undo)
       assert b2.selection == selection
@@ -151,14 +151,14 @@ defmodule Quillex.Buffer.Process.ReducerTest do
     end
 
     test "restores the next redo state" do
-      snapshot = {["future"], [Cursor.new(1, 7)], nil}
+      snapshot = {["future"], Cursor.new(1, 7), nil}
       b = buf(["current"], redo_stack: [snapshot])
       b2 = Reducer.process(b, :redo)
       assert b2.data == ["future"]
     end
 
     test "moves current state onto undo stack when redo fires" do
-      snapshot = {["future"], [Cursor.new(1, 1)], nil}
+      snapshot = {["future"], Cursor.new(1, 1), nil}
       b = buf(["current"], cursor: Cursor.new(1, 8), redo_stack: [snapshot])
       b2 = Reducer.process(b, :redo)
 

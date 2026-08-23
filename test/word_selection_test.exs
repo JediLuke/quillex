@@ -25,7 +25,7 @@ defmodule Quillex.WordSelectionTest do
     %BufState{
       uuid: "t",
       data: [text],
-      cursor: %BufState.Cursor{line: 1, col: col},
+      cursor: BufState.Cursor.new(1, col),
       selection: nil
     }
   end

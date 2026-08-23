@@ -239,7 +239,7 @@ defmodule Quillex.Property.TextEditorPropertiesTest do
         ) do
       %BufState{
         data: lines,
-        cursor: %Cursor{line: cursor_line, col: cursor_col},
+        cursor: Cursor.new(cursor_line, cursor_col),
         selection: nil
       }
     end

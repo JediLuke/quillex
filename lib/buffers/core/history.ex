@@ -2,6 +2,7 @@ defmodule Quillex.Buffer.Core.History do
   @moduledoc "Explicit undo/redo snapshot ownership for the editing core."
 
   alias Quillex.Structs.BufState
+  alias Quillex.Structs.BufState.Cursor
 
   def push(%BufState{} = buf) do
     snapshot = {buf.data, buf.cursor, buf.selection}
@@ -22,7 +23,7 @@ defmodule Quillex.Buffer.Core.History do
     %{
       buf
       | data: data,
-        cursor: cursor,
+        cursor: Cursor.settle(cursor),
         selection: selection,
         dirty?: data != buf.clean_data,
         undo_stack: rest,
@@ -38,7 +39,7 @@ defmodule Quillex.Buffer.Core.History do
     %{
       buf
       | data: data,
-        cursor: cursor,
+        cursor: Cursor.settle(cursor),
         selection: selection,
         dirty?: data != buf.clean_data,
         redo_stack: rest,
