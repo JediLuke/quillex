@@ -518,6 +518,66 @@ defmodule Quillex.FileNavOperationsSpex do
       end
     end
 
+    # The rename box used to be a picture of a text field: the name was seeded
+    # into it, a "|" was painted after it, and then the first character typed
+    # replaced the lot. Left-arrow did not move a caret — there was none — it
+    # moved the tree's selection out from under the open box.
+    scenario "The rename box opens on the existing name, ready to edit" do
+      given_ "a file whose name is worth keeping", context do
+        file = Path.join(context.root, "edit-me.txt")
+        File.write!(file, "contents")
+        refresh_tree()
+        {:ok, Map.put(context, :edit_file, file)}
+      end
+
+      when_ "the caret is walked back off the extension and text is typed",
+            context do
+        right_click(context.edit_file)
+        choose_context_action(0)
+
+        state = nav_state()
+        assert state.renaming_id == context.edit_file
+        assert state.rename_value == "edit-me.txt"
+        assert state.rename_caret == String.length("edit-me.txt")
+
+        for _ <- 1..4, do: ScenicMcp.Probes.send_keys("left", [])
+        Process.sleep(200)
+        assert nav_state().rename_caret == String.length("edit-me")
+
+        type_codepoints("-v2")
+        Process.sleep(200)
+        {:ok, context}
+      end
+
+      then_ "the original name is still there with the insertion in place",
+            context do
+        state = nav_state()
+
+        assert state.rename_value == "edit-me-v2.txt",
+               "the rename box holds #{inspect(state.rename_value)}"
+
+        assert state.rename_caret == String.length("edit-me-v2")
+        assert state.renaming_id == context.edit_file
+        {:ok, context}
+      end
+
+      when_ "the edit is committed", context do
+        ScenicMcp.Probes.send_keys("enter", [])
+        Process.sleep(700)
+        refresh_tree()
+        {:ok, context}
+      end
+
+      then_ "the file on disk carries the edited name", context do
+        renamed = Path.join(context.root, "edit-me-v2.txt")
+
+        refute File.exists?(context.edit_file)
+        assert File.read!(renamed) == "contents"
+        assert nav_state().renaming_id == nil
+        {:ok, context}
+      end
+    end
+
     scenario "A directory is renamed inline from its row" do
       given_ "a directory is visible", context do
         directory = Path.join(context.root, "rename-me")
@@ -531,6 +591,12 @@ defmodule Quillex.FileNavOperationsSpex do
         right_click(context.rename_directory)
         choose_context_action(0)
         assert nav_state().renaming_id == context.rename_directory
+
+        # The box opens holding the name, so replacing it outright means
+        # clearing it first — exactly as it would in any other text field.
+        for _ <- 1..String.length("rename-me"), do: ScenicMcp.Probes.send_keys("backspace", [])
+        Process.sleep(200)
+        assert nav_state().rename_value == ""
 
         type_codepoints("renamed-directory")
         ScenicMcp.Probes.send_keys("enter", [])
