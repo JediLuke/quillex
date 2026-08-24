@@ -775,9 +775,29 @@ defmodule Quillex.RootScene.Renderizer do
       )
 
     graph
+    |> render_tab_strip_hit(tab_bar_frame)
     |> render_tab_bar(scene, old_state, state, tab_bar_frame)
     |> render_cursor_pos_label(scene, old_state, state, cursor_label_frame)
     |> render_icon_menu(scene, old_state, state, icon_menu_frame)
+  end
+
+  # RootScene's right-click detection for the tab context menu needs the
+  # click delivered to the ROOT scene. Requested :cursor_button never reaches
+  # it — the ViewPort drops requested positional input when the requester's
+  # scene transform cannot be resolved, and the root scene's ("_main_") is
+  # not in scene_transforms — so the strip gets a hit-tested primitive
+  # instead: an invisible rect owned by the root graph, the same pattern as
+  # :file_nav_resize_handle. TabBar still receives its own clicks via
+  # request_input; hit-tested and requested delivery are independent.
+  defp render_tab_strip_hit(graph, frame) do
+    graph
+    |> Scenic.Graph.delete(:tab_strip_hit)
+    |> rect({frame.size.width, frame.size.height},
+      id: :tab_strip_hit,
+      fill: {:color, {0, 0, 0, 0}},
+      input: :cursor_button,
+      translate: frame.pin.point
+    )
   end
 
   defp render_cursor_pos_label(graph, scene, old_state, state, frame) do
