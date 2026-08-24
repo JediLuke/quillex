@@ -694,4 +694,67 @@ defmodule Quillex.RootSceneTest do
              ) == graph
     end
   end
+
+  # ---------------------------------------------------------------------------
+  # derive_tabs/1 — marker position in the tab label
+  # ---------------------------------------------------------------------------
+  #
+  # The TabBar truncates an over-long label by cutting its TAIL, so anything
+  # appended to a label is the first thing to disappear — and tabs are
+  # narrowest exactly when many files are open. The external-change marker
+  # therefore LEADS the label: it must survive truncation, because nothing
+  # else tells you a file changed or vanished underneath you once the
+  # transient status message has cleared.
+
+  defp tab_buf_ref(attrs) do
+    struct!(%Quillex.Buffer.Ref{uuid: "uuid-#{attrs[:name]}", name: attrs[:name]}, attrs)
+  end
+
+  defp tab_label_for(attrs) do
+    state = %Quillex.RootScene.State{buffers: [tab_buf_ref(attrs)]}
+    {[tab], _selected} = Quillex.RootScene.Renderizer.derive_tabs(state)
+    tab.label
+  end
+
+  describe "Renderizer.derive_tabs/1 — external-change marker" do
+    test "a clean, in-sync buffer is labelled with its bare name" do
+      assert tab_label_for(name: "notes.txt") == "notes.txt"
+    end
+
+    test "an externally modified buffer wears the marker at the FRONT" do
+      label = tab_label_for(name: "notes.txt", external_change: :modified)
+
+      assert String.starts_with?(label, "! "),
+             "the external-change marker must lead the label so tail truncation cannot eat it, got: #{inspect(label)}"
+
+      assert label == "! notes.txt"
+    end
+
+    test "a deleted-on-disk buffer wears the same leading marker" do
+      label = tab_label_for(name: "notes.txt", external_change: :deleted)
+
+      assert String.starts_with?(label, "! "),
+             "a file deleted underneath you must be visible on the tab, got: #{inspect(label)}"
+
+      assert label == "! notes.txt"
+    end
+
+    test "the dirty marker stays a suffix, and the two markers coexist" do
+      assert tab_label_for(name: "notes.txt", dirty?: true) == "notes.txt *"
+
+      assert tab_label_for(name: "notes.txt", dirty?: true, external_change: :modified) ==
+               "! notes.txt *"
+    end
+
+    test "the marker survives the TabBar's tail truncation" do
+      # Mirrors ScenicWidgets.TabBar.Renderer.truncate_label/3: slice to
+      # max_chars, tail replaced with an ellipsis. A trailing marker is lost;
+      # a leading one is not.
+      label = tab_label_for(name: "a_really_long_file_name.exs", external_change: :deleted)
+      truncated = String.slice(label, 0, 8) <> "..."
+
+      assert String.starts_with?(truncated, "! "),
+             "truncated to #{inspect(truncated)} — the marker did not survive"
+    end
+  end
 end

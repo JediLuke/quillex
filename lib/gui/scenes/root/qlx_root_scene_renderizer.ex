@@ -935,14 +935,14 @@ defmodule Quillex.RootScene.Renderizer do
   end
 
   # Helper to create tab bar
-  # Build tabs from open buffers, appending " *" for dirty (unsaved) buffers
-  defp derive_tabs(state) do
+  # Build tabs from open buffers: "! " prefixed when the file changed or vanished
+  # underneath us, " *" appended when there are unsaved edits.
+  # Public so unit tests can pin the label format directly.
+  @doc false
+  def derive_tabs(state) do
     tabs =
       Enum.map(state.buffers, fn buf ->
-        label =
-          buf.name <>
-            if(buf.dirty?, do: " *", else: "") <>
-            if(buf.external_change, do: " !", else: "")
+        label = tab_label(buf)
 
         %{
           id: buf.uuid,
@@ -959,6 +959,29 @@ defmodule Quillex.RootScene.Renderizer do
     selected_id = if state.active_buf, do: state.active_buf.uuid, else: nil
 
     {tabs, selected_id}
+  end
+
+  # The external-change marker leads the label, and that position is the whole
+  # point of it. The TabBar truncates a label that outgrows its tab by cutting
+  # the tail ("really_long_name..."), and tabs are narrowest exactly when many
+  # files are open — which is when a file changing or being deleted underneath
+  # you is most likely to go unnoticed. A trailing "!" is the first thing the
+  # truncation eats; a leading one always survives.
+  #
+  # ":modified" and ":deleted" deliberately share one marker. The status
+  # message that accompanies the transition already says which happened, and
+  # both demand the same thing of you — decide whether to reload or save over
+  # the disk. The tab only has to say "look at me".
+  #
+  # The dirty marker stays a suffix. It is truncatable for the same reason, but
+  # it is routine rather than urgent, it follows the convention every other
+  # editor uses, and unsaved work has a real safety net regardless: closing a
+  # dirty buffer (or quitting) prompts. Nothing prompts you about a file that
+  # vanished from disk.
+  defp tab_label(buf) do
+    if(buf.external_change, do: "! ", else: "") <>
+      buf.name <>
+      if(buf.dirty?, do: " *", else: "")
   end
 
   defp do_create_tab_bar(graph, state, frame) do
