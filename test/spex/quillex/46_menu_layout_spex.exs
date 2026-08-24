@@ -144,7 +144,9 @@ defmodule Quillex.MenuLayoutSpex do
         assert selection == ["select_all", "delete_line"]
         assert find == ["find", "find_replace", "find_next"]
         assert project == ["find_in_project", "replace_in_project"]
-        assert navigate == ["goto_line"]
+        # Both ways of saying "take me somewhere else in the project": by
+        # file name, and by line number.
+        assert navigate == ["search_filename", "goto_line"]
         {:ok, context}
       end
     end

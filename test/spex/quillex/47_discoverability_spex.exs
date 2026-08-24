@@ -23,6 +23,7 @@ defmodule Quillex.DiscoverabilitySpex do
   @bindings [
     {"Ctrl+N", "RootScene menu/keyboard — new buffer"},
     {"Ctrl+O", "RootScene — file picker"},
+    {"Ctrl+P", "RootScene handle_input, key_p with ctrl — Search Filename"},
     {"Ctrl+S", "TextField input_to_buffer_action, key_s"},
     {"Ctrl+Shift+S", "RootScene — save as"},
     {"Ctrl+W", "RootScene handle_input, key_w"},
@@ -101,7 +102,14 @@ defmodule Quillex.DiscoverabilitySpex do
     tags: [:phase_47, :discoverability] do
     scenario "auditing the bindings against the registry" do
       then_ "each one is registered", context do
-        registered = Commands.all() |> Enum.map(& &1.shortcut) |> MapSet.new()
+        # The registry spells shortcuts canonically ("Mod+N"); this list
+        # spells them the way this keyboard does. Render before comparing, or
+        # every Mod-prefixed binding reads as missing and the audit asserts
+        # nothing at all — which is what it had quietly been doing.
+        registered =
+          Commands.all()
+          |> Enum.map(&Quillex.Shortcuts.render(&1.shortcut))
+          |> MapSet.new()
 
         missing =
           @bindings

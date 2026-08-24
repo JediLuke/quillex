@@ -2065,15 +2065,10 @@ defmodule Quillex.RootScene do
     )
   end
 
-  defp file_finder_rows(graph, [], %{file_finder_input: ""}, _width, _palette), do: graph
-
-  defp file_finder_rows(graph, [], _state, _width, palette) do
-    Scenic.Primitives.text(graph, "No files match",
-      translate: {14, @file_finder_rows_y + 16},
-      fill: palette.pane_dim,
-      font_size: 12
-    )
-  end
+  # Nothing matched, or nothing typed yet: the summary line above already says
+  # which it is, so the row area stays empty and the popup keeps its smallest
+  # size rather than saying the same thing twice.
+  defp file_finder_rows(graph, [], _state, _width, _palette), do: graph
 
   defp file_finder_rows(graph, shown, state, width, palette) do
     shown
@@ -2082,17 +2077,15 @@ defmodule Quillex.RootScene do
       row_y = @file_finder_rows_y + i * @file_finder_row_h
       selected? = i == state.file_finder_selected
 
+      # Every row gets its rect, not just the selected one: unselected it is
+      # the pane's own colour and so invisible, and it is what gives the row a
+      # findable, clickable box — for a person's mouse and for a spex alike.
       g
-      |> then(fn g ->
-        if selected? do
-          Scenic.Primitives.rrect(g, {width - 28, @file_finder_row_h, 3},
-            translate: {14, row_y},
-            fill: palette.pane_hover_bg
-          )
-        else
-          g
-        end
-      end)
+      |> Scenic.Primitives.rrect({width - 28, @file_finder_row_h, 3},
+        id: :"file_finder_row_#{i}",
+        translate: {14, row_y},
+        fill: if(selected?, do: palette.pane_hover_bg, else: palette.pane_bg)
+      )
       |> Scenic.Primitives.text(file_finder_row_label(row.label),
         translate: {23, row_y + 16},
         fill: if(selected?, do: palette.pane_fg, else: palette.pane_dim),
@@ -2109,7 +2102,9 @@ defmodule Quillex.RootScene do
     shown = min(total, @file_finder_max_rows)
 
     case total do
-      0 -> "Enter opens the first match; arrows choose another"
+      # The draft said "Enter opens the first match" here, which is exactly
+      # what it does not do when nothing matched.
+      0 -> "No files match"
       ^shown -> "#{total} matching #{if total == 1, do: "file", else: "files"}"
       _ -> "First #{shown} of #{total} matching files"
     end
@@ -2126,8 +2121,7 @@ defmodule Quillex.RootScene do
   end
 
   defp file_finder_bounds(state) do
-    shown = min(length(state.file_finder_results), @file_finder_max_rows)
-    rows = if state.file_finder_input == "", do: 0, else: max(shown, 1)
+    rows = min(length(state.file_finder_results), @file_finder_max_rows)
     width = min(560, max(400, state.frame.size.width * 0.5))
     height = @file_finder_rows_y + rows * @file_finder_row_h + if(rows > 0, do: 8, else: 0)
     {(state.frame.size.width - width) / 2, @top_bar_height + 10, width, height}
