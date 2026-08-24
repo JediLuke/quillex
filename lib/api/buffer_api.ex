@@ -78,8 +78,37 @@ defmodule Quillex.Buffer do
   @doc "Return every dirty buffer reference."
   def dirty_buffers, do: Enum.filter(list(), & &1.dirty?)
 
-  @doc "Close a clean buffer; dirty buffers require explicit discard."
+  @doc """
+  True when this buffer holds content that exists nowhere else on disk.
+
+  Two ways that happens:
+
+    * `dirty?` — the user edited the buffer and never saved it.
+    * `external_change: :deleted` — the file was deleted underneath us, so the
+      buffer is now the only remaining copy of what was in it. It can be clean
+      and still be irreplaceable.
+
+  `external_change: :modified` deliberately does NOT count: the file is still
+  there, so nothing the user authored is at stake and the buffer can be
+  reloaded from disk at any time.
+  """
+  def unsaved?(%{dirty?: true}), do: true
+  def unsaved?(%{external_change: :deleted}), do: true
+  def unsaved?(%{}), do: false
+
+  @doc "Return every buffer that would lose content if it were closed silently."
+  def unsaved_buffers, do: Enum.filter(list(), &unsaved?/1)
+
+  @doc """
+  Close a buffer whose content is safe to throw away.
+
+  Anything the user would want asked about first — unsaved edits, or a file
+  deleted on disk — is refused here and requires the explicit `close/2`
+  discard. The caller's job is to ask.
+  """
   def close(%{dirty?: true}), do: {:error, :dirty}
+
+  def close(%{external_change: :deleted}), do: {:error, :deleted_on_disk}
 
   def close(buf_ref) do
     Quillex.Buffer.BufferManager.close_buffer(buf_ref)
