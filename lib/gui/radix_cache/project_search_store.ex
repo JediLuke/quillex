@@ -20,6 +20,9 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
               | {:done, matches, files, ms}
               | {:error, term},
         files: [{path, [Match]}],      # VISIBLE results, grouped by file
+        filename_matches: [%{path:, label:, match_start:, match_len:}],
+                                       # files whose NAME matches the query —
+                                       # surfaced for exploration, never replaced
         excluded: MapSet of paths,     # scope: files and subtrees unticked
         dismissed: MapSet of {path, line, col},
         dismissed_files: MapSet of path,
@@ -52,12 +55,20 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
   # driving the pane.
   @dirty_debounce_ms 400
   @max_results 5_000
+  # A one-letter query names most of a project; the section is a signpost,
+  # not a directory listing.
+  @max_filename_matches 100
 
   @initial %{
     root: nil,
     query: "",
     status: :idle,
     files: [],
+    # Files whose NAME matches the query. Kept apart from `files` on purpose:
+    # `files` is what every replace path acts on, and a filename is not a
+    # thing a text replacement can touch. These rows are for finding your way
+    # to a file, nothing more.
+    filename_matches: [],
     excluded: MapSet.new(),
     dismissed: MapSet.new(),
     dismissed_files: MapSet.new(),
@@ -348,6 +359,15 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
   # the same reason its final result would be.
   def handle_info({:partial_results, _stale, _partial}, state), do: {:noreply, state}
 
+  # The current search's filename matches, from the walk at the start of its
+  # task. Published straight away: a name hit is often the whole answer, and
+  # it is ready before the text search has read anything.
+  def handle_info({:filename_matches, ref, rows}, %{partial_ref: ref} = state) do
+    {:noreply, publish(state, %{state.view | filename_matches: rows})}
+  end
+
+  def handle_info({:filename_matches, _stale, _rows}, state), do: {:noreply, state}
+
   # Debounce fired: start the search unless the query changed again meanwhile.
   def handle_info({:run_search, ref}, %{debounce: ref} = state) do
     {:noreply, run_search_now(%{state | debounce: nil})}
@@ -415,6 +435,7 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
       view
       | dismissed: MapSet.new(),
         dismissed_files: MapSet.new(),
+        filename_matches: [],
         active_match: nil,
         error: nil,
         status: pending_status(view)
@@ -441,7 +462,7 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
     state = cancel_task(state)
 
     %{state | raw_files: []}
-    |> publish(%{state.view | files: [], status: :idle})
+    |> publish(%{state.view | files: [], filename_matches: [], status: :idle})
     |> notify_waiters()
   end
 
@@ -462,6 +483,12 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
 
     task =
       Task.Supervisor.async_nolink(Quillex.Search.TaskSupervisor, fn ->
+        # Filename matches ride the same task and the same ref as the text
+        # search: they honour the same scope, and a superseded search takes
+        # its filename answer down with it. Sent first — a name match is
+        # known from the walk alone, before a single file is read.
+        send(store, {:filename_matches, partial_ref, filename_matches(root, query, opts)})
+
         Project.search_streaming(root, query, opts, fn partial ->
           send(store, {:partial_results, partial_ref, partial})
         end)
@@ -504,6 +531,20 @@ defmodule Quillex.RadixCache.ProjectSearchStore do
       open_buffers_only: view.open_buffers_only,
       max_results: @max_results
     ] ++ search_opts(view)
+  end
+
+  # Which files' NAMES this query matches, over the same universe the text
+  # search reads: the tree under the root normally, only the open buffers
+  # when the search is scoped to them.
+  defp filename_matches(root, query, opts) do
+    paths =
+      if Keyword.get(opts, :open_buffers_only, false),
+        do: Quillex.Search.Filename.open_buffer_paths(root, opts),
+        else: Quillex.Search.Filename.list_files(root, opts)
+
+    paths
+    |> Quillex.Search.Filename.search_matches(root, query, opts)
+    |> Enum.take(@max_filename_matches)
   end
 
   defp do_replace(state, [], _replacement), do: state

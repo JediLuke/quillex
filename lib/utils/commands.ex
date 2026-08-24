@@ -138,6 +138,13 @@ defmodule Quillex.Commands do
       description: "Move to the next search match."
     },
     %{
+      id: :search_filename,
+      label: "Search Filename…",
+      shortcut: "Mod+P",
+      menu: :edit,
+      description: "Find a file by name and open it."
+    },
+    %{
       id: :goto_line,
       label: "Go to Line…",
       shortcut: "Mod+G",
@@ -377,7 +384,14 @@ defmodule Quillex.Commands do
   defp section(%{menu: :file}), do: "File"
 
   defp section(%{menu: :edit, id: id})
-       when id in [:find, :find_replace, :find_next, :find_in_project, :replace_in_project],
+       when id in [
+              :find,
+              :find_replace,
+              :find_next,
+              :find_in_project,
+              :replace_in_project,
+              :search_filename
+            ],
        do: "Finding"
 
   defp section(%{menu: :edit}), do: "Editing"
