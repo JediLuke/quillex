@@ -19,8 +19,6 @@ defmodule Quillex.RootScene do
   @dropdown_width 180
 
   @file_nav_collapse_threshold 110
-  @file_nav_min_width 160
-  @file_nav_max_width 800
 
   # the way input works is that we route input to the active buffer
   # component, which then converts it to actions, which are then then
@@ -384,12 +382,15 @@ defmodule Quillex.RootScene do
        when scene.assigns.state.file_nav_resizing do
     state = scene.assigns.state
 
-    max_width =
-      min(@file_nav_max_width, max(@file_nav_min_width, trunc(state.frame.size.width - 240)))
+    max_width = Quillex.RootScene.Renderizer.file_nav_max_width(state)
 
     hide? = x < @file_nav_collapse_threshold
 
-    width = x |> round() |> max(@file_nav_min_width) |> min(max_width)
+    width =
+      x
+      |> round()
+      |> max(Quillex.RootScene.Renderizer.file_nav_min_width())
+      |> min(max_width)
 
     new_state = %{
       state

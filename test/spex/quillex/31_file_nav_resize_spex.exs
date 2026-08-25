@@ -57,8 +57,18 @@ defmodule Quillex.FileNavResizeSpex do
       nav_pid = if is_list(child), do: List.first(child), else: child
       nav_state = :sys.get_state(nav_pid).assigns.state
 
-      assert nav_state.frame.size.width == live_width,
+      # The navigator follows the pointer by SCISSOR, not by re-rendering. Its
+      # rows stay drawn at the widest this gesture can reach and the pane is
+      # clipped to the live width, because rebuilding the row graph on every
+      # pointer sample is what made dragging the divider lag on a large project
+      # tree — the same bargain the TextField below already strikes with its
+      # word wrap.
+      assert nav_state.preview_frame.size.width == live_width,
              "navigator did not resize during the captured drag"
+
+      assert nav_state.frame.size.width ==
+               Quillex.RootScene.Renderizer.file_nav_max_width(root_state),
+             "the navigator's rows were re-rendered mid-drag instead of clipped"
 
       if pane_width = Keyword.get(opts, :pane_width_during_drag) do
         {:ok, pane_child} = Scenic.Scene.child(root_scene, :buffer_pane)
@@ -89,7 +99,22 @@ defmodule Quillex.FileNavResizeSpex do
 
     unless Keyword.get(opts, :expect_collapse, false) do
       assert resize_bubble_fill() == {:color, {:color_rgba, {55, 60, 72, 255}}}
+
+      # Mouse-up is where the expensive half of the resize is finally paid for:
+      # the pane is re-rendered at the width the pointer settled on, and the
+      # scissor standing in for it all drag is dropped.
+      if live_width = Keyword.get(opts, :live_width) do
+        nav_state = :sys.get_state(nav_pid()).assigns.state
+        assert nav_state.frame.size.width == live_width
+        assert nav_state.preview_frame == nil
+      end
     end
+  end
+
+  defp nav_pid do
+    root_scene = :sys.get_state(Process.whereis(Quillex.RootScene))
+    {:ok, child} = Scenic.Scene.child(root_scene, :file_nav)
+    if is_list(child), do: List.first(child), else: child
   end
 
   defp resize_bubble_fill do

@@ -19,6 +19,14 @@ defmodule Quillex.RootScene.Renderizer do
   # Height of the transient status notification bar
   @status_bar_height 24
 
+  # How far the file navigator's divider can be dragged. The maximum is
+  # whichever comes first: a hard ceiling, or leaving the buffer pane a usable
+  # column. Layout numbers, so they live with the layout — the root scene reads
+  # them back through `file_nav_max_width/1` while it drives the drag.
+  @file_nav_min_width 160
+  @file_nav_max_width 800
+  @file_nav_min_buffer_width 240
+
   # Background colours for each severity level
   # Colour lives in Quillex.GUI.Palette — one palette for the editor and every
   # piece of chrome. Nothing in this file names a colour.
@@ -336,8 +344,53 @@ defmodule Quillex.RootScene.Renderizer do
   # First render: there is no pane to move yet, it is about to be created.
   defp apply_file_nav_frame(_scene, nil, _state, _frame), do: :ok
 
+  # Divider drag, opening move. A SideNav rebuilds its whole row graph for
+  # every frame it is given, and on a large project tree that is far too much
+  # work to do sixty times a second — which is what dragging the divider used
+  # to ask of it. So the pane is drawn ONCE here, at the widest the gesture can
+  # reach, and clipped straight back to the width it is at. Every interim width
+  # from now until the pointer is released is then a scissor away.
+  #
+  # Exactly the deal `apply_buffer_pane_settings/4` already strikes above: the
+  # cheap part of a resize runs live, the expensive part waits for mouse-up.
+  defp apply_file_nav_frame(
+         scene,
+         %{file_nav_resizing: false},
+         %{file_nav_resizing: true, show_project_search: false} = state,
+         frame
+       ) do
+    {_header_frame, content_frame} = file_nav_frames(state, widest_file_nav_frame(state, frame))
+    Scenic.Scene.put_child(scene, :file_nav, {:begin_resize, content_frame})
+    :ok
+  end
+
+  # Divider drag, in flight. The header is a path and a background, so it can
+  # afford to follow the pointer properly; the tree cannot, and is scissored.
+  defp apply_file_nav_frame(
+         scene,
+         _old_state,
+         %{file_nav_resizing: true, show_project_search: false} = state,
+         frame
+       ) do
+    {header_frame, content_frame} = file_nav_frames(state, frame)
+    Scenic.Scene.put_child(scene, :file_nav, {:preview_frame, content_frame})
+
+    Scenic.Scene.put_child(scene, :file_nav_path_header, {
+      :update,
+      project_path_header_data(state, header_frame)
+    })
+
+    :ok
+  end
+
   defp apply_file_nav_frame(scene, old_state, state, frame) do
-    if old_state.file_nav_width != state.file_nav_width or old_state.frame != state.frame or
+    # Releasing the divider commits the width the pointer settled on. It is its
+    # own condition because the width itself has not changed since the last
+    # pointer sample — only the scissor standing in for it has to go.
+    released? = old_state.file_nav_resizing and not state.file_nav_resizing
+
+    if released? or old_state.file_nav_width != state.file_nav_width or
+         old_state.frame != state.frame or
          old_state.file_nav_path != state.file_nav_path or old_state.theme != state.theme or
          old_state.chrome_zoom != state.chrome_zoom do
       if state.show_project_search do
@@ -354,6 +407,31 @@ defmodule Quillex.RootScene.Renderizer do
     end
 
     :ok
+  end
+
+  @doc """
+  Widest the file navigator can be dragged, in this window.
+
+  A hard ceiling, except in a window too narrow to honour it without squeezing
+  the buffer pane to nothing.
+  """
+  def file_nav_max_width(state) do
+    min(
+      @file_nav_max_width,
+      max(@file_nav_min_width, trunc(state.frame.size.width - @file_nav_min_buffer_width))
+    )
+  end
+
+  @doc "Narrowest the file navigator can be dragged before it collapses."
+  def file_nav_min_width, do: @file_nav_min_width
+
+  # The navigator's slot at its maximum width, which is what the pane is drawn
+  # at for the duration of a divider drag.
+  defp widest_file_nav_frame(state, %Widgex.Frame{} = frame) do
+    Widgex.Frame.new(
+      pin: frame.pin.point,
+      size: {file_nav_max_width(state), frame.size.height}
+    )
   end
 
   defp highlight_styles(%{syntax_highlighting: true}), do: Quillex.GUI.Theme.highlight_styles()
