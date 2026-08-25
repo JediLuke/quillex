@@ -45,6 +45,24 @@ defmodule Quillex.RootScene.State do
             file_nav_path: nil,
             file_nav_width: 250,
             file_nav_revision: 0,
+            # What the navigator is currently showing. Held here because a
+            # refresh has to rebuild only the levels that are actually loaded,
+            # and only this side knows which those are — see
+            # `Quillex.Utils.FileTree.refresh/2`.
+            file_nav_tree: [],
+            # The tree is read off disk in a task, so the pane can be on screen
+            # before the filesystem has answered. Until it does, the navigator
+            # says it is loading rather than drawing as an empty project.
+            file_nav_loading?: false,
+            # Bumped for every read started. A read that comes back holding a
+            # stale token — the project changed while it was walking — is
+            # dropped rather than drawn.
+            file_nav_load_id: 0,
+            # Which root `file_nav_tree` was read for, set when the read is
+            # STARTED rather than when it lands. Asking "is the tree empty?"
+            # instead would re-read a genuinely empty project on every view
+            # snapshot, and leave it saying `Loading…` for ever.
+            file_nav_read_path: nil,
             file_nav_resize_hovered: false,
             file_nav_resizing: false,
             file_nav_resize_hide?: false,

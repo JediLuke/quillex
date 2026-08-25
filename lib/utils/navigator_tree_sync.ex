@@ -2,12 +2,18 @@ defmodule Quillex.Files.NavigatorTreeSync do
   @moduledoc """
   Keeps the file navigator's directory tree synchronized with disk.
 
-  This service watches the navigator root rather than open buffers. It polls a
-  lightweight structural signature made from the visible relative paths and
-  entry kinds, then asks `Quillex.RadixCache.ViewStore` to publish a navigator
-  revision when files or directories are created, removed, renamed, or moved.
-  RootScene responds by updating the existing SideNav component, allowing the
-  widget to preserve expansion and interaction state.
+  This service watches the directories the navigator has open rather than open
+  buffers. RootScene tells it which those are; it polls a lightweight
+  structural signature of each one, one level deep, then asks
+  `Quillex.RadixCache.ViewStore` to publish a navigator revision when files or
+  directories are created, removed, renamed, or moved. RootScene responds by
+  updating the existing SideNav component, allowing the widget to preserve
+  expansion and interaction state.
+
+  What is watched is what is *shown*. This used to walk the entire project on
+  every tick, to depth, which on a large tree meant a full recursive stat of it
+  twice a second — for ever, in the background, to notice that folders nobody
+  had opened were unchanged.
 
   Polling uses ordinary Elixir file APIs and therefore keeps Quillex portable
   and NIF-free. Open document contents remain the separate responsibility of
@@ -26,6 +32,13 @@ defmodule Quillex.Files.NavigatorTreeSync do
   @doc false
   def poll_now, do: GenServer.call(__MODULE__, :poll_now)
 
+  @doc """
+  Set the directories to watch — the navigator root and every folder open
+  under it. An empty list watches nothing, which is what a hidden navigator
+  needs.
+  """
+  def watch(paths) when is_list(paths), do: GenServer.cast(__MODULE__, {:watch, paths})
+
   @impl GenServer
   def init(opts) do
     Scenic.PubSub.subscribe(Sources.view())
@@ -37,7 +50,12 @@ defmodule Quillex.Files.NavigatorTreeSync do
         Application.get_env(:quillex, :navigator_tree_poll_ms, @default_poll_ms)
       )
 
-    {:ok, schedule(%{path: nil, signature: nil, visible?: false, interval_ms: interval_ms})}
+    {:ok, schedule(%{paths: [], signature: nil, visible?: false, interval_ms: interval_ms})}
+  end
+
+  @impl GenServer
+  def handle_cast({:watch, paths}, state) do
+    {:noreply, %{state | paths: paths, signature: signature(state.visible?, paths)}}
   end
 
   @impl GenServer
@@ -48,12 +66,11 @@ defmodule Quillex.Files.NavigatorTreeSync do
 
   @impl GenServer
   def handle_info({{Scenic.PubSub, :data}, {:radix_view, view, _timestamp}}, state) do
-    path = view.file_nav_path || File.cwd!()
     visible? = view.show_file_nav
 
     state =
-      if path != state.path or visible? != state.visible? do
-        %{state | path: path, visible?: visible?, signature: signature(visible?, path)}
+      if visible? != state.visible? do
+        %{state | visible?: visible?, signature: signature(visible?, state.paths)}
       else
         state
       end
@@ -68,9 +85,10 @@ defmodule Quillex.Files.NavigatorTreeSync do
   def handle_info(_message, state), do: {:noreply, state}
 
   defp inspect_tree(%{visible?: false} = state), do: state
+  defp inspect_tree(%{paths: []} = state), do: state
 
   defp inspect_tree(state) do
-    current = FileTree.signature(state.path)
+    current = FileTree.signature(state.paths)
 
     if state.signature != nil and current != state.signature do
       ViewStore.refresh_file_nav()
@@ -79,8 +97,8 @@ defmodule Quillex.Files.NavigatorTreeSync do
     %{state | signature: current}
   end
 
-  defp signature(true, path), do: FileTree.signature(path)
-  defp signature(false, _path), do: nil
+  defp signature(true, paths), do: FileTree.signature(paths)
+  defp signature(false, _paths), do: nil
 
   defp schedule(%{interval_ms: interval_ms} = state) when interval_ms > 0 do
     Map.put(state, :timer, Process.send_after(self(), :poll, interval_ms))

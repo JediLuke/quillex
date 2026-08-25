@@ -1124,27 +1124,121 @@ defmodule Quillex.RootScene do
   # checkmarks); everything else is a plain re-render.
   def handle_info({{Scenic.PubSub, :data}, {:radix_view, view, _ts}}, scene) do
     old_state = scene.assigns.state
-    new_state = merge_view(old_state, view)
+    {new_state, read} = plan_file_nav_read(old_state, merge_view(old_state, view))
 
-    result =
+    {:noreply, new_scene} =
       if editor_layout_changed?(old_state, new_state) do
         update_editor_settings(scene, new_state)
       else
         {:noreply, render_snapshot(scene, new_state)}
       end
 
-    case result do
-      {:noreply, new_scene} when old_state.file_nav_revision != new_state.file_nav_revision ->
-        if new_state.show_file_nav do
-          tree = Quillex.Utils.FileTree.build(new_state.file_nav_path || File.cwd!())
-          Scenic.Scene.put_child(new_scene, :file_nav, {:update_tree, tree})
+    # After the render, not before: the read is kicked off against the state
+    # the pane was just drawn from, and the pane is already up saying
+    # `Loading…` by the time the filesystem is asked anything.
+    start_file_nav_read(new_scene.assigns.state, read)
+
+    {:noreply, new_scene}
+  end
+
+  # Does this view snapshot mean the navigator has to go back to disk, and if
+  # so, how much of it?
+  #
+  # `:fresh` throws the tree away and starts again from the root — a different
+  # project is a different tree, and showing the old one while the new one
+  # loads would be a lie. `:refresh` re-reads only the levels already loaded
+  # and keeps what is on screen on screen, because the alternative is every
+  # open folder snapping shut each time a file is saved anywhere.
+  defp plan_file_nav_read(old_state, %{show_file_nav: false} = state) do
+    if old_state.show_file_nav, do: Quillex.Files.NavigatorTreeSync.watch([])
+    {state, :none}
+  end
+
+  defp plan_file_nav_read(old_state, state) do
+    root = state.file_nav_path || File.cwd!()
+
+    cond do
+      state.file_nav_read_path != root ->
+        {begin_file_nav_read(%{state | file_nav_tree: [], file_nav_loading?: true}, root), :fresh}
+
+      not old_state.show_file_nav or
+          old_state.file_nav_revision != state.file_nav_revision ->
+        {begin_file_nav_read(state, root), :refresh}
+
+      true ->
+        {state, :none}
+    end
+  end
+
+  defp begin_file_nav_read(state, root),
+    do: %{state | file_nav_load_id: state.file_nav_load_id + 1, file_nav_read_path: root}
+
+  defp start_file_nav_read(_state, :none), do: :ok
+
+  defp start_file_nav_read(state, kind) do
+    scene_pid = self()
+    root = state.file_nav_path || File.cwd!()
+    id = state.file_nav_load_id
+    tree = state.file_nav_tree
+
+    # Off the scene process, always. Reading a directory is the one thing here
+    # that can block for an unbounded time — a cold cache, a network mount, a
+    # tree with a hundred thousand entries in it — and the editor must not stop
+    # drawing because the filesystem is thinking.
+    Task.Supervisor.start_child(Quillex.Search.TaskSupervisor, fn ->
+      items =
+        case kind do
+          :fresh -> Quillex.Utils.FileTree.build_level(root)
+          :refresh -> Quillex.Utils.FileTree.refresh(root, tree)
         end
 
-        {:noreply, new_scene}
+      send(scene_pid, {:file_nav_tree, id, items})
+    end)
 
-      other ->
-        other
+    :ok
+  end
+
+  # A tree, back from disk. Dropped if the navigator has moved on since it was
+  # asked for.
+  def handle_info({:file_nav_tree, id, tree}, %{assigns: %{state: %{file_nav_load_id: id}}} = scene) do
+    state = %{scene.assigns.state | file_nav_tree: tree, file_nav_loading?: false}
+
+    if state.show_file_nav do
+      Scenic.Scene.put_child(scene, :file_nav, {:update_tree, tree})
+      watch_file_nav_tree(state)
     end
+
+    {:noreply, assign(scene, state: state)}
+  end
+
+  def handle_info({:file_nav_tree, _stale_id, _tree}, scene), do: {:noreply, scene}
+
+  # One directory's contents, back from disk, for a folder somebody opened.
+  def handle_info(
+        {:file_nav_children, id, path, items},
+        %{assigns: %{state: %{file_nav_load_id: id}}} = scene
+      ) do
+    tree = ScenicWidgets.SideNav.Item.put_children(scene.assigns.state.file_nav_tree, path, items)
+    state = %{scene.assigns.state | file_nav_tree: tree}
+
+    if state.show_file_nav do
+      Scenic.Scene.put_child(scene, :file_nav, {:load_children, path, items})
+      watch_file_nav_tree(state)
+    end
+
+    {:noreply, assign(scene, state: state)}
+  end
+
+  def handle_info({:file_nav_children, _stale_id, _path, _items}, scene), do: {:noreply, scene}
+
+  # The tree-sync poller watches what is loaded, not what exists. Anything
+  # nobody has opened cannot have changed on screen, so re-reading it twice a
+  # second to find that out is pure waste — and on a large project it is enough
+  # waste to be felt.
+  defp watch_file_nav_tree(state) do
+    root = state.file_nav_path || File.cwd!()
+    loaded = Quillex.Utils.FileTree.loaded_paths(state.file_nav_tree)
+    Quillex.Files.NavigatorTreeSync.watch([root | MapSet.to_list(loaded)])
   end
 
   # Project-search store snapshots (:radix_project_search) — scope, options and
@@ -1984,8 +2078,24 @@ defmodule Quillex.RootScene do
     end
   end
 
-  # Handle expand/collapse events from SideNav (informational only)
-  def handle_event({:sidebar, :expand, _item_id}, _from, scene), do: {:noreply, scene}
+  # Opening a folder is what fetches it. The navigator is handed one directory
+  # level at a time (see `Quillex.Utils.FileTree`), so this is where the next
+  # one is read — off the scene process, like every other directory read here.
+  #
+  # Unconditional rather than only-when-unloaded: reading one directory is
+  # cheap, and it means a folder is re-read at the moment somebody looks at it,
+  # which is a better guarantee than any poll interval can give.
+  def handle_event({:sidebar, :expand, path}, _from, scene) do
+    scene_pid = self()
+    id = scene.assigns.state.file_nav_load_id
+
+    Task.Supervisor.start_child(Quillex.Search.TaskSupervisor, fn ->
+      send(scene_pid, {:file_nav_children, id, path, Quillex.Utils.FileTree.build_level(path)})
+    end)
+
+    {:noreply, scene}
+  end
+
   def handle_event({:sidebar, :collapse, _item_id}, _from, scene), do: {:noreply, scene}
   def handle_event({:sidebar, :hover, _item_id}, _from, scene), do: {:noreply, scene}
 

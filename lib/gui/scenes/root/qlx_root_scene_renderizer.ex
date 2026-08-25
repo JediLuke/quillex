@@ -1,7 +1,6 @@
 defmodule Quillex.RootScene.Renderizer do
   import Scenic.Primitives, only: [group: 3, line: 3, rect: 3, rrect: 3, text: 3]
 
-  alias Quillex.Utils.FileTree
   alias Quillex.Utils.SideNavThemes
   alias ScenicWidgets.FloatingPanel
 
@@ -470,9 +469,7 @@ defmodule Quillex.RootScene.Renderizer do
   end
 
   defp maybe_create_file_nav(graph, state, %Widgex.Frame{} = frame) do
-    # Build file tree from current path
     nav_root = state.file_nav_path || File.cwd!()
-    file_tree = FileTree.build(nav_root)
 
     # Sized against the editor's text, but deliberately smaller than it —
     # see SideNavThemes.for_editor/1.
@@ -482,7 +479,12 @@ defmodule Quillex.RootScene.Renderizer do
 
     side_nav_data = %{
       frame: content_frame,
-      tree: file_tree,
+      tree: state.file_nav_tree,
+      # The tree is read in a task, so the pane goes up before the filesystem
+      # has answered and says so meanwhile. An empty navigator is what a
+      # project with no files in it looks like, and the two must not be
+      # confusable — see RootScene's `start_file_nav_read/2`.
+      loading?: state.file_nav_loading?,
       active_id: state.active_buf && state.active_buf.path,
       theme: Map.put(side_nav_theme, :border_sides, [:left, :right, :bottom]),
       # Lets a drop on the empty space below the tree mean "move to the top
