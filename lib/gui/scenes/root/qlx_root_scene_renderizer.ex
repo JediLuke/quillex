@@ -520,7 +520,11 @@ defmodule Quillex.RootScene.Renderizer do
         border: palette.pane_border,
         dim_text: palette.pane_dim,
         font: :ibm_plex_mono,
-        font_size: file_nav_theme(state).font_size
+        # Sized to fit the header's OWN height, not only to the nav's ratio: a
+        # breadcrumb wants air above and below its text, and at a big chrome
+        # zoom the nav's 0.7-of-24 label was tall enough to touch both edges
+        # of the strip. Whichever is smaller keeps it looking like a label.
+        font_size: min(file_nav_theme(state).font_size, round(frame.size.height * 0.5))
       }
     }
   end
@@ -1181,11 +1185,12 @@ defmodule Quillex.RootScene.Renderizer do
               id: "chrome_zoom",
               label: "Zoom",
               value: state.chrome_zoom,
-              min: 50,
-              max: 200,
+              min: Quillex.RadixCache.ViewStore.chrome_zoom_range().first,
+              max: Quillex.RadixCache.ViewStore.chrome_zoom_range().last,
               step: 10,
               tooltip:
                 "Scale application chrome independently from editor text. " <>
+                  "Click the number to type one. " <>
                   "#{Quillex.Commands.shortcut(:zoom_in)} and " <>
                   "#{Quillex.Commands.shortcut(:zoom_out)} change it; " <>
                   "#{Quillex.Commands.shortcut(:zoom_reset)} resets it."

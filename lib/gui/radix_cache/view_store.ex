@@ -188,7 +188,11 @@ defmodule Quillex.RadixCache.ViewStore do
     GenServer.cast(__MODULE__, {:set_theme, id})
   end
 
-  def set_chrome_zoom(n) when is_integer(n) and n in 50..200,
+  # 400% is for a talk on a projector, where 200% was still small print.
+  @chrome_zoom_range 50..400
+  def chrome_zoom_range, do: @chrome_zoom_range
+
+  def set_chrome_zoom(n) when is_integer(n) and n in @chrome_zoom_range,
     do: GenServer.cast(__MODULE__, {:set_chrome_zoom, n})
 
   @doc "Show a transient status-bar message; the store clears it after eight seconds."
