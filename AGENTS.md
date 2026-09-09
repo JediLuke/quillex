@@ -46,6 +46,20 @@
   for you and for nobody else.
 - Scenic requires OpenGL system deps; `scripts/install.sh` handles them.
 
+## Agent Tooling (MCP)
+- `.mcp.json` (Claude Code) and `.codex/config.toml` (Codex) declare the same
+  two MCP servers. Run the agent from the repo root; paths are relative to it.
+- `whiteboard`: a diagram canvas (boxes, arrows, flowcharts, PNG/SVG export)
+  via `npx whiteboard-mcp`, nothing to build. It is licensed — export
+  `WHITEBOARD_MCP_LICENSE_KEY` in the shell that starts the agent. Claude's
+  config forwards it; for Codex add it under `[mcp_servers.whiteboard.env]` in
+  your personal `~/.codex/config.toml`, never in the repo.
+- `scenic-mcp`: drives the running app (screenshots, viewport, clicks, keys).
+  `tools/mcp/scenic_mcp.sh` starts the Node server from the sibling
+  `../scenic_mcp_experimental` checkout, which needs a one-off
+  `npm install && npm run build`. Start the app first (`iex -S mix`, port
+  9997); the server has nothing to talk to otherwise.
+
 ## State Architecture — RadixCache stores (READ FIRST)
 
 Diagrams: `ARCHITECTURE.md` (repo root).
