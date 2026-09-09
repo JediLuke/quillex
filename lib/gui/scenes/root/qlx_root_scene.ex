@@ -610,7 +610,8 @@ defmodule Quillex.RootScene do
 
   defp adjust_chrome_zoom(delta) do
     current = Quillex.RadixCache.ViewStore.get_state().chrome_zoom
-    Quillex.RadixCache.ViewStore.set_chrome_zoom(min(200, max(50, current + delta)))
+    range = Quillex.RadixCache.ViewStore.chrome_zoom_range()
+    Quillex.RadixCache.ViewStore.set_chrome_zoom(min(range.last, max(range.first, current + delta)))
   end
 
   defp update_file_nav_resize_hover(scene, coords, hovered?) do
