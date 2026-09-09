@@ -334,11 +334,28 @@ defmodule Quillex.SelectionAndMouseSpex do
             assert end_col > start_col,
                    "Double-click word selection should span multiple columns (start=#{start_col}, end=#{end_col})"
 
-            {:ok, context}
+            # The click is a few characters into "Hello", on the FIRST row. A
+            # click there used to resolve to the end of the line, which
+            # selected "World" instead — and looked like a selection working.
+            assert {start_col, end_col} == {1, 6},
+                   "double-click should select 'Hello' (cols 1..6), got #{start_col}..#{end_col}"
+
+            {:ok, Map.put(context, :word_start_col, start_col)}
 
           {:error, :selection_timeout} ->
             flunk("Double-click should select a word but no selection was detected after 3s")
         end
+      end
+
+      # The cursor used to jump to the END of the word — away from where the
+      # user had just clicked. It now sits at the word's start.
+      then_ "and the cursor sits at the start of the word, not its end", context do
+        {_line, cursor_col} = SemanticHelpers.get_cursor_position()
+
+        assert cursor_col == context.word_start_col,
+               "cursor should be at the word start (col #{context.word_start_col}), got col #{cursor_col}"
+
+        {:ok, context}
       end
     end
 
