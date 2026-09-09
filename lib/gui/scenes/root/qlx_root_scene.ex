@@ -315,6 +315,28 @@ defmodule Quillex.RootScene do
     dispatch_to_active_buffer(scene, {:move_cursor, {:page_down, page_size}})
   end
 
+  # Escape with nothing else to put away clears the selection.
+  #
+  # Escape is the most overloaded key in the editor and this is deliberately
+  # its LAST meaning — see escape_clears_selection?/1 for the order and for
+  # who takes it first. Closing a menu must not also throw away the text the
+  # menu was opened to act on.
+  #
+  # `:key_esc` is the only spelling here. That is what the driver emits, and a
+  # clause matching `:key_escape` could only ever fire from a test harness
+  # sending the wrong atom — which would make a passing test prove nothing.
+  #
+  # With nothing selected and nothing open this is a harmless no-op: the buffer
+  # clears an already-empty selection, and the cursor never moves. That is the
+  # right answer for a key people press to mean "never mind".
+  defp route_input({:key, {:key_esc, 1, _mods}}, _context, scene) do
+    if escape_clears_selection?(scene.assigns.state) do
+      dispatch_to_active_buffer(scene, :clear_selection)
+    else
+      {:noreply, scene}
+    end
+  end
+
   # NOTE: Ctrl+Left/Right (word navigation) are handled in the TextField's
   # input_to_buffer_action/2 directly, NOT here. Adding them here caused
   # double-firing: both root scene AND TextField processed each keypress,
@@ -684,6 +706,38 @@ defmodule Quillex.RootScene do
       true ->
         do_dispatch_to_active_buffer(scene, action)
     end
+  end
+
+  @doc """
+  Does Escape mean "clear the selection" right now?
+
+  Only when nothing else on screen has a better claim to it. Every other thing
+  Escape does is done by the component that owns the thing being dismissed,
+  off the same broadcast keystroke, and none of them can tell this scene "I
+  took it" in time to be asked — so the question is put the other way round.
+  The order, from the strongest claim down:
+
+    1. a top-bar dropdown, and the dialogs and pickers that capture the
+       keyboard. Those never reach here at all: capturing `:key` takes the
+       keystroke away from every other listener, which is why this predicate
+       says nothing about the IconMenu
+    2. the Go To Line prompt, which captures the keyboard the same way and,
+       belt and braces, matches in `route_input/3` clauses above these
+    3. a dialog, the file picker or the find bar — `keyboard_overlay_open?/1`.
+       The find bar does NOT capture, so this gate is the only thing keeping
+       Escape-to-close-the-bar from also wiping the selection
+    4. the project search pane. It does not capture either, and it takes
+       Escape whether or not it holds the keyboard, so the pane merely being
+       open is enough to defer to it
+    5. the side pane, whenever it is the pane holding the keyboard
+    6. the document's selection — this, the bottom of the chain
+
+  With nothing selected and nothing open, Escape is a harmless no-op.
+  """
+  def escape_clears_selection?(%Quillex.RootScene.State{} = state) do
+    state.keyboard_owner == :buffer and
+      not state.show_project_search and
+      not keyboard_overlay_open?(state)
   end
 
   defp keyboard_overlay_open?(state) do
