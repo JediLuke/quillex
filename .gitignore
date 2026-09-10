@@ -38,3 +38,11 @@ tools/window_pinner
 
 # Repository-local scratch space used by tests and development tools.
 /tmp/
+
+# Claude Code's machine-local state. `worktrees/` holds full checkouts for
+# background agents — hundreds of megabytes, one `git add -A` away from being
+# committed — and `settings.local.json` is personal to one machine.
+# Deliberately NOT ignoring all of `.claude/`: a shared `settings.json` or
+# agent definition is something a project may well want to track.
+/.claude/worktrees/
+/.claude/settings.local.json

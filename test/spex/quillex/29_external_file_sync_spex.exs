@@ -12,6 +12,7 @@ defmodule Quillex.ExternalFileSyncSpex do
 
   alias ScenicMcp.Query
   alias Quillex.TestHelpers.ScriptInspector
+  alias Quillex.TestHelpers.SemanticHelpers
 
   setup_all do
     case Application.ensure_all_started(:quillex) do
@@ -73,6 +74,64 @@ defmodule Quillex.ExternalFileSyncSpex do
 
         assert Query.text_visible?("Reloaded #{Path.basename(context.path)} from disk"),
                "external reload status was not visible"
+
+        {:ok, context}
+      end
+    end
+  end
+
+  spex "A file deleted underneath an open buffer is flagged on its tab",
+    description: "The external-change marker leads the tab label so truncation cannot hide it",
+    tags: [:phase_29, :files, :external_sync] do
+    scenario "The file behind a clean open buffer is deleted on disk" do
+      given_ "an open file", context do
+        path =
+          Path.join(
+            System.tmp_dir!(),
+            "quillex_external_delete_spex_#{System.unique_integer([:positive])}.txt"
+          )
+
+        File.write!(path, "still_here")
+
+        :ok = Quillex.TestHelpers.FileOpener.open_file(path)
+
+        on_exit(fn ->
+          Quillex.Buffer.list()
+          |> Enum.find(&(&1.path == Path.expand(path)))
+          |> case do
+            nil -> :ok
+            ref -> Quillex.Buffer.close(ref, :discard)
+          end
+
+          File.rm(path)
+        end)
+
+        name = Path.basename(path)
+
+        assert wait_until(fn -> name in SemanticHelpers.get_tab_labels() end),
+               "the file never got a tab"
+
+        {:ok, context |> Map.put(:path, path) |> Map.put(:name, name)}
+      end
+
+      when_ "another program deletes the file", context do
+        File.rm!(context.path)
+        {:ok, context}
+      end
+
+      then_ "the tab wears the marker at the FRONT of its label", context do
+        # The marker must LEAD the label. The TabBar truncates an over-long
+        # label by cutting its tail, so a trailing marker is the first thing
+        # to vanish — and tabs are narrowest exactly when many files are open,
+        # which is when a file disappearing underneath you is easiest to miss.
+        assert wait_until(fn ->
+                 "! #{context.name}" in SemanticHelpers.get_tab_labels()
+               end),
+               "the tab never showed a leading external-change marker; labels: " <>
+                 inspect(SemanticHelpers.get_tab_labels())
+
+        refute context.name in SemanticHelpers.get_tab_labels(),
+               "the unmarked label is still present; the marker never reached the tab"
 
         {:ok, context}
       end

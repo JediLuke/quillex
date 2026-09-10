@@ -31,6 +31,17 @@ defmodule Quillex.RootScene do
   # narrower query away, and the popup should never cover the document.
   @file_finder_max_rows 8
 
+  # Tab context menu (right-click on a tab): the popup's row geometry, shared
+  # by the renderer and the click hit-test below.
+  @tab_ctx_menu_width 220
+  @tab_ctx_row_height 28
+  @tab_ctx_pad 6
+  @tab_ctx_items [
+    {:close_others, "Close Other Tabs"},
+    {:close_right, "Close Tabs to the Right"},
+    {:close_all, "Close All Tabs"}
+  ]
+
   # the way input works is that we route input to the active buffer
   # component, which then converts it to actions, which are then then
   # propagated back up - so basically input is handled at the "lowest level"
@@ -251,6 +262,70 @@ defmodule Quillex.RootScene do
     end
   end
 
+  # ── Tab context menu ──────────────────────────────────────────────────────
+  #
+  # Right-clicking a tab pops up bulk-close actions relative to THAT tab
+  # (Close Other Tabs / Close Tabs to the Right / Close All Tabs). The scene
+  # owns the popup the same way it owns the Go-to-Line prompt above; these
+  # clauses are pattern-gated on the menu being open, so they sit in front of
+  # the general key/click handling without changing it.
+
+  # Scenic reports Escape as :key_esc. Nothing in this codebase ever sees
+  # :key_escape, so matching it here would only make a test that sent the
+  # wrong atom pass while the real key did nothing.
+  defp route_input(
+         {:key, {:key_esc, 1, _mods}},
+         _context,
+         %{assigns: %{state: %{tab_context_menu: %{}}}} = scene
+       ) do
+    {:noreply, hide_tab_context_menu(scene)}
+  end
+
+  # Swallow every other keystroke while the menu is up, the way Go to Line
+  # does: a document shortcut firing underneath an open menu is never what
+  # the user meant.
+  defp route_input(
+         {:key, _},
+         _context,
+         %{assigns: %{state: %{tab_context_menu: %{}}}} = scene
+       ),
+       do: {:noreply, scene}
+
+  defp route_input(
+         {:cursor_button, {:btn_left, 1, _mods, point}},
+         _context,
+         %{assigns: %{state: %{tab_context_menu: %{}}}} = scene
+       ) do
+    case tab_context_menu_hit(scene.assigns.state, point) do
+      :outside -> {:noreply, hide_tab_context_menu(scene)}
+      nil -> {:noreply, scene}
+      action -> run_tab_context_action(scene, action)
+    end
+  end
+
+  # A second right-click moves the menu to the newly clicked tab, or closes
+  # it when the click lands anywhere else.
+  defp route_input(
+         {:cursor_button, {:btn_right, 1, _mods, point}},
+         _context,
+         %{assigns: %{state: %{tab_context_menu: %{}}}} = scene
+       ) do
+    scene = hide_tab_context_menu(scene)
+    maybe_open_tab_context_menu(scene, point)
+  end
+
+  # Right-click with no menu open: opens the tab context menu when the press
+  # lands on a tab. The press reaches this scene because the tab strip carries
+  # an invisible root-owned hit rect (:tab_strip_hit, see the Renderizer) —
+  # requested positional input alone never arrives here.
+  defp route_input({:cursor_button, {:btn_right, 1, _mods, point}}, _context, scene) do
+    if keyboard_overlay_open?(scene.assigns.state) do
+      {:noreply, scene}
+    else
+      maybe_open_tab_context_menu(scene, point)
+    end
+  end
+
   # Handle Ctrl+N keyboard shortcut for New Buffer
   # Creates a new empty buffer, equivalent to File → New Buffer.
   defp route_input({:key, {:key_n, 1, [:ctrl]}}, _context, scene) do
@@ -393,6 +468,28 @@ defmodule Quillex.RootScene do
   defp route_input({:key, {:key_pagedown, 1, _mods}}, _context, scene) do
     page_size = compute_page_size(scene)
     dispatch_to_active_buffer(scene, {:move_cursor, {:page_down, page_size}})
+  end
+
+  # Escape with nothing else to put away clears the selection.
+  #
+  # Escape is the most overloaded key in the editor and this is deliberately
+  # its LAST meaning — see escape_clears_selection?/1 for the order and for
+  # who takes it first. Closing a menu must not also throw away the text the
+  # menu was opened to act on.
+  #
+  # `:key_esc` is the only spelling here. That is what the driver emits, and a
+  # clause matching `:key_escape` could only ever fire from a test harness
+  # sending the wrong atom — which would make a passing test prove nothing.
+  #
+  # With nothing selected and nothing open this is a harmless no-op: the buffer
+  # clears an already-empty selection, and the cursor never moves. That is the
+  # right answer for a key people press to mean "never mind".
+  defp route_input({:key, {:key_esc, 1, _mods}}, _context, scene) do
+    if escape_clears_selection?(scene.assigns.state) do
+      dispatch_to_active_buffer(scene, :clear_selection)
+    else
+      {:noreply, scene}
+    end
   end
 
   # NOTE: Ctrl+Left/Right (word navigation) are handled in the TextField's
@@ -668,7 +765,8 @@ defmodule Quillex.RootScene do
 
   defp adjust_chrome_zoom(delta) do
     current = Quillex.RadixCache.ViewStore.get_state().chrome_zoom
-    Quillex.RadixCache.ViewStore.set_chrome_zoom(min(200, max(50, current + delta)))
+    range = Quillex.RadixCache.ViewStore.chrome_zoom_range()
+    Quillex.RadixCache.ViewStore.set_chrome_zoom(min(range.last, max(range.first, current + delta)))
   end
 
   defp update_file_nav_resize_hover(scene, coords, hovered?) do
@@ -764,6 +862,38 @@ defmodule Quillex.RootScene do
       true ->
         do_dispatch_to_active_buffer(scene, action)
     end
+  end
+
+  @doc """
+  Does Escape mean "clear the selection" right now?
+
+  Only when nothing else on screen has a better claim to it. Every other thing
+  Escape does is done by the component that owns the thing being dismissed,
+  off the same broadcast keystroke, and none of them can tell this scene "I
+  took it" in time to be asked — so the question is put the other way round.
+  The order, from the strongest claim down:
+
+    1. a top-bar dropdown, and the dialogs and pickers that capture the
+       keyboard. Those never reach here at all: capturing `:key` takes the
+       keystroke away from every other listener, which is why this predicate
+       says nothing about the IconMenu
+    2. the Go To Line prompt, which captures the keyboard the same way and,
+       belt and braces, matches in `route_input/3` clauses above these
+    3. a dialog, the file picker or the find bar — `keyboard_overlay_open?/1`.
+       The find bar does NOT capture, so this gate is the only thing keeping
+       Escape-to-close-the-bar from also wiping the selection
+    4. the project search pane. It does not capture either, and it takes
+       Escape whether or not it holds the keyboard, so the pane merely being
+       open is enough to defer to it
+    5. the side pane, whenever it is the pane holding the keyboard
+    6. the document's selection — this, the bottom of the chain
+
+  With nothing selected and nothing open, Escape is a harmless no-op.
+  """
+  def escape_clears_selection?(%Quillex.RootScene.State{} = state) do
+    state.keyboard_owner == :buffer and
+      not state.show_project_search and
+      not keyboard_overlay_open?(state)
   end
 
   defp keyboard_overlay_open?(state) do
@@ -1252,9 +1382,16 @@ defmodule Quillex.RootScene do
   def handle_info({{Scenic.PubSub, :registered}, _}, scene), do: {:noreply, scene}
   def handle_info({{Scenic.PubSub, :unregistered}, _}, scene), do: {:noreply, scene}
 
-  def handle_info({:quit_requested, dirty_buffers}, scene) do
-    names = Enum.map_join(dirty_buffers, "\n", &"• #{&1.name || "untitled"}")
-    state = %{scene.assigns.state | show_unsaved_prompt: true, quit_dirty_buffers: dirty_buffers}
+  # The list is every buffer holding content that is not on disk — unsaved
+  # edits, and files deleted underneath us (clean, but the only copy left).
+  def handle_info({:quit_requested, unsaved_buffers}, scene) do
+    names = Enum.map_join(unsaved_buffers, "\n", &"• #{&1.name || "untitled"}#{deleted_note(&1)}")
+
+    state = %{
+      scene.assigns.state
+      | show_unsaved_prompt: true,
+        quit_dirty_buffers: unsaved_buffers
+    }
 
     graph =
       ScenicWidgets.ConfirmDialog.add_to_graph(
@@ -1263,7 +1400,7 @@ defmodule Quillex.RootScene do
           frame: state.frame,
           theme: dialog_theme(state),
           title: "Unsaved Changes",
-          message: "The following buffers have unsaved changes:\n\n#{names}",
+          message: "The following buffers have content that is not on disk:\n\n#{names}",
           buttons: [{:discard, "Quit Without Saving"}, {:cancel, "Cancel"}]
         },
         id: :quit_prompt
@@ -2148,6 +2285,278 @@ defmodule Quillex.RootScene do
     end
   end
 
+
+  # ── Tab context menu (right-click on a tab) ───────────────────────────────
+  #
+  # The popup itself is scene-owned primitives, exactly like the Go-to-Line
+  # prompt: RootScene draws it, hit-tests clicks against its known geometry,
+  # and tears it down on Escape / outside click / a chosen action.
+
+  defp maybe_open_tab_context_menu(scene, point) do
+    case tab_bar_hit(scene, point) do
+      {:tab, tab_uuid} -> open_tab_context_menu(scene, tab_uuid, point)
+      :none -> {:noreply, scene}
+    end
+  end
+
+  # Which tab sits under the pointer? The TabBar's own state is the single
+  # authority on tab geometry (dynamic per-tab widths, scroll offset), so ask
+  # it rather than duplicating the strip layout here — duplication would
+  # drift the moment the theme, zoom or scroll position changes. Reading a
+  # child's state via :sys.get_state has precedent in the renderizer
+  # (preserved_icon_menu_state/1); the empty-child case covers startup and
+  # recreation churn, when there is simply no strip to right-click.
+  defp tab_bar_hit(scene, {x, y}) do
+    case Scenic.Scene.child(scene, :tab_bar) do
+      {:ok, [pid | _]} when is_pid(pid) ->
+        tab_state = :sys.get_state(pid).assigns.state
+        {bar_x, bar_y} = tab_state.frame.pin.point
+        local = {x - bar_x, y - bar_y}
+
+        if ScenicWidgets.TabBar.State.point_inside?(tab_state, local) do
+          case ScenicWidgets.TabBar.State.hit_test(tab_state, local) do
+            # Right-clicking a tab's close button still targets that tab.
+            {:close, tab_uuid} -> {:tab, tab_uuid}
+            {:tab, tab_uuid} -> {:tab, tab_uuid}
+            :none -> :none
+          end
+        else
+          :none
+        end
+
+      _ ->
+        :none
+    end
+  end
+
+  defp open_tab_context_menu(scene, tab_uuid, {x, y}) do
+    state = scene.assigns.state
+    {w, h} = tab_context_menu_size()
+
+    pos = {
+      min(x, state.frame.size.width - w - 4),
+      min(y, state.frame.size.height - h - 4)
+    }
+
+    new_state = %{state | tab_context_menu: %{uuid: tab_uuid, pos: pos}}
+    graph = tab_context_menu_graph(scene.assigns.graph, new_state)
+
+    # Same choreography as Go to Line: blur + gate the editor so the click
+    # that dismisses the menu cannot also land in the document, and capture
+    # pointer AND keyboard so both reach this scene from anywhere.
+    # (Requested :cursor_button is dropped for the root scene — see
+    # render_tab_strip_hit/2 in the renderizer — but CAPTURED delivery
+    # works, which is also what the Go-to-Line prompt relies on.)
+    #
+    # Capturing :key/:codepoint is what makes "the menu owns the keyboard"
+    # actually true. Blur alone is not enough: the buffer pane is recreated
+    # from state.keyboard_owner on a geometry change, and a status message
+    # arriving under an open menu is exactly such a change — the incoming
+    # TextField would come up focused and eat the next keystroke. A capture
+    # is not re-derived from state, so it survives that.
+    Scenic.Scene.put_child(scene, :buffer_pane, :blur)
+    Scenic.Scene.put_child(scene, :buffer_pane, {:set_overlay_open, true})
+
+    new_scene = scene |> assign(state: new_state, graph: graph) |> push_graph(graph)
+    :ok = capture_input(new_scene, [:key, :codepoint, :cursor_button])
+    {:noreply, new_scene}
+  end
+
+  defp hide_tab_context_menu(scene) do
+    :ok = release_input(scene, [:key, :codepoint, :cursor_button])
+    new_state = %{scene.assigns.state | tab_context_menu: nil}
+    graph = Scenic.Graph.delete(scene.assigns.graph, :tab_context_menu)
+    new_scene = scene |> assign(state: new_state, graph: graph) |> push_graph(graph)
+    Scenic.Scene.put_child(new_scene, :buffer_pane, {:set_overlay_open, false})
+    grant_keyboard(new_scene, new_state.keyboard_owner)
+  end
+
+  @doc false
+  # The popup's outer size. Public so a unit test can hit-test against the
+  # same numbers the renderer draws with, rather than re-stating them.
+  def tab_context_menu_size do
+    {@tab_ctx_menu_width, length(@tab_ctx_items) * @tab_ctx_row_height + 2 * @tab_ctx_pad}
+  end
+
+  defp tab_context_menu_graph(graph, state) do
+    %{uuid: uuid, pos: {x, y}} = state.tab_context_menu
+    palette = Quillex.GUI.Palette.get(state.theme)
+    {w, h} = tab_context_menu_size()
+
+    graph
+    |> Scenic.Graph.delete(:tab_context_menu)
+    |> Scenic.Primitives.group(
+      fn g ->
+        g =
+          Scenic.Primitives.rrect(g, {w, h, 4},
+            fill: palette.pane_bg,
+            stroke: {1, palette.pane_border}
+          )
+
+        @tab_ctx_items
+        |> Enum.with_index()
+        |> Enum.reduce(g, fn {{action, label}, i}, g ->
+          enabled? = tab_context_targets(state.buffers, uuid, action) != []
+          row_y = @tab_ctx_pad + i * @tab_ctx_row_height
+
+          Scenic.Primitives.text(g, label,
+            id: {:tab_ctx_item, action},
+            translate: {14, row_y + 19},
+            fill: if(enabled?, do: palette.pane_fg, else: palette.pane_dim),
+            font_size: 13
+          )
+        end)
+      end,
+      id: :tab_context_menu,
+      translate: {x, y}
+    )
+  end
+
+  @doc false
+  # Which row (if any) a click landed on: an item atom, nil for the padding
+  # strips, :outside for a click that dismisses the menu. Pure — it reads only
+  # state.tab_context_menu.pos — so it is public for unit tests, the same way
+  # decide_close/2 is.
+  def tab_context_menu_hit(state, {px, py}) do
+    %{pos: {x, y}} = state.tab_context_menu
+    {w, h} = tab_context_menu_size()
+
+    cond do
+      px < x or px > x + w or py < y or py > y + h ->
+        :outside
+
+      py < y + @tab_ctx_pad or py >= y + h - @tab_ctx_pad ->
+        nil
+
+      true ->
+        idx = trunc((py - y - @tab_ctx_pad) / @tab_ctx_row_height)
+        {action, _label} = Enum.at(@tab_ctx_items, idx)
+        action
+    end
+  end
+
+  # Run a bulk-close action chosen from the tab context menu. All three
+  # actions are bulk discard paths, so they funnel through the same unsaved
+  # guard as every other close: a target that is dirty — or whose file was
+  # deleted on disk while the buffer stayed clean, leaving the buffer the
+  # only remaining copy — must be confirmed first. One prompt covers the
+  # whole batch (the quit prompt's shape): N stacked dialogs for one gesture
+  # is hostile, and cancel should abort the gesture, so nothing at all
+  # closes until the answer arrives.
+  defp run_tab_context_action(scene, action) do
+    %{uuid: clicked_uuid} = scene.assigns.state.tab_context_menu
+    scene = hide_tab_context_menu(scene)
+    state = scene.assigns.state
+
+    # Fresh-read every target: the authoritative dirty?/external_change flags
+    # live in each Buffer.Process (see try_close_buffer/2).
+    targets =
+      state.buffers
+      |> tab_context_targets(clicked_uuid, action)
+      |> Enum.map(&refresh_buf_ref/1)
+
+    case {targets, tab_context_unsaved(targets)} do
+      {[], _} ->
+        {:noreply, scene}
+
+      {targets, []} ->
+        close_tab_context_targets(state, targets)
+        {:noreply, scene}
+
+      {targets, unsaved} ->
+        show_tab_context_close_prompt(scene, targets, unsaved)
+    end
+  end
+
+  # Close a batch of buffers. When the batch is every open buffer ("Close
+  # All Tabs"), open a fresh empty buffer FIRST: BufferManager refuses to
+  # close the last buffer (the editor always shows one), so "close all"
+  # means "give me a clean slate", not "silently leave one behind".
+  defp close_tab_context_targets(state, targets) do
+    if tab_context_needs_fresh_buffer?(state.buffers, targets) do
+      {:ok, _fresh} = Quillex.Buffer.new(%{})
+    end
+
+    # Same call as the single-buffer close path (handle_cast {:close_buffer,…}):
+    # BufferManager owns the "which buffer is active now" decision, and
+    # declining a close is its business, not a reason to take the GUI down.
+    Enum.each(targets, &Quillex.Buffer.BufferManager.close_buffer/1)
+
+    :ok
+  end
+
+  # One confirmation for the whole batch — the quit prompt's shape, and the
+  # same "Unsaved Changes" title, which existing spex cleanup helpers key on.
+  # Reuses the show_unsaved_prompt flag (as the quit prompt does) so the
+  # overlay gating on shortcuts and focus routing applies unchanged.
+  defp show_tab_context_close_prompt(scene, targets, unsaved) do
+    state = scene.assigns.state
+    names = Enum.map_join(unsaved, "\n", &"• #{&1.name || "untitled"}")
+
+    new_state = %{state | show_unsaved_prompt: true, pending_tab_context_close: targets}
+
+    graph =
+      scene.assigns.graph
+      |> ScenicWidgets.ConfirmDialog.add_to_graph(
+        %{
+          frame: new_state.frame,
+          theme: dialog_theme(new_state),
+          title: "Unsaved Changes",
+          message: "The following tabs have unsaved changes:\n\n#{names}",
+          buttons: [{:discard, "Close Without Saving"}, {:cancel, "Cancel"}]
+        },
+        id: :tab_context_close_prompt
+      )
+
+    new_scene = scene |> assign(state: new_state, graph: graph) |> push_graph(graph)
+    Scenic.Scene.put_child(new_scene, :buffer_pane, :blur)
+    {:noreply, new_scene}
+  end
+
+  defp hide_tab_context_close_prompt(scene) do
+    state = %{scene.assigns.state | show_unsaved_prompt: false, pending_tab_context_close: []}
+    graph = Scenic.Graph.delete(scene.assigns.graph, :tab_context_close_prompt)
+    new_scene = scene |> assign(state: state) |> assign(graph: graph) |> push_graph(graph)
+    Scenic.Scene.put_child(new_scene, :buffer_pane, :focus)
+    new_scene
+  end
+
+  @doc false
+  # Pure selection logic for the tab context menu: which buffers each action
+  # closes, given the tab order and the tab that was right-clicked. Public so
+  # unit tests can pin it directly (same pattern as decide_close/2). The
+  # clicked tab must be present for :close_right — the menu can only have
+  # been opened from a live tab.
+  def tab_context_targets(buffers, clicked_uuid, :close_others),
+    do: Enum.reject(buffers, &(&1.uuid == clicked_uuid))
+
+  def tab_context_targets(buffers, clicked_uuid, :close_right) do
+    idx = Enum.find_index(buffers, &(&1.uuid == clicked_uuid))
+    Enum.drop(buffers, idx + 1)
+  end
+
+  def tab_context_targets(buffers, _clicked_uuid, :close_all), do: buffers
+
+  @doc false
+  # Does this batch empty the editor? BufferManager declines to close the last
+  # buffer — the editor always shows one — so a batch that takes every tab has
+  # to be handed a fresh one first, or "Close All Tabs" quietly leaves the last
+  # tab sitting there. Public so unit tests can pin it directly.
+  def tab_context_needs_fresh_buffer?(buffers, targets),
+    do: length(targets) == length(buffers)
+
+  @doc false
+  # Which of the targets need confirming before they are thrown away. This is
+  # deliberately the SAME test decide_close/2 applies to a single close —
+  # dirty? and nothing else — so a bulk close and a Ctrl+W never disagree
+  # about what counts as unsaved. (The draft this grew from also prompted on
+  # external_change: :deleted. That is arguably better, but it is a change to
+  # the app's close policy, not to this menu, and it belongs on the branch
+  # that is making it everywhere: fix/confirm-close-deleted-file.)
+  # Public so unit tests can pin it directly.
+  def tab_context_unsaved(targets),
+    do: Enum.filter(targets, &match?(%Quillex.Buffer.Ref{dirty?: true}, &1))
+
   defp dialog_theme(state) do
     state.theme
     |> Quillex.GUI.Palette.get()
@@ -2643,6 +3052,22 @@ defmodule Quillex.RootScene do
     new_scene = hide_quit_prompt(scene)
     Quillex.Lifecycle.Coordinator.cancel()
     {:noreply, new_scene}
+  end
+
+  # --- Tab context menu batch close ---
+  # One dialog covered the whole batch, so one answer settles it: discard
+  # closes every target (the clean ones included), cancel closes nothing.
+  # These clauses must sit above the generic {:confirm_dialog_response, _id, _}
+  # handlers, which belong to the single-buffer unsaved prompt.
+  def handle_event({:confirm_dialog_response, :tab_context_close_prompt, :discard}, _from, scene) do
+    targets = scene.assigns.state.pending_tab_context_close
+    new_scene = hide_tab_context_close_prompt(scene)
+    close_tab_context_targets(new_scene.assigns.state, targets)
+    {:noreply, new_scene}
+  end
+
+  def handle_event({:confirm_dialog_response, :tab_context_close_prompt, :cancel}, _from, scene) do
+    {:noreply, hide_tab_context_close_prompt(scene)}
   end
 
   def handle_event({:confirm_dialog_response, _id, :save}, _from, scene) do
@@ -3180,28 +3605,37 @@ defmodule Quillex.RootScene do
   end
 
   # The previous preview goes away when the next result takes the slot — but
-  # never if it has unsaved edits. Losing typed work to a click on a search
-  # result would be indefensible; an extra tab is merely untidy.
+  # never if it holds content that is not on disk. Losing typed work to a click
+  # on a search result would be indefensible; an extra tab is merely untidy.
   defp close_stale_preview(%{preview_buf_uuid: nil}, _incoming), do: :ok
 
   defp close_stale_preview(%{preview_buf_uuid: uuid}, %{uuid: uuid}), do: :ok
 
   defp close_stale_preview(%{preview_buf_uuid: uuid} = state, _incoming) do
     case Enum.find(state.buffers, &(&1.uuid == uuid)) do
-      %{dirty?: false} = stale -> Quillex.Buffer.close(stale)
-      _other -> :ok
+      nil -> :ok
+      stale -> if Quillex.Buffer.unsaved?(stale), do: :ok, else: Quillex.Buffer.close(stale)
     end
   end
 
   # A preview tab stops being provisional the moment it is edited — typing in a
   # file is the clearest possible statement that you meant to open it. It also
   # stops existing when the buffer does.
-  defp surviving_preview(nil, _buffers), do: nil
+  #
+  # A file deleted on disk promotes the tab for the same reason: the buffer is
+  # now the only copy of that content, which is not something a provisional tab
+  # is allowed to be. Promoting is quieter than a modal on a search-result
+  # click, and it leaves the deliberate close — which does prompt — as the only
+  # way the content can go.
+  #
+  # Public so unit tests can pin it directly.
+  @doc false
+  def surviving_preview(nil, _buffers), do: nil
 
-  defp surviving_preview(uuid, buffers) do
+  def surviving_preview(uuid, buffers) do
     case Enum.find(buffers, &(&1.uuid == uuid)) do
-      %{dirty?: false} -> uuid
-      _promoted_or_gone -> nil
+      nil -> nil
+      buf -> if Quillex.Buffer.unsaved?(buf), do: nil, else: uuid
     end
   end
 
@@ -3571,20 +4005,26 @@ defmodule Quillex.RootScene do
   # Pure decision function for the close-buffer workflow. Public so unit tests
   # can exercise it without a live Scenic.Scene.
   #
-  #   nil            → :noop (nothing to close)
-  #   dirty? = true  → {:show_prompt, buf_ref, new_state} (state marks the prompt open)
-  #   dirty? = false → {:close, buf_ref}
+  #   nil                       → :noop (nothing to close)
+  #   dirty?, or deleted-on-disk → {:show_prompt, buf_ref, new_state}
+  #   anything else              → {:close, buf_ref}
+  #
+  # Both prompt cases are the same question — "this content is not on disk,
+  # do you want it?" — so they get one dialog, never two stacked on top of
+  # each other. `Quillex.Buffer.unsaved?/1` is the single definition of which
+  # buffers that covers; the quit path uses it too.
   def decide_close(%Quillex.RootScene.State{} = state, active_buf) do
     case active_buf do
       nil ->
         :noop
 
-      %Quillex.Buffer.Ref{dirty?: true} = buf_ref ->
-        new_state = %{state | show_unsaved_prompt: true, pending_close_buf_ref: buf_ref}
-        {:show_prompt, buf_ref, new_state}
-
       %Quillex.Buffer.Ref{} = buf_ref ->
-        {:close, buf_ref}
+        if Quillex.Buffer.unsaved?(buf_ref) do
+          new_state = %{state | show_unsaved_prompt: true, pending_close_buf_ref: buf_ref}
+          {:show_prompt, buf_ref, new_state}
+        else
+          {:close, buf_ref}
+        end
     end
   end
 
@@ -3604,7 +4044,7 @@ defmodule Quillex.RootScene do
           frame: new_state.frame,
           theme: dialog_theme(new_state),
           title: "Unsaved Changes",
-          message: "Save changes to \"#{buf_name}\" before closing?",
+          message: unsaved_prompt_message(buf_ref, buf_name),
           buttons: [{:save, "Save"}, {:discard, "Discard"}, {:cancel, "Cancel"}]
         },
         id: :unsaved_prompt
@@ -3621,6 +4061,25 @@ defmodule Quillex.RootScene do
 
     {:noreply, new_scene}
   end
+
+  # A file deleted underneath us wins the wording even when the buffer is also
+  # dirty: it is the more alarming half of the story and it already implies the
+  # other one — nothing here is on disk. "Save" means writing the file back out
+  # at the path it used to live at, which is exactly the escape hatch you want
+  # when the buffer is the last copy in existence.
+  defp unsaved_prompt_message(%Quillex.Buffer.Ref{external_change: :deleted}, buf_name) do
+    "\"#{buf_name}\" was deleted on disk.\n\n" <>
+      "This buffer is the only remaining copy of its contents. " <>
+      "Save it back to disk before closing?"
+  end
+
+  defp unsaved_prompt_message(%Quillex.Buffer.Ref{}, buf_name) do
+    "Save changes to \"#{buf_name}\" before closing?"
+  end
+
+  # Marks the deleted-on-disk entries in the quit prompt's buffer list.
+  defp deleted_note(%{external_change: :deleted}), do: "  (deleted on disk)"
+  defp deleted_note(%{}), do: ""
 
   # Hide the "Unsaved Changes" dialog and restore focus to the buffer pane.
   # Returns the new scene directly (not {:noreply, scene}) so callers can
