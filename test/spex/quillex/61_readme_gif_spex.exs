@@ -202,7 +202,11 @@ defmodule Quillex.ReadmeGifSpex do
     """)
 
     File.write!(Path.join(@demo_dir, "README.md"), "# demo\n\nA project for the Quillex gif.\n")
-    File.write!(Path.join(@demo_dir, "mix.exs"), "defmodule Demo.MixProject do\n  use Mix.Project\nend\n")
+
+    File.write!(
+      Path.join(@demo_dir, "mix.exs"),
+      "defmodule Demo.MixProject do\n  use Mix.Project\nend\n"
+    )
 
     ViewStore.set_theme(Palette.default())
     ViewStore.set_text_size(@text_size)
@@ -334,11 +338,13 @@ defmodule Quillex.ReadmeGifSpex do
           y = frame.pin.y + 8 + (line - 1) * line_height
 
           Probes.send_mouse_move(x, y)
+
           assert wait_until(fn -> text_field_state().fold_hover_line == line end),
                  "hovering line #{line} should show its fold triangle"
 
           dwell(500)
           Probes.click(x, y)
+
           assert wait_until(fn -> MapSet.member?(text_field_state().folds, line) end),
                  "clicking the triangle should fold the block on line #{line}"
 
@@ -347,8 +353,10 @@ defmodule Quillex.ReadmeGifSpex do
 
         dwell(800)
         menu(:view, :unfold_all)
+
         assert wait_until(fn -> MapSet.size(text_field_state().folds) == 0 end),
                "Unfold All should open every fold"
+
         dwell(500)
         close_menus()
         dwell(900)

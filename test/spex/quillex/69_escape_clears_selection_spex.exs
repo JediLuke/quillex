@@ -31,13 +31,12 @@ defmodule Quillex.EscapeClearsSelectionSpex do
   defp root_state, do: :sys.get_state(Process.whereis(Quillex.RootScene)).assigns.state
 
   defp active_buffer do
-    state = root_state()
-    {:ok, buf} = Quillex.Buffer.Process.fetch_buf(state.active_buf)
-    buf
+    {:ok, snapshot} = Quillex.Buffer.fetch(root_state().active_buf)
+    snapshot
   end
 
   defp selection, do: active_buffer().selection
-  defp cursor, do: {active_buffer().cursor.line, active_buffer().cursor.col}
+  defp cursor, do: active_buffer().cursor
 
   defp icon_menu_state do
     root = :sys.get_state(Process.whereis(Quillex.RootScene))

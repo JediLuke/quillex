@@ -11,7 +11,6 @@ defmodule Quillex.BootAndTypingSpex do
   @moduletag timeout: 300_000
 
   alias ScenicMcp.Probes
-  alias Quillex.TestHelpers.SemanticHelpers
   import Quillex.TestHelpers.Integration
 
   setup_all do

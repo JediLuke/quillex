@@ -133,6 +133,25 @@ defmodule Quillex.TestHelpers.Integration do
     """
   end
 
+  def ensure_editor_focused(attempts) do
+    %{x: x, y: y, width: w, height: h} = buffer_pane_frame()
+
+    Probes.click(x + trunc(w * 0.4), y + trunc(h * 0.4))
+    Process.sleep(200)
+
+    # Assert the postcondition rather than assume the click landed. A click can
+    # be swallowed by an overlay that is still closing, or by a pane being
+    # rebuilt — and a click that did not take focus is indistinguishable from
+    # one that did until the next keystroke goes nowhere.
+    if editor_focused?() do
+      :ok
+    else
+      Probes.send_keys("escape", [])
+      Process.sleep(150)
+      ensure_editor_focused(attempts - 1)
+    end
+  end
+
   @doc false
   def editor_focus_state do
     root = :sys.get_state(Process.whereis(Quillex.RootScene))
@@ -162,25 +181,6 @@ defmodule Quillex.TestHelpers.Integration do
       :show_unsaved_prompt,
       :file_nav_width
     ])
-  end
-
-  def ensure_editor_focused(attempts) do
-    %{x: x, y: y, width: w, height: h} = buffer_pane_frame()
-
-    Probes.click(x + trunc(w * 0.4), y + trunc(h * 0.4))
-    Process.sleep(200)
-
-    # Assert the postcondition rather than assume the click landed. A click can
-    # be swallowed by an overlay that is still closing, or by a pane being
-    # rebuilt — and a click that did not take focus is indistinguishable from
-    # one that did until the next keystroke goes nowhere.
-    if editor_focused?() do
-      :ok
-    else
-      Probes.send_keys("escape", [])
-      Process.sleep(150)
-      ensure_editor_focused(attempts - 1)
-    end
   end
 
   @doc "Does the buffer pane hold the keyboard right now?"
@@ -253,14 +253,8 @@ defmodule Quillex.TestHelpers.Integration do
       # Prefer the MAIN EDITOR PANE's entry (field_id :buffer_pane). The
       # by-id / "latest text_buffer" lookups can return another component's
       # or a stale entry, which reads as "my text never arrived".
-      pane_entry =
-        case SemanticHelpers.find_by_type_all_graphs(viewport, :text_buffer) do
-          {:ok, entries} ->
-            Enum.find(entries, &(get_in(&1, [:semantic, :field_id]) == :buffer_pane))
-
-          _ ->
-            nil
-        end
+      {:ok, entries} = SemanticHelpers.find_by_type_all_graphs(viewport, :text_buffer)
+      pane_entry = Enum.find(entries, &(get_in(&1, [:semantic, :field_id]) == :buffer_pane))
 
       if pane_entry do
         pane_entry.content || ""

@@ -116,15 +116,6 @@ defmodule Quillex.DropdownMannersSpex do
     :ok
   end
 
-  defp panel_centre do
-    state = pane_state()
-    panel = ScenicWidgets.SearchPane.State.settings_frame(state)
-    {px, py} = panel.pin.point
-    {pin_x, pin_y} = state.frame.pin.point
-
-    {trunc(pin_x + px + panel.size.width / 2), trunc(pin_y + py + panel.size.height / 2)}
-  end
-
   setup_all do
     {:ok, _} = Application.ensure_all_started(:quillex)
     Process.sleep(1_000)

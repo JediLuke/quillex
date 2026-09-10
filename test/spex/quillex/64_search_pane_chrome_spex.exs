@@ -71,12 +71,6 @@ defmodule Quillex.SearchPaneChromeSpex do
   defp circles_within(bounds),
     do: Enum.filter(shapes_within(bounds), &(&1.module == Scenic.Primitive.Circle))
 
-  defp lines_anywhere do
-    pane_graph().primitives
-    |> Map.values()
-    |> Enum.filter(&(&1.module == Scenic.Primitive.Line))
-  end
-
   # Anything in the settings panel drawn in the hover colour.
   defp hovered_fills do
     theme = ScenicWidgets.SearchPane.State.dropdown_theme(pane_state())

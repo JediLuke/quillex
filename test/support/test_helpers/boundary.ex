@@ -31,6 +31,11 @@ defmodule Quillex.TestHelpers do
       Perf,
       Invariants,
       SemanticProbe,
-      Oracle
+      Oracle,
+      # The integration spex's shared vocabulary — open a file, switch tabs,
+      # read what the editor shows. It was written into the helpers and never
+      # listed here, so every spex that imported it compiled with a boundary
+      # warning: 185 of them, the bulk of the noise in a test build.
+      Integration
     ]
 end

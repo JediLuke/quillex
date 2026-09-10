@@ -28,13 +28,15 @@ defmodule Quillex.TabReorderSpex do
         Probes.mouse_down(elem(from, 0), elem(from, 1))
         Probes.send_mouse_move(elem(to, 0), elem(to, 1))
         Probes.mouse_up(elem(to, 0), elem(to, 1))
-        Quillex.Buffer.BufferManager.sync()
+        # A synchronous call to the buffer store: the drop has landed by the
+        # time it returns.
+        _ = Quillex.Buffer.list()
         Process.sleep(250)
         {:ok, context}
       end
 
       then_ "the reordered tab list persists in the authoritative buffer store", context do
-        ids = Quillex.Buffer.BufferManager.get_state().buffers |> Enum.map(& &1.uuid)
+        ids = Quillex.Buffer.list() |> Enum.map(& &1.uuid)
 
         assert Enum.find_index(ids, &(&1 == context.second.uuid)) <
                  Enum.find_index(ids, &(&1 == context.first.uuid))

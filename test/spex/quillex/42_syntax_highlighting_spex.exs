@@ -69,7 +69,7 @@ defmodule Quillex.SyntaxHighlightingSpex do
         :ok = Quillex.TestHelpers.FileOpener.open_file(path)
 
         assert wait_until(fn ->
-                 active = Quillex.Buffer.BufferManager.get_state().active_buf
+                 active = Quillex.Buffer.active_buf()
                  active && active.path == path && pane_state().buffer_id == active.uuid
                end),
                "the pane should be showing the source file before highlights are inspected"
