@@ -82,6 +82,47 @@ defmodule Quillex.Files.ExternalFileSyncTest do
     assert status_message() =~ "was deleted on disk; buffer preserved"
   end
 
+  # The buffer is clean — the user never touched it — and it is nonetheless the
+  # only place that content still exists. It must not be closeable by accident.
+  test "a deleted backing file makes an untouched buffer unsaved", %{path: path, ref: ref} do
+    File.rm!(path)
+
+    :ok = ExternalFileSync.poll_now()
+
+    assert {:ok, snapshot} = Buffer.fetch(ref)
+    refute snapshot.ref.dirty?
+    assert snapshot.ref.external_change == :deleted
+
+    # The buffer list carries the mark through to everything that reads it.
+    Quillex.Buffer.BufferManager.sync()
+    listed = Enum.find(Buffer.list(), &(&1.uuid == ref.uuid))
+    assert listed.external_change == :deleted
+
+    assert Buffer.unsaved?(listed)
+    assert Enum.any?(Buffer.unsaved_buffers(), &(&1.uuid == ref.uuid))
+
+    # Quit asks about exactly this list, so a deleted-file buffer now stops it.
+    assert {:error, :deleted_on_disk} = Buffer.close(listed)
+  end
+
+  # Quitting used to consult only the dirty buffers, so a clean buffer whose
+  # file had been deleted let the whole app exit without a word. `pending?:
+  # true` is the Coordinator saying it stopped to ask; the alternative branch
+  # calls complete_quit/2 and returns {:stop, :normal, _}.
+  test "quitting stops to ask about a deleted-file buffer", %{path: path, ref: ref} do
+    File.rm!(path)
+    :ok = ExternalFileSync.poll_now()
+    assert {:ok, _snapshot} = Buffer.fetch(ref)
+    Quillex.Buffer.BufferManager.sync()
+
+    assert Enum.any?(Buffer.unsaved_buffers(), &(&1.uuid == ref.uuid))
+
+    state = %{driver: self(), pending?: false, shutdown: {Function, :identity, [:never_called]}}
+
+    assert {:noreply, %{pending?: true}} =
+             Quillex.Lifecycle.Coordinator.handle_cast({:request_close, :window_close}, state)
+  end
+
   test "save_as retargets synchronization to the new canonical path", %{path: old_path, ref: ref} do
     new_path = temp_path("retargeted")
     on_exit(fn -> File.rm(new_path) end)

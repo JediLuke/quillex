@@ -1302,9 +1302,16 @@ defmodule Quillex.RootScene do
   def handle_info({{Scenic.PubSub, :registered}, _}, scene), do: {:noreply, scene}
   def handle_info({{Scenic.PubSub, :unregistered}, _}, scene), do: {:noreply, scene}
 
-  def handle_info({:quit_requested, dirty_buffers}, scene) do
-    names = Enum.map_join(dirty_buffers, "\n", &"• #{&1.name || "untitled"}")
-    state = %{scene.assigns.state | show_unsaved_prompt: true, quit_dirty_buffers: dirty_buffers}
+  # The list is every buffer holding content that is not on disk — unsaved
+  # edits, and files deleted underneath us (clean, but the only copy left).
+  def handle_info({:quit_requested, unsaved_buffers}, scene) do
+    names = Enum.map_join(unsaved_buffers, "\n", &"• #{&1.name || "untitled"}#{deleted_note(&1)}")
+
+    state = %{
+      scene.assigns.state
+      | show_unsaved_prompt: true,
+        quit_dirty_buffers: unsaved_buffers
+    }
 
     graph =
       ScenicWidgets.ConfirmDialog.add_to_graph(
@@ -1313,7 +1320,7 @@ defmodule Quillex.RootScene do
           frame: state.frame,
           theme: dialog_theme(state),
           title: "Unsaved Changes",
-          message: "The following buffers have unsaved changes:\n\n#{names}",
+          message: "The following buffers have content that is not on disk:\n\n#{names}",
           buttons: [{:discard, "Quit Without Saving"}, {:cancel, "Cancel"}]
         },
         id: :quit_prompt
@@ -3224,28 +3231,37 @@ defmodule Quillex.RootScene do
   end
 
   # The previous preview goes away when the next result takes the slot — but
-  # never if it has unsaved edits. Losing typed work to a click on a search
-  # result would be indefensible; an extra tab is merely untidy.
+  # never if it holds content that is not on disk. Losing typed work to a click
+  # on a search result would be indefensible; an extra tab is merely untidy.
   defp close_stale_preview(%{preview_buf_uuid: nil}, _incoming), do: :ok
 
   defp close_stale_preview(%{preview_buf_uuid: uuid}, %{uuid: uuid}), do: :ok
 
   defp close_stale_preview(%{preview_buf_uuid: uuid} = state, _incoming) do
     case Enum.find(state.buffers, &(&1.uuid == uuid)) do
-      %{dirty?: false} = stale -> Quillex.Buffer.close(stale)
-      _other -> :ok
+      nil -> :ok
+      stale -> if Quillex.Buffer.unsaved?(stale), do: :ok, else: Quillex.Buffer.close(stale)
     end
   end
 
   # A preview tab stops being provisional the moment it is edited — typing in a
   # file is the clearest possible statement that you meant to open it. It also
   # stops existing when the buffer does.
-  defp surviving_preview(nil, _buffers), do: nil
+  #
+  # A file deleted on disk promotes the tab for the same reason: the buffer is
+  # now the only copy of that content, which is not something a provisional tab
+  # is allowed to be. Promoting is quieter than a modal on a search-result
+  # click, and it leaves the deliberate close — which does prompt — as the only
+  # way the content can go.
+  #
+  # Public so unit tests can pin it directly.
+  @doc false
+  def surviving_preview(nil, _buffers), do: nil
 
-  defp surviving_preview(uuid, buffers) do
+  def surviving_preview(uuid, buffers) do
     case Enum.find(buffers, &(&1.uuid == uuid)) do
-      %{dirty?: false} -> uuid
-      _promoted_or_gone -> nil
+      nil -> nil
+      buf -> if Quillex.Buffer.unsaved?(buf), do: nil, else: uuid
     end
   end
 
@@ -3615,20 +3631,26 @@ defmodule Quillex.RootScene do
   # Pure decision function for the close-buffer workflow. Public so unit tests
   # can exercise it without a live Scenic.Scene.
   #
-  #   nil            → :noop (nothing to close)
-  #   dirty? = true  → {:show_prompt, buf_ref, new_state} (state marks the prompt open)
-  #   dirty? = false → {:close, buf_ref}
+  #   nil                       → :noop (nothing to close)
+  #   dirty?, or deleted-on-disk → {:show_prompt, buf_ref, new_state}
+  #   anything else              → {:close, buf_ref}
+  #
+  # Both prompt cases are the same question — "this content is not on disk,
+  # do you want it?" — so they get one dialog, never two stacked on top of
+  # each other. `Quillex.Buffer.unsaved?/1` is the single definition of which
+  # buffers that covers; the quit path uses it too.
   def decide_close(%Quillex.RootScene.State{} = state, active_buf) do
     case active_buf do
       nil ->
         :noop
 
-      %Quillex.Buffer.Ref{dirty?: true} = buf_ref ->
-        new_state = %{state | show_unsaved_prompt: true, pending_close_buf_ref: buf_ref}
-        {:show_prompt, buf_ref, new_state}
-
       %Quillex.Buffer.Ref{} = buf_ref ->
-        {:close, buf_ref}
+        if Quillex.Buffer.unsaved?(buf_ref) do
+          new_state = %{state | show_unsaved_prompt: true, pending_close_buf_ref: buf_ref}
+          {:show_prompt, buf_ref, new_state}
+        else
+          {:close, buf_ref}
+        end
     end
   end
 
@@ -3648,7 +3670,7 @@ defmodule Quillex.RootScene do
           frame: new_state.frame,
           theme: dialog_theme(new_state),
           title: "Unsaved Changes",
-          message: "Save changes to \"#{buf_name}\" before closing?",
+          message: unsaved_prompt_message(buf_ref, buf_name),
           buttons: [{:save, "Save"}, {:discard, "Discard"}, {:cancel, "Cancel"}]
         },
         id: :unsaved_prompt
@@ -3665,6 +3687,25 @@ defmodule Quillex.RootScene do
 
     {:noreply, new_scene}
   end
+
+  # A file deleted underneath us wins the wording even when the buffer is also
+  # dirty: it is the more alarming half of the story and it already implies the
+  # other one — nothing here is on disk. "Save" means writing the file back out
+  # at the path it used to live at, which is exactly the escape hatch you want
+  # when the buffer is the last copy in existence.
+  defp unsaved_prompt_message(%Quillex.Buffer.Ref{external_change: :deleted}, buf_name) do
+    "\"#{buf_name}\" was deleted on disk.\n\n" <>
+      "This buffer is the only remaining copy of its contents. " <>
+      "Save it back to disk before closing?"
+  end
+
+  defp unsaved_prompt_message(%Quillex.Buffer.Ref{}, buf_name) do
+    "Save changes to \"#{buf_name}\" before closing?"
+  end
+
+  # Marks the deleted-on-disk entries in the quit prompt's buffer list.
+  defp deleted_note(%{external_change: :deleted}), do: "  (deleted on disk)"
+  defp deleted_note(%{}), do: ""
 
   # Hide the "Unsaved Changes" dialog and restore focus to the buffer pane.
   # Returns the new scene directly (not {:noreply, scene}) so callers can

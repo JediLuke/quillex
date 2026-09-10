@@ -23,14 +23,19 @@ defmodule Quillex.Lifecycle.Coordinator do
   @impl true
   def handle_cast({:request_close, _reason}, %{pending?: true} = state), do: {:noreply, state}
 
+  # Not just the dirty ones: a buffer whose file was deleted on disk is clean
+  # and still holds the only copy of its contents. Quitting past it without a
+  # word would throw that away.
   def handle_cast({:request_close, _reason}, state) do
-    case Quillex.Buffer.dirty_buffers() do
+    case Quillex.Buffer.unsaved_buffers() do
       [] ->
         complete_quit(state.driver, state.shutdown)
         {:stop, :normal, state}
 
-      dirty ->
-        if scene = Process.whereis(Quillex.RootScene), do: send(scene, {:quit_requested, dirty})
+      unsaved ->
+        if scene = Process.whereis(Quillex.RootScene),
+          do: send(scene, {:quit_requested, unsaved})
+
         {:noreply, %{state | pending?: true}}
     end
   end
