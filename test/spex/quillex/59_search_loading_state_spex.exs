@@ -47,13 +47,6 @@ defmodule Quillex.SearchLoadingStateSpex do
   defp pane_open?, do: pane_scene() != nil
   defp pane_graph, do: pane_scene().assigns.graph
 
-  defp drawn_text do
-    pane_graph().primitives
-    |> Map.values()
-    |> Enum.filter(&(&1.module == Scenic.Primitive.Text))
-    |> Enum.map(& &1.data)
-  end
-
   # The STATUS LINE, which is a header widget. Told apart from the body's own
   # "Searching…" line by WHERE it is drawn — a graph's primitives are a map,
   # and which of two matching strings comes out first is nobody's promise.

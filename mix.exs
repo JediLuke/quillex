@@ -27,12 +27,12 @@ defmodule Quillex.MixProject do
   # is meant to be the git hook (see the README); `check` adds the spex suite,
   # which needs a running desktop and takes minutes rather than seconds.
   #
-  # `--warnings-as-errors` is deliberately NOT here yet. Seven warnings remain,
-  # all of them "clauses should be grouped together" in qlx_root_scene.ex —
-  # route_input/3, handle_info/2 and handle_event/3 each have clause groups
-  # separated by hundreds of lines of other functions. Regrouping them is part
-  # of splitting that 3,300-line file, not a shuffle to do on its own. Turn the
-  # flag on in both aliases the moment that lands; everything else is clean.
+  # `--warnings-as-errors` is deliberately NOT here yet. The spex still name
+  # stores, catalogues and palettes that their boundary does not export — a
+  # hundred or so boundary warnings in a test build — and whether to export
+  # those as seams is a doctrine decision (public_boundary_test.exs pins the
+  # list), made in its own PR. Turn the flag on in both aliases the moment
+  # that lands; everything else is clean.
   defp aliases do
     [
       precommit: [

@@ -229,7 +229,10 @@ defmodule Quillex.ChromeZoomSpex do
         assert wait_until(fn -> placed_at(:file_nav) != nil end)
 
         scroll = child_state(:file_nav).state.scroll
-        refute scroll.scrollbar_visible, "the tree already overflows at 100%; pick a shorter fixture"
+
+        refute scroll.scrollbar_visible,
+               "the tree already overflows at 100%; pick a shorter fixture"
+
         {:ok, context}
       end
 
@@ -270,6 +273,7 @@ defmodule Quillex.ChromeZoomSpex do
       then_ "a toggle's box is drawn twice its 100% size", context do
         graph = child_state(:icon_menu).graph
         theme = child_state(:icon_menu).state.theme
+
         # The dropdown draws at 13pt by default; the ratio is what everything fixed-size scales by.
         scale = theme.dropdown_font_size / 13
 

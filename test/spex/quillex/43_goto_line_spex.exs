@@ -15,10 +15,7 @@ defmodule Quillex.GotoLineSpex do
   use SexySpex
 
   alias ScenicMcp.Probes
-  alias Quillex.TestHelpers.SemanticHelpers
   import Quillex.TestHelpers.Integration, only: [fresh_editor!: 0, ensure_editor_focused: 0]
-
-  @spinoza "test/fixtures/spinozas_ethics_p1.txt"
 
   setup_all do
     # A reset alone is not enough: Ctrl+G has to reach a FOCUSED editor, and in

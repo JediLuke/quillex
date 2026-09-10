@@ -34,12 +34,6 @@ defmodule Quillex.FindOptionsSpex do
 
   defp bar_state, do: :sys.get_state(child!(:search_bar)).assigns.state
 
-  defp field_pid do
-    bar = :sys.get_state(child!(:search_bar))
-    {:ok, c} = Scenic.Scene.child(bar, :search_bar_query_field)
-    if is_list(c), do: List.first(c), else: c
-  end
-
   defp pane_state, do: :sys.get_state(child!(:buffer_pane)).assigns.state
 
   defp matches, do: pane_state().search_matches

@@ -162,16 +162,14 @@ defmodule Quillex.ModelConformanceSpex do
   # On divergence, dump every text_buffer entry so a recurrence identifies
   # itself as read-targeting vs genuine misdirected input.
   defp dump_buffer_entries do
-    with {:ok, viewport} <- Scenic.ViewPort.info(:main_viewport),
-         {:ok, entries} <- SemanticHelpers.find_by_type_all_graphs(viewport, :text_buffer) do
-      Enum.map_join(entries, "\n", fn e ->
-        "  field_id=#{inspect(get_in(e, [:semantic, :field_id]))} " <>
-          "cursor=#{inspect(get_in(e, [:semantic, :cursor_position]))} " <>
-          "content=#{inspect(String.slice(e.content || "", 0, 60))}"
-      end)
-    else
-      _ -> "  <no entries>"
-    end
+    {:ok, viewport} = Scenic.ViewPort.info(:main_viewport)
+    {:ok, entries} = SemanticHelpers.find_by_type_all_graphs(viewport, :text_buffer)
+
+    Enum.map_join(entries, "\n", fn e ->
+      "  field_id=#{inspect(get_in(e, [:semantic, :field_id]))} " <>
+        "cursor=#{inspect(get_in(e, [:semantic, :cursor_position]))} " <>
+        "content=#{inspect(String.slice(e.content || "", 0, 60))}"
+    end)
   end
 
   defp await_convergence(expected_text, deadline_ms) do

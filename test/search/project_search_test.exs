@@ -37,12 +37,16 @@ defmodule Quillex.Search.ProjectTest do
     end
   end
 
+  # Through a variable, so the type checker cannot see that the Elixir
+  # backend's answer is always true and warn on every `if` in the loop.
+  defp available?(backend), do: backend.available?()
+
   for backend <- [Backend.Elixir, Backend.Ripgrep] do
     @backend backend
 
     describe "#{inspect(backend)}" do
       test "finds every match with grapheme columns, in path order", %{root: root} do
-        if @backend.available?() do
+        if available?(@backend) do
           {:ok, matches} = @backend.search(root, "the", [])
 
           assert Enum.map(
@@ -62,7 +66,7 @@ defmodule Quillex.Search.ProjectTest do
       end
 
       test "honours scope excludes and the max_results cap", %{root: root} do
-        if @backend.available?() do
+        if available?(@backend) do
           {:ok, matches} = @backend.search(root, "the", excludes: [Path.join(root, "vendor")])
           refute Enum.any?(matches, &String.contains?(&1.path, "vendor"))
 
@@ -75,7 +79,7 @@ defmodule Quillex.Search.ProjectTest do
       end
 
       test "skips files that are not valid UTF-8", %{root: root} do
-        if @backend.available?() do
+        if available?(@backend) do
           {:ok, matches} = @backend.search(root, "the", [])
           refute Enum.any?(matches, &String.ends_with?(&1.path, "latin1.txt"))
         end
@@ -90,7 +94,7 @@ defmodule Quillex.Search.ProjectTest do
       # asserting on both. A pane that means one thing under ripgrep and another
       # without it would be worse than having no toggles at all.
       test "case_sensitive matches only the exact casing", %{root: root} do
-        if @backend.available?() do
+        if available?(@backend) do
           {:ok, matches} = @backend.search(root, "THE", case_sensitive: true)
 
           assert Enum.map(matches, &{Path.relative_to(&1.path, root), &1.line, &1.col}) ==
@@ -99,7 +103,7 @@ defmodule Quillex.Search.ProjectTest do
       end
 
       test "regex treats the query as a pattern, and does not by default", %{root: root} do
-        if @backend.available?() do
+        if available?(@backend) do
           {:ok, literal} = @backend.search(root, "th.", [])
           assert literal == []
 
@@ -109,7 +113,7 @@ defmodule Quillex.Search.ProjectTest do
       end
 
       test "a pattern that will not compile is reported, not raised", %{root: root} do
-        if @backend.available?() do
+        if available?(@backend) do
           assert {:error, {:bad_pattern, message}} = @backend.search(root, "foo(", regex: true)
           assert is_binary(message)
         end

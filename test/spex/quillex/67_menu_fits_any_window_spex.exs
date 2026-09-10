@@ -81,7 +81,7 @@ defmodule Quillex.MenuFitsAnyWindowSpex do
     end
   end
 
-  defp wait_until(predicate, timeout \\ 8_000) do
+  defp wait_until(predicate, timeout) do
     deadline = System.monotonic_time(:millisecond) + timeout
     do_wait(predicate, deadline)
   end

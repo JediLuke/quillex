@@ -8,7 +8,6 @@ defmodule Quillex.TabBarScrollScopeSpex do
   """
   use SexySpex
 
-  alias Quillex.Buffer.BufferManager
   alias ScenicMcp.Probes
 
   setup_all do
@@ -22,12 +21,11 @@ defmodule Quillex.TabBarScrollScopeSpex do
     Quillex.TestHelpers.AppReset.reset!()
 
     for index <- 1..12 do
-      {:ok, _ref} = BufferManager.new_buffer("overflowing-tab-#{index}.ex")
+      {:ok, _ref} = Quillex.Buffer.new(%{name: "overflowing-tab-#{index}.ex"})
     end
 
-    first = BufferManager.list_buffers() |> List.first()
-    BufferManager.activate_buffer(first)
-    BufferManager.sync()
+    first = Quillex.Buffer.list() |> List.first()
+    :ok = Quillex.Buffer.activate(first)
     Process.sleep(700)
     :ok
   end

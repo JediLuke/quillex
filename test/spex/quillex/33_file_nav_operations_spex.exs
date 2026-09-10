@@ -13,7 +13,6 @@ defmodule Quillex.FileNavOperationsSpex do
   """
   use SexySpex
 
-  alias Quillex.Buffer.BufferManager
   alias Quillex.Files.NavigatorTreeSync
   alias Quillex.RadixCache.ViewStore
   alias Quillex.TestHelpers.SemanticProbe
@@ -230,7 +229,9 @@ defmodule Quillex.FileNavOperationsSpex do
 
       when_ "one file is opened and another is Ctrl-selected", context do
         click(context.alpha)
-        BufferManager.sync()
+        # A synchronous call to the buffer store: the click's activation has
+        # landed by the time it returns.
+        _ = Quillex.Buffer.list()
         Process.sleep(300)
         click(context.beta, [:ctrl])
         {:ok, context}
@@ -244,7 +245,7 @@ defmodule Quillex.FileNavOperationsSpex do
         assert row_background(context.alpha) == {60, 80, 120}
         assert row_background(context.beta) == {48, 51, 62}
 
-        active = BufferManager.get_state().active_buf
+        active = Quillex.Buffer.active_buf()
         assert active.path == context.alpha
         {:ok, context}
       end

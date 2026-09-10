@@ -45,21 +45,35 @@ defmodule Quillex.SearchFromSelectionSpex do
   end
 
   defp buffer_selection do
-    state = :sys.get_state(Process.whereis(Quillex.RootScene)).assigns.state
-
-    with ref when not is_nil(ref) <- state.active_buf,
-         {:ok, buf} <- Quillex.Buffer.Process.fetch_buf(ref) do
-      Quillex.Buffer.Core.Selection.selected_text(buf)
-    else
-      _ -> ""
+    case Quillex.Buffer.active_buf() do
+      nil -> ""
+      ref -> selected_text(snapshot_of(ref))
     end
   end
 
-  defp active_buffer_state do
-    root = :sys.get_state(Process.whereis(Quillex.RootScene)).assigns.state
-    {:ok, state} = Quillex.Buffer.Process.fetch_buf(root.active_buf)
-    state
+  # What the selection covers, read from the public snapshot the way the
+  # buffer's own editing code reads it: either order, across lines.
+  defp selected_text(%{selection: nil}), do: ""
+
+  defp selected_text(%{lines: lines, selection: %{start: a, end: b}}) do
+    {{start_line, start_col}, {end_line, end_col}} = if a <= b, do: {a, b}, else: {b, a}
+
+    lines
+    |> Enum.slice((start_line - 1)..(end_line - 1))
+    |> Enum.with_index(start_line)
+    |> Enum.map_join("\n", fn {line, line_no} ->
+      from = if line_no == start_line, do: start_col - 1, else: 0
+      to = if line_no == end_line, do: end_col - 1, else: String.length(line)
+      String.slice(line, from, max(to - from, 0))
+    end)
   end
+
+  defp snapshot_of(ref) do
+    {:ok, snapshot} = Quillex.Buffer.fetch(ref)
+    snapshot
+  end
+
+  defp active_buffer_snapshot, do: snapshot_of(Quillex.Buffer.active_buf())
 
   defp wait_until(predicate, timeout \\ 8_000) do
     deadline = System.monotonic_time(:millisecond) + timeout
@@ -229,7 +243,7 @@ defmodule Quillex.SearchFromSelectionSpex do
                the selection was #{inspect(context.selected)}.
                """
 
-        assert active_buffer_state().search_current_index == 0,
+        assert active_buffer_snapshot().search.current_index == 0,
                "Ctrl+F moved from the selected occurrence to the next match"
 
         {:ok, context}

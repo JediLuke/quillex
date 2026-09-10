@@ -28,11 +28,6 @@ defmodule Quillex.ProjectSearchSpex do
     |> Enum.find(&(&1.id == :status))
   end
 
-  defp drawn_header_height do
-    [%{data: {_w, h}}] = Scenic.Graph.get(pane_scene().assigns.graph, :search_pane_header_bg)
-    h
-  end
-
   defp pane_scene do
     root = :sys.get_state(Process.whereis(Quillex.RootScene))
     {:ok, child} = Scenic.Scene.child(root, :project_search_pane)

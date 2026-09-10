@@ -43,13 +43,6 @@ defmodule Quillex.SearchStreamingSpex do
   defp pane_open?, do: pane_scene() != nil
   defp pane_graph, do: pane_scene().assigns.graph
 
-  defp drawn_text do
-    pane_graph().primitives
-    |> Map.values()
-    |> Enum.filter(&(&1.module == Scenic.Primitive.Text))
-    |> Enum.map(& &1.data)
-  end
-
   # The STATUS LINE, which is a header widget — told apart from the body's
   # own "Searching…" line by where it is drawn rather than by what it says,
   # since a graph's primitives are a map and their order is nobody's promise.

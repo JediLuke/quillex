@@ -525,7 +525,6 @@ defmodule Quillex.FindBarSpex do
         # label placed under each control lands at a different height and the
         # set reads as scattered. They hang from the bottom of the BAR.
         st = bar()
-        bottom = BarState.height(st)
 
         labelled = Enum.filter(BarState.widgets(st), & &1.tooltip)
         assert length(labelled) >= 6, "most of the bar should explain itself"

@@ -17,8 +17,6 @@ defmodule Quillex.TestHelpers.AppReset do
   not happen is worse than no reset at all.
   """
 
-  require Logger
-
   @doc """
   Close every buffer but one, empty it, and dismiss any overlay.
 
