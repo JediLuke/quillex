@@ -10,7 +10,7 @@ defmodule Quillex.DemoSpex do
   Run it with `scripts/run_demo` and watch; `--fast` runs the same script as a
   regression test.
 
-  It is paced to be *watched*, which means it is slow: a quarter of an hour,
+  It is paced to be *watched*, which means it is slow: ten minutes or so,
   most of it deliberate pauses on something that just changed. An audience
   needs several seconds to find the thing that moved before they can
   understand it; the test needs none, which is what `--fast` is for.
@@ -80,16 +80,19 @@ defmodule Quillex.DemoSpex do
   # was paced by someone who already knew where to look.
   defp dwell(ms), do: beat(if fast?(), do: ms, else: round(ms * 1.5))
 
-  # Typing speed. A fast human types four or five characters a second; this is
-  # quicker than that, because the room is reading rather than watching the
-  # keystrokes — but nothing like the old 9ms, which put a paragraph on screen
-  # faster than anyone could start reading it.
-  defp per_char_ms, do: if(fast?(), do: 0, else: Process.get(:demo_pace, 42))
+  # Typing speed. The room is reading rather than watching the keystrokes, so
+  # this is well past any human's typing — about forty characters a second,
+  # which is a comfortable reading pace for a line that is appearing as you
+  # read it. It was 42ms once, and the narration (some seven thousand
+  # characters of it) took five minutes of the demo just to type; nothing like
+  # the old 9ms either, which put a paragraph on screen faster than anyone
+  # could start reading it.
+  defp per_char_ms, do: if(fast?(), do: 0, else: Process.get(:demo_pace, 24))
 
   # The opening is slower still: that is when a room reads most closely, and
   # when nobody yet knows what they are looking at.
-  defp pace(:slow), do: Process.put(:demo_pace, 68)
-  defp pace(:normal), do: Process.put(:demo_pace, 42)
+  defp pace(:slow), do: Process.put(:demo_pace, 40)
+  defp pace(:normal), do: Process.put(:demo_pace, 24)
 
   # ── Reading the editor ────────────────────────────────────────────────────
 

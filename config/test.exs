@@ -19,3 +19,10 @@ config :quillex,
 config :scenic_mcp,
   port: 9987,
   app_name: "Quillex"
+
+# The spex reporter is quiet unless `mix spex --verbose` asks for the
+# given/when/then narration. The task only ever SETS quiet (to true, when
+# --verbose is absent) and reads it with a default of true, so without this
+# line --verbose changes nothing. `scripts/run_demo --short` relies on it: the
+# short demo's narration is the reporter.
+config :sexy_spex, quiet: false
