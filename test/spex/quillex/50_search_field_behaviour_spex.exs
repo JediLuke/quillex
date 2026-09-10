@@ -153,4 +153,45 @@ defmodule Quillex.SearchFieldBehaviourSpex do
       end
     end
   end
+
+  # The same file-backed clipboard 30_clipboard_spex uses, so the paste is
+  # deterministic and never reads the developer's real clipboard.
+  @clipboard_file "/tmp/quillex_test_clipboard"
+
+  spex "the clipboard reaches the pane's fields" do
+    scenario "Ctrl+V pastes into the query, and types nothing" do
+      given_ "a phrase on the clipboard and the query field focused", context do
+        File.write!(@clipboard_file, "needle in the haystack")
+
+        open_pane()
+        Probes.send_keys("a", [:ctrl])
+        Process.sleep(300)
+
+        assert field_state(:search_pane_query_field).focused
+
+        {:ok, context}
+      end
+
+      when_ "Ctrl+V is pressed, the way the driver reports it", context do
+        # A chord arrives twice from a real driver: as the :key it is bound to
+        # and again as the codepoint of the letter under the finger. The
+        # second one is what used to be typed into the field as a "v".
+        Probes.send_keys("v", [:ctrl])
+        Probes.send_codepoint("v", [:ctrl])
+        Process.sleep(700)
+
+        {:ok, context}
+      end
+
+      then_ "the query is the clipboard, with no stray letter", context do
+        assert query_text() == "needle in the haystack",
+               "Ctrl+V should paste and nothing else: #{inspect(query_text())}"
+
+        assert wait_until(fn -> pane_state().query == "needle in the haystack" end),
+               "the pasted text should reach the pane: #{inspect(pane_state().query)}"
+
+        {:ok, context}
+      end
+    end
+  end
 end
