@@ -27,12 +27,14 @@ defmodule Quillex.MixProject do
   # is meant to be the git hook (see the README); `check` adds the spex suite,
   # which needs a running desktop and takes minutes rather than seconds.
   #
-  # `--warnings-as-errors` is deliberately NOT here yet. Seven warnings remain,
-  # all of them "clauses should be grouped together" in qlx_root_scene.ex —
-  # route_input/3, handle_info/2 and handle_event/3 each have clause groups
-  # separated by hundreds of lines of other functions. Regrouping them is part
-  # of splitting that 3,300-line file, not a shuffle to do on its own. Turn the
-  # flag on in both aliases the moment that lands; everything else is clean.
+  # `--warnings-as-errors` is deliberately NOT here yet. Seven warnings remain
+  # in quillex itself, all of them "clauses should be grouped together" in
+  # qlx_root_scene.ex — route_input/3, handle_info/2 and handle_event/3 each
+  # have clause groups separated by hundreds of lines of other functions.
+  # Regrouping them is part of splitting that 3,300-line file, not a shuffle
+  # to do on its own. scenic_widget_contrib has 17 of the same kind left; the
+  # other forks (scenic, scenic_mcp, scenic_driver_local) still have a few
+  # dozen of their own. Turn the flag on in both aliases once those land.
   defp aliases do
     [
       precommit: [
@@ -103,7 +105,7 @@ defmodule Quillex.MixProject do
         :scenic_widget_contrib,
         "../scenic-widget-contrib",
         "https://github.com/JediLuke/scenic-widget-contrib.git",
-        "9b28464c0ed76d51c9bed4824be7754a58cd7594"
+        "291ad92e24a5f6484354c2eab465862d728e5661"
       ),
       {:elixir_uuid, "~> 1.2"},
       {:font_metrics, "~> 0.5"},
