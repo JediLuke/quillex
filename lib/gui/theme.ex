@@ -1,7 +1,9 @@
 defmodule Quillex.GUI.Theme do
   @moduledoc "Application visual tokens shared by editor and navigation."
 
-  def editor_font(size) when size in 12..32 do
+  # The store gates the size (ViewStore.text_size_range/0); this only needs
+  # a font size that makes sense.
+  def editor_font(size) when is_integer(size) and size > 0 do
     {:ok, {Scenic.Assets.Static.Font, metrics}} = Scenic.Assets.Static.meta(:ibm_plex_mono)
     %{name: :ibm_plex_mono, size: size, metrics: metrics}
   end
