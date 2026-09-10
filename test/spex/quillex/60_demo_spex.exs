@@ -704,13 +704,17 @@ defmodule Quillex.DemoSpex do
         Probes.click(fx + 60, fy + 16)
         dwell(2_500)
 
+        # The range arrives END first — the text field gives a double-click's
+        # word that way round so the cursor sits at the word's start, nearest
+        # the click — so "copy" (columns 1 to 5) reads as {1, 5}..{1, 1}. Either
+        # order is the word; the assertion normalises before it looks.
         assert wait_until(fn ->
                  case selection() do
-                   %{start: {1, s}, end: {1, e}} -> e > s
+                   %{start: {1, s}, end: {1, e}} -> Enum.min_max([s, e]) == {1, 5}
                    _ -> false
                  end
                end),
-               "double-click should select a word, got #{inspect(selection())}"
+               "double-click should select the word \"copy\", got #{inspect(selection())}"
 
         {:ok, context}
       end
