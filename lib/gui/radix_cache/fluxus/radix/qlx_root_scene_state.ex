@@ -89,6 +89,14 @@ defmodule Quillex.RootScene.State do
             quit_dirty_buffers: [],
             pending_nav_delete: [],
             show_nav_delete_prompt: false,
+            # Tab context menu (right-click on a tab): nil while closed, or
+            # %{uuid: tab_uuid, pos: {x, y}} while the popup is up. Scene-owned
+            # transient interaction state, like the other dialog flags.
+            tab_context_menu: nil,
+            # Buffers queued by a tab-context bulk close while its single
+            # "Unsaved Changes" prompt is up. The whole batch waits on one
+            # answer: discard closes them all, cancel closes none.
+            pending_tab_context_close: [],
             show_project_replace_prompt: false,
             pending_project_replacement: nil,
             # "Save Settings as Default" explains itself before it writes
