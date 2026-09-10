@@ -17,6 +17,12 @@ defmodule Quillex.UnsavedClosePromptSpex do
     4. Cancel keeps buffer open with content intact
     5. Save saves then closes (file-backed buffer)
     6. Tab close button on dirty buffer shows dialog
+    7. Clean buffer whose file was DELETED on disk also shows the dialog
+
+  Scenario 7 is the one that is not about editing at all. `dirty?` is false —
+  the user never typed a thing — and the buffer is nonetheless the only place
+  that content still exists, because the file went away underneath it. Closing
+  it used to be silent.
   """
   use SexySpex
 
@@ -75,6 +81,21 @@ defmodule Quillex.UnsavedClosePromptSpex do
   end
 
   defp tmp_file_path(name), do: Path.join(@tmp_dir, name)
+
+  # The external-file poller runs on a 500ms timer; give it a few turns.
+  defp wait_for_deleted_mark(ref, attempts \\ 30)
+  defp wait_for_deleted_mark(_ref, 0), do: false
+
+  defp wait_for_deleted_mark(ref, attempts) do
+    {:ok, snapshot} = Quillex.Buffer.fetch(ref)
+
+    if snapshot.ref.external_change == :deleted do
+      true
+    else
+      Process.sleep(200)
+      wait_for_deleted_mark(ref, attempts - 1)
+    end
+  end
 
   defp active_lines do
     state = :sys.get_state(Process.whereis(Quillex.RootScene)).assigns.state
@@ -592,6 +613,127 @@ defmodule Quillex.UnsavedClosePromptSpex do
         Probes.send_keys("d", [])
         Process.sleep(400)
         :ok
+      end
+    end
+  end
+
+  # ===========================================================================
+  # SPEX 7: A file deleted on disk makes an UNEDITED buffer prompt too
+  # ===========================================================================
+
+  spex "UnsavedClosePrompt - Ctrl+W on a buffer whose file was deleted shows the dialog",
+    description:
+      "A clean buffer whose file vanished from disk is the only copy of its contents, so closing it asks first",
+    tags: [:unsaved_close_prompt, :ctrl_w, :clean, :external_delete] do
+    scenario "Ctrl+W on a clean buffer whose file was deleted on disk prompts" do
+      given_ "a clean file-backed buffer is open", context do
+        Probes.send_keys("escape", [])
+        Process.sleep(200)
+        force_close_all_but_one()
+
+        deleted_file = tmp_file_path("deleted_under_us.txt")
+        File.write!(deleted_file, "the only copy of this line")
+
+        case FileOpener.open_file(deleted_file) do
+          :ok ->
+            Process.sleep(500)
+            SemanticHelpers.wait_for_tab(Path.basename(deleted_file), 3000)
+
+          {:error, reason} ->
+            flunk("Could not open temp file via FileOpener: #{inspect(reason)}")
+        end
+
+        ref = Enum.find(Quillex.Buffer.list(), &(&1.path == Path.expand(deleted_file)))
+
+        if is_nil(ref) do
+          flunk("Could not find the buffer for #{deleted_file}")
+        end
+
+        {:ok, context |> Map.put(:deleted_file, deleted_file) |> Map.put(:ref, ref)}
+      end
+
+      when_ "the file is deleted on disk underneath it", context do
+        File.rm!(context.deleted_file)
+        {:ok, context}
+      end
+
+      then_ "the buffer is still clean, and marked as deleted", context do
+        assert wait_for_deleted_mark(context.ref),
+               "the supervised poller should have marked the buffer deleted"
+
+        {:ok, snapshot} = Quillex.Buffer.fetch(context.ref)
+
+        refute snapshot.ref.dirty?,
+               "the user never edited this buffer; the whole point is that it is clean"
+
+        {:ok, context}
+      end
+
+      when_ "we press Ctrl+W to close it", context do
+        count_before = SemanticHelpers.get_tab_count() || 0
+        Probes.send_keys("w", [:ctrl])
+        Process.sleep(500)
+        {:ok, Map.put(context, :count_before, count_before)}
+      end
+
+      then_ "the confirmation dialog appears instead of a silent close" do
+        rendered = Query.rendered_text()
+
+        assert String.contains?(rendered, "Unsaved Changes"),
+               "a clean buffer whose file was deleted must not close silently. Got: #{inspect(rendered)}"
+
+        :ok
+      end
+
+      then_ "the dialog says the file was deleted rather than talking about edits", context do
+        rendered = Query.rendered_text()
+        name = Path.basename(context.deleted_file)
+
+        # Quoted-and-full-stopped, which the transient status bar line is not —
+        # otherwise this assertion would pass on the status message alone.
+        assert String.contains?(rendered, "\"#{name}\" was deleted on disk."),
+               "the prompt should explain what actually happened. Got: #{inspect(rendered)}"
+
+        assert String.contains?(rendered, "only remaining copy"),
+               "the prompt should say why it matters. Got: #{inspect(rendered)}"
+
+        {:ok, context}
+      end
+
+      then_ "the tab is still there while the dialog is up", context do
+        count = SemanticHelpers.get_tab_count() || 0
+
+        assert count == context.count_before,
+               "no tab should have gone anywhere yet. Expected #{context.count_before}, got #{count}"
+
+        {:ok, context}
+      end
+
+      when_ "we press Escape to cancel", context do
+        Probes.send_keys("escape", [])
+        Process.sleep(400)
+        {:ok, context}
+      end
+
+      then_ "the buffer survives with its contents", context do
+        count = SemanticHelpers.get_tab_count() || 0
+
+        assert count == context.count_before,
+               "cancelling must leave the buffer open. Expected #{context.count_before}, got #{count}"
+
+        {:ok, snapshot} = Quillex.Buffer.fetch(context.ref)
+
+        assert snapshot.lines == ["the only copy of this line"],
+               "the content must still be there. Got: #{inspect(snapshot.lines)}"
+
+        {:ok, context}
+      end
+
+      then_ "cleanup: discard the buffer explicitly", context do
+        Quillex.Buffer.close(context.ref, :discard)
+        Process.sleep(300)
+        File.rm(context.deleted_file)
+        {:ok, context}
       end
     end
   end
