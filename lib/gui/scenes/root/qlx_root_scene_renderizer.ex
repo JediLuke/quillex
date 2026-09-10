@@ -520,7 +520,11 @@ defmodule Quillex.RootScene.Renderizer do
         border: palette.pane_border,
         dim_text: palette.pane_dim,
         font: :ibm_plex_mono,
-        font_size: file_nav_theme(state).font_size
+        # Sized to fit the header's OWN height, not only to the nav's ratio: a
+        # breadcrumb wants air above and below its text, and at a big chrome
+        # zoom the nav's 0.7-of-24 label was tall enough to touch both edges
+        # of the strip. Whichever is smaller keeps it looking like a label.
+        font_size: min(file_nav_theme(state).font_size, round(frame.size.height * 0.5))
       }
     }
   end
@@ -775,9 +779,29 @@ defmodule Quillex.RootScene.Renderizer do
       )
 
     graph
+    |> render_tab_strip_hit(tab_bar_frame)
     |> render_tab_bar(scene, old_state, state, tab_bar_frame)
     |> render_cursor_pos_label(scene, old_state, state, cursor_label_frame)
     |> render_icon_menu(scene, old_state, state, icon_menu_frame)
+  end
+
+  # RootScene's right-click detection for the tab context menu needs the
+  # click delivered to the ROOT scene. Requested :cursor_button never reaches
+  # it — the ViewPort drops requested positional input when the requester's
+  # scene transform cannot be resolved, and the root scene's ("_main_") is
+  # not in scene_transforms — so the strip gets a hit-tested primitive
+  # instead: an invisible rect owned by the root graph, the same pattern as
+  # :file_nav_resize_handle. TabBar still receives its own clicks via
+  # request_input; hit-tested and requested delivery are independent.
+  defp render_tab_strip_hit(graph, frame) do
+    graph
+    |> Scenic.Graph.delete(:tab_strip_hit)
+    |> rect({frame.size.width, frame.size.height},
+      id: :tab_strip_hit,
+      fill: {:color, {0, 0, 0, 0}},
+      input: :cursor_button,
+      translate: frame.pin.point
+    )
   end
 
   defp render_cursor_pos_label(graph, scene, old_state, state, frame) do
@@ -1181,11 +1205,12 @@ defmodule Quillex.RootScene.Renderizer do
               id: "chrome_zoom",
               label: "Zoom",
               value: state.chrome_zoom,
-              min: 50,
-              max: 200,
+              min: Quillex.RadixCache.ViewStore.chrome_zoom_range().first,
+              max: Quillex.RadixCache.ViewStore.chrome_zoom_range().last,
               step: 10,
               tooltip:
                 "Scale application chrome independently from editor text. " <>
+                  "Click the number to type one. " <>
                   "#{Quillex.Commands.shortcut(:zoom_in)} and " <>
                   "#{Quillex.Commands.shortcut(:zoom_out)} change it; " <>
                   "#{Quillex.Commands.shortcut(:zoom_reset)} resets it."

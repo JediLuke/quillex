@@ -1,0 +1,11 @@
+# Project-level Codex config. Codex layers this over ~/.codex/config.toml for
+# a trusted project. It carries only the MCP servers the repo's agents use;
+# see "Agent Tooling (MCP)" in AGENTS.md for what each one needs on the machine.
+
+[mcp_servers.whiteboard]
+command = "npx"
+args = ["-y", "whiteboard-mcp"]
+
+[mcp_servers.scenic_mcp]
+command = "bash"
+args = ["tools/mcp/scenic_mcp.sh"]
