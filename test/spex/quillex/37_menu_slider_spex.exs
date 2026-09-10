@@ -173,57 +173,29 @@ defmodule Quillex.MenuSliderSpex do
     end
   end
 
-  spex "Text-size stepper updates the live editor font",
+  spex "Text-size slider updates the live editor font",
     description:
-      "Stepping and typing Text Size update ViewStore and the existing TextField process in place",
-    tags: [:phase_37, :menu, :stepper, :text_size] do
-    scenario "Stepping up, then typing the top of the range" do
-      given_ "the editor at 24pt with View open", context do
+      "Dragging Text Size updates ViewStore and the existing TextField process in place",
+    tags: [:phase_37, :menu, :slider, :text_size] do
+    scenario "Dragging Text Size to its maximum" do
+      when_ "the slider is dragged to 72", context do
         Quillex.RadixCache.ViewStore.set_text_size(24)
         Quillex.RadixCache.ViewStore.sync()
         ensure_view_open()
-        {:ok, context}
-      end
 
-      when_ "the plus control is clicked once", context do
-        %{entry: %{screen_bounds: bounds}} = SemanticProbe.dump(:icon_menu_view_text_size)
-        {_pid, component} = icon_menu_state()
+        %{entry: %{screen_bounds: %{left: left, top: top, width: width, height: height}}} =
+          SemanticProbe.dump(:icon_menu_view_text_size)
 
-        {plus_x, plus_width} =
-          ScenicWidgets.Menu.Dropdown.stepper_layout(component.assigns.state.theme, bounds.width).plus
-
-        Probes.click(bounds.left + plus_x + plus_width / 2, bounds.top + bounds.height / 2)
+        y = top + height / 2
+        Probes.mouse_down(left + 10, y)
+        Probes.send_mouse_move(left + width - 10, y)
+        Probes.mouse_up(left + width - 10, y)
         Quillex.RadixCache.ViewStore.sync()
         Process.sleep(300)
         {:ok, context}
       end
 
-      then_ "the live editor is one step larger", context do
-        assert Quillex.RadixCache.ViewStore.get_state().text_size == 26
-        assert pane_state().font.size == 26
-        {:ok, context}
-      end
-
-      when_ "72 is typed into the value box", context do
-        ensure_view_open()
-        %{entry: %{screen_bounds: bounds}} = SemanticProbe.dump(:icon_menu_view_text_size)
-        {_pid, component} = icon_menu_state()
-
-        # The value box sits between the minus and plus buttons; the layout
-        # that draws it also says where it is.
-        {value_x, value_width} =
-          ScenicWidgets.Menu.Dropdown.stepper_layout(component.assigns.state.theme, bounds.width).value
-
-        Probes.click(bounds.left + value_x + value_width / 2, bounds.top + bounds.height / 2)
-        Process.sleep(200)
-        Probes.send_text("72")
-        Probes.send_keys("enter", [])
-        Quillex.RadixCache.ViewStore.sync()
-        Process.sleep(300)
-        {:ok, context}
-      end
-
-      then_ "the live editor uses 72pt, the top of the range", context do
+      then_ "the live editor uses the top of the range, 72pt", context do
         assert Quillex.RadixCache.ViewStore.get_state().text_size == 72
         assert pane_state().font.size == 72
 

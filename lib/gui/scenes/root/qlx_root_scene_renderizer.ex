@@ -1217,16 +1217,13 @@ defmodule Quillex.RootScene.Renderizer do
               tooltip: "Collapse all code blocks at the selected nesting level or deeper."
             },
             %Divider{id: "view_display_divider"},
-            %Stepper{
+            %Slider{
               id: "text_size",
               label: "Text Size",
               value: state.text_size,
               min: Quillex.RadixCache.ViewStore.text_size_range().first,
               max: Quillex.RadixCache.ViewStore.text_size_range().last,
-              step: 2,
-              tooltip:
-                "Change the active editor font size, from 12 to 72 points. " <>
-                  "Click the number to type one."
+              tooltip: "Change the active editor font size from 12 to 72 points."
             },
             %Slider{
               id: "tab_width",
