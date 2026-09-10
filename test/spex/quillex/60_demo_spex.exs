@@ -1064,7 +1064,8 @@ defmodule Quillex.DemoSpex do
           })
 
         assert wait_until(fn ->
-                 child_state(:project_search_pane).hovered == {:match, path, match.line, match.col}
+                 child_state(:project_search_pane).hovered ==
+                   {:match, path, match.line, match.col}
                end),
                "hovering the match should reveal its actions"
 

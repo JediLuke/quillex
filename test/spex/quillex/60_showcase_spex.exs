@@ -192,8 +192,15 @@ defmodule Quillex.ShowcaseSpex do
     end
     """)
 
-    File.write!(Path.join(@demo_dir, "README.md"), "# demo\n\nA project for the Quillex showcase.\n")
-    File.write!(Path.join(@demo_dir, "mix.exs"), "defmodule Demo.MixProject do\n  use Mix.Project\nend\n")
+    File.write!(
+      Path.join(@demo_dir, "README.md"),
+      "# demo\n\nA project for the Quillex showcase.\n"
+    )
+
+    File.write!(
+      Path.join(@demo_dir, "mix.exs"),
+      "defmodule Demo.MixProject do\n  use Mix.Project\nend\n"
+    )
 
     ViewStore.set_theme(Palette.default())
     ViewStore.set_text_size(@text_size)
