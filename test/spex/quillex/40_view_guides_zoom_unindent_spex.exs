@@ -140,13 +140,27 @@ defmodule Quillex.ViewGuidesZoomUnindentSpex do
     end
   end
 
+  defp icon_menu_theme do
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
+    {:ok, child} = Scenic.Scene.child(root, :icon_menu)
+    pid = if is_list(child), do: List.first(child), else: child
+    :sys.get_state(pid).assigns.state.theme
+  end
+
   spex "Zoom stepper scales application chrome",
     tags: [:phase_40, :view, :zoom, :stepper] do
     scenario "The plus button increases Zoom" do
       when_ "the right-hand plus control is clicked", context do
         open_view()
         %{entry: %{screen_bounds: bounds}} = SemanticProbe.dump(:icon_menu_view_chrome_zoom)
-        Probes.click(bounds.left + bounds.width - 5, bounds.top + bounds.height / 2)
+
+        # The plus button is inset from the row's right edge; the layout that
+        # draws it says by how much. Clicking "5px from the edge" landed in
+        # that margin once the stepper started scaling with the chrome.
+        {plus_x, plus_width} =
+          ScenicWidgets.Menu.Dropdown.stepper_layout(icon_menu_theme(), bounds.width).plus
+
+        Probes.click(bounds.left + plus_x + plus_width / 2, bounds.top + bounds.height / 2)
         Process.sleep(350)
         {:ok, context}
       end

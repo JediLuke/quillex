@@ -161,6 +161,7 @@ defmodule Quillex.RootScene.Renderizer do
 
       graph
       |> maybe_update_file_nav(state, file_nav_frame)
+      |> maybe_move_side_pane(old_state, state, file_nav_frame)
       |> maybe_create_status_bar(state, status_bar_frame)
       |> maybe_create_search_bar(state, search_bar_frame)
       |> maybe_create_file_nav_resize_handle(state, file_nav_frame)
@@ -174,6 +175,7 @@ defmodule Quillex.RootScene.Renderizer do
       graph
       |> maybe_move_buffer_pane(old_state, state, actual_buffer_frame)
       |> maybe_update_file_nav(state, file_nav_frame)
+      |> maybe_move_side_pane(old_state, state, file_nav_frame)
       |> maybe_update_status_bar(state, status_bar_frame)
       |> maybe_update_search_bar(scene, state, search_bar_frame)
       |> maybe_update_file_nav_resize_handle(state, file_nav_frame)
@@ -329,6 +331,36 @@ defmodule Quillex.RootScene.Renderizer do
     else
       graph
     end
+  end
+
+  # apply_file_nav_frame/4 hands the sidebar children their new frames, and
+  # each rebuilds its own graph from that frame's SIZE. Their POSITION is the
+  # translate this scene gave them in add_to_graph, and nothing else ever
+  # revisited it: zooming the chrome made the tab bar taller, the nav frame
+  # moved down to make room, and the navigator and its path header stayed
+  # put, half under the tabs. Same rule as maybe_move_buffer_pane/4.
+  defp maybe_move_side_pane(graph, _old_state, _state, nil), do: graph
+  defp maybe_move_side_pane(graph, nil, _state, _frame), do: graph
+
+  defp maybe_move_side_pane(graph, old_state, state, frame) do
+    if side_pane_geometry_changed?(old_state, state) do
+      if state.show_project_search do
+        move_component(graph, :project_search_pane, frame)
+      else
+        {header_frame, content_frame} = file_nav_frames(state, frame)
+
+        graph
+        |> move_component(:file_nav_path_header, header_frame)
+        |> move_component(:file_nav, content_frame)
+      end
+    else
+      graph
+    end
+  end
+
+  defp side_pane_geometry_changed?(old_state, state) do
+    old_state.file_nav_width != state.file_nav_width or old_state.frame != state.frame or
+      old_state.chrome_zoom != state.chrome_zoom
   end
 
   defp apply_file_nav_frame(_scene, _old_state, _state, nil), do: :ok
