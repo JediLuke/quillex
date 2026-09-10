@@ -55,6 +55,29 @@ defmodule Quillex do
       # x then clicks the sidebar instead of the document.
       RadixCache.ViewStore,
       # Diagnostics access for TestHelpers.Perf (performance-budget spex)
-      PerfMonitor
+      PerfMonitor,
+
+      # ── Seams the spex read through ─────────────────────────────────────
+      #
+      # Not product API. Each is a store, a catalogue, a palette or a pure
+      # lookup that a spex reads to know what the screen SHOULD show, or a
+      # poller it kicks so a scenario need not wait out a timer. Exported so
+      # the spex boundary can name them without a warning; reaching past
+      # them into reducers, buffer processes or scenes is still a violation.
+      # public_boundary_test.exs pins this list, so adding to it is a
+      # decision made on purpose.
+      RadixCache.ProjectSearchStore,
+      RadixCache.PaneStore,
+      GUI.Palette,
+      GUI.Theme,
+      GUI.SearchPaneModel,
+      Utils.SideNavThemes,
+      Commands,
+      Shortcuts,
+      SettingsFile,
+      Files.ExternalFileSync,
+      Files.NavigatorTreeSync,
+      Search.Backend.Elixir,
+      RootScene.Renderizer
     ]
 end

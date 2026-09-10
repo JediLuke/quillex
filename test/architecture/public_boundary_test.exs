@@ -6,7 +6,22 @@ defmodule Quillex.PublicBoundaryTest do
     "Elixir.API.FileAPI",
     "Elixir.Buffer",
     "Elixir.RadixCache.ViewStore",
-    "Elixir.PerfMonitor"
+    "Elixir.PerfMonitor",
+    # Seams the spex read through — stores, catalogues, palettes, pollers
+    # and one pure menu builder. See the note above them in lib/quillex.ex.
+    "Elixir.RadixCache.ProjectSearchStore",
+    "Elixir.RadixCache.PaneStore",
+    "Elixir.GUI.Palette",
+    "Elixir.GUI.Theme",
+    "Elixir.GUI.SearchPaneModel",
+    "Elixir.Utils.SideNavThemes",
+    "Elixir.Commands",
+    "Elixir.Shortcuts",
+    "Elixir.SettingsFile",
+    "Elixir.Files.ExternalFileSync",
+    "Elixir.Files.NavigatorTreeSync",
+    "Elixir.Search.Backend.Elixir",
+    "Elixir.RootScene.Renderizer"
   ]
 
   test "the public boundary does not expose implementation modules to tests" do
