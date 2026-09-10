@@ -46,6 +46,12 @@ defmodule Quillex.ChromeZoomSpex do
 
   defp root_state, do: :sys.get_state(Process.whereis(Quillex.RootScene)).assigns.state
 
+  defp child_state(id) do
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
+    {:ok, [pid | _]} = Scenic.Scene.child(root, id)
+    :sys.get_state(pid, 30_000).assigns
+  end
+
   defp zoom(n) do
     Quillex.RadixCache.ViewStore.set_chrome_zoom(n)
     Quillex.RadixCache.ViewStore.sync()
@@ -208,6 +214,87 @@ defmodule Quillex.ChromeZoomSpex do
       then_ "both return to where they were", context do
         assert placed_at(:file_nav_path_header) |> elem(1) == context.header_y
         assert placed_at(:file_nav) |> elem(1) == context.nav_y
+        Quillex.RadixCache.ViewStore.close_file_nav()
+        Quillex.RadixCache.ViewStore.sync()
+        {:ok, context}
+      end
+    end
+
+    scenario "the navigator can scroll a tree the zoom made too tall" do
+      given_ "the file navigator open at 100%, its tree fitting the window", context do
+        Quillex.RadixCache.ViewStore.close_project_search()
+        Quillex.RadixCache.ViewStore.open_file_nav()
+        Quillex.RadixCache.ViewStore.sync()
+        :ok = zoom(100)
+        assert wait_until(fn -> placed_at(:file_nav) != nil end)
+
+        scroll = child_state(:file_nav).state.scroll
+        refute scroll.scrollbar_visible, "the tree already overflows at 100%; pick a shorter fixture"
+        {:ok, context}
+      end
+
+      when_ "the chrome is zoomed to 400%", context do
+        :ok = zoom(400)
+        {:ok, context}
+      end
+
+      then_ "the tree is taller than its frame, and says so with a scrollbar", context do
+        scroll = child_state(:file_nav).state.scroll
+
+        assert scroll.content_height > scroll.viewport_height,
+               """
+               at 400% the navigator still believes its content is
+               #{scroll.content_height}px in a #{scroll.viewport_height}px frame.
+               The rows were laid out at the new height, the scroll extent
+               was not: the theme update recomputed bounds and nothing else.
+               """
+
+        assert scroll.scrollbar_visible, "the tree overflows and shows no scrollbar"
+        assert Widgex.Scroll.ScrollState.max_offset_y(scroll) > 0
+
+        :ok = zoom(100)
+        Quillex.RadixCache.ViewStore.close_file_nav()
+        Quillex.RadixCache.ViewStore.sync()
+        {:ok, context}
+      end
+    end
+
+    scenario "the View menu's tick boxes grow with the zoom" do
+      given_ "the View menu open at 200%", context do
+        :ok = zoom(200)
+        Probes.click_element("icon_menu_view")
+        Process.sleep(400)
+        {:ok, context}
+      end
+
+      then_ "a toggle's box is drawn twice its 100% size", context do
+        graph = child_state(:icon_menu).graph
+        theme = child_state(:icon_menu).state.theme
+        # The dropdown draws at 13pt by default; the ratio is what everything fixed-size scales by.
+        scale = theme.dropdown_font_size / 13
+
+        boxes =
+          graph
+          |> Scenic.Graph.reduce([], fn
+            %Scenic.Primitive{module: Scenic.Primitive.RoundedRectangle, data: {w, h, _r}}, acc
+            when abs(w - 11 * scale) < 0.01 and abs(h - 11 * scale) < 0.01 ->
+              [{w, h} | acc]
+
+            _, acc ->
+              acc
+          end)
+
+        assert boxes != [],
+               """
+               no #{Float.round(11 * scale, 1)}px tick box in the View menu at
+               200%: the boxes are drawn at a fixed 11px beside labels twice
+               that size.
+               """
+
+        assert_in_delta scale, 2.0, 0.1
+
+        Probes.send_keys("esc", [])
+        :ok = zoom(100)
         {:ok, context}
       end
     end

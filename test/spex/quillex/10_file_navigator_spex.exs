@@ -41,10 +41,22 @@ defmodule Quillex.FileNavigatorSpex do
   # Toggle file navigator via View menu (black-box UI interaction).
   # Uses the same pattern as other view settings: click View, then the item.
   defp toggle_file_nav do
+    # A toggle row leaves the View menu open, and the sidebar appearing
+    # rebuilds the chrome with the menu handed back open. Clicking "View"
+    # then would CLOSE it, and the row click would land on nothing. Start
+    # from closed.
+    close_menus()
     Probes.click_element("icon_menu_view")
     Process.sleep(200)
     Probes.click_element("icon_menu_view_file_nav")
     Process.sleep(500)
+  end
+
+  defp close_menus do
+    if child_assigns(:icon_menu).state.active_menu do
+      Probes.send_keys("esc", [])
+      Process.sleep(200)
+    end
   end
 
   # Check file nav visibility via rendered content.
