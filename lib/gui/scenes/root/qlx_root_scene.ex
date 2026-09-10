@@ -22,6 +22,15 @@ defmodule Quillex.RootScene do
   @file_nav_min_width 160
   @file_nav_max_width 800
 
+  # The pseudo-path of the search pane's "Files matching by name" group —
+  # matched in :open_match events, where its rows carry an index rather
+  # than a line number. See Quillex.GUI.SearchPaneModel.filename_matches_path/0.
+  @filename_matches_path Quillex.GUI.SearchPaneModel.filename_matches_path()
+
+  # How many rows the Search Filename popup shows at once. More is a
+  # narrower query away, and the popup should never cover the document.
+  @file_finder_max_rows 8
+
   # Tab context menu (right-click on a tab): the popup's row geometry, shared
   # by the renderer and the click hit-test below.
   @tab_ctx_menu_width 220
@@ -188,6 +197,71 @@ defmodule Quillex.RootScene do
     end
   end
 
+  # Search Filename popup — the same owns-the-keyboard-entirely contract as
+  # Go to Line above, and for the same reason: a character typed into the
+  # query must never also land in the document. Text arrives as codepoints;
+  # keys handle everything a codepoint cannot say.
+  defp route_input(
+         {:key, {key, action, _mods}},
+         _context,
+         %{assigns: %{state: %{show_file_finder: true}}} = scene
+       )
+       when action in [1, 2] do
+    state = scene.assigns.state
+
+    case key do
+      :key_enter ->
+        open_file_finder_result(scene, state.file_finder_selected)
+
+      :key_kp_enter ->
+        open_file_finder_result(scene, state.file_finder_selected)
+
+      k when k in [:key_esc, :key_escape] ->
+        {:noreply, hide_file_finder(scene)}
+
+      :key_backspace ->
+        {:noreply, update_file_finder(scene, String.slice(state.file_finder_input, 0..-2//1))}
+
+      :key_up ->
+        {:noreply, move_file_finder_selection(scene, -1)}
+
+      :key_down ->
+        {:noreply, move_file_finder_selection(scene, 1)}
+
+      _ ->
+        {:noreply, scene}
+    end
+  end
+
+  defp route_input(
+         {:key, {_key, 0, _mods}},
+         _context,
+         %{assigns: %{state: %{show_file_finder: true}}} = scene
+       ),
+       do: {:noreply, scene}
+
+  defp route_input(
+         {:codepoint, {char, _mods}},
+         _context,
+         %{assigns: %{state: %{show_file_finder: true}}} = scene
+       )
+       when is_binary(char) do
+    {:noreply, update_file_finder(scene, scene.assigns.state.file_finder_input <> char)}
+  end
+
+  defp route_input(
+         {:cursor_button, {:btn_left, 1, _mods, coords}},
+         _context,
+         %{assigns: %{state: %{show_file_finder: true}}} = scene
+       ) do
+    case file_finder_hit(scene.assigns.state, coords) do
+      {:result, idx} -> open_file_finder_result(scene, idx)
+      :close -> {:noreply, hide_file_finder(scene)}
+      :outside -> {:noreply, hide_file_finder(scene)}
+      nil -> {:noreply, scene}
+    end
+  end
+
   # ── Tab context menu ──────────────────────────────────────────────────────
   #
   # Right-clicking a tab pops up bulk-close actions relative to THAT tab
@@ -262,6 +336,12 @@ defmodule Quillex.RootScene do
   # Opens the file picker modal in open mode, equivalent to File → Open.
   defp route_input({:key, {:key_o, 1, [:ctrl]}}, _context, scene) do
     show_file_picker(scene)
+  end
+
+  # Handle Ctrl+P keyboard shortcut for Search Filename
+  # Opens the find-file-by-name popup, equivalent to Edit → Search Filename.
+  defp route_input({:key, {:key_p, 1, [:ctrl]}}, _context, scene) do
+    show_file_finder(scene)
   end
 
   # Handle Ctrl+W keyboard shortcut for Close Buffer
@@ -771,7 +851,7 @@ defmodule Quillex.RootScene do
       # DOCUMENT, and firing them while the user is typing in the search bar
       # or answering a dialog mutates the file behind their back (Ctrl+D
       # would delete a line of the document mid-search).
-      state.show_goto_line or
+      state.show_goto_line or state.show_file_finder or
         state.show_search_bar or state.show_unsaved_prompt or
         state.show_nav_delete_prompt or
         state.show_project_replace_prompt or
@@ -817,7 +897,7 @@ defmodule Quillex.RootScene do
   end
 
   defp keyboard_overlay_open?(state) do
-    state.show_goto_line or
+    state.show_goto_line or state.show_file_finder or
       state.show_search_bar or state.show_unsaved_prompt or state.show_file_picker or
       state.show_nav_delete_prompt or state.show_save_settings_prompt or
       state.show_project_replace_prompt or
@@ -1569,6 +1649,9 @@ defmodule Quillex.RootScene do
       "goto_line" ->
         show_goto_line(scene)
 
+      "search_filename" ->
+        show_file_finder(scene)
+
       "find_in_project" ->
         open_project_search(scene, focus: :query)
 
@@ -1921,6 +2004,287 @@ defmodule Quillex.RootScene do
   end
 
   defp jump_to_line(scene, _line), do: {:noreply, hide_goto_line(scene)}
+
+  # ── Search Filename ───────────────────────────────────────────────────────
+  #
+  # A quick-open: type part of a file's name, get the matching files, Enter
+  # opens the first (or the arrow-selected) one into the preview slot — the
+  # same slot a project search result opens into. The popup follows the Go to
+  # Line contract exactly: scene-owned, keyboard captured while open, the
+  # editor blurred and gated underneath it.
+  #
+  # The project tree is listed ONCE, when the popup opens — under the same
+  # excludes and ignore files a project search honours — and every keystroke
+  # filters that listing in memory. See Quillex.Search.Filename.
+
+  defp show_file_finder(%{assigns: %{state: %{show_file_finder: true}}} = scene),
+    do: {:noreply, scene}
+
+  defp show_file_finder(scene) do
+    state = scene.assigns.state
+    root = state.file_nav_path || File.cwd!()
+
+    index =
+      root
+      |> Quillex.Search.Filename.list_files(file_finder_opts(root))
+      |> Quillex.Search.Filename.index(root)
+
+    new_state = %{
+      state
+      | show_file_finder: true,
+        file_finder_input: "",
+        file_finder_root: root,
+        file_finder_index: index,
+        file_finder_results: [],
+        file_finder_selected: 0,
+        keyboard_owner: :file_finder
+    }
+
+    # Same as Go to Line: capturing at RootScene does not revoke the editor's
+    # own input request, so it must be blurred and independently gated or
+    # both processes consume every keystroke.
+    Scenic.Scene.put_child(scene, :buffer_pane, :blur)
+    Scenic.Scene.put_child(scene, :buffer_pane, {:set_overlay_open, true})
+
+    new_scene =
+      scene
+      |> assign(state: new_state)
+      |> assign(graph: file_finder_graph(scene.assigns.graph, new_state))
+      |> then(&(&1 |> push_graph(&1.assigns.graph)))
+
+    :ok = capture_input(new_scene, [:key, :codepoint, :cursor_button])
+    {:noreply, new_scene}
+  end
+
+  # The popup lists what a project search would search: the same excludes
+  # file and the same ignore files. There is no scope tree here — the popup
+  # is a launcher, not an investigation.
+  defp file_finder_opts(root) do
+    ignore = Quillex.Search.IgnoreFile.rules(root)
+
+    [
+      exclude_globs: Quillex.Search.Excludes.patterns() ++ ignore.ignore,
+      unignore_globs: ignore.unignore
+    ]
+  end
+
+  defp hide_file_finder(scene) do
+    :ok = release_input(scene, [:key, :codepoint, :cursor_button])
+
+    state = %{
+      scene.assigns.state
+      | show_file_finder: false,
+        file_finder_input: "",
+        file_finder_root: nil,
+        file_finder_index: [],
+        file_finder_results: [],
+        file_finder_selected: 0,
+        keyboard_owner: :buffer
+    }
+
+    graph = Scenic.Graph.delete(scene.assigns.graph, :file_finder_prompt)
+
+    new_scene = scene |> assign(state: state) |> assign(graph: graph) |> push_graph(graph)
+    Scenic.Scene.put_child(new_scene, :buffer_pane, {:set_overlay_open, false})
+    Scenic.Scene.put_child(new_scene, :buffer_pane, :focus)
+    new_scene
+  end
+
+  defp update_file_finder(scene, typed) do
+    state = scene.assigns.state
+    results = Quillex.Search.Filename.match(state.file_finder_index, typed)
+
+    new_state = %{
+      state
+      | file_finder_input: typed,
+        file_finder_results: results,
+        file_finder_selected: 0
+    }
+
+    graph = file_finder_graph(scene.assigns.graph, new_state)
+    scene |> assign(state: new_state) |> assign(graph: graph) |> push_graph(graph)
+  end
+
+  defp move_file_finder_selection(scene, delta) do
+    state = scene.assigns.state
+    shown = min(length(state.file_finder_results), @file_finder_max_rows)
+
+    if shown == 0 do
+      scene
+    else
+      selected = state.file_finder_selected |> Kernel.+(delta) |> max(0) |> min(shown - 1)
+      new_state = %{state | file_finder_selected: selected}
+      graph = file_finder_graph(scene.assigns.graph, new_state)
+      scene |> assign(state: new_state) |> assign(graph: graph) |> push_graph(graph)
+    end
+  end
+
+  defp open_file_finder_result(scene, idx) do
+    case Enum.at(scene.assigns.state.file_finder_results, idx) do
+      # Enter with nothing matched: the popup stays, the query is still wrong.
+      nil ->
+        {:noreply, scene}
+
+      %{path: path} ->
+        scene = hide_file_finder(scene)
+        open_file_finder_preview(scene, path)
+    end
+  end
+
+  # The preview SLOT, without the search: open_preview_at/3 hands the opened
+  # buffer the project search's query so a clicked result arrives marked —
+  # but the popup's query was a FILE name, and the project query underneath
+  # it may be empty, which is not a searchable thing. Same slot bookkeeping,
+  # no search dispatch.
+  defp open_file_finder_preview(scene, path) do
+    old_state = scene.assigns.state
+
+    case Quillex.API.FileAPI.open(path) do
+      {:ok, %{buffer_ref: buf_ref}} ->
+        close_stale_preview(old_state, buf_ref)
+        {:noreply, assign(scene, state: %{old_state | preview_buf_uuid: buf_ref.uuid})}
+
+      {:error, reason} ->
+        Quillex.RadixCache.ViewStore.show_status(to_string(reason), :warning)
+        {:noreply, scene}
+    end
+  end
+
+  # Layout: title row, the query field, then the result rows. Everything the
+  # hit-test needs to know is derived from the same numbers, in
+  # file_finder_hit/2 below — keep them together.
+  @file_finder_field_y 51
+  @file_finder_rows_y 95
+  @file_finder_row_h 24
+
+  defp file_finder_graph(graph, state) do
+    typed = state.file_finder_input
+    results = state.file_finder_results
+    shown = Enum.take(results, @file_finder_max_rows)
+    {x, y, width, height} = file_finder_bounds(state)
+    palette = Quillex.GUI.Palette.get(state.theme)
+    field_text = if typed == "", do: "File name", else: typed
+
+    graph
+    |> Scenic.Graph.delete(:file_finder_prompt)
+    |> Scenic.Primitives.group(
+      fn g ->
+        g
+        |> Scenic.Primitives.rrect({width, height, 5},
+          fill: palette.pane_bg,
+          stroke: {1, palette.pane_border}
+        )
+        |> Scenic.Primitives.text("Search files by name",
+          translate: {14, 24},
+          fill: palette.pane_fg,
+          font_size: 15
+        )
+        |> goto_line_button(:file_finder_close, "×", {width - 34, 8}, {24, 24}, palette)
+        |> Scenic.Primitives.text(file_finder_summary(state),
+          translate: {14, 43},
+          fill: palette.pane_dim,
+          font_size: 11
+        )
+        |> Scenic.Primitives.rrect({width - 28, 30, 3},
+          translate: {14, @file_finder_field_y},
+          fill: palette.field_bg,
+          stroke: {1, palette.field_border}
+        )
+        |> Scenic.Primitives.text(field_text,
+          translate: {23, @file_finder_field_y + 21},
+          fill: if(typed == "", do: palette.pane_dim, else: palette.pane_fg),
+          font_size: 14
+        )
+        |> file_finder_rows(shown, state, width, palette)
+      end,
+      id: :file_finder_prompt,
+      translate: {x, y}
+    )
+  end
+
+  # Nothing matched, or nothing typed yet: the summary line above already says
+  # which it is, so the row area stays empty and the popup keeps its smallest
+  # size rather than saying the same thing twice.
+  defp file_finder_rows(graph, [], _state, _width, _palette), do: graph
+
+  defp file_finder_rows(graph, shown, state, width, palette) do
+    shown
+    |> Enum.with_index()
+    |> Enum.reduce(graph, fn {row, i}, g ->
+      row_y = @file_finder_rows_y + i * @file_finder_row_h
+      selected? = i == state.file_finder_selected
+
+      # Every row gets its rect, not just the selected one: unselected it is
+      # the pane's own colour and so invisible, and it is what gives the row a
+      # findable, clickable box — for a person's mouse and for a spex alike.
+      g
+      |> Scenic.Primitives.rrect({width - 28, @file_finder_row_h, 3},
+        id: :"file_finder_row_#{i}",
+        translate: {14, row_y},
+        fill: if(selected?, do: palette.pane_hover_bg, else: palette.pane_bg)
+      )
+      |> Scenic.Primitives.text(file_finder_row_label(row.label),
+        translate: {23, row_y + 16},
+        fill: if(selected?, do: palette.pane_fg, else: palette.pane_dim),
+        font_size: 12
+      )
+    end)
+  end
+
+  defp file_finder_summary(%{file_finder_input: "", file_finder_index: index}),
+    do: "Type to search #{length(index)} files under this project"
+
+  defp file_finder_summary(%{file_finder_results: results}) do
+    total = length(results)
+    shown = min(total, @file_finder_max_rows)
+
+    case total do
+      # The draft said "Enter opens the first match" here, which is exactly
+      # what it does not do when nothing matched.
+      0 -> "No files match"
+      ^shown -> "#{total} matching #{if total == 1, do: "file", else: "files"}"
+      _ -> "First #{shown} of #{total} matching files"
+    end
+  end
+
+  # A path longer than the row keeps its TAIL: the basename is the part the
+  # person typed, so it is the part that must stay readable.
+  defp file_finder_row_label(label) do
+    max_chars = 68
+
+    if String.length(label) <= max_chars,
+      do: label,
+      else: "…" <> String.slice(label, -(max_chars - 1), max_chars - 1)
+  end
+
+  defp file_finder_bounds(state) do
+    rows = min(length(state.file_finder_results), @file_finder_max_rows)
+    width = min(560, max(400, state.frame.size.width * 0.5))
+    height = @file_finder_rows_y + rows * @file_finder_row_h + if(rows > 0, do: 8, else: 0)
+    {(state.frame.size.width - width) / 2, @top_bar_height + 10, width, height}
+  end
+
+  defp file_finder_hit(state, {px, py}) do
+    {x, y, width, height} = file_finder_bounds(state)
+    shown = min(length(state.file_finder_results), @file_finder_max_rows)
+
+    row =
+      Enum.find(0..(shown - 1)//1, fn i ->
+        inside_rect?(
+          {px, py},
+          {x + 14, y + @file_finder_rows_y + i * @file_finder_row_h, width - 28,
+           @file_finder_row_h}
+        )
+      end)
+
+    cond do
+      px < x or px > x + width or py < y or py > y + height -> :outside
+      inside_rect?({px, py}, {x + width - 34, y + 8, 24, 24}) -> :close
+      row != nil -> {:result, row}
+      true -> nil
+    end
+  end
+
 
   # ── Tab context menu (right-click on a tab) ───────────────────────────────
   #
@@ -2340,6 +2704,16 @@ defmodule Quillex.RootScene do
   def handle_event({:search_pane, :toggle_scope, dir}, _from, scene) do
     Quillex.RadixCache.ProjectSearchStore.toggle_scope(dir)
     {:noreply, scene}
+  end
+
+  # A row of the "Files matching by name" group. Its path is the group's
+  # pseudo-path and its line is an index into the snapshot's filename
+  # matches — the real path is looked up there, and the file opens at the
+  # top: the match was the NAME, so there is no line to jump to.
+  def handle_event({:search_pane, :open_match, @filename_matches_path, idx, _col}, _from, scene) do
+    %{filename_matches: rows} = Quillex.RadixCache.ProjectSearchStore.get_state()
+    %{path: real_path} = Enum.at(rows, idx - 1)
+    open_preview_at(scene, real_path, {1, 1})
   end
 
   def handle_event({:search_pane, :open_match, path, line, col}, _from, scene) do

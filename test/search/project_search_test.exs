@@ -156,6 +156,136 @@ defmodule Quillex.Search.ProjectTest do
     assert Enum.map(files, fn {p, _ms} -> Path.basename(p) end) == ["a.ex", "c.txt"]
   end
 
+  # ── Files matching by NAME ────────────────────────────────────────────────
+  #
+  # They ride the same task and the same ref as the text search, so they
+  # honour the same scope and a superseded search takes its filename answer
+  # down with it. They are published apart from `files` on purpose: `files` is
+  # what every replace path acts on, and a filename is not a thing a text
+  # replacement can touch.
+
+  defp filename_labels(snapshot), do: Enum.map(snapshot.filename_matches, & &1.label)
+
+  defp wait_for_closed(ref, attempts \\ 100) do
+    cond do
+      not Enum.any?(Quillex.Buffer.list(), &(&1.uuid == ref.uuid)) ->
+        :ok
+
+      attempts == 0 ->
+        :ok
+
+      true ->
+        Process.sleep(10)
+        wait_for_closed(ref, attempts - 1)
+    end
+  end
+
+  test "a filename match is published even when nothing in the project contains the query",
+       %{root: root} do
+    # "latin" is in no file's TEXT — latin1.txt holds "café the" — so this is
+    # the whole answer, and it comes from the walk alone.
+    ProjectSearchStore.set_root(root)
+    ProjectSearchStore.set_query("latin")
+    :ok = ProjectSearchStore.await_idle()
+
+    snapshot = eventually(&match?(%{status: {:done, 0, 0, _}}, &1))
+    assert snapshot.files == []
+    assert filename_labels(snapshot) == ["latin1.txt"]
+  end
+
+  test "filename matches never enter the results a replace acts on", %{root: root} do
+    ProjectSearchStore.set_root(root)
+    ProjectSearchStore.set_query("latin")
+    :ok = ProjectSearchStore.await_idle()
+    snapshot = eventually(&(&1.filename_matches != []))
+
+    refute Enum.any?(snapshot.files, fn {path, _} -> Path.basename(path) == "latin1.txt" end),
+           "a filename match must not appear in `files`, which is what Replace All acts on"
+  end
+
+  test "emptying the query takes the filename answer down with it", %{root: root} do
+    ProjectSearchStore.set_root(root)
+    ProjectSearchStore.set_query("latin")
+    :ok = ProjectSearchStore.await_idle()
+    assert eventually(&(&1.filename_matches != [])).filename_matches != []
+
+    # Nothing is being searched any more, so nothing may still be answering.
+    ProjectSearchStore.set_query("")
+    :ok = ProjectSearchStore.await_idle()
+    assert eventually(&(&1.status == :idle)).filename_matches == []
+  end
+
+  test "a new query's filename answer replaces the last one's", %{root: root} do
+    ProjectSearchStore.set_root(root)
+    ProjectSearchStore.set_query("latin")
+    :ok = ProjectSearchStore.await_idle()
+    assert eventually(&(&1.filename_matches != [])).filename_matches != []
+
+    # "the" is in every file's text and in no file's name.
+    ProjectSearchStore.set_query("the")
+    :ok = ProjectSearchStore.await_idle()
+    snapshot = eventually(&match?(%{status: {:done, 5, _, _}}, &1))
+    assert snapshot.filename_matches == []
+  end
+
+  test "filename matches honour the scope tree, exactly as the text search does", %{root: root} do
+    ProjectSearchStore.set_root(root)
+    ProjectSearchStore.set_query("b")
+    :ok = ProjectSearchStore.await_idle()
+
+    assert eventually(&(length(&1.filename_matches) == 2)) |> filename_labels() |> Enum.sort() ==
+             ["bin.dat", "lib/deep/b.txt"]
+
+    ProjectSearchStore.toggle_scope(Path.join(root, "lib"))
+    :ok = ProjectSearchStore.await_idle()
+
+    assert eventually(&(length(&1.filename_matches) == 1)) |> filename_labels() == ["bin.dat"],
+           "unticking lib must take lib/deep/b.txt out of the names as well as the text"
+  end
+
+  test "scoped to open buffers, only the open buffers are named", %{root: root} do
+    open_path = Path.join(root, "lib/deep/b.txt")
+    {:ok, %{buffer_ref: ref}} = Quillex.API.FileAPI.open(open_path)
+
+    # The store is a singleton and this option is sticky: put it back even if
+    # the assertion below never runs, or every later test in this file
+    # searches nothing but the open buffers.
+    on_exit(fn ->
+      if ProjectSearchStore.get_state().open_buffers_only,
+        do: ProjectSearchStore.toggle_option(:open_buffers_only)
+
+      ProjectSearchStore.sync()
+
+      # And wait for the buffer to be GONE, not merely told to go. Anything
+      # that walks `Quillex.Buffer.list()` and then calls the processes it
+      # names — the external-file watcher does — falls over a ref whose
+      # process died between the two, and it does it in whichever test file
+      # happens to run next.
+      Quillex.Buffer.close(ref, :discard)
+      wait_for_closed(ref)
+    end)
+
+    ProjectSearchStore.set_root(root)
+    ProjectSearchStore.toggle_option(:open_buffers_only)
+    ProjectSearchStore.set_query("b")
+    :ok = ProjectSearchStore.await_idle()
+
+    assert eventually(&(&1.filename_matches != [])) |> filename_labels() == ["lib/deep/b.txt"],
+           "bin.dat is not open, so its name is not in scope either"
+  end
+
+  test "the section is a signpost, not a directory listing: it is capped", %{root: root} do
+    Enum.each(1..150, &File.write!(Path.join(root, "capped_#{&1}.txt"), ""))
+
+    ProjectSearchStore.set_root(root)
+    ProjectSearchStore.set_query("capped_")
+    :ok = ProjectSearchStore.await_idle()
+
+    # A one-letter query names most of a project; the store takes the first
+    # hundred and stops.
+    assert length(eventually(&(length(&1.filename_matches) == 100)).filename_matches) == 100
+  end
+
   test "the store keeps skipped matches visible and excludes them from replace", %{root: root} do
     ProjectSearchStore.set_root(root)
     ProjectSearchStore.set_query("the")

@@ -108,6 +108,16 @@ defmodule Quillex.RootScene.State do
             # interaction deserves.
             show_goto_line: false,
             goto_line_input: "",
+            # Search Filename (Mod+P). Same scene-owned popup contract as Go
+            # to Line: RootScene collects the keystrokes and draws the prompt
+            # itself. The file listing is taken once, when the popup opens —
+            # a keystroke filters the list, it never re-walks the tree.
+            show_file_finder: false,
+            file_finder_input: "",
+            file_finder_root: nil,
+            file_finder_index: [],
+            file_finder_results: [],
+            file_finder_selected: 0,
             # Search bar
             show_search_bar: false,
             search_query: "",

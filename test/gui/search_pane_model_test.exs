@@ -205,4 +205,112 @@ defmodule Quillex.GUI.SearchPaneModelTest do
     assert model.regex
     assert model.error == "bad pattern"
   end
+
+  # ── Files matching by name ────────────────────────────────────────────────
+  #
+  # These rows never enter the store's `files`, because `files` is what every
+  # replace path acts on and a filename is not a thing a text replacement can
+  # touch. The pane only draws file groups, so the model presents them as one
+  # synthetic group under a pseudo-path the root scene recognises.
+
+  defp filename_row(label, start \\ 0, len \\ 6),
+    do: %{
+      path: "#{@root}/#{label}",
+      label: label,
+      match_start: start,
+      match_len: len
+    }
+
+  defp with_names(rows, overrides \\ %{}) do
+    snapshot(
+      Map.merge(
+        %{
+          root: @root,
+          query: "needle",
+          status: {:done, 0, 0, 1},
+          filename_matches: rows
+        },
+        overrides
+      )
+    )
+  end
+
+  test "filename matches come first, as one group under the pseudo-path" do
+    model = Model.build(with_names([filename_row("lib/needle.ex"), filename_row("needle.txt")]))
+
+    [group | rest] = model.files
+    assert group.path == Model.filename_matches_path()
+    assert group.label == "Files matching by name"
+    assert rest == [], "there were no text matches; only the name group should be here"
+  end
+
+  test "a filename row carries its index, not a line number, and marks its own match" do
+    model =
+      Model.build(with_names([filename_row("lib/needle.ex", 4), filename_row("needle.txt")]))
+
+    [%{matches: [first, second]}] = model.files
+
+    # The index is how the root scene finds the real path again; the gutter
+    # reads as a plain enumeration rather than a meaningless line number.
+    assert {first.line, first.col} == {1, 1}
+    assert {second.line, second.col} == {2, 1}
+
+    assert String.slice(first.text, first.match_start, first.match_len) == "needle"
+    assert String.slice(second.text, second.match_start, second.match_len) == "needle"
+  end
+
+  test "no filename matches means no group at all" do
+    assert Model.build(with_names([])).files == []
+    assert Model.build(snapshot(%{root: @root, query: "needle"})).files == []
+  end
+
+  test "dismissing the group takes the whole section away" do
+    snapshot =
+      with_names([filename_row("needle.txt")], %{
+        dismissed_files: MapSet.new([Model.filename_matches_path()])
+      })
+
+    assert Model.build(snapshot).files == []
+  end
+
+  test "a dismissed filename row is marked skipped, like any other row" do
+    path = Model.filename_matches_path()
+
+    snapshot =
+      with_names([filename_row("needle.txt"), filename_row("lib/needle.ex")], %{
+        dismissed: MapSet.new([{path, 2, 1}])
+      })
+
+    [%{matches: [first, second]}] = Model.build(snapshot).files
+    refute first.skipped?
+    assert second.skipped?
+  end
+
+  test "the counts in the header are about text matches only" do
+    m = %Match{path: "#{@root}/f", line: 1, col: 1, text: "the needle", matched: "needle"}
+
+    model =
+      Model.build(
+        with_names([filename_row("needle.txt"), filename_row("lib/needle.ex")], %{
+          files: [{"#{@root}/f", [m]}]
+        })
+      )
+
+    # Two groups on screen, but a filename is not an occurrence of anything
+    # and nothing can be replaced in one.
+    assert length(model.files) == 2
+    assert model.total_matches == 1
+    assert model.eligible_matches == 1
+    assert model.eligible_files == 1
+  end
+
+  test "a filename too long for the pane keeps its tail, and the mark moves with it" do
+    label = String.duplicate("deep/", 30) <> "needle.ex"
+    model = Model.build(with_names([filename_row(label, String.length(label) - 9)]))
+
+    [%{matches: [row]}] = model.files
+    assert String.length(row.text) <= 73, "the row is wider than the pane can draw"
+    assert String.ends_with?(row.text, "needle.ex")
+    assert String.slice(row.text, row.match_start, row.match_len) == "needle"
+  end
 end

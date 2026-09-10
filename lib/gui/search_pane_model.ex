@@ -55,8 +55,60 @@ defmodule Quillex.GUI.SearchPaneModel do
         eligible_file_count(snapshot.files, Map.get(snapshot, :dismissed, MapSet.new())),
       scope_key: scope_key(snapshot),
       scope: scope(snapshot, previous),
-      files: files(snapshot)
+      files: filename_group(snapshot) ++ files(snapshot)
     }
+  end
+
+  @doc """
+  The pseudo-path of the "Files matching by name" group.
+
+  Filename matches live in the snapshot's `filename_matches`, never in
+  `files` — a filename is not something a replace can touch — but the pane
+  only draws file groups, so they are presented as one synthetic group under
+  this path. It is not a real file: the root scene recognises it in
+  `:open_match` events and opens the actual file the row names, and every
+  replace path ignores it because the store's `files` never contains it.
+  """
+  def filename_matches_path, do: "qlx://filename-matches"
+
+  # Filename matches as the pane's first group: for exploration, "there is a
+  # file CALLED this" is often the whole answer, and it is known before the
+  # text search has read a single file. Each row's `line` is its index into
+  # the snapshot's `filename_matches` — which the root scene uses to find the
+  # real path again — so the gutter numbers read as a plain enumeration.
+  #
+  # The group's dismiss button works like any other file's: unwanted, the
+  # whole section goes with one click (and comes back with the next search,
+  # like every dismissal).
+  defp filename_group(snapshot) do
+    rows = Map.get(snapshot, :filename_matches, [])
+    path = filename_matches_path()
+    dismissed = Map.get(snapshot, :dismissed, MapSet.new())
+
+    if rows == [] or MapSet.member?(Map.get(snapshot, :dismissed_files, MapSet.new()), path) do
+      []
+    else
+      [
+        %{
+          path: path,
+          label: "Files matching by name",
+          matches:
+            Enum.map(Enum.with_index(rows, 1), fn {row, idx} ->
+              {text, match_start} = filename_text(row.label, row.match_start)
+
+              %{
+                line: idx,
+                col: 1,
+                text: text,
+                match_start: match_start,
+                match_len: row.match_len,
+                current?: false,
+                skipped?: MapSet.member?(dismissed, {path, idx, 1})
+              }
+            end)
+        }
+      ]
+    end
   end
 
   @doc "The model for a scene that has not received its first snapshot yet."
@@ -80,6 +132,22 @@ defmodule Quillex.GUI.SearchPaneModel do
       scope: [],
       files: []
     }
+  end
+
+  # A filename row's text is the relative path, trimmed from the FRONT when
+  # it will not fit: the match is in the basename, so it is the tail that
+  # matters. The shift keeps the highlight on the matched span; the clamp
+  # only ever fires on a basename longer than the pane, where there is no
+  # good answer left to be exact about.
+  defp filename_text(label, match_start) do
+    len = String.length(label)
+
+    if len <= @max_excerpt_chars do
+      {label, match_start}
+    else
+      dropped = len - @max_excerpt_chars + 1
+      {"…" <> String.slice(label, dropped, len - dropped), max(match_start - dropped + 1, 0)}
+    end
   end
 
   # What the scope tree is built FROM. Anything else in a snapshot — results,
