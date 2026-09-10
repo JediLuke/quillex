@@ -27,22 +27,22 @@ defmodule Quillex.MixProject do
   # is meant to be the git hook (see the README); `check` adds the spex suite,
   # which needs a running desktop and takes minutes rather than seconds.
   #
-  # `--warnings-as-errors` is deliberately NOT here yet. The spex still name
-  # stores, catalogues and palettes that their boundary does not export — a
-  # hundred or so boundary warnings in a test build — and whether to export
-  # those as seams is a doctrine decision (public_boundary_test.exs pins the
-  # list), made in its own PR. Turn the flag on in both aliases the moment
-  # that lands; everything else is clean.
+  # `--warnings-as-errors` holds the line at zero. The last of them were the
+  # clause groups in qlx_root_scene.ex and the spex naming test helpers and
+  # stores that their boundary had never been told about. It applies to this
+  # project's own compilation only; the forks (scenic, scenic_mcp,
+  # scenic_driver_local, scenic_widget_contrib) still warn on a cold build
+  # and are each their own repository's job.
   defp aliases do
     [
       precommit: [
-        "compile --all-warnings",
+        "compile --all-warnings --warnings-as-errors",
         "format --check-formatted",
         "deps.unlock --unused",
         "test"
       ],
       check: [
-        "compile --all-warnings",
+        "compile --all-warnings --warnings-as-errors",
         "format --check-formatted",
         "deps.unlock --unused",
         "test",
