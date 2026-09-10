@@ -72,6 +72,8 @@ running.
 editor into its own buffer. It is a test as well as a showcase — it asserts as
 it goes, because a demo that plays through while the feature underneath is
 broken would be worse than no demo at all. `--fast` runs it as a test.
+`--short` plays a forty-five second cut instead — editing, find, project
+search, folding and themes — with nothing narrated but the spex output.
 
 `scripts/make_readme_gif.sh` re-records the gif at the top of this README: a
 thirty-second spex tour screenshotted every 90ms, assembled with

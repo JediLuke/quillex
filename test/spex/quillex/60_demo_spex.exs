@@ -10,7 +10,7 @@ defmodule Quillex.DemoSpex do
   Run it with `scripts/run_demo` and watch; `--fast` runs the same script as a
   regression test.
 
-  It is paced to be *watched*, which means it is slow: a quarter of an hour,
+  It is paced to be *watched*, which means it is slow: ten minutes or so,
   most of it deliberate pauses on something that just changed. An audience
   needs several seconds to find the thing that moved before they can
   understand it; the test needs none, which is what `--fast` is for.
@@ -80,16 +80,19 @@ defmodule Quillex.DemoSpex do
   # was paced by someone who already knew where to look.
   defp dwell(ms), do: beat(if fast?(), do: ms, else: round(ms * 1.5))
 
-  # Typing speed. A fast human types four or five characters a second; this is
-  # quicker than that, because the room is reading rather than watching the
-  # keystrokes — but nothing like the old 9ms, which put a paragraph on screen
-  # faster than anyone could start reading it.
-  defp per_char_ms, do: if(fast?(), do: 0, else: Process.get(:demo_pace, 42))
+  # Typing speed. The room is reading rather than watching the keystrokes, so
+  # this is well past any human's typing — about forty characters a second,
+  # which is a comfortable reading pace for a line that is appearing as you
+  # read it. It was 42ms once, and the narration (some seven thousand
+  # characters of it) took five minutes of the demo just to type; nothing like
+  # the old 9ms either, which put a paragraph on screen faster than anyone
+  # could start reading it.
+  defp per_char_ms, do: if(fast?(), do: 0, else: Process.get(:demo_pace, 24))
 
   # The opening is slower still: that is when a room reads most closely, and
   # when nobody yet knows what they are looking at.
-  defp pace(:slow), do: Process.put(:demo_pace, 68)
-  defp pace(:normal), do: Process.put(:demo_pace, 42)
+  defp pace(:slow), do: Process.put(:demo_pace, 40)
+  defp pace(:normal), do: Process.put(:demo_pace, 24)
 
   # ── Reading the editor ────────────────────────────────────────────────────
 
@@ -701,13 +704,17 @@ defmodule Quillex.DemoSpex do
         Probes.click(fx + 60, fy + 16)
         dwell(2_500)
 
+        # The range arrives END first — the text field gives a double-click's
+        # word that way round so the cursor sits at the word's start, nearest
+        # the click — so "copy" (columns 1 to 5) reads as {1, 5}..{1, 1}. Either
+        # order is the word; the assertion normalises before it looks.
         assert wait_until(fn ->
                  case selection() do
-                   %{start: {1, s}, end: {1, e}} -> e > s
+                   %{start: {1, s}, end: {1, e}} -> Enum.min_max([s, e]) == {1, 5}
                    _ -> false
                  end
                end),
-               "double-click should select a word, got #{inspect(selection())}"
+               "double-click should select the word \"copy\", got #{inspect(selection())}"
 
         {:ok, context}
       end
@@ -1043,23 +1050,50 @@ defmodule Quillex.DemoSpex do
         %{files: files} = root_state().project_search
         {path, [match | _]} = Enum.find(files, fn {p, _} -> Path.basename(p) == "notes.txt" end)
 
-        before = Enum.sum(Enum.map(files, fn {_p, ms} -> length(ms) end))
-
-        Probes.click_element("search_pane_dismiss_match_#{match.line}_#{match.col}_#{path}")
-
-        assert wait_until(fn ->
-                 %{files: after_files} = root_state().project_search
-                 Enum.sum(Enum.map(after_files, fn {_p, ms} -> length(ms) end)) == before - 1
-               end),
-               "dismissing a match should remove it from the results"
-
-        dwell(3_000)
-
-        # The replacement row lives behind a disclosure, like the find bar's —
-        # so it has to be opened before there is a field to click.
+        # Skipping a match is a REVIEW control: it exists only once the
+        # replacement row is open — during an ordinary search there is nothing
+        # to skip — and, like the row's other actions, it is drawn while its
+        # row is hovered. So: open the row (it lives behind a disclosure, like
+        # the find bar's), hover the match, hover the control, then click it.
         Probes.click_element("search_pane_replace_caret")
         beat(400)
 
+        {:ok, _} =
+          ScenicMcp.Tools.hover_element(%{
+            "element_id" => "search_pane_match_#{match.line}_#{match.col}_#{path}"
+          })
+
+        assert wait_until(fn ->
+                 child_state(:project_search_pane).hovered ==
+                   {:match, path, match.line, match.col}
+               end),
+               "hovering the match should reveal its actions"
+
+        dismiss_id = "search_pane_dismiss_match_#{match.line}_#{match.col}_#{path}"
+        {:ok, _} = ScenicMcp.Tools.hover_element(%{"element_id" => dismiss_id})
+
+        assert wait_until(fn ->
+                 child_state(:project_search_pane).hovered ==
+                   {:dismiss_match, path, match.line, match.col}
+               end),
+               "the skip control should be there to hover once the replacement row is open"
+
+        Probes.click_element(dismiss_id)
+
+        # A skipped match stays in the list, struck through — you can see what
+        # the replace is going to leave alone — so it is not the count that
+        # changes but the set of matches marked as skipped.
+        assert wait_until(fn ->
+                 MapSet.member?(
+                   root_state().project_search.dismissed,
+                   {path, match.line, match.col}
+                 )
+               end),
+               "skipping a match should mark it as skipped"
+
+        dwell(3_000)
+
+        # The replacement row is already open from the skip above.
         Probes.click_element("search_pane_field_replace")
         beat(600)
         type("g'day")
@@ -1530,9 +1564,13 @@ defmodule Quillex.DemoSpex do
         registered = Quillex.Commands.all() |> Enum.reject(&is_nil(&1.shortcut))
         assert length(registered) >= 30
 
+        # The registry spells a binding "Mod+N"; the reference spells it the way
+        # the current primary modifier does — "Ctrl+N" here, "Cmd+N" on a Mac.
         for command <- registered do
-          assert Enum.any?(lines, &String.contains?(&1, command.shortcut)),
-                 "#{command.id} is registered but does not reach the reference"
+          rendered = Quillex.Shortcuts.render(command.shortcut)
+
+          assert Enum.any?(lines, &String.contains?(&1, rendered)),
+                 "#{command.id} (#{rendered}) is registered but does not reach the reference"
         end
 
         key("escape")

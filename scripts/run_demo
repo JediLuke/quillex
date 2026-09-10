@@ -2,8 +2,10 @@
 # Play the Quillex demo: every feature, top to bottom, narrated by the editor
 # into its own buffer.
 #
-#   scripts/run_demo          # paced to be watched
-#   scripts/run_demo --fast   # same script, run as a regression test
+#   scripts/run_demo          # every feature, narrated, ten minutes or so
+#   scripts/run_demo --short  # forty-five seconds: editing, find, project
+#                             # search, folding, themes
+#   scripts/run_demo --fast   # either one, run as a regression test
 #
 # It is a spex, so it asserts as it goes. A demo that plays through while the
 # feature underneath is broken would be worse than no demo at all.
@@ -13,11 +15,20 @@ cd "$(dirname "$0")/.."
 export PATH="$HOME/.asdf/shims:$HOME/.asdf/bin:$PATH"
 
 DEMO_SPEED=watch
+SPEX=test/spex/quillex/60_demo_spex.exs
+# The short demo has no narration in the buffer, so its narration is the spex
+# reporter: --verbose prints each given/when/then as it starts, beside the
+# window it is driving.
+SPEX_ARGS=()
 for arg in "$@"; do
   case "$arg" in
     --fast) DEMO_SPEED=fast ;;
+    --short)
+      SPEX=test/spex/quillex/60_showcase_spex.exs
+      SPEX_ARGS=(--verbose)
+      ;;
     -h | --help)
-      sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     *)
@@ -28,11 +39,16 @@ for arg in "$@"; do
 done
 export DEMO_SPEED
 
-if [ "$DEMO_SPEED" = watch ]; then
-  echo "Playing the Quillex demo. It runs for about a quarter of an hour,"
+if [ "$DEMO_SPEED" = watch ] && [ "$SPEX" = test/spex/quillex/60_demo_spex.exs ]; then
+  echo "Playing the Quillex demo. It runs for ten minutes or so,"
   echo "paced to be watched — watch the window."
-  echo "(scripts/run_demo --fast runs the same script as a test.)"
+  echo "(scripts/run_demo --short is the forty-five second version;"
+  echo " --fast runs either one as a test.)"
+  echo
+elif [ "$DEMO_SPEED" = watch ]; then
+  echo "Playing the short Quillex demo: about forty-five seconds — watch the window."
+  echo "(scripts/run_demo plays the full narrated tour; --fast runs either one as a test.)"
   echo
 fi
 
-exec scripts/run_spex.sh test/spex/quillex/60_demo_spex.exs
+exec scripts/run_spex.sh "$SPEX" ${SPEX_ARGS[@]+"${SPEX_ARGS[@]}"}
