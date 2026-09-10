@@ -32,6 +32,20 @@ defmodule Quillex.ChromeZoomSpex do
     end
   end
 
+  # Where the root scene has PLACED a sidebar child: the translate it gave the
+  # component in its own graph. Each child rebuilds its contents from the frame
+  # it is handed, but only this decides where on screen those contents land.
+  defp placed_at(id) do
+    root = :sys.get_state(Process.whereis(Quillex.RootScene))
+
+    case Scenic.Graph.get(root.assigns.graph, id) do
+      [primitive] -> primitive.transforms[:translate]
+      _ -> nil
+    end
+  end
+
+  defp root_state, do: :sys.get_state(Process.whereis(Quillex.RootScene)).assigns.state
+
   defp zoom(n) do
     Quillex.RadixCache.ViewStore.set_chrome_zoom(n)
     Quillex.RadixCache.ViewStore.sync()
@@ -137,6 +151,63 @@ defmodule Quillex.ChromeZoomSpex do
                  now:  #{inspect(back)}
                """
 
+        {:ok, context}
+      end
+    end
+
+    scenario "the navigator follows the tab bar" do
+      given_ "the file navigator open at 100%", context do
+        Quillex.RadixCache.ViewStore.close_project_search()
+        Quillex.RadixCache.ViewStore.open_file_nav()
+        Quillex.RadixCache.ViewStore.sync()
+        :ok = zoom(100)
+        assert wait_until(fn -> placed_at(:file_nav) != nil end)
+
+        {_x, header_y} = placed_at(:file_nav_path_header)
+        {_x, nav_y} = placed_at(:file_nav)
+        {:ok, Map.merge(context, %{header_y: header_y, nav_y: nav_y})}
+      end
+
+      when_ "the chrome is zoomed to 200%", context do
+        :ok = zoom(200)
+        {:ok, context}
+      end
+
+      then_ "the path header and the tree sit below the taller tab bar", context do
+        {_x, header_y} = placed_at(:file_nav_path_header)
+        {_x, nav_y} = placed_at(:file_nav)
+
+        # The tab bar is 35px of chrome and the path header 27px; at 200% each
+        # is twice that. Both children were handed frames that far down, and
+        # this checks they were also MOVED there: zooming used to leave them at
+        # the 100% positions, half-hidden under the tabs.
+        %{frame: %{pin: %{point: {_fx, frame_top}}}} = root_state()
+
+        assert header_y == frame_top + 70,
+               """
+               the path header is drawn at y=#{header_y} at 200% zoom, where the
+               tab bar now ends at #{frame_top + 70}. It was at #{context.header_y}
+               at 100%: the frame moved down, the component did not.
+               """
+
+        assert nav_y == header_y + 54,
+               """
+               the file tree is drawn at y=#{nav_y} at 200% zoom, but the path
+               header above it now ends at #{header_y + 54}. It was at
+               #{context.nav_y} at 100%.
+               """
+
+        {:ok, context}
+      end
+
+      when_ "it is put back to 100%", context do
+        :ok = zoom(100)
+        {:ok, context}
+      end
+
+      then_ "both return to where they were", context do
+        assert placed_at(:file_nav_path_header) |> elem(1) == context.header_y
+        assert placed_at(:file_nav) |> elem(1) == context.nav_y
         {:ok, context}
       end
     end
