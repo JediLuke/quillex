@@ -174,7 +174,12 @@ defmodule Quillex.RadixCache.ViewStore do
     GenServer.cast(__MODULE__, {:set_tab_width, n})
   end
 
-  def set_text_size(n) when is_integer(n) and n in 12..32 do
+  # 72pt is presentation size: a demo on a projector, or a screen across the
+  # room, and it still leaves a dozen lines in a normal window.
+  @text_size_range 12..72
+  def text_size_range, do: @text_size_range
+
+  def set_text_size(n) when is_integer(n) and n in @text_size_range do
     GenServer.cast(__MODULE__, {:set_text_size, n})
   end
 
