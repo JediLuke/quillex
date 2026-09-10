@@ -218,34 +218,46 @@ defmodule Quillex.ClickCursorSpex do
       end
     end
 
-    scenario "Clicking below the last line puts the cursor on the last line" do
+    # Why the END of the last line and not wherever X happened to fall: the
+    # empty space under a document is where you click to "go to the bottom
+    # and carry on". The next keystroke is Enter, for a fresh line — and
+    # Enter at column 1 of the last line pushes that line DOWN instead,
+    # leaving you typing on a blank line above the text you meant to follow.
+    scenario "Clicking below the last line puts the cursor at the end of the last line" do
       given_ "a short buffer with a lot of empty space beneath it", context do
         new_buffer_with(["alpha", "beta"])
         {:ok, context}
       end
 
-      when_ "we click well below the last line", context do
-        %{x: fx, y: fy, width: fw, height: fh} = SemanticHelpers.get_buffer_frame()
-        Probes.click(fx + trunc(fw * 0.4), fy + trunc(fh * 0.7))
+      when_ "we click well below the last line, near the left edge", context do
+        # Left edge on purpose: X must not matter down here. Measured against
+        # the phantom row the click fell on, X near the margin reads as
+        # column 1 — which is exactly the bug this scenario pins.
+        %{x: fx, y: fy, height: fh} = SemanticHelpers.get_buffer_frame()
+        Probes.click(fx + 60, fy + trunc(fh * 0.7))
         Process.sleep(400)
         {:ok, context}
       end
 
-      then_ "the cursor lands on the last line", context do
-        assert {2, _col} = our_buffer_cursor(),
+      then_ "the cursor lands at the end of the last line", context do
+        assert {2, col} = our_buffer_cursor(),
                "clicking below the text should land on the last line, got #{inspect(our_buffer_cursor())}"
+
+        assert col == String.length("beta") + 1,
+               "below the document means END of the last line, got column #{col}"
 
         {:ok, context}
       end
 
-      then_ "and the editor has the keyboard", context do
-        Probes.send_text("!")
+      then_ "and Enter opens a fresh line beneath, ready to type on", context do
+        Probes.send_keys("enter", [])
+        Probes.send_text("gamma")
         Process.sleep(300)
 
         {:ok, snapshot} = Quillex.Buffer.fetch(active_buf())
 
-        assert Enum.join(snapshot.lines, "\n") =~ "!",
-               "typing after clicking empty space should reach the document, got #{inspect(snapshot.lines)}"
+        assert snapshot.lines == ["alpha", "beta", "gamma"],
+               "Enter after clicking empty space should add a new last line, got #{inspect(snapshot.lines)}"
 
         {:ok, context}
       end
