@@ -151,6 +151,9 @@ defmodule Quillex.ViewGuidesZoomUnindentSpex do
     tags: [:phase_40, :view, :zoom, :stepper] do
     scenario "The plus button increases Zoom" do
       when_ "the right-hand plus control is clicked", context do
+        Quillex.RadixCache.ViewStore.set_chrome_zoom(100)
+        Quillex.RadixCache.ViewStore.sync()
+        Process.sleep(300)
         open_view()
         %{entry: %{screen_bounds: bounds}} = SemanticProbe.dump(:icon_menu_view_chrome_zoom)
 
@@ -175,10 +178,78 @@ defmodule Quillex.ViewGuidesZoomUnindentSpex do
     end
   end
 
+  spex "The zoom box still takes typed numbers after a zoom",
+    tags: [:phase_40, :view, :zoom, :stepper, :keyboard] do
+    scenario "Plus, then type a value into the same open menu" do
+      given_ "the View menu open at 100%", context do
+        Quillex.RadixCache.ViewStore.set_chrome_zoom(100)
+        Quillex.RadixCache.ViewStore.sync()
+        Process.sleep(200)
+        open_view()
+        {:ok, context}
+      end
+
+      when_ "the plus control is clicked, and then a value is typed into the box", context do
+        %{entry: %{screen_bounds: bounds}} = SemanticProbe.dump(:icon_menu_view_chrome_zoom)
+        layout = ScenicWidgets.Menu.Dropdown.stepper_layout(icon_menu_theme(), bounds.width)
+        {plus_x, plus_width} = layout.plus
+        Probes.click(bounds.left + plus_x + plus_width / 2, bounds.top + bounds.height / 2)
+        Process.sleep(800)
+        assert Quillex.RadixCache.ViewStore.get_state().chrome_zoom == 110
+
+        # The zoom rebuilt the chrome, menu included; it is handed back open.
+        # Aim at the box where it is NOW.
+        %{entry: %{screen_bounds: bounds}} = SemanticProbe.dump(:icon_menu_view_chrome_zoom)
+        layout = ScenicWidgets.Menu.Dropdown.stepper_layout(icon_menu_theme(), bounds.width)
+        {value_x, value_width} = layout.value
+        Probes.click(bounds.left + value_x + value_width / 2, bounds.top + bounds.height / 2)
+        Process.sleep(300)
+        Probes.send_text("130")
+        Process.sleep(200)
+        {:ok, context}
+      end
+
+      then_ "the digits land in the box, not in the document", context do
+        root = :sys.get_state(Process.whereis(Quillex.RootScene))
+        {:ok, child} = Scenic.Scene.child(root, :icon_menu)
+        pid = if is_list(child), do: List.first(child), else: child
+        editing = :sys.get_state(pid).assigns.state.editing
+
+        assert %{item_id: "chrome_zoom", text: "130"} = editing,
+               """
+               typed 130 into the zoom box and it holds #{inspect(editing)}.
+               After the plus click rebuilt the menu, the menu was open on
+               screen but no longer held the keyboard: the digits went to
+               whatever else had :codepoint — the document.
+               """
+
+        Probes.send_keys("enter", [])
+        Quillex.RadixCache.ViewStore.sync()
+        Process.sleep(500)
+        assert Quillex.RadixCache.ViewStore.get_state().chrome_zoom == 130
+
+        # Scenarios run in random order: leave the menu closed and the zoom
+        # where the others expect it. An open menu holds :key, and would eat
+        # the next scenario's Ctrl+=.
+        Probes.send_keys("esc", [])
+        Process.sleep(200)
+        Quillex.RadixCache.ViewStore.set_chrome_zoom(100)
+        Quillex.RadixCache.ViewStore.sync()
+        Process.sleep(500)
+        {:ok, context}
+      end
+    end
+  end
+
   spex "Zoom has conventional keyboard shortcuts",
     tags: [:phase_40, :view, :zoom, :keyboard] do
     scenario "Increase, decrease, and reset shortcuts" do
       when_ "Ctrl+= is pressed from 100 percent", context do
+        # An open menu owns :key (a toggle row leaves the menu up, and a
+        # chrome rebuild hands it back open). Close it, or the shortcut is
+        # the menu's, not the document's.
+        Probes.send_keys("esc", [])
+        Process.sleep(200)
         Quillex.RadixCache.ViewStore.set_chrome_zoom(100)
         Quillex.RadixCache.ViewStore.sync()
         Process.sleep(100)
