@@ -73,6 +73,11 @@ editor into its own buffer. It is a test as well as a showcase — it asserts as
 it goes, because a demo that plays through while the feature underneath is
 broken would be worse than no demo at all. `--fast` runs it as a test.
 
+`scripts/make_readme_gif.sh` re-records the gif at the top of this README: a
+thirty-second spex tour screenshotted every 90ms, assembled with
+`scripts/assemble_gif.py` (needs `uv`). The recording spex only runs when
+`QUILLEX_GIF=1` is set, so it never joins a normal `mix spex` run.
+
 ### Working across the forks
 
 If you are changing Quillex *and* one of the forks at the same time, pinned
