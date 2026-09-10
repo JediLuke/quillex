@@ -7,9 +7,6 @@ defmodule Quillex.Utils.FileTree do
 
   alias ScenicWidgets.SideNav.Item
 
-  # File extensions to show (common code/text files)
-  @shown_extensions ~w(.ex .exs .eex .heex .txt .md .json .yaml .yml .toml .xml .html .css .js .ts .sh .gitignore .tool-versions)
-
   # Directories to hide
   @hidden_dirs ~w(.git _build deps node_modules .elixir_ls .lexical)
 
@@ -114,14 +111,11 @@ defmodule Quillex.Utils.FileTree do
       File.dir?(full_path) and entry in @hidden_dirs ->
         false
 
-      # Show all directories (that aren't hidden)
-      File.dir?(full_path) ->
-        true
-
-      # Show files with allowed extensions or no extension
+      # Everything else is shown. There is deliberately no extension whitelist:
+      # opening a file is gated on its content (see Quillex.Files.TextFile),
+      # not its name, so the navigator should not second-guess that.
       true ->
-        ext = Path.extname(entry)
-        ext == "" or ext in @shown_extensions
+        true
     end
   end
 
