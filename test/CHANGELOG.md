@@ -1,5 +1,39 @@
 # Changelog
 
+## 1.0.0 — 2026-09-10
+
+Cut at ElixirConf. 0.8.2 was the release where every feature 1.0 needed
+existed; the twenty-two pull requests since were the ones where using them for
+a while found what still gave way. Wherever this is, this is 1.0.
+
+- Search by filename (`Ctrl+P`): type part of a name, get the matching
+  files, Enter opens one into the preview slot. The project tree is listed
+  once when the popup opens, under the same excludes a project search
+  honours, and every keystroke filters it in memory.
+- Tab context menu: right-click a tab for Close Other Tabs, Close Tabs to
+  the Right and Close All Tabs, with the unsaved-changes prompt where it
+  applies.
+- The cursor remembers the column it wanted. Moving up and down through a
+  short line no longer loses your place on the next long one.
+- Chrome zoom works from 50% to 400%: the sidebar and its path header move
+  down under the taller tab bar instead of hiding behind it, tick boxes and
+  the sliders grow with the text, the file tree grows a scrollbar when the
+  zoom makes it taller than the window, and the zoom box keeps taking typed
+  numbers after a zoom change instead of quietly typing them into the
+  document. Editor text size now reaches 72pt.
+- File navigator: shows every file, not a whitelist of extensions; the
+  rename box is a real text field you can edit; a buffer whose file was
+  deleted from disk is kept rather than thrown away, with the external
+  change marker where you can actually see it.
+- Search pane: paste works in its fields — a command chord in a direct-mode
+  field no longer also types its letter.
+- Escape lets go of the selection; double-click leaves the cursor at the
+  start of the word; the buffer no longer scrolls sideways after a search.
+- Housekeeping: the retired comprehensive spex was audited and what it alone
+  covered was salvaged into current spex before it went; both coding agents
+  get the same MCP servers from the repo; Claude Code's worktrees stay out
+  of git.
+
 ## 0.8.2 — 2026-08-23
 
 The product pass. Every feature 1.0 needs now exists; this release is the one
