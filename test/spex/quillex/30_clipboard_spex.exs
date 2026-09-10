@@ -141,6 +141,40 @@ defmodule Quillex.ClipboardSpex do
     end
   end
 
+  # Ctrl+X had removal coverage (20_mouse_cut, 56_selection_and_mouse) but
+  # nothing anywhere asserted what it put ON the clipboard, and no spex ever
+  # pasted after a cut. A cut that deletes the selection and writes nothing
+  # therefore looked exactly like a working cut. The whole point of cut rather
+  # than delete is the second half, so assert the round trip: the word has to
+  # come back somewhere else, and exactly once.
+  spex "Clipboard - keyboard cut and paste",
+    description: "Ctrl+X takes the selection away and Ctrl+V puts it back elsewhere",
+    tags: [:clipboard, :cut, :paste, :keyboard] do
+    scenario "cut the first word and paste it at the end", _context do
+      given_ "a focused buffer containing 'cut this'", context do
+        File.rm(@clipboard_file)
+        new_focused_buffer("cut this")
+        select_first_four_characters()
+        {:ok, context}
+      end
+
+      when_ "Ctrl+X cuts 'cut ' and Ctrl+V pastes it at the end", context do
+        Probes.send_keys("x", [:ctrl])
+        {:ok, _} = wait_for_content("this")
+        assert File.read!(@clipboard_file) == "cut "
+
+        Probes.send_keys("end", [])
+        Probes.send_keys("v", [:ctrl])
+        {:ok, context}
+      end
+
+      then_ "the word has moved rather than been duplicated", context do
+        {:ok, _} = wait_for_content("thiscut ")
+        {:ok, context}
+      end
+    end
+  end
+
   spex "Clipboard - Edit menu copy and paste",
     description: "Edit → Copy writes selected text and Edit → Paste inserts it",
     tags: [:clipboard, :copy, :paste, :menu] do
