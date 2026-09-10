@@ -8,7 +8,7 @@ defmodule Quillex.GUI.Components.BufferPane.MutatorSelectTextTest do
     test "starting selection with shift+right sets selection to given range" do
       buf = %BufState{
         data: ["First line", "Second line", "Third line"],
-        cursor: %Cursor{line: 2, col: 1},
+        cursor: Cursor.new(2, 1),
         selection: nil
       }
 
@@ -24,7 +24,7 @@ defmodule Quillex.GUI.Components.BufferPane.MutatorSelectTextTest do
       # cannot move the cursor, so selection start and end are the same position.
       buf = %BufState{
         data: ["Hello"],
-        cursor: %Cursor{line: 1, col: 1},
+        cursor: Cursor.new(1, 1),
         selection: nil
       }
 
@@ -39,7 +39,7 @@ defmodule Quillex.GUI.Components.BufferPane.MutatorSelectTextTest do
       # Simulate state after pressing Shift+Right 7 times from start of line 2
       buf = %BufState{
         data: ["First line", "Second line", "Third line"],
-        cursor: %Cursor{line: 2, col: 8},
+        cursor: Cursor.new(2, 8),
         selection: %{start: {2, 1}, end: {2, 8}}
       }
 
@@ -55,7 +55,7 @@ defmodule Quillex.GUI.Components.BufferPane.MutatorSelectTextTest do
       # State after Shift+Right 7 times then Shift+Down
       buf = %BufState{
         data: ["First line", "Second line", "Third line"],
-        cursor: %Cursor{line: 3, col: 8},
+        cursor: Cursor.new(3, 8),
         selection: %{start: {2, 1}, end: {3, 8}}
       }
 

@@ -79,36 +79,17 @@ defmodule Quillex.Buffer.Core.Navigation do
     %{buf | cursor: new_cursor}
   end
 
-  def move_cursor(%{cursor: c, selection: _selection} = buf, {:page_up, n})
-      when buf.selection != nil and is_integer(n) and n > 0 do
-    # Page Up: move cursor up by n lines, clamped to line 1. Clears any selection.
-    new_line = max(1, c.line - n)
-    new_cursor = c |> Cursor.move({new_line, c.col})
-    %{buf | cursor: new_cursor, selection: nil}
-  end
-
+  # Page Up / Page Down are Up and Down by a screenful, so they run through
+  # the same transition: the line is clamped to the document, the column to
+  # the line, and the column the cursor wants is left alone. They used to
+  # carry `c.col` onto the new line untouched, which put the cursor past the
+  # end of any shorter line it landed on.
   def move_cursor(%{cursor: c} = buf, {:page_up, n}) when is_integer(n) and n > 0 do
-    # Page Up: move cursor up by n lines, clamped to line 1.
-    new_line = max(1, c.line - n)
-    new_cursor = c |> Cursor.move({new_line, c.col})
-    %{buf | cursor: new_cursor}
-  end
-
-  def move_cursor(%{cursor: c, selection: _selection} = buf, {:page_down, n})
-      when buf.selection != nil and is_integer(n) and n > 0 do
-    # Page Down: move cursor down by n lines, clamped to last line. Clears any selection.
-    last_line = length(buf.data)
-    new_line = min(last_line, c.line + n)
-    new_cursor = c |> Cursor.move({new_line, c.col})
-    %{buf | cursor: new_cursor, selection: nil}
+    %{buf | cursor: move_cursor_with_bounds(buf, c, :up, n), selection: nil}
   end
 
   def move_cursor(%{cursor: c} = buf, {:page_down, n}) when is_integer(n) and n > 0 do
-    # Page Down: move cursor down by n lines, clamped to last line.
-    last_line = length(buf.data)
-    new_line = min(last_line, c.line + n)
-    new_cursor = c |> Cursor.move({new_line, c.col})
-    %{buf | cursor: new_cursor}
+    %{buf | cursor: move_cursor_with_bounds(buf, c, :down, n), selection: nil}
   end
 
   # Handle cursor movement when there's an active selection
@@ -130,24 +111,28 @@ defmodule Quillex.Buffer.Core.Navigation do
         {selection.end, selection.start}
       end
 
-    # Position cursor at the appropriate end of selection based on direction
+    # Position cursor at the appropriate end of selection based on direction.
+    # Collapsing onto an edge of the selection is an absolute move — it puts
+    # the cursor somewhere the user chose by selecting there — so it takes the
+    # wanted column with it, and Down from a collapsed selection then aims at
+    # the edge it collapsed onto.
     positioned_cursor =
       case direction do
         :left ->
           # When moving left, start from the beginning of selection
-          %{c | line: sel_start_line, col: sel_start_col}
+          Cursor.move(c, {sel_start_line, sel_start_col})
 
         :right ->
           # When moving right, start from the end of selection
-          %{c | line: sel_end_line, col: sel_end_col}
+          Cursor.move(c, {sel_end_line, sel_end_col})
 
         :up ->
           # When moving up, start from the beginning of selection
-          %{c | line: sel_start_line, col: sel_start_col}
+          Cursor.move(c, {sel_start_line, sel_start_col})
 
         :down ->
           # When moving down, start from the end of selection
-          %{c | line: sel_end_line, col: sel_end_col}
+          Cursor.move(c, {sel_end_line, sel_end_col})
 
         _ ->
           # For other directions, default to current cursor position
@@ -168,36 +153,39 @@ defmodule Quillex.Buffer.Core.Navigation do
     %{buf | cursor: new_cursor}
   end
 
-  # Helper function to move cursor with boundary checking
+  @doc """
+  Move a cursor one step in a direction, kept inside the document.
+
+  Vertical and horizontal movement differ in what they do to the column the
+  cursor wants. Up and Down land on `min(desired_col, end of that line)` and
+  leave the wanted column where it was, so a run of short lines is something
+  the cursor walks over rather than something that resets it. Left and Right
+  establish a new wanted column, because the user just chose one.
+  """
   def move_cursor_with_bounds(buf, cursor, direction, count) do
     case direction do
       :up ->
-        new_line = max(1, cursor.line - count)
-        # Adjust column to fit within the bounds of the new line
-        new_line_text = Enum.at(buf.data, new_line - 1) || ""
-        max_col = String.length(new_line_text) + 1
-        adjusted_col = min(cursor.col, max_col)
-        %{cursor | line: new_line, col: adjusted_col}
+        move_to_line(buf, cursor, max(1, cursor.line - count))
 
       :down ->
-        max_line = length(buf.data)
-        new_line = min(max_line, cursor.line + count)
-        # Adjust column to fit within the bounds of the new line
-        new_line_text = Enum.at(buf.data, new_line - 1) || ""
-        max_col = String.length(new_line_text) + 1
-        adjusted_col = min(cursor.col, max_col)
-        %{cursor | line: new_line, col: adjusted_col}
+        move_to_line(buf, cursor, min(length(buf.data), cursor.line + count))
 
       :left ->
-        new_col = max(1, cursor.col - count)
-        %{cursor | col: new_col}
+        Cursor.move(cursor, {cursor.line, max(1, cursor.col - count)})
 
       :right ->
-        current_line = Enum.at(buf.data, cursor.line - 1) || ""
-        max_col = String.length(current_line) + 1
-        new_col = min(max_col, cursor.col + count)
-        %{cursor | col: new_col}
+        Cursor.move(cursor, {cursor.line, min(end_col(buf, cursor.line), cursor.col + count)})
     end
+  end
+
+  defp move_to_line(buf, cursor, line) do
+    Cursor.move_vertical(cursor, {line, end_col(buf, line)})
+  end
+
+  # The column just past the last character of a line — where the caret sits
+  # when it is at the end of it. Columns are one-based, hence the + 1.
+  defp end_col(buf, line) do
+    String.length(Enum.at(buf.data, line - 1, "")) + 1
   end
 end
 
@@ -324,7 +312,9 @@ defmodule Quillex.Buffer.Core.Document do
         {left_text, _deleted_char} = String.split_at(left_text, -1)
         updated_line = left_text <> right_text
         updated_data = List.replace_at(buf.data, line_index, updated_line)
-        new_cursor = %{cursor | col: cursor.col - 1}
+        # An edit establishes a column, so Cursor.move rather than a raw
+        # struct update: the ghost column follows the caret.
+        new_cursor = Cursor.move(cursor, {cursor.line, cursor.col - 1})
         %{buf | data: updated_data, cursor: new_cursor, dirty?: true}
 
       # Cursor is at the beginning of a line that's not the first line
@@ -339,11 +329,7 @@ defmodule Quillex.Buffer.Core.Document do
           |> List.delete_at(line_index)
           |> List.replace_at(prev_line_index, updated_line)
 
-        new_cursor = %{
-          cursor
-          | line: cursor.line - 1,
-            col: String.length(prev_line) + 1
-        }
+        new_cursor = Cursor.move(cursor, {cursor.line - 1, String.length(prev_line) + 1})
 
         %{buf | data: updated_data, cursor: new_cursor, dirty?: true}
 
