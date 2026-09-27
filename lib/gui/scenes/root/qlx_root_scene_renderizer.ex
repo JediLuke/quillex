@@ -205,8 +205,6 @@ defmodule Quillex.RootScene.Renderizer do
              wrap_mode: if(state.word_wrap, do: :word, else: :none),
              auto_indent: state.auto_indent,
              tab_width: state.tab_width,
-             fold_level: state.fold_level,
-             gutter_menu_theme: icon_menu_theme(state),
              font: Quillex.GUI.Theme.editor_font(state.text_size),
              highlight_styles: highlight_styles(state),
              frame: frame
@@ -264,8 +262,6 @@ defmodule Quillex.RootScene.Renderizer do
            wrap_mode: if(state.word_wrap, do: :word, else: :none),
            auto_indent: state.auto_indent,
            tab_width: state.tab_width,
-           fold_level: state.fold_level,
-           gutter_menu_theme: icon_menu_theme(state),
            font: Quillex.GUI.Theme.editor_font(state.text_size),
            highlight_styles: highlight_styles(state),
            frame: frame
@@ -584,6 +580,11 @@ defmodule Quillex.RootScene.Renderizer do
       font_size: scaled(13, state)
     })
   end
+
+  @doc false
+  # The gutter fold menu is a dropdown panel like the menubar's, so it is
+  # themed from the same map.
+  def gutter_menu_theme(state), do: Quillex.GUI.GutterMenu.theme(icon_menu_theme(state))
 
   defp icon_menu_theme(state) do
     palette(state)

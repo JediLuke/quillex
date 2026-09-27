@@ -93,6 +93,9 @@ defmodule Quillex.RootScene.State do
             # %{uuid: tab_uuid, pos: {x, y}} while the popup is up. Scene-owned
             # transient interaction state, like the other dialog flags.
             tab_context_menu: nil,
+            # Gutter fold menu (right-click on the line numbers): nil while
+            # closed, or a Quillex.GUI.GutterMenu map while it is up.
+            gutter_menu: nil,
             # Buffers queued by a tab-context bulk close while its single
             # "Unsaved Changes" prompt is up. The whole batch waits on one
             # answer: discard closes them all, cancel closes none.

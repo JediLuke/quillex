@@ -47,6 +47,12 @@ defmodule Quillex.FoldingSpex do
   defp state, do: text_field_scene().assigns.state
   defp graph, do: text_field_scene().assigns.graph
 
+  # The gutter fold menu belongs to the root scene, which draws it over the
+  # TextField.
+  defp root_scene, do: :sys.get_state(Process.whereis(Quillex.RootScene))
+  defp root_state, do: root_scene().assigns.state
+  defp root_graph, do: root_scene().assigns.graph
+
   defp pointer(button, action, point) do
     {:ok, viewport} = Scenic.ViewPort.info(:main_viewport)
     Scenic.ViewPort.Input.send(viewport, {:cursor_button, {button, action, [], point}})
@@ -171,7 +177,7 @@ defmodule Quillex.FoldingSpex do
       end
     end
 
-    scenario "right-clicking line numbers opens the in-buffer fold menu" do
+    scenario "right-clicking line numbers opens the fold menu over the buffer" do
       when_ "the line-number gutter is right-clicked", context do
         %{frame: frame} = state()
         point = {frame.pin.x + 12, frame.pin.y + 35}
@@ -181,47 +187,38 @@ defmodule Quillex.FoldingSpex do
         {:ok, context}
       end
 
-      then_ "the closed fold-level control is layered over both buffer regions", context do
-        assert state().gutter_menu
-        assert Scenic.Graph.get(graph(), :gutter_context_menu_gutter) != []
-        assert Scenic.Graph.get(graph(), :gutter_context_menu_content) != []
+      then_ "the closed fold-level control is drawn over the buffer", context do
+        assert %{at: {_x, _y}} = root_state().gutter_menu
+        assert Scenic.Graph.get(root_graph(), :gutter_context_menu) != []
 
-        menu_theme = ScenicWidgets.TextField.Renderer.gutter_menu_theme(state())
-        clear_text = hd(Scenic.Graph.get(graph(), {:item_text, :gutter_clear_folds}))
-        panel = hd(Scenic.Graph.get(graph(), :dropdown_bg))
+        {_rows, menu_theme, _bounds} = Quillex.RootScene.gutter_menu_layout(root_state())
+        clear_text = hd(Scenic.Graph.get(root_graph(), {:item_text, :gutter_clear_folds}))
+        panel = hd(Scenic.Graph.get(root_graph(), :dropdown_bg))
 
-        assert menu_theme.dropdown_font_size == state().gutter_menu_theme.dropdown_font_size
         assert Scenic.Primitive.get_style(clear_text, :font_size) == menu_theme.dropdown_font_size
 
         refute Scenic.Primitive.get_style(panel, :fill) in [:clear, nil],
                "the context menu needs an opaque themed surface over buffer text"
 
-        assert Scenic.Graph.get(graph(), {:select_option, :gutter_fold_level, 1}) == []
-        assert Scenic.Graph.get(graph(), {:item_text, :gutter_clear_folds}) != []
+        assert Scenic.Graph.get(root_graph(), {:select_option, :gutter_fold_level, 1}) == []
+        assert Scenic.Graph.get(root_graph(), {:item_text, :gutter_clear_folds}) != []
         {:ok, context}
       end
 
       when_ "the fold-level control is opened and Level 1 is clicked", context do
-        %{frame: frame} = state()
-        bounds = ScenicWidgets.TextField.Renderer.gutter_menu_bounds(state())
-
-        row_height =
-          ScenicWidgets.TextField.Renderer.gutter_menu_theme(state()).dropdown_item_height
-
-        control =
-          {frame.pin.x + bounds.x + bounds.width - 20, frame.pin.y + bounds.y + row_height / 2}
+        {_rows, theme, bounds} = Quillex.RootScene.gutter_menu_layout(root_state())
+        row_height = theme.dropdown_item_height
+        control = {bounds.x + bounds.width - 20, bounds.y + row_height / 2}
 
         pointer(:btn_left, 1, control)
         pointer(:btn_left, 0, control)
         Process.sleep(150)
 
-        assert state().gutter_menu.select_expanded?
-        assert Scenic.Graph.get(graph(), {:select_option, :gutter_fold_level, 1}) != []
-        assert Scenic.Graph.get(graph(), {:select_option, :gutter_fold_level, 5}) != []
+        assert root_state().gutter_menu.select_expanded?
+        assert Scenic.Graph.get(root_graph(), {:select_option, :gutter_fold_level, 1}) != []
+        assert Scenic.Graph.get(root_graph(), {:select_option, :gutter_fold_level, 5}) != []
 
-        option =
-          {frame.pin.x + bounds.x + bounds.width - 20, frame.pin.y + bounds.y + row_height * 1.5}
-
+        option = {bounds.x + bounds.width - 20, bounds.y + row_height * 1.5}
         pointer(:btn_left, 1, option)
         pointer(:btn_left, 0, option)
         Process.sleep(350)
@@ -229,8 +226,8 @@ defmodule Quillex.FoldingSpex do
       end
 
       then_ "the document folds and the shared fold-level setting follows", context do
-        assert state().gutter_menu == nil
-        assert state().fold_level == 1
+        assert root_state().gutter_menu == nil
+        assert Scenic.Graph.get(root_graph(), :gutter_context_menu) == []
         assert Quillex.RadixCache.ViewStore.get_state().fold_level == 1
         assert MapSet.member?(state().folds, 1)
         {:ok, context}
