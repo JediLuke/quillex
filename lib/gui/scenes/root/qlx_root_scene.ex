@@ -262,6 +262,88 @@ defmodule Quillex.RootScene do
     end
   end
 
+  # ── Gutter fold menu ──────────────────────────────────────────────────────
+  #
+  # The TextField reports a right-click on its line numbers and this scene
+  # draws the fold menu over it (see open_gutter_menu/2). While it is up it
+  # captures the pointer and keyboard, like the tab context menu below.
+  defp route_input(
+         {:key, {:key_esc, 1, _mods}},
+         _context,
+         %{assigns: %{state: %{gutter_menu: %{}}}} = scene
+       ) do
+    {:noreply, hide_gutter_menu(scene)}
+  end
+
+  defp route_input({:key, _}, _context, %{assigns: %{state: %{gutter_menu: %{}}}} = scene),
+    do: {:noreply, scene}
+
+  defp route_input({:codepoint, _}, _context, %{assigns: %{state: %{gutter_menu: %{}}}} = scene),
+    do: {:noreply, scene}
+
+  defp route_input(
+         {:cursor_pos, point},
+         _context,
+         %{assigns: %{state: %{gutter_menu: %{} = menu}}} = scene
+       ) do
+    {rows, theme, bounds} = gutter_menu_layout(scene.assigns.state)
+    hovered = Quillex.GUI.GutterMenu.hover(menu, bounds, theme, point)
+
+    if hovered == menu,
+      do: {:noreply, scene},
+      else: {:noreply, redraw_gutter_menu(scene, hovered, rows)}
+  end
+
+  defp route_input(
+         {:cursor_button, {:btn_left, 1, _mods, point}},
+         _context,
+         %{assigns: %{state: %{gutter_menu: %{} = menu}}} = scene
+       ) do
+    {_rows, theme, bounds} = gutter_menu_layout(scene.assigns.state)
+
+    case Quillex.GUI.GutterMenu.click(menu, bounds, theme, point) do
+      :toggle_select ->
+        menu = %{menu | select_expanded?: not menu.select_expanded?}
+
+        {:noreply,
+         redraw_gutter_menu(
+           scene,
+           menu,
+           Quillex.GUI.GutterMenu.rows(menu, scene.assigns.state.fold_level)
+         )}
+
+      :close ->
+        {:noreply, hide_gutter_menu(scene)}
+
+      {:fold_to_level, level} = action ->
+        Quillex.RadixCache.ViewStore.set_fold_level(level)
+        scene = hide_gutter_menu(scene)
+        Scenic.Scene.put_child(scene, :buffer_pane, {:action, action})
+        {:noreply, scene}
+
+      :unfold_all ->
+        scene = hide_gutter_menu(scene)
+        Scenic.Scene.put_child(scene, :buffer_pane, {:action, :unfold_all})
+        {:noreply, scene}
+    end
+  end
+
+  # Any other button — a right-click elsewhere included — dismisses it.
+  defp route_input(
+         {:cursor_button, {_button, 1, _mods, _point}},
+         _context,
+         %{assigns: %{state: %{gutter_menu: %{}}}} = scene
+       ) do
+    {:noreply, hide_gutter_menu(scene)}
+  end
+
+  defp route_input(
+         {:cursor_button, _},
+         _context,
+         %{assigns: %{state: %{gutter_menu: %{}}}} = scene
+       ),
+       do: {:noreply, scene}
+
   # ── Tab context menu ──────────────────────────────────────────────────────
   #
   # Right-clicking a tab pops up bulk-close actions relative to THAT tab
@@ -766,7 +848,10 @@ defmodule Quillex.RootScene do
   defp adjust_chrome_zoom(delta) do
     current = Quillex.RadixCache.ViewStore.get_state().chrome_zoom
     range = Quillex.RadixCache.ViewStore.chrome_zoom_range()
-    Quillex.RadixCache.ViewStore.set_chrome_zoom(min(range.last, max(range.first, current + delta)))
+
+    Quillex.RadixCache.ViewStore.set_chrome_zoom(
+      min(range.last, max(range.first, current + delta))
+    )
   end
 
   defp update_file_nav_resize_hover(scene, coords, hovered?) do
@@ -1496,9 +1581,12 @@ defmodule Quillex.RootScene do
     {:noreply, scene}
   end
 
-  def handle_event({:fold_level_changed, _id, level}, _from, scene) when level in 1..5 do
-    Quillex.RadixCache.ViewStore.set_fold_level(level)
-    {:noreply, scene}
+  def handle_event({:gutter_context_menu, :buffer_pane, context}, _from, scene) do
+    state = scene.assigns.state
+
+    if keyboard_overlay_open?(state) or state.tab_context_menu != nil,
+      do: {:noreply, scene},
+      else: open_gutter_menu(scene, Quillex.GUI.GutterMenu.new(context))
   end
 
   def handle_event({:menu_value_changed, "theme", value}, _from, scene) do
@@ -2285,7 +2373,6 @@ defmodule Quillex.RootScene do
     end
   end
 
-
   # ── Tab context menu (right-click on a tab) ───────────────────────────────
   #
   # The popup itself is scene-owned primitives, exactly like the Go-to-Line
@@ -2360,6 +2447,51 @@ defmodule Quillex.RootScene do
     new_scene = scene |> assign(state: new_state, graph: graph) |> push_graph(graph)
     :ok = capture_input(new_scene, [:key, :codepoint, :cursor_button])
     {:noreply, new_scene}
+  end
+
+  defp open_gutter_menu(scene, menu) do
+    state = %{scene.assigns.state | gutter_menu: menu}
+    {rows, _theme, _bounds} = gutter_menu_layout(state)
+    scene = redraw_gutter_menu(assign(scene, state: state), menu, rows)
+
+    # The same choreography as the tab context menu: blur and gate the editor
+    # so the click that dismisses the menu cannot also land in the document,
+    # and capture the pointer (hover included) and the keyboard.
+    Scenic.Scene.put_child(scene, :buffer_pane, :blur)
+    Scenic.Scene.put_child(scene, :buffer_pane, {:set_overlay_open, true})
+    :ok = capture_input(scene, [:key, :codepoint, :cursor_button, :cursor_pos])
+    {:noreply, scene}
+  end
+
+  defp redraw_gutter_menu(scene, menu, rows) do
+    state = %{scene.assigns.state | gutter_menu: menu}
+    theme = Quillex.RootScene.Renderizer.gutter_menu_theme(state)
+    bounds = Quillex.GUI.GutterMenu.bounds(menu, rows, theme, state.frame.size.box)
+
+    graph =
+      scene.assigns.graph
+      |> Scenic.Graph.delete(:gutter_context_menu)
+      |> then(&Quillex.GUI.GutterMenu.render(&1, menu, rows, theme, bounds))
+
+    scene |> assign(state: state, graph: graph) |> push_graph(graph)
+  end
+
+  defp hide_gutter_menu(scene) do
+    :ok = release_input(scene, [:key, :codepoint, :cursor_button, :cursor_pos])
+    new_state = %{scene.assigns.state | gutter_menu: nil}
+    graph = Scenic.Graph.delete(scene.assigns.graph, :gutter_context_menu)
+    new_scene = scene |> assign(state: new_state, graph: graph) |> push_graph(graph)
+    Scenic.Scene.put_child(new_scene, :buffer_pane, {:set_overlay_open, false})
+    grant_keyboard(new_scene, new_state.keyboard_owner)
+  end
+
+  @doc false
+  # Rows, theme and bounds for the open gutter menu, computed the same way for
+  # drawing and hit testing. Public so a spex can aim at the rows it draws.
+  def gutter_menu_layout(%{gutter_menu: %{} = menu} = state) do
+    rows = Quillex.GUI.GutterMenu.rows(menu, state.fold_level)
+    theme = Quillex.RootScene.Renderizer.gutter_menu_theme(state)
+    {rows, theme, Quillex.GUI.GutterMenu.bounds(menu, rows, theme, state.frame.size.box)}
   end
 
   defp hide_tab_context_menu(scene) do
